@@ -7,10 +7,10 @@ from .game import LudoGame
 from .player import Player, PlayerColor
 from .board import Board, Position
 from .token import Token, TokenState
-from .strategy import (
+from .strategy import StrategyFactory
+from .strategies import (
     Strategy,
     STRATEGIES,
-    StrategyFactory,
     KillerStrategy,
     WinnerStrategy,
     OptimistStrategy,
@@ -37,4 +37,5 @@ __all__ = [
     "BalancedStrategy",
     "RandomStrategy",
     "CautiousStrategy",
+    "STRATEGIES",
 ]
