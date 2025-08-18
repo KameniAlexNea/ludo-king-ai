@@ -12,7 +12,7 @@ from .random_strategy import RandomStrategy
 from .cautious import CautiousStrategy
 
 # Strategy Mapping - Centralized mapping of strategy names to classes
-STRATEGIES = {
+STRATEGIES: dict[str, Strategy] = {
     "killer": KillerStrategy,
     "winner": WinnerStrategy,
     "optimist": OptimistStrategy,

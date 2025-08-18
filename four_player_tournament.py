@@ -5,6 +5,7 @@ Comprehensive tournament between combinations of 4 Ludo AI strategies.
 """
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
+from game_state_saver import GameStateSaver
 import random
 import os
 from collections import defaultdict
@@ -25,6 +26,9 @@ class FourPlayerTournament:
         self.games_per_matchup = int(os.getenv("GAMES_PER_MATCHUP", 10))
         self.tournament_seed = int(os.getenv("TOURNAMENT_SEED", 42))
         self.verbose_output = os.getenv("VERBOSE_OUTPUT", "true").lower() == "true"
+        
+        # Initialize state saver
+        self.state_saver = GameStateSaver()
 
         # Get all available strategies or use selected ones
         selected_strategies = os.getenv("SELECTED_STRATEGIES", "").strip()
@@ -196,6 +200,9 @@ class FourPlayerTournament:
                 move_result = game.execute_move(
                     current_player, selected_token, dice_value
                 )
+                
+                # Save the decision and outcome
+                self.state_saver.save_decision(strategy_name, context, selected_token, move_result)
 
                 # Track stats
                 game_results["player_stats"][strategy_name]["moves_made"] += 1
@@ -235,6 +242,9 @@ class FourPlayerTournament:
         if not game_results["winner"]:
             print(f"  Game {game_number}: DRAW (time limit reached)")
             game_results["turns_played"] = turn_count
+        
+        # Save game states
+        self.state_saver.save_game(game_number)
 
         return game_results
 
