@@ -6,6 +6,7 @@ Demonstrates different AI personalities playing against each other.
 from ludo import LudoGame, PlayerColor, StrategyFactory
 import random
 from collections import defaultdict
+from ludo.token import TokenState
 
 
 def strategy_tournament():
@@ -169,7 +170,6 @@ def demonstrate_strategic_thinking():
 
     # Move some tokens to create interesting situation
     # (This would normally be done through game play)
-    from ludo.token import TokenState
 
     red_player.tokens[0].state = TokenState.ACTIVE
     red_player.tokens[0].position = 25

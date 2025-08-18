@@ -7,11 +7,41 @@ import random
 from typing import List, Dict, Optional
 from .player import Player, PlayerColor
 from .board import Board
+from .token import Token, TokenState
 
 
 class LudoGame:
     """
     Main Ludo game class that manages the entire game state and flow.
+
+    This class provides comprehensive game management including:
+    - Turn-based gameplay with dice rolling
+    - Move validation and execution
+    - AI player support with strategic decision making
+    - Game state tracking and history
+    - Flexible reset options that preserve player configurations
+
+    Example usage:
+        # Basic game setup
+        game = LudoGame([PlayerColor.RED, PlayerColor.BLUE])
+
+        # Set AI strategies
+        strategies = {
+            'red': StrategyFactory.create_strategy('killer'),
+            'blue': StrategyFactory.create_strategy('winner')
+        }
+        game.set_player_strategies(strategies)
+
+        # Play game...
+
+        # Reset while preserving strategies (default)
+        game.reset_game()  # Strategies are kept
+
+        # Or reset completely
+        game.reset_game(preserve_strategies=False)  # Strategies lost
+
+        # Or reset only game state (for testing)
+        game.reset_game_state_only()  # Everything preserved except turn counters
     """
 
     def __init__(self, player_colors: List[PlayerColor]):
@@ -375,9 +405,119 @@ class LudoGame:
 
         return analysis
 
-    def reset_game(self):
-        """Reset the game to initial state."""
-        self.__init__([player.color for player in self.players])
+    def reset_game(self, preserve_strategies: bool = True):
+        """
+        Reset the game to initial state.
+
+        Args:
+            preserve_strategies: If True, preserve player strategies and configurations.
+                               If False, completely reinitialize players.
+        """
+        if preserve_strategies:
+            self._reset_with_preserved_config()
+        else:
+            self._reset_complete()
+
+    def _reset_with_preserved_config(self):
+        """Reset game state while preserving player strategies and configurations."""
+        # Store player configurations
+        player_configs = []
+        for player in self.players:
+            config = {
+                "color": player.color,
+                "player_id": player.player_id,
+                "strategy": player.strategy,
+                "strategy_name": player.get_strategy_name(),
+                "strategy_description": player.get_strategy_description(),
+            }
+            player_configs.append(config)
+
+        # Reset game state variables
+        self.current_player_index = 0
+        self.game_over = False
+        self.winner = None
+        self.turn_count = 0
+        self.consecutive_sixes = 0
+        self.last_dice_value = 0
+        self.move_history = []
+
+        # Reset board
+        self.board = Board()
+
+        # Reset players while preserving their configurations
+        for i, config in enumerate(player_configs):
+            player = self.players[i]
+
+            # Reset player tokens to initial state
+            player.tokens = []
+            for j in range(4):
+                token = Token(
+                    token_id=j,
+                    player_color=config["color"].value,
+                    state=TokenState.HOME,
+                )
+                player.tokens.append(token)
+
+            # Preserve strategy if it was set
+            if config["strategy"] is not None:
+                player.strategy = config["strategy"]
+
+        # Reinitialize board with all tokens in home
+        self._initialize_board()
+
+    def _reset_complete(self):
+        """Completely reset the game, losing all player configurations."""
+        player_colors = [player.color for player in self.players]
+        self.__init__(player_colors)
+
+    def reset_game_state_only(self):
+        """
+        Reset only the game state (turn count, winner, etc.) without touching
+        player configurations or token positions. Useful for testing scenarios.
+        """
+        self.current_player_index = 0
+        self.game_over = False
+        self.winner = None
+        self.turn_count = 0
+        self.consecutive_sixes = 0
+        self.last_dice_value = 0
+        self.move_history = []
+
+    def set_player_strategies(self, strategies: Dict[str, object]):
+        """
+        Set strategies for players by color.
+
+        Args:
+            strategies: Dictionary mapping player color strings to strategy objects
+                       e.g., {'red': killer_strategy, 'blue': winner_strategy}
+        """
+        for player in self.players:
+            color_key = player.color.value
+            if color_key in strategies:
+                player.set_strategy(strategies[color_key])
+
+    def get_player_configurations(self) -> List[Dict]:
+        """
+        Get current player configurations including strategies.
+        Useful for saving and restoring game setups.
+
+        Returns:
+            List[Dict]: Player configurations
+        """
+        configs = []
+        for player in self.players:
+            config = {
+                "color": player.color.value,
+                "player_id": player.player_id,
+                "strategy_name": player.get_strategy_name(),
+                "strategy_description": player.get_strategy_description(),
+                "has_strategy": player.strategy is not None,
+                "tokens_finished": player.get_finished_tokens_count(),
+                "tokens_active": sum(1 for t in player.tokens if t.is_active()),
+                "tokens_in_home": sum(1 for t in player.tokens if t.is_in_home()),
+            }
+            configs.append(config)
+        return configs
 
     def __str__(self) -> str:
         """String representation of the current game state."""

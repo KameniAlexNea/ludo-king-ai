@@ -6,6 +6,7 @@ Each player has a color and controls 4 tokens.
 from enum import Enum
 from typing import List, Dict
 from .token import Token, TokenState
+from .constants import BoardConstants, StrategyConstants
 
 
 class PlayerColor(Enum):
@@ -42,14 +43,8 @@ class Player:
             self.tokens.append(token)
 
         # Starting positions for each color on the board
-        self.start_positions = {
-            PlayerColor.RED: 1,
-            PlayerColor.GREEN: 14,
-            PlayerColor.YELLOW: 27,
-            PlayerColor.BLUE: 40,
-        }
-
-        self.start_position = self.start_positions[color]
+        self.start_positions = BoardConstants.START_POSITIONS
+        self.start_position = self.start_positions[color.value]
 
     def get_movable_tokens(self, dice_value: int) -> List[Token]:
         """
@@ -187,29 +182,7 @@ class Player:
 
     def _is_safe_move(self, token: Token, target_position: int) -> bool:
         """Check if the target position is a safe square."""
-        # Safe squares are at positions: 1, 9, 14, 22, 27, 35, 40, 48 (star squares)
-        # Plus each player's colored squares
-        safe_squares = {1, 9, 14, 22, 27, 35, 40, 48}
-
-        # Player's colored safe squares
-        colored_safe = {
-            PlayerColor.RED: {1, 2, 3, 4, 5, 6},
-            PlayerColor.GREEN: {14, 15, 16, 17, 18, 19},
-            PlayerColor.YELLOW: {27, 28, 29, 30, 31, 32},
-            PlayerColor.BLUE: {40, 41, 42, 43, 44, 45},
-        }
-
-        if target_position in safe_squares:
-            return True
-
-        if target_position in colored_safe.get(self.color, set()):
-            return True
-
-        # Home column is always safe
-        if target_position >= 52:
-            return True
-
-        return False
+        return BoardConstants.is_safe_position(target_position, self.color.value)
 
     def _calculate_strategic_value(self, token: Token, dice_value: int) -> float:
         """
@@ -222,13 +195,17 @@ class Player:
         if token.is_in_home_column():
             target = token.get_target_position(dice_value, self.start_position)
             if target == 57:
-                value += 100.0  # Finishing is highest priority
+                value += (
+                    StrategyConstants.FINISH_TOKEN_VALUE
+                )  # Finishing is highest priority
             else:
-                value += 20.0  # Moving in home column is good
+                value += (
+                    StrategyConstants.HOME_COLUMN_ADVANCE_VALUE
+                )  # Moving in home column is good
 
         # Exiting home is valuable when you roll a 6
         elif token.is_in_home() and dice_value == 6:
-            value += 15.0
+            value += StrategyConstants.EXIT_HOME_VALUE
 
         # Moving active tokens forward
         elif token.is_active():

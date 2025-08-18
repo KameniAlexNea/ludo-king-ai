@@ -7,6 +7,7 @@ from typing import Dict, List, Set, Optional, Tuple
 from dataclasses import dataclass
 from .player import Player, PlayerColor
 from .token import Token
+from .constants import BoardConstants
 
 
 @dataclass
@@ -21,26 +22,16 @@ class Position:
     def __post_init__(self):
         """Set safe and star properties based on position."""
         # Star squares (safe for all players)
-        star_positions = {1, 9, 14, 22, 27, 35, 40, 48}
-        if self.index in star_positions:
+        if self.index in BoardConstants.STAR_SQUARES:
             self.is_star = True
             self.is_safe = True
 
         # Colored safe squares for each player
-        colored_squares = {
-            1: PlayerColor.RED.value,
-            9: PlayerColor.RED.value,
-            14: PlayerColor.GREEN.value,
-            22: PlayerColor.GREEN.value,
-            27: PlayerColor.YELLOW.value,
-            35: PlayerColor.YELLOW.value,
-            40: PlayerColor.BLUE.value,
-            48: PlayerColor.BLUE.value,
-        }
-
-        if self.index in colored_squares:
-            self.color = colored_squares[self.index]
-            self.is_safe = True
+        for color, safe_positions in BoardConstants.COLORED_SAFE_SQUARES.items():
+            if self.index in safe_positions:
+                self.color = color
+                self.is_safe = True
+                break
 
 
 class Board:
@@ -58,25 +49,27 @@ class Board:
         for i in range(self.main_path_size):
             self.positions[i] = Position(i)
 
+        # Optimized blocking positions tracking (initialize before reset_token_positions)
+        self._blocking_positions_cache: Dict[str, Set[int]] = {}
+        self._cache_valid = False
+
+        # Track positions with multiple tokens by color for faster lookup
+        self._multi_token_positions: Dict[str, Set[int]] = {
+            PlayerColor.RED.value: set(),
+            PlayerColor.GREEN.value: set(),
+            PlayerColor.YELLOW.value: set(),
+            PlayerColor.BLUE.value: set(),
+        }
+
         # Track which tokens are at each position
         self.token_positions: Dict[int, List[Token]] = {}
         self.reset_token_positions()
 
         # Starting positions for each color
-        self.start_positions = {
-            PlayerColor.RED.value: 1,
-            PlayerColor.GREEN.value: 14,
-            PlayerColor.YELLOW.value: 27,
-            PlayerColor.BLUE.value: 40,
-        }
+        self.start_positions = BoardConstants.START_POSITIONS
 
         # Home column entry positions for each color
-        self.home_entries = {
-            PlayerColor.RED.value: 0,  # After position 51, enters home column
-            PlayerColor.GREEN.value: 13,
-            PlayerColor.YELLOW.value: 26,
-            PlayerColor.BLUE.value: 39,
-        }
+        self.home_entries = BoardConstants.HOME_COLUMN_ENTRIES
 
     def reset_token_positions(self):
         """Reset all token position tracking."""
@@ -84,16 +77,48 @@ class Board:
         for i in range(self.main_path_size + self.home_column_size * 4):
             self.token_positions[i] = []
 
+        # Reset cache and multi-token tracking
+        self._invalidate_blocking_cache()
+        for color_set in self._multi_token_positions.values():
+            color_set.clear()
+
     def add_token(self, token: Token, position: int):
         """Add a token to a specific position on the board."""
         if position not in self.token_positions:
             self.token_positions[position] = []
+
         self.token_positions[position].append(token)
+
+        # Update multi-token tracking for blocking optimization
+        if 0 <= position < self.main_path_size:
+            player_tokens_count = sum(
+                1
+                for t in self.token_positions[position]
+                if t.player_color == token.player_color
+            )
+            if player_tokens_count >= 2:
+                self._multi_token_positions[token.player_color].add(position)
+
+        # Invalidate cache when board state changes
+        self._invalidate_blocking_cache()
 
     def remove_token(self, token: Token, position: int):
         """Remove a token from a specific position on the board."""
         if position in self.token_positions and token in self.token_positions[position]:
             self.token_positions[position].remove(token)
+
+            # Update multi-token tracking for blocking optimization
+            if 0 <= position < self.main_path_size:
+                player_tokens_count = sum(
+                    1
+                    for t in self.token_positions[position]
+                    if t.player_color == token.player_color
+                )
+                if player_tokens_count < 2:
+                    self._multi_token_positions[token.player_color].discard(position)
+
+            # Invalidate cache when board state changes
+            self._invalidate_blocking_cache()
 
     def get_tokens_at_position(self, position: int) -> List[Token]:
         """Get all tokens at a specific position."""
@@ -101,22 +126,7 @@ class Board:
 
     def is_position_safe(self, position: int, player_color: str) -> bool:
         """Check if a position is safe for a given player color."""
-        if position < 0 or position >= self.main_path_size:
-            return True  # Home and home columns are safe
-
-        board_position = self.positions.get(position)
-        if not board_position:
-            return True
-
-        # Star squares are safe for everyone
-        if board_position.is_star:
-            return True
-
-        # Colored squares are safe for matching color
-        if board_position.color == player_color:
-            return True
-
-        return False
+        return BoardConstants.is_safe_position(position, player_color)
 
     def can_move_to_position(
         self, token: Token, target_position: int
@@ -289,22 +299,111 @@ class Board:
         if new_position >= 0:
             self.add_token(token, new_position)
 
-    def get_blocking_positions(self, player_color: str) -> Set[int]:
-        """Get positions where this player is blocking opponents."""
+    def _invalidate_blocking_cache(self):
+        """Invalidate the blocking positions cache."""
+        self._cache_valid = False
+        self._blocking_positions_cache.clear()
+
+    def _rebuild_blocking_cache(self):
+        """Rebuild the blocking positions cache for all players."""
+        self._blocking_positions_cache.clear()
+
+        for color in [
+            PlayerColor.RED.value,
+            PlayerColor.GREEN.value,
+            PlayerColor.YELLOW.value,
+            PlayerColor.BLUE.value,
+        ]:
+            self._blocking_positions_cache[color] = self._calculate_blocking_positions(
+                color
+            )
+
+        self._cache_valid = True
+
+    def _calculate_blocking_positions(self, player_color: str) -> Set[int]:
+        """
+        Calculate blocking positions for a specific player.
+        Optimized version that only checks positions with multiple tokens.
+        """
         blocking_positions = set()
 
-        for position, tokens in self.token_positions.items():
-            if position < 0 or position >= self.main_path_size:
-                continue  # Only check main board positions
+        # Only check positions that potentially have multiple tokens of this color
+        candidate_positions = self._multi_token_positions.get(player_color, set())
 
-            player_tokens = [t for t in tokens if t.player_color == player_color]
-            if len(player_tokens) >= 2 and not self.is_position_safe(
+        for position in candidate_positions:
+            # Double-check that position is still valid and has multiple tokens
+            if 0 <= position < self.main_path_size and not self.is_position_safe(
                 position, player_color
             ):
-                # Multiple tokens of same player on non-safe square = blocking
-                blocking_positions.add(position)
+                player_tokens = [
+                    t
+                    for t in self.token_positions.get(position, [])
+                    if t.player_color == player_color
+                ]
+
+                if len(player_tokens) >= 2:
+                    blocking_positions.add(position)
+                else:
+                    # Clean up inconsistent state
+                    self._multi_token_positions[player_color].discard(position)
 
         return blocking_positions
+
+    def get_blocking_positions(self, player_color: str) -> Set[int]:
+        """
+        Get positions where this player is blocking opponents.
+
+        This method is now optimized with caching and efficient data structures.
+        Time complexity reduced from O(n*m) to O(1) for cached results,
+        where n is number of positions and m is average tokens per position.
+        """
+        # Return cached result if available
+        if self._cache_valid and player_color in self._blocking_positions_cache:
+            return self._blocking_positions_cache[player_color].copy()
+
+        # Rebuild entire cache if invalid (affects all players)
+        if not self._cache_valid:
+            self._rebuild_blocking_cache()
+            return self._blocking_positions_cache.get(player_color, set()).copy()
+
+        # Calculate for this specific player if not in cache
+        blocking_positions = self._calculate_blocking_positions(player_color)
+        self._blocking_positions_cache[player_color] = blocking_positions
+
+        return blocking_positions.copy()
+
+    def get_all_blocking_positions(self) -> Dict[str, Set[int]]:
+        """
+        Get blocking positions for all players at once.
+        More efficient than calling get_blocking_positions for each player separately.
+        """
+        if not self._cache_valid:
+            self._rebuild_blocking_cache()
+
+        return {
+            color: positions.copy()
+            for color, positions in self._blocking_positions_cache.items()
+        }
+
+    def has_blocking_position(self, player_color: str, position: int) -> bool:
+        """
+        Quick check if a specific position is blocking for a player.
+        More efficient than getting all blocking positions when you only need one.
+        """
+        if not (0 <= position < self.main_path_size):
+            return False
+
+        if self.is_position_safe(position, player_color):
+            return False
+
+        # Check if this position has multiple tokens of the same color
+        player_tokens = [
+            t
+            for t in self.token_positions.get(position, [])
+            if t.player_color == player_color
+        ]
+
+        return len(player_tokens) >= 2
 
     def __str__(self) -> str:
         """String representation of the board state."""
