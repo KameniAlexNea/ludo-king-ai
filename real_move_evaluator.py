@@ -7,7 +7,14 @@ Evaluates moves based on actual game state and board positions.
 from game_state_saver import GameStateSaver
 
 class RealMoveEvaluator:
-    """Evaluates moves based on actual game mechanics and board state"""
+    """
+    Evaluates moves based on actual game mechanics and board state
+    
+    NOTE: This is currently a 'meta-evaluation' system that re-scales 
+    pre-computed values from the game engine. For true move evaluation,
+    we would need to analyze actual board positions, distances, and 
+    vulnerabilities directly.
+    """
     
     def __init__(self):
         self.weights = {
@@ -69,38 +76,67 @@ class RealMoveEvaluator:
         
         return scores
     
+    def validate_evaluation_logic(self, evaluations):
+        """Validate that evaluation logic makes sense"""
+        if not evaluations:
+            return
+        
+        # Check score distributions
+        all_scores = {}
+        for criteria in ["safety", "progress", "capture", "blocking"]:
+            scores = [e[criteria] for e in evaluations]
+            all_scores[criteria] = scores
+        
+        print("\n🔍 EVALUATION VALIDATION:")
+        
+        for criteria, scores in all_scores.items():
+            avg = sum(scores) / len(scores)
+            extreme_low = len([s for s in scores if s <= 1.5]) / len(scores)
+            extreme_high = len([s for s in scores if s >= 4.5]) / len(scores)
+            neutral_range = len([s for s in scores if 2.5 <= s <= 3.5]) / len(scores)
+            
+            print(f"{criteria.title()}:")
+            print(f"  Average: {avg:.2f} (should be ~3.0)")
+            print(f"  Neutral (2.5-3.5): {neutral_range:.1%} (should be majority)")
+            print(f"  Extreme low (≤1.5): {extreme_low:.1%} (should be rare)")
+            print(f"  Extreme high (≥4.5): {extreme_high:.1%} (should be rare)")
+            
+            # Validation warnings
+            if avg < 2.5 or avg > 3.5:
+                print(f"  ⚠️  Average score {avg:.2f} is biased!")
+            if neutral_range < 0.5:
+                print(f"  ⚠️  Too few neutral scores - check logic!")
+            if extreme_low > 0.2:
+                print(f"  ⚠️  Too many terrible scores - scoring too harsh!")
+            print()
+    
     def _evaluate_safety_real(self, move_details, strategic_analysis):
         """Evaluate safety based on actual move data"""
-        # Check if move is explicitly marked as safe in game engine
-        if move_details.get("is_safe_move", False):
-            return 5  # Game engine says it's safe
-        
         move_type = move_details.get("move_type", "")
         
-        # Moves that are inherently safe
+        # Moves that are inherently safe (cannot be captured)
         if move_type in ["finish", "advance_home_column"]:
             return 5  # Cannot be captured in home column
+        
+        # Check if move is explicitly marked as safe by game engine
+        if move_details.get("is_safe_move", False):
+            return 5  # Game engine says it's safe (safe squares, etc.)
+        
+        # Exit home moves are generally safe (start position)
         elif move_type == "exit_home":
             return 4  # Starting position is relatively safe
         
-        # Check for risky moves from strategic analysis
-        risky_moves = strategic_analysis.get("risky_moves", [])
-        move_token_id = move_details.get("token_id", -1)
-        
-        # Check if this move is in the risky list
-        for risky_move in risky_moves:
-            if risky_move.get("token_id") == move_token_id:
-                return 1  # High risk
-        
-        # Default to neutral if no clear safety info
-        return 3
+        # For regular board moves, use the game engine's safety assessment
+        # If not marked as safe, it's risky but not terrible
+        else:
+            return 2  # Risky but not catastrophic - this is normal in Ludo
     
     def _evaluate_progress_real(self, move_details, player_state, current_situation):
         """Evaluate progress based on actual move advancement"""
         move_type = move_details.get("move_type", "")
         strategic_value = move_details.get("strategic_value", 0)
         
-        # Excellent progress moves
+        # Excellent progress moves - these are objectively good
         if move_type == "finish":
             return 5  # Finishing a token is always excellent progress
         elif move_type == "advance_home_column":
@@ -112,58 +148,52 @@ class RealMoveEvaluator:
             tokens_home = player_state.get("tokens_in_home", 4)
             
             if tokens_active == 0:
-                return 5  # Must get tokens out
+                return 5  # Must get tokens out - essential
             elif tokens_home > 2:
                 return 4  # Good to get more tokens active
-            elif tokens_active >= 3:
-                return 2  # Maybe too many tokens active
             else:
-                return 3  # Neutral
+                return 3  # Neutral - exiting home is generally fine
         
-        # Normal board advancement - use strategic value
+        # Normal board advancement - use strategic value but with better scaling
         else:
-            # Convert strategic value to 1-5 scale
-            if strategic_value >= 15:
+            # More conservative scaling - most moves should be around 3 (neutral)
+            if strategic_value >= 20:  # Very high value moves
                 return 5
-            elif strategic_value >= 10:
+            elif strategic_value >= 10:  # Above average moves
                 return 4
-            elif strategic_value >= 5:
+            elif strategic_value >= 2:   # Normal moves
                 return 3
-            elif strategic_value >= 1:
-                return 2
             else:
-                return 1
+                return 2  # Below average but not terrible
     
     def _evaluate_capture_real(self, move_details):
         """Evaluate capture opportunity based on actual capture data"""
         if move_details.get("captures_opponent", False):
             captured_tokens = move_details.get("captured_tokens", [])
             if len(captured_tokens) > 1:
-                return 5  # Multiple captures
+                return 5  # Multiple captures - excellent
             else:
-                return 5  # Single capture is still excellent
+                return 5  # Single capture - excellent
         else:
-            return 1  # No capture opportunity
+            return 3  # No capture opportunity - neutral (not bad!)
     
     def _evaluate_blocking_real(self, move_details, opponents, strategic_analysis):
         """Evaluate blocking value based on opponent threat levels"""
         # Check if we can block based on strategic analysis
         can_block = strategic_analysis.get("can_block_opponent", False)
         if not can_block:
-            return 1  # No blocking opportunity
+            return 3  # No blocking opportunity - neutral (not bad!)
         
         # Get opponent threat levels
         threat_levels = [opp.get("threat_level", 0) for opp in opponents]
         max_threat = max(threat_levels) if threat_levels else 0
         
-        if max_threat > 0.8:
-            return 5  # Blocking a leader
-        elif max_threat > 0.6:
+        if max_threat > 0.7:  # Conservative threshold - only very threatening opponents
+            return 5  # Blocking a real leader
+        elif max_threat > 0.5:  # Moderate threat
             return 4  # Blocking a strong opponent
-        elif max_threat > 0.4:
-            return 3  # Blocking moderate threat
         else:
-            return 2  # Blocking weak opponent
+            return 3  # Blocking weaker opponent - neutral value
 
 
 class GameStateAnalyzer:
@@ -233,6 +263,9 @@ class GameStateAnalyzer:
         
         # Calculate statistics
         self._print_strategy_analysis(evaluations, strategy_name)
+        
+        # Validate evaluation logic
+        self.evaluator.validate_evaluation_logic(evaluations)
         
         return evaluations
     
