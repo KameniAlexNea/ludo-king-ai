@@ -9,6 +9,7 @@ from .board import Board, Position
 from .token import Token, TokenState
 from .strategy import (
     Strategy,
+    STRATEGIES,
     StrategyFactory,
     KillerStrategy,
     WinnerStrategy,

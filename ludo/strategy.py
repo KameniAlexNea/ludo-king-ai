@@ -430,19 +430,23 @@ class CautiousStrategy(Strategy):
         return self._get_lowest_value_move(valid_moves)["token_id"]
 
 
+# Strategy Mapping - Centralized mapping of strategy names to classes
+STRATEGIES = {
+    "killer": KillerStrategy,
+    "winner": WinnerStrategy,
+    "optimist": OptimistStrategy,
+    "defensive": DefensiveStrategy,
+    "balanced": BalancedStrategy,
+    "random": RandomStrategy,
+    "cautious": CautiousStrategy,
+}
+
+
 # Strategy Factory
 class StrategyFactory:
     """Factory class for creating strategy instances."""
 
-    _strategies = {
-        "killer": KillerStrategy,
-        "winner": WinnerStrategy,
-        "optimist": OptimistStrategy,
-        "defensive": DefensiveStrategy,
-        "balanced": BalancedStrategy,
-        "random": RandomStrategy,
-        "cautious": CautiousStrategy,
-    }
+    _strategies = STRATEGIES
 
     @classmethod
     def create_strategy(cls, strategy_name: str) -> Strategy:
