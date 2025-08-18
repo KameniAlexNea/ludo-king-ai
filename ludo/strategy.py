@@ -415,7 +415,7 @@ class CautiousStrategy(Strategy):
             return self._get_highest_value_move(very_safe)["token_id"]
 
         # Priority 4: Exit home only if absolutely necessary
-        player_state = game_context.get("player_state", {})
+        player_state: dict = game_context.get("player_state", {})
         active_tokens = player_state.get("active_tokens", 0)
 
         if active_tokens == 0:  # Must exit home

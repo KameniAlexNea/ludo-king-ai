@@ -123,7 +123,7 @@ def strategy_tournament():
     return strategy_stats
 
 
-def play_strategic_game(game, max_turns=200):
+def play_strategic_game(game: LudoGame, max_turns=200):
     """Play a complete game with strategic AI players."""
     turn_count = 0
 
