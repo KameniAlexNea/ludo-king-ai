@@ -88,7 +88,7 @@ Each possible move includes:
 # QUICK START FOR AI DEVELOPERS
 # ============================================================================
 
-QUICK_START_CODE = '''
+QUICK_START_CODE = """
 from ludo import LudoGame, PlayerColor
 
 # 1. Create game
@@ -113,7 +113,7 @@ while not game.game_over:
             game.next_turn()
     else:
         game.next_turn()
-'''
+"""
 
 # ============================================================================
 # AI DEVELOPMENT PATTERNS
