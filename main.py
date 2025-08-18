@@ -3,7 +3,7 @@ Ludo King AI Environment - Main Example
 Demonstrates how to use the Ludo environment for AI training and gameplay.
 """
 
-from ludo import LudoGame, PlayerColor
+from ludo import LudoGame, PlayerColor, StrategyFactory
 import json
 
 
@@ -63,31 +63,32 @@ class SimpleAI:
 
 
 def play_game_demo():
-    """Demonstrate a complete game with AI players."""
+    """Demonstrate a complete game with strategic AI players."""
     print("=" * 60)
-    print("LUDO KING AI ENVIRONMENT DEMO")
+    print("LUDO KING AI ENVIRONMENT DEMO WITH STRATEGIES")
     print("=" * 60)
     
     # Create a game with 4 players
     player_colors = [PlayerColor.RED, PlayerColor.BLUE, PlayerColor.GREEN, PlayerColor.YELLOW]
     game = LudoGame(player_colors)
     
-    # Create AI players
-    ai_players = {
-        color.value: SimpleAI(color.value) for color in player_colors
-    }
+    # Assign different strategies to players
+    strategies = ['killer', 'winner', 'optimist', 'defensive']
+    for i, player in enumerate(game.players):
+        strategy = StrategyFactory.create_strategy(strategies[i])
+        player.set_strategy(strategy)
+        print(f"{player.color.value.upper()}: {strategy.name} - {strategy.description}")
     
-    print(f"\nGame started with players: {[color.value for color in player_colors]}")
-    print(f"Turn order: {[p.color.value for p in game.players]}")
+    print("\nGame started with strategic AI players!")
+    print(f"Turn order: {[f'{p.color.value}({p.get_strategy_name()})' for p in game.players]}")
     
     turn_limit = 100  # Prevent infinite games
     turn_count = 0
     
     while not game.game_over and turn_count < turn_limit:
         current_player = game.get_current_player()
-        ai_player = ai_players[current_player.color.value]
         
-        print(f"\n--- Turn {turn_count + 1}: {current_player.color.value} ---")
+        print(f"\n--- Turn {turn_count + 1}: {current_player.color.value} ({current_player.get_strategy_name()}) ---")
         
         # Roll dice
         dice_value = game.roll_dice()
@@ -103,13 +104,16 @@ def play_game_demo():
             turn_count += 1
             continue
         
-        # AI makes decision
-        selected_token = ai_player.make_decision(context)
+        # AI makes strategic decision
+        selected_token = current_player.make_strategic_decision(context)
         
         # Execute the move
         move_result = game.execute_move(current_player, selected_token, dice_value)
         
         if move_result['success']:
+            chosen_move = next((m for m in context['valid_moves'] if m['token_id'] == selected_token), None)
+            move_type = chosen_move['move_type'] if chosen_move else 'unknown'
+            print(f"{current_player.get_strategy_name()} AI: {move_type} with token {selected_token}")
             print(f"Move executed: Token {selected_token} from {move_result['old_position']} to {move_result['new_position']}")
             
             if move_result['captured_tokens']:
@@ -244,19 +248,74 @@ def benchmark_game_performance():
     print(f"Average time per turn: {(total_time / total_turns * 1000):.2f} ms")
 
 
+def strategic_demo():
+    """Quick demonstration of strategic AI system."""
+    print("\n" + "=" * 60)
+    print("STRATEGIC AI SYSTEM DEMONSTRATION")
+    print("=" * 60)
+    
+    print("\nAvailable AI Strategies:")
+    descriptions = StrategyFactory.get_strategy_descriptions()
+    for name, desc in descriptions.items():
+        print(f"🤖 {name.upper()}: {desc}")
+    
+    print("\nQuick 2-Player Strategic Match:")
+    print("-" * 40)
+    
+    # Create a quick strategic match
+    game = LudoGame([PlayerColor.RED, PlayerColor.BLUE])
+    game.players[0].set_strategy(StrategyFactory.create_strategy('killer'))
+    game.players[1].set_strategy(StrategyFactory.create_strategy('defensive'))
+    
+    print(f"🔴 RED: {game.players[0].get_strategy_name()} vs 🔵 BLUE: {game.players[1].get_strategy_name()}")
+    
+    # Play a few turns to show strategy differences
+    for turn in range(10):
+        if game.game_over:
+            break
+            
+        current_player = game.get_current_player()
+        dice_value = game.roll_dice()
+        context = game.get_ai_decision_context(dice_value)
+        
+        if context['valid_moves']:
+            selected_token = current_player.make_strategic_decision(context)
+            move_result = game.execute_move(current_player, selected_token, dice_value)
+            
+            if move_result['success']:
+                chosen_move = next((m for m in context['valid_moves'] if m['token_id'] == selected_token), None)
+                if chosen_move:
+                    print(f"Turn {turn+1}: {current_player.color.value} ({current_player.get_strategy_name()}) - {chosen_move['move_type']}")
+                
+                if move_result.get('game_won'):
+                    print(f"🏆 {current_player.color.value} ({current_player.get_strategy_name()}) WINS!")
+                    break
+                
+                if not move_result.get('extra_turn', False):
+                    game.next_turn()
+            else:
+                print(f"Turn {turn+1}: {current_player.color.value} - Move failed")
+                game.next_turn()
+        else:
+            print(f"Turn {turn+1}: {current_player.color.value} - No valid moves")
+            game.next_turn()
+
+
 if __name__ == "__main__":
     # Run the demonstrations
     play_game_demo()
     demonstrate_ai_interface()
     benchmark_game_performance()
+    strategic_demo()
     
     print("\n" + "=" * 60)
-    print("LUDO AI ENVIRONMENT READY!")
+    print("LUDO AI ENVIRONMENT WITH STRATEGIES READY!")
     print("=" * 60)
     print("\nTo use this environment in your AI projects:")
-    print("1. Import: from ludo import LudoGame, PlayerColor")
+    print("1. Import: from ludo import LudoGame, PlayerColor, StrategyFactory")
     print("2. Create: game = LudoGame([PlayerColor.RED, PlayerColor.BLUE])")
-    print("3. Use: context = game.get_ai_decision_context(dice_value)")
-    print("4. Decide: token_id = your_ai_model.predict(context)")
+    print("3. Strategy: player.set_strategy(StrategyFactory.create_strategy('killer'))")
+    print("4. Decide: token_id = player.make_strategic_decision(context)")
     print("5. Execute: result = game.execute_move(player, token_id, dice_value)")
-    print("\nThe environment provides rich state information for AI learning!")
+    print("\nAvailable strategies:", StrategyFactory.get_available_strategies())
+    print("Run 'python strategic_tournament.py' for tournament mode!")

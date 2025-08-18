@@ -21,17 +21,19 @@ class Player:
     Represents a player in the Ludo game.
     """
     
-    def __init__(self, color: PlayerColor, player_id: int):
+    def __init__(self, color: PlayerColor, player_id: int, strategy=None):
         """
         Initialize a player with their color and 4 tokens.
         
         Args:
             color: Player's color (RED, BLUE, GREEN, YELLOW)
             player_id: Unique identifier for the player (0-3)
+            strategy: Strategy instance for AI decision making (optional)
         """
         self.color = color
         self.player_id = player_id
         self.tokens: List[Token] = []
+        self.strategy = strategy
         
         # Create 4 tokens for this player
         for i in range(4):
@@ -229,6 +231,71 @@ class Player:
         
         return value
     
+    def set_strategy(self, strategy):
+        """
+        Set the strategy for this player.
+        
+        Args:
+            strategy: Strategy instance for decision making
+        """
+        self.strategy = strategy
+    
+    def make_strategic_decision(self, game_context: Dict) -> int:
+        """
+        Make a strategic decision using the assigned strategy.
+        
+        Args:
+            game_context: Complete game context from the game engine
+            
+        Returns:
+            int: token_id to move (0-3)
+        """
+        if self.strategy is None:
+            # Fallback to simple decision if no strategy set
+            return self._make_simple_decision(game_context)
+        
+        return self.strategy.decide(game_context)
+    
+    def _make_simple_decision(self, game_context: Dict) -> int:
+        """
+        Simple fallback decision making without strategy.
+        Uses basic priority system.
+        """
+        valid_moves = game_context.get('valid_moves', [])
+        
+        if not valid_moves:
+            return 0
+        
+        # Simple priority: finish > capture > exit > highest value
+        for move in valid_moves:
+            if move['move_type'] == 'finish':
+                return move['token_id']
+        
+        for move in valid_moves:
+            if move['captures_opponent']:
+                return move['token_id']
+        
+        for move in valid_moves:
+            if move['move_type'] == 'exit_home':
+                return move['token_id']
+        
+        # Choose highest strategic value
+        best_move = max(valid_moves, key=lambda m: m['strategic_value'])
+        return best_move['token_id']
+    
+    def get_strategy_name(self) -> str:
+        """Get the name of the current strategy."""
+        if self.strategy is None:
+            return "Simple"
+        return self.strategy.name
+    
+    def get_strategy_description(self) -> str:
+        """Get the description of the current strategy."""
+        if self.strategy is None:
+            return "Basic priority-based decision making"
+        return self.strategy.description
+    
     def __str__(self) -> str:
         """String representation of the player."""
-        return f"Player({self.color.value}, tokens: {[str(token) for token in self.tokens]})"
+        strategy_name = self.get_strategy_name()
+        return f"Player({self.color.value}, strategy: {strategy_name}, tokens: {len([t for t in self.tokens if not t.is_in_home()])} active)"
