@@ -9,7 +9,7 @@ from game_state_saver import GameStateSaver
 import random
 import os
 from collections import defaultdict
-from itertools import combinations
+from itertools import combinations, combinations_with_replacement
 import time
 from dotenv import load_dotenv
 
@@ -38,7 +38,8 @@ class FourPlayerTournament:
             self.all_strategies = StrategyFactory.get_available_strategies()
 
         # Generate all 4-strategy combinations
-        self.strategy_combinations = list(combinations(self.all_strategies, 4))
+        combi_method = combinations if len(self.all_strategies) > 4 else combinations_with_replacement
+        self.strategy_combinations = list(combi_method(self.all_strategies, 4))
 
         # Tournament tracking
         self.results = defaultdict(lambda: defaultdict(int))
