@@ -13,7 +13,7 @@ from .llm_exceptions import (
     LLMValidationError,
 )
 from .config import LLMConfig
-from .prompt import PROMPT
+from .prompt import create_prompt
 from .utils import LLMClient, CircuitBreaker, RESPONSE_PATTERNS
 
 
@@ -227,58 +227,7 @@ class LLMStrategy(Strategy):
     def _create_prompt(self, game_context: Dict) -> str:
         """Create structured prompt for LLM decision making with sanitized data."""
         valid_moves = self._get_valid_moves(game_context)
-        player_state = game_context.get("player_state", {})
-        opponents = game_context.get("opponents", [])
-
-        # Build moves information safely (data already validated)
-        moves_info = []
-        for i, move in enumerate(valid_moves):
-            token_id = move.get("token_id", 0)
-            move_type = move.get("move_type", "unknown")
-            strategic_value = move.get("strategic_value", 0.0)
-
-            move_desc = f"Token {token_id}: {move_type} (value: {strategic_value:.2f})"
-
-            if move.get("captures_opponent"):
-                move_desc += " [CAPTURES OPPONENT]"
-            if move.get("is_safe_move"):
-                move_desc += " [SAFE]"
-            else:
-                move_desc += " [RISKY]"
-
-            moves_info.append(move_desc)
-
-        # Extract game state data (already validated)
-        my_progress = player_state.get("finished_tokens", 0)
-        my_home_tokens = player_state.get("home_tokens", 0)
-        my_active_tokens = max(0, 4 - my_home_tokens - my_progress)
-
-        # Extract opponent data (already validated)
-        opponent_progress = [opp.get("tokens_finished", 0) for opp in opponents]
-        max_opponent_progress = max(opponent_progress, default=0)
-
-        # Determine game phase
-        if my_progress == 0:
-            game_phase = "Early"
-        elif my_progress < 3:
-            game_phase = "Mid"
-        else:
-            game_phase = "End"
-
-        # Create prompt with validated data
-        moves_text = "\n".join(f"{i + 1}. {move}" for i, move in enumerate(moves_info))
-
-        prompt = PROMPT.format(
-            my_progress=my_progress,
-            my_home_tokens=my_home_tokens,
-            my_active_tokens=my_active_tokens,
-            opponent_progress=opponent_progress,
-            max_opponent_progress=max_opponent_progress,
-            game_phase=game_phase,
-            moves_text=moves_text,
-        )
-
-        return prompt
+        return create_prompt(game_context, valid_moves)
 
     def _parse_llm_response(self, response: str, game_context: Dict) -> Optional[int]:
         """
@@ -287,6 +236,8 @@ class LLMStrategy(Strategy):
         """
         if not response:
             raise LLMResponseError("Empty response from LLM")
+        # Remove any 'think' tags or similar artifacts from the response
+        response = re.sub(r"<\s*think\s*>.*?<\s*/\s*think\s*>", "", response, flags=re.DOTALL | re.IGNORECASE)
 
         valid_moves = self._get_valid_moves(game_context)
         valid_token_ids = [move["token_id"] for move in valid_moves]
