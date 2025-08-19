@@ -30,58 +30,59 @@ Choose the token ID (0-3) for your move. Respond with ONLY the token number.
 
 DECISION: """
 
+
 def create_prompt(game_context: dict, valid_moves: list[dict]) -> str:
-        """Create structured prompt for LLM decision making with sanitized data."""
-        # valid_moves = self._get_valid_moves(game_context)
-        player_state: dict = game_context.get("player_state", {})
-        opponents: list[dict] = game_context.get("opponents", [])
+    """Create structured prompt for LLM decision making with sanitized data."""
+    # valid_moves = self._get_valid_moves(game_context)
+    player_state: dict = game_context.get("player_state", {})
+    opponents: list[dict] = game_context.get("opponents", [])
 
-        # Build moves information safely (data already validated)
-        moves_info = []
-        for i, move in enumerate(valid_moves):
-            token_id = move.get("token_id", 0)
-            move_type = move.get("move_type", "unknown")
-            strategic_value = move.get("strategic_value", 0.0)
+    # Build moves information safely (data already validated)
+    moves_info = []
+    for i, move in enumerate(valid_moves):
+        token_id = move.get("token_id", 0)
+        move_type = move.get("move_type", "unknown")
+        strategic_value = move.get("strategic_value", 0.0)
 
-            move_desc = f"Token {token_id}: {move_type} (value: {strategic_value:.2f})"
+        move_desc = f"Token {token_id}: {move_type} (value: {strategic_value:.2f})"
 
-            if move.get("captures_opponent"):
-                move_desc += " [CAPTURES OPPONENT]"
-            if move.get("is_safe_move"):
-                move_desc += " [SAFE]"
-            else:
-                move_desc += " [RISKY]"
-
-            moves_info.append(move_desc)
-
-        # Extract game state data (already validated)
-        my_progress = player_state.get("finished_tokens", 0)
-        my_home_tokens = player_state.get("home_tokens", 0)
-        my_active_tokens = max(0, 4 - my_home_tokens - my_progress)
-
-        # Extract opponent data (already validated)
-        opponent_progress = [opp.get("tokens_finished", 0) for opp in opponents]
-        max_opponent_progress = max(opponent_progress, default=0)
-
-        # Determine game phase
-        if my_progress == 0:
-            game_phase = "Early"
-        elif my_progress < 3:
-            game_phase = "Mid"
+        if move.get("captures_opponent"):
+            move_desc += " [CAPTURES OPPONENT]"
+        if move.get("is_safe_move"):
+            move_desc += " [SAFE]"
         else:
-            game_phase = "End"
+            move_desc += " [RISKY]"
 
-        # Create prompt with validated data
-        moves_text = "\n".join(f"{i + 1}. {move}" for i, move in enumerate(moves_info))
+        moves_info.append(move_desc)
 
-        prompt = PROMPT.format(
-            my_progress=my_progress,
-            my_home_tokens=my_home_tokens,
-            my_active_tokens=my_active_tokens,
-            opponent_progress=opponent_progress,
-            max_opponent_progress=max_opponent_progress,
-            game_phase=game_phase,
-            moves_text=moves_text,
-        )
+    # Extract game state data (already validated)
+    my_progress = player_state.get("finished_tokens", 0)
+    my_home_tokens = player_state.get("home_tokens", 0)
+    my_active_tokens = max(0, 4 - my_home_tokens - my_progress)
 
-        return prompt
+    # Extract opponent data (already validated)
+    opponent_progress = [opp.get("tokens_finished", 0) for opp in opponents]
+    max_opponent_progress = max(opponent_progress, default=0)
+
+    # Determine game phase
+    if my_progress == 0:
+        game_phase = "Early"
+    elif my_progress < 3:
+        game_phase = "Mid"
+    else:
+        game_phase = "End"
+
+    # Create prompt with validated data
+    moves_text = "\n".join(f"{i + 1}. {move}" for i, move in enumerate(moves_info))
+
+    prompt = PROMPT.format(
+        my_progress=my_progress,
+        my_home_tokens=my_home_tokens,
+        my_active_tokens=my_active_tokens,
+        opponent_progress=opponent_progress,
+        max_opponent_progress=max_opponent_progress,
+        game_phase=game_phase,
+        moves_text=moves_text,
+    )
+
+    return prompt

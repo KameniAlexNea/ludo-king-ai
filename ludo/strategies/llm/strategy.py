@@ -237,7 +237,12 @@ class LLMStrategy(Strategy):
         if not response:
             raise LLMResponseError("Empty response from LLM")
         # Remove any 'think' tags or similar artifacts from the response
-        response = re.sub(r"<\s*think\s*>.*?<\s*/\s*think\s*>", "", response, flags=re.DOTALL | re.IGNORECASE)
+        response = re.sub(
+            r"<\s*think\s*>.*?<\s*/\s*think\s*>",
+            "",
+            response,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
 
         valid_moves = self._get_valid_moves(game_context)
         valid_token_ids = [move["token_id"] for move in valid_moves]
