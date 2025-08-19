@@ -205,7 +205,7 @@ class Player:
 
         # Exiting home is valuable when you roll a 6
         elif token.is_in_home() and dice_value == 6:
-            value += StrategyConstants.EXIT_HOME_VALUE
+            value += dice_value  # Use dice value instead of fixed constant
 
         # Moving active tokens forward
         elif token.is_active():

@@ -110,7 +110,6 @@ class StrategyConstants:
     # Strategic values
     FINISH_TOKEN_VALUE = 100.0
     HOME_COLUMN_ADVANCE_VALUE = 20.0
-    EXIT_HOME_VALUE = 15.0
     CAPTURE_BONUS = 25.0
     SAFE_MOVE_BONUS = 5.0
     RISKY_MOVE_PENALTY = 10.0
