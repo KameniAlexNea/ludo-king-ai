@@ -5,6 +5,7 @@ Each player has 4 tokens that move around the board.
 
 from enum import Enum
 from dataclasses import dataclass
+from .constants import BoardConstants
 
 
 class TokenState(Enum):
@@ -27,7 +28,7 @@ class Token:
     state: TokenState = TokenState.HOME
     position: int = (
         -1
-    )  # -1 means in home, 0-51 for board positions, 52-57 for home column
+    )  # -1 means in home, 0-51 for board positions, 100-105 for home column
 
     def __post_init__(self):
         """Initialize token in home state."""
@@ -71,7 +72,7 @@ class Token:
         if self.is_in_home_column():
             # Must use exact count to move in home column
             target_position = self.position + dice_value
-            return target_position <= 57  # Can't go beyond the center
+            return target_position <= 105  # Can't go beyond position 105 (finish)
 
         # Token is active on main board
         return True
@@ -95,20 +96,29 @@ class Token:
         if self.is_in_home_column():
             return self.position + dice_value
 
-        # Active on main board
+        # Active on main board - implement wraparound logic
         new_position = self.position + dice_value
 
-        # Check if token should enter home column
-        home_column_entry = (player_start_position + 51) % 52
-        if self.position < home_column_entry <= new_position or (
-            home_column_entry == 0 and new_position >= 52
-        ):
-            # Enter home column
-            overflow = new_position - home_column_entry
-            return 52 + overflow - 1  # Home column positions start at 52
+        # Get the home entry position for this player
+        home_entry_position = BoardConstants.HOME_COLUMN_ENTRIES[self.player_color]
 
-        # Normal move on main board
-        return new_position % 52
+        # Check if we should enter home column
+        if self.position <= home_entry_position < new_position:
+            # Enter home column at position 100 and advance
+            overflow = new_position - home_entry_position - 1
+            return 100 + overflow
+
+        # Handle wraparound: after position 51, go to position 0 (except for red)
+        if new_position > 51:
+            if self.player_color == "red" and self.position <= 51:
+                # Red enters home after position 51
+                overflow = new_position - 52
+                return 100 + overflow
+            else:
+                # All other colors wrap around to position 0
+                return new_position - 52
+
+        return new_position
 
     def move(self, dice_value: int, player_start_position: int) -> bool:
         """
@@ -134,14 +144,18 @@ class Token:
             self.state = TokenState.ACTIVE
             self.position = player_start_position
         elif self.is_active():
-            if target_position >= 52:
+            if 100 <= target_position <= 105:
+                # Entering home column
                 self.state = TokenState.HOME_COLUMN
                 self.position = target_position
+                if self.position == 105:  # Reached finish
+                    self.state = TokenState.FINISHED
             else:
+                # Normal move on main board
                 self.position = target_position
         elif self.is_in_home_column():
             self.position = target_position
-            if self.position == 57:  # Reached center
+            if self.position == 105:  # Reached finish
                 self.state = TokenState.FINISHED
 
         return True

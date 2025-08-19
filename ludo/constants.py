@@ -24,15 +24,15 @@ class GameConstants:
     TOKENS_TO_WIN = 4
 
     # Special positions
-    FINISH_POSITION = 57
-    HOME_POSITION = -1
+    FINISH_POSITION = 105  # Final position in home column
+    HOME_POSITION = -1  # Tokens start in home (-1)
 
 
 class BoardConstants:
     """Board layout and position constants."""
 
-    # Star squares (safe for all players)
-    STAR_SQUARES: Set[int] = {1, 9, 14, 22, 27, 35, 40, 48}
+    # Star squares (safe for all players) - 0-indexed board
+    STAR_SQUARES: Set[int] = {8, 21, 34, 47}
 
     # Starting positions for each color
     START_POSITIONS: Dict[str, int] = {
@@ -42,20 +42,20 @@ class BoardConstants:
         "blue": 40,
     }
 
-    # Home column entry positions for each color
+    # Last position before entering home column for each color
     HOME_COLUMN_ENTRIES: Dict[str, int] = {
-        "red": 0,  # After position 51, enters home column
-        "green": 13,
-        "yellow": 26,
-        "blue": 39,
+        "red": 51,  # Red enters home after position 51
+        "green": 12,  # Green enters home after position 12
+        "yellow": 25,  # Yellow enters home after position 25
+        "blue": 38,  # Blue enters home after position 38
     }
 
-    # Colored safe squares for each player (including starting positions)
+    # Starting positions are safe for everyone (all starting squares are safe)
     COLORED_SAFE_SQUARES: Dict[str, Set[int]] = {
-        "red": {1, 2, 3, 4, 5, 6},
-        "green": {14, 15, 16, 17, 18, 19},
-        "yellow": {27, 28, 29, 30, 31, 32},
-        "blue": {40, 41, 42, 43, 44, 45},
+        "red": {1},  # Only starting position (safe for everyone)
+        "green": {14},  # Only starting position (safe for everyone)
+        "yellow": {27},  # Only starting position (safe for everyone)
+        "blue": {40},  # Only starting position (safe for everyone)
     }
 
     # All safe squares (combination of star squares and colored squares)
@@ -67,13 +67,15 @@ class BoardConstants:
             all_safe.update(color_squares)
         return all_safe
 
-    # Home column positions (52-57 for each player, calculated dynamically)
-    HOME_COLUMN_START = 52
+    # Home column positions (100 to 105)
+    HOME_COLUMN_START = 100
+    HOME_COLUMN_END = 105
+    FINISH_POSITION = 105  # Final position in home column
 
     @classmethod
     def is_home_column_position(cls, position: int) -> bool:
         """Check if a position is in any home column."""
-        return position >= cls.HOME_COLUMN_START
+        return cls.HOME_COLUMN_START <= position <= cls.HOME_COLUMN_END
 
     @classmethod
     def is_safe_position(cls, position: int, player_color: str = None) -> bool:
@@ -95,10 +97,9 @@ class BoardConstants:
         if position in cls.STAR_SQUARES:
             return True
 
-        # Color-specific safe squares
-        if player_color and position in cls.COLORED_SAFE_SQUARES.get(
-            player_color, set()
-        ):
+        # Starting positions are safe for everyone (not just the owner)
+        all_starting_positions = {1, 14, 27, 40}
+        if position in all_starting_positions:
             return True
 
         return False

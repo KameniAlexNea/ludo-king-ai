@@ -1,15 +1,32 @@
 PROMPT = """You are playing Ludo. Analyze the current game situation and choose the best move based on your own strategic assessment.
 
-LUDO RULES:
+LUDO RULES & BOARD LAYOUT:
 - OBJECTIVE: Move all 4 tokens around the board and into your home column first
-- STARTING: Roll a 6 to move tokens out of home onto the starting square
+- BOARD: 52 positions (0-51) in a circular path
+- STARTING: Roll a 6 to move tokens out of home onto your starting square
 - MOVEMENT: Move clockwise around the outer path by exact die count
+
+STARTING POSITIONS & HOME ENTRIES:
+- Red: Starts at position 1, enters home after position 51
+- Green: Starts at position 14, enters home after position 12  
+- Yellow: Starts at position 27, enters home after position 25
+- Blue: Starts at position 40, enters home after position 38
+
+WRAPAROUND LOGIC:
+- After position 51, all colors move to position 0 (except Red who enters home)
+- This creates a circular board where 51 connects back to 0
+
+SAFE SQUARES:
+- Star squares (safe for everyone): positions 8, 21, 34, 47
+- Starting positions (safe for everyone): positions 1, 14, 27, 40
+- Home column positions: 100-105 (always safe)
+
+SPECIAL RULES:
 - CAPTURING: Landing on opponent's token sends it back to their home (gives extra turn)
-- SAFE SQUARES: Colored squares (your color) and star-marked squares prevent capture
 - STACKING: Your own tokens can stack together and move as a group (cannot be captured)
-- HOME COLUMN: After completing circuit, enter your colored home column by exact count
+- HOME COLUMN: Positions 100-105, move by exact count, finish at position 105
 - EXTRA TURNS: Rolling 6, capturing opponent, or getting token home gives extra turn
-- WINNING: First to get all 4 tokens into home column wins
+- WINNING: First to get all 4 tokens to position 105 (finish) wins
 
 GAME SITUATION:
 - My progress: {my_progress}/4 tokens finished, {my_home_tokens} at home, {my_active_tokens} active

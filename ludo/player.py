@@ -194,7 +194,7 @@ class Player:
         # Finishing a token is very valuable
         if token.is_in_home_column():
             target = token.get_target_position(dice_value, self.start_position)
-            if target == 57:
+            if target == 105:  # Updated finish position
                 value += (
                     StrategyConstants.FINISH_TOKEN_VALUE
                 )  # Finishing is highest priority

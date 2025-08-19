@@ -42,11 +42,15 @@ class Board:
     def __init__(self):
         """Initialize the board with 52 main positions plus home columns."""
         self.main_path_size = 52
-        self.home_column_size = 6  # Positions 52-57 for each player
+        self.home_column_size = 6  # Positions 100-105 for home columns
 
-        # Initialize main board positions
+        # Initialize main board positions (0-51)
         self.positions: Dict[int, Position] = {}
         for i in range(self.main_path_size):
+            self.positions[i] = Position(i)
+
+        # Initialize home column positions (100-105)
+        for i in range(100, 106):  # 100, 101, 102, 103, 104, 105
             self.positions[i] = Position(i)
 
         # Optimized blocking positions tracking (initialize before reset_token_positions)
@@ -74,7 +78,13 @@ class Board:
     def reset_token_positions(self):
         """Reset all token position tracking."""
         self.token_positions.clear()
-        for i in range(self.main_path_size + self.home_column_size * 4):
+
+        # Initialize positions for main board (0-51)
+        for i in range(self.main_path_size):
+            self.token_positions[i] = []
+
+        # Initialize positions for home columns (100-105)
+        for i in range(100, 106):
             self.token_positions[i] = []
 
         # Reset cache and multi-token tracking
@@ -268,9 +278,18 @@ class Board:
 
     def get_position_info(self, position: int) -> Dict:
         """Get detailed information about a specific position."""
-        if position < 0:
+        if position == -1:
             return {"type": "home", "is_safe": True, "tokens": []}
-        elif position < self.main_path_size:
+        elif 100 <= position <= 105:
+            return {
+                "type": "home_column",
+                "position": position,
+                "is_safe": True,
+                "tokens": [
+                    token.to_dict() for token in self.get_tokens_at_position(position)
+                ],
+            }
+        elif 0 <= position < self.main_path_size:
             board_pos = self.positions.get(position, Position(position))
             return {
                 "type": "main_board",
@@ -284,12 +303,10 @@ class Board:
             }
         else:
             return {
-                "type": "home_column",
+                "type": "unknown",
                 "position": position,
-                "is_safe": True,
-                "tokens": [
-                    token.to_dict() for token in self.get_tokens_at_position(position)
-                ],
+                "is_safe": False,
+                "tokens": [],
             }
 
     def update_token_position(self, token: Token, old_position: int, new_position: int):
