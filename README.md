@@ -6,6 +6,9 @@ A comprehensive Python environment for training AI agents to play Ludo King. Thi
 
 - **Complete Ludo Implementation**: Full game rules with proper token movement, capturing, and winning conditions
 - **AI-Friendly Interface**: Rich game state representation optimized for ML models
+- **Strategic Tournament System**: Multi-strategy tournaments with comprehensive analysis
+- **Game State Learning**: Automatic saving and analysis of AI decisions and outcomes
+- **Move Evaluation Framework**: Real-time move quality assessment and correlation analysis
 - **Structured Design**: Clean, modular code that's easy to understand and extend
 - **Strategic Analysis**: Built-in move evaluation and strategic context for AI decision making
 - **Multiple Player Support**: 2-4 players with different colors
@@ -17,12 +20,27 @@ The environment is built with clear separation of concerns:
 
 ```
 ludo/
-├── __init__.py       # Package initialization
-├── token.py          # Token/piece representation and movement
-├── player.py         # Player management and strategy
-├── board.py          # Game board and position management  
-├── game.py           # Main game engine and rules
-└── main.py           # Example usage and AI demonstrations
+├── __init__.py              # Package initialization
+├── token.py                 # Token/piece representation and movement
+├── player.py                # Player management and strategy
+├── board.py                 # Game board and position management  
+├── game.py                  # Main game engine and rules
+├── strategy.py              # Strategy framework and implementations
+└── strategies/              # Individual strategy implementations
+    ├── base.py              # Base strategy class
+    ├── killer.py            # Aggressive capture-focused strategy
+    ├── winner.py            # Win-focused finishing strategy
+    ├── defensive.py         # Conservative safe-play strategy
+    ├── optimist.py          # Risk-taking strategy
+    ├── balanced.py          # Adaptive balanced strategy
+    └── cautious.py          # Ultra-conservative strategy
+
+# Tournament and Analysis Systems
+four_player_tournament.py   # Comprehensive tournament system
+strategic_tournament.py     # Strategic analysis demonstrations
+game_state_saver.py         # Decision tracking and persistence
+real_move_evaluator.py      # Move quality analysis system
+main.py                     # Example usage and AI demonstrations
 ```
 
 ## 🚀 Quick Start
@@ -158,6 +176,56 @@ Each possible move includes:
 - Reproducible game seeds
 - Comprehensive logging
 
+## 📊 Game State Learning System
+
+### Automatic Decision Tracking
+The environment automatically captures every AI decision for later analysis:
+
+```python
+from game_state_saver import GameStateSaver
+from four_player_tournament import FourPlayerTournament
+
+# Run tournament with automatic state saving
+tournament = FourPlayerTournament()
+tournament.run_full_tournament()  # Saves all decisions to JSON files
+
+# Load and analyze saved states
+saver = GameStateSaver()
+states = saver.load_states("killer")  # Load decisions for specific strategy
+analysis = saver.analyze_strategy("killer")  # Get performance statistics
+```
+
+### Rich Context Capture
+Each saved decision includes:
+- **Complete game context**: Board state, valid moves, strategic analysis
+- **Decision made**: Which token was chosen and why
+- **Outcome**: Results of the move (captures, extra turns, game won)
+- **Timestamp**: For temporal analysis
+
+### Move Quality Evaluation
+```python
+from real_move_evaluator import GameStateAnalyzer
+
+# Analyze move quality vs outcomes
+analyzer = GameStateAnalyzer()
+analyzer.analyze_decisions_with_context("optimist")
+
+# Results include:
+# - Safety vs Progress vs Capture scores
+# - Correlation between move quality and outcomes  
+# - Move type performance analysis
+# - Strategic pattern identification
+```
+
+### Performance Insights
+The evaluation system provides:
+- **Move Type Analysis**: Exit home vs advance vs finish performance
+- **Safety Assessment**: Safe moves vs risky moves outcomes
+- **Strategy Comparison**: Which strategies make better decisions
+- **Correlation Validation**: Does good evaluation predict good outcomes?
+
+## 🏆 Tournament Analysis
+
 ## 📊 Example AI Implementation
 
 A simple AI is included that demonstrates the interface:
@@ -189,6 +257,7 @@ class SimpleAI:
 
 ## 🏃‍♂️ Running the Demo
 
+### Basic Game Demo
 Run the complete demonstration:
 
 ```bash
@@ -199,6 +268,32 @@ This will show:
 1. **Full Game Demo**: Complete game with AI players
 2. **AI Interface Demo**: Detailed state representation examples
 3. **Performance Benchmark**: Speed and efficiency metrics
+
+### Strategic Tournament
+Run comprehensive multi-strategy tournaments:
+
+```bash
+python four_player_tournament.py
+```
+
+Features:
+- **35 strategy combinations**: Tests all 4-player combinations
+- **Performance analysis**: Win rates, capture efficiency, strategic behavior
+- **Automatic state saving**: All decisions saved for later analysis
+- **Head-to-head comparison**: Strategy vs strategy performance matrices
+
+### Move Evaluation Analysis
+Analyze saved tournament data:
+
+```bash
+python real_move_evaluator.py
+```
+
+Provides:
+- **Move quality scoring**: Safety, progress, capture, blocking analysis
+- **Strategy comparison**: Which strategies make better decisions
+- **Correlation analysis**: Move quality vs actual outcomes
+- **Performance validation**: Evaluation system accuracy assessment
 
 ## 🔧 Advanced Usage
 
@@ -256,12 +351,17 @@ This environment is designed to be easily extensible. Areas for enhancement:
 
 ## 📈 Roadmap
 
-- [ ] Neural network training examples
-- [ ] Reinforcement learning integration
-- [ ] Tournament system
-- [ ] Rule variations (team play, different board sizes)
-- [ ] Advanced strategic analysis
-- [ ] Performance optimizations for large-scale training
+- [x] **Strategic tournament system** - Multi-strategy competitions with comprehensive analysis
+- [x] **Game state learning** - Automatic decision tracking and analysis
+- [x] **Move evaluation framework** - Real-time move quality assessment
+- [x] **Performance correlation analysis** - Move quality vs outcome validation
+- [ ] **Neural network training examples** - Deep learning integration examples
+- [ ] **Reinforcement learning integration** - RL agent training framework
+- [ ] **Advanced move evaluation** - True board position analysis (not meta-evaluation)
+- [ ] **Predictive modeling** - Outcome prediction from game states
+- [ ] **Rule variations** - Team play, different board sizes, custom rules
+- [ ] **Real-time strategy adaptation** - Dynamic strategy switching
+- [ ] **Performance optimizations** - Large-scale training efficiency improvements
 
 ---
 

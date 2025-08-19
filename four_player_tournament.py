@@ -5,10 +5,11 @@ Comprehensive tournament between combinations of 4 Ludo AI strategies.
 """
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
+from game_state_saver import GameStateSaver
 import random
 import os
 from collections import defaultdict
-from itertools import combinations
+from itertools import combinations, combinations_with_replacement
 import time
 from dotenv import load_dotenv
 
@@ -26,6 +27,9 @@ class FourPlayerTournament:
         self.tournament_seed = int(os.getenv("TOURNAMENT_SEED", 42))
         self.verbose_output = os.getenv("VERBOSE_OUTPUT", "true").lower() == "true"
 
+        # Initialize state saver
+        self.state_saver = GameStateSaver()
+
         # Get all available strategies or use selected ones
         selected_strategies = os.getenv("SELECTED_STRATEGIES", "").strip()
         if selected_strategies:
@@ -34,7 +38,12 @@ class FourPlayerTournament:
             self.all_strategies = StrategyFactory.get_available_strategies()
 
         # Generate all 4-strategy combinations
-        self.strategy_combinations = list(combinations(self.all_strategies, 4))
+        combi_method = (
+            combinations
+            if len(self.all_strategies) > 4
+            else combinations_with_replacement
+        )
+        self.strategy_combinations = list(combi_method(self.all_strategies, 4))
 
         # Tournament tracking
         self.results = defaultdict(lambda: defaultdict(int))
@@ -197,14 +206,19 @@ class FourPlayerTournament:
                     current_player, selected_token, dice_value
                 )
 
+                # Save the decision and outcome
+                self.state_saver.save_decision(
+                    strategy_name, context, selected_token, move_result
+                )
+
                 # Track stats
                 game_results["player_stats"][strategy_name]["moves_made"] += 1
 
                 if move_result.get("captured_tokens"):
                     captures = len(move_result["captured_tokens"])
-                    game_results["player_stats"][strategy_name]["tokens_captured"] += (
-                        captures
-                    )
+                    game_results["player_stats"][strategy_name][
+                        "tokens_captured"
+                    ] += captures
                     game_results["game_events"].append(
                         f"Turn {turn_count}: {strategy_name} captured {captures} token(s)"
                     )
@@ -235,6 +249,9 @@ class FourPlayerTournament:
         if not game_results["winner"]:
             print(f"  Game {game_number}: DRAW (time limit reached)")
             game_results["turns_played"] = turn_count
+
+        # Save game states
+        self.state_saver.save_game(game_number)
 
         return game_results
 
@@ -307,11 +324,7 @@ class FourPlayerTournament:
             medal = (
                 "🥇"
                 if rank == 1
-                else "🥈"
-                if rank == 2
-                else "🥉"
-                if rank == 3
-                else "  "
+                else "🥈" if rank == 2 else "🥉" if rank == 3 else "  "
             )
             print(
                 f"{rank:<4} {entry['strategy'].upper():<12} {entry['wins']:<6} {entry['games']:<7} "
