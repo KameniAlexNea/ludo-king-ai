@@ -59,9 +59,9 @@ def create_prompt(game_context: dict, valid_moves: list[dict]) -> str:
     for i, move in enumerate(valid_moves):
         token_id = move.get("token_id", 0)
         move_type = move.get("move_type", "unknown")
-        strategic_value = move.get("strategic_value", 0.0)
+        # strategic_value = move.get("strategic_value", 0.0)
 
-        move_desc = f"Token {token_id}: {move_type} (value: {strategic_value:.2f})"
+        move_desc = f"Token {token_id}: {move_type}" # (value: {strategic_value:.2f})
 
         if move.get("captures_opponent"):
             move_desc += " [CAPTURES OPPONENT]"

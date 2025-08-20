@@ -10,7 +10,7 @@ from .defensive import DefensiveStrategy
 from .balanced import BalancedStrategy
 from .random_strategy import RandomStrategy
 from .cautious import CautiousStrategy
-from .llm_strategy import LLMStrategy
+from .llm import LLMStrategy
 
 # Strategy Mapping - Centralized mapping of strategy names to classes
 STRATEGIES: dict[str, Strategy] = {
