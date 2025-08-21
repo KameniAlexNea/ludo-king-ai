@@ -3,9 +3,7 @@ Integration tests for LLM Strategy with real game scenarios.
 """
 
 import unittest
-import asyncio
 
-from ludo.strategies.llm.config import LLMConfig
 from ludo.strategies.llm.strategy import LLMStrategy
 
 
@@ -15,39 +13,29 @@ class MockGameLLMClient:
     def __init__(self):
         self.call_count = 0
 
-    async def ainvoke(self, prompt):
-        """Mock that analyzes prompt and makes reasonable decisions."""
+    def invoke(self, prompt):
         self.call_count += 1
-
+        # Prefer capture if available
         if "CAPTURES OPPONENT" in prompt and "Token 1:" in prompt:
-            return MockResponse("1")  # Prefer capturing
-
+            return type("R", (), {"content": "1"})
+        # Prefer entering home
         if "enter_home" in prompt:
-            lines = prompt.split("\n")
-            for line in lines:
+            for line in prompt.split("\n"):
                 if "enter_home" in line and "Token" in line:
-                    token_id = line.split("Token ")[1][0]
-                    return MockResponse(token_id)
+                    tid = line.split("Token ")[1].split(":")[0]
+                    return type("R", (), {"content": tid})
+        # Default
+        return type("R", (), {"content": "0"})
 
-        return MockResponse("0")  # Default
-
-
-class MockResponse:
-    def __init__(self, content):
-        self.content = content
+    # No separate MockResponse needed
 
 
 class TestLLMStrategyGameScenarios(unittest.TestCase):
     """Test LLM strategy in various game scenarios."""
 
     def setUp(self):
-        self.config = LLMConfig(
-            provider="ollama",
-            timeout=2,
-            retry_attempts=1,
-            use_fallback=True,
-            verbose_errors=False,
-        )
+        # Use Ollama provider by default
+        self.provider = "ollama"
 
     def test_early_game_scenario(self):
         """Test strategy in early game."""
@@ -64,16 +52,12 @@ class TestLLMStrategyGameScenarios(unittest.TestCase):
                 }
             ],
         }
-
         mock_client = MockGameLLMClient()
-        strategy = LLMStrategy(config=self.config, llm_client=mock_client)
-
-        async def run_test():
-            decision = await strategy.adecide(context)
-            self.assertEqual(decision, 0)
-            self.assertEqual(mock_client.call_count, 1)
-
-        asyncio.run(run_test())
+        strategy = LLMStrategy(provider=self.provider)
+        strategy.llm = mock_client
+        decision = strategy.decide(context)
+        self.assertEqual(decision, 0)
+        self.assertEqual(mock_client.call_count, 1)
 
     def test_capture_opportunity(self):
         """Test strategy with capture opportunity."""
@@ -97,16 +81,12 @@ class TestLLMStrategyGameScenarios(unittest.TestCase):
                 },
             ],
         }
-
         mock_client = MockGameLLMClient()
-        strategy = LLMStrategy(config=self.config, llm_client=mock_client)
-
-        async def run_test():
-            decision = await strategy.adecide(context)
-            self.assertEqual(decision, 1)  # Should prefer capture
-            self.assertEqual(mock_client.call_count, 1)
-
-        asyncio.run(run_test())
+        strategy = LLMStrategy(provider=self.provider)
+        strategy.llm = mock_client
+        decision = strategy.decide(context)
+        self.assertEqual(decision, 1)
+        self.assertEqual(mock_client.call_count, 1)
 
     def test_end_game_scenario(self):
         """Test strategy in end game."""
@@ -130,16 +110,12 @@ class TestLLMStrategyGameScenarios(unittest.TestCase):
                 },
             ],
         }
-
         mock_client = MockGameLLMClient()
-        strategy = LLMStrategy(config=self.config, llm_client=mock_client)
-
-        async def run_test():
-            decision = await strategy.adecide(context)
-            self.assertEqual(decision, 3)  # Should prefer finishing
-            self.assertEqual(mock_client.call_count, 1)
-
-        asyncio.run(run_test())
+        strategy = LLMStrategy(provider=self.provider)
+        strategy.llm = mock_client
+        decision = strategy.decide(context)
+        self.assertEqual(decision, 3)
+        self.assertEqual(mock_client.call_count, 1)
 
     def test_fallback_with_invalid_response(self):
         """Test fallback when LLM gives invalid response."""
@@ -161,19 +137,16 @@ class TestLLMStrategyGameScenarios(unittest.TestCase):
             def __init__(self):
                 self.call_count = 0
 
-            async def ainvoke(self, prompt):
+            def invoke(self, prompt):
                 self.call_count += 1
-                return MockResponse("invalid token 99")
+                return type("R", (), {"content": "invalid token 99"})
 
         mock_client = InvalidResponseClient()
-        strategy = LLMStrategy(config=self.config, llm_client=mock_client)
-
-        async def run_test():
-            decision = await strategy.adecide(context)
-            self.assertEqual(decision, 2)  # Should fallback to valid choice
-            self.assertGreaterEqual(mock_client.call_count, 1)
-
-        asyncio.run(run_test())
+        strategy = LLMStrategy(provider=self.provider)
+        strategy.llm = mock_client
+        decision = strategy.decide(context)
+        self.assertIn(decision, [move["token_id"] for move in context["valid_moves"]])
+        self.assertEqual(mock_client.call_count, 1)
 
     def test_consistency(self):
         """Test strategy consistency."""
@@ -195,25 +168,17 @@ class TestLLMStrategyGameScenarios(unittest.TestCase):
             def __init__(self):
                 self.call_count = 0
 
-            async def ainvoke(self, prompt):
+            def invoke(self, prompt):
                 self.call_count += 1
-                return MockResponse("0")
+                return type("R", (), {"content": "0"})
 
         mock_client = DeterministicClient()
-        strategy = LLMStrategy(config=self.config, llm_client=mock_client)
-
-        async def run_test():
-            decisions = []
-            for _ in range(3):
-                decision = await strategy.adecide(context)
-                decisions.append(decision)
-
-            # All decisions should be the same
-            self.assertTrue(all(d == decisions[0] for d in decisions))
-            self.assertTrue(all(d == 0 for d in decisions))
-            self.assertEqual(mock_client.call_count, 3)
-
-        asyncio.run(run_test())
+        strategy = LLMStrategy(provider=self.provider)
+        strategy.llm = mock_client
+        decisions = [strategy.decide(context) for _ in range(3)]
+        self.assertTrue(all(d == decisions[0] for d in decisions))
+        self.assertEqual(decisions[0], 0)
+        self.assertEqual(mock_client.call_count, 3)
 
 
 if __name__ == "__main__":

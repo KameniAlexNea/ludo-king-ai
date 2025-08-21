@@ -7,7 +7,6 @@ import random
 from typing import List, Dict, Optional
 from .player import Player, PlayerColor
 from .board import Board
-from .token import Token, TokenState
 
 
 class LudoGame:
