@@ -11,6 +11,7 @@ This demonstrates:
 
 import os
 import sys
+import argparse
 from collections import defaultdict
 
 # Add the project root to Python path
@@ -24,17 +25,18 @@ from ludo_stats.game_state_saver import GameStateSaver
 class RLEvaluation:
     """System for evaluating a trained RL agent against other strategies."""
 
-    def __init__(self, model_path: str, num_games: int = 10):
+    def __init__(self, model_path: str, num_games: int = 10, max_turns: int = 1000):
         """
         Initialize the RL evaluation environment.
 
         Args:
             model_path: Path to the trained RL model.
             num_games: Number of games to play for evaluation.
+            max_turns: Maximum number of turns per game.
         """
         self.model_path = model_path
         self.num_games = num_games
-        self.max_turns = 1000  # Prevent infinite games
+        self.max_turns = max_turns  # Prevent infinite games
 
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(f"Model file not found: {self.model_path}")
@@ -176,14 +178,33 @@ class RLEvaluation:
 
 def main():
     """Main example function."""
+    parser = argparse.ArgumentParser(description="Ludo RL Agent Gameplay Example")
+    parser.add_argument(
+        "--model_path",
+        type=str,
+        default="models/ludo_dqn_model.pth",
+        help="Path to the trained RL model.",
+    )
+    parser.add_argument(
+        "--num_games",
+        type=int,
+        default=5,
+        help="Number of games to play for evaluation.",
+    )
+    parser.add_argument(
+        "--max_turns",
+        type=int,
+        default=1000,
+        help="Maximum number of turns per game.",
+    )
+    args = parser.parse_args()
+
     print("🎲 Ludo RL Agent Gameplay Example")
     print("=" * 50)
 
-    model_path = "models/ludo_dqn_model.pth"
-
     # Check if model exists
-    if not os.path.exists(model_path):
-        print(f"❌ Trained model not found: {model_path}")
+    if not os.path.exists(args.model_path):
+        print(f"❌ Trained model not found: {args.model_path}")
         print("\n💡 To create a trained model:")
         print("   1. Generate training data by running tournaments")
         print("   2. Run: python examples/train_rl_agent.py")
@@ -191,7 +212,9 @@ def main():
         return
 
     try:
-        evaluation = RLEvaluation(model_path, num_games=5)
+        evaluation = RLEvaluation(
+            args.model_path, num_games=args.num_games, max_turns=args.max_turns
+        )
         results = evaluation.run_evaluation()
 
         if results and results["total_games"] > 0:
