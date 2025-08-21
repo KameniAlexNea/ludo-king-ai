@@ -8,6 +8,7 @@ from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 from .dqn_model import LudoDQNAgent
 from .state_encoder import LudoStateEncoder
@@ -58,11 +59,20 @@ class LudoRLTrainer:
             print(f"Save directory {save_dir} does not exist")
             return all_data
 
-        for filename in os.listdir(save_dir):
-            if filename.endswith(".json"):
-                file_path = os.path.join(save_dir, filename)
-                data = self.load_game_data_file(file_path)
-                all_data.extend(data)
+        # Get list of JSON files
+        json_files = [f for f in os.listdir(save_dir) if f.endswith(".json")]
+        
+        if not json_files:
+            print(f"No JSON files found in {save_dir}")
+            return all_data
+
+        print(f"Loading game data from {len(json_files)} files...")
+        
+        # Load files with progress bar
+        for filename in tqdm(json_files, desc="Loading game files"):
+            file_path = os.path.join(save_dir, filename)
+            data = self.load_game_data_file(file_path)
+            all_data.extend(data)
 
         return all_data
 
@@ -259,12 +269,12 @@ class LudoRLTrainer:
                 avg_loss = epoch_loss / num_batches
                 epoch_losses.append(avg_loss)
 
-            # Calculate average reward from recent sequences
-            if sequences:
-                recent_rewards = []
-                for seq in sequences[-10:]:  # last 10 sequences
-                    seq_reward = sum(exp[2] for exp in seq)
-                    recent_rewards.append(seq_reward)
+            # Calculate average reward from recent experiences in replay buffer
+            if len(self.agent.memory) > 0:
+                # Sample recent experiences to calculate current performance
+                recent_size = min(1000, len(self.agent.memory))
+                recent_experiences = list(self.agent.memory)[-recent_size:]
+                recent_rewards = [exp[2] for exp in recent_experiences]
                 avg_reward = np.mean(recent_rewards)
                 epoch_rewards.append(avg_reward)
 

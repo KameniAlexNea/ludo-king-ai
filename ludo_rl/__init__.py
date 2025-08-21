@@ -4,7 +4,7 @@ Provides tools for training RL agents on Ludo game data.
 """
 
 from .dqn_model import LudoDQN, LudoDQNAgent
-from .rl_player import LudoRLPlayer
+from .rl_player import LudoRLPlayer, create_rl_strategy
 from .state_encoder import LudoStateEncoder
 from .trainer import LudoRLTrainer
 
@@ -14,4 +14,5 @@ __all__ = [
     "LudoDQNAgent",
     "LudoRLTrainer",
     "LudoRLPlayer",
+    "create_rl_strategy",
 ]
