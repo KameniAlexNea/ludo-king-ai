@@ -40,7 +40,7 @@ MOVE TYPES EXPLAINED:
 - SAFE: This move positions your token in a safe spot where it cannot be captured
 - RISKY: This move puts your token in a position where opponents might capture it
 
-Analyze the situation and develop your own strategy (You receive also some strategics values).
+Analyze the situation and develop your own strategy (You receive also some strategics values, not always useful).
 Consider the current game state, your position relative to opponents, and the potential outcomes of each move.
 
 Choose the token ID (0-3) for your move. Respond with ONLY the token number.

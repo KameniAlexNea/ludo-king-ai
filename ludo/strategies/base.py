@@ -69,3 +69,9 @@ class Strategy(ABC):
         if not valid_moves:
             return None
         return min(valid_moves, key=lambda m: m["strategic_value"])
+
+    def __str__(self):
+        return f"Strategy(name={self.name}, description={self.description})"
+
+    def __repr__(self):
+        return str(self)
