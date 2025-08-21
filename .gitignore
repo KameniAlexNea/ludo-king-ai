@@ -214,3 +214,4 @@ saved_states/
 # Test and temporary model files
 *.pth
 training_progress.png
+models/
