@@ -86,7 +86,6 @@ class RLEvaluation:
         self.state_saver.save_game(f"rl_evaluation_{self.num_games}_games")
 
         self._display_results()
-        self._analyze_agent_performance()
 
         return self.results
 
@@ -173,55 +172,6 @@ class RLEvaluation:
         for strategy, wins in self.results["opponent_wins"].items():
             percentage = wins / max(self.results["total_games"], 1) * 100
             print(f"   {strategy.upper()} wins: {wins} ({percentage:.1f}%)")
-
-    def _analyze_agent_performance(self):
-        """
-        Analyze RL agent performance using a single game context.
-        """
-        print("\n🔍 RL Agent Decision Analysis")
-        print("=" * 30)
-
-        try:
-            # Create a test game scenario
-            game = LudoGame([PlayerColor.GREEN, PlayerColor.RED])
-
-            # Create a test scenario
-            dice_value = 6
-            game_context = game.get_ai_decision_context(dice_value)
-
-            print("Test scenario:")
-            print(f"   Dice value: {dice_value}")
-            print(f"   Valid moves: {len(game_context['valid_moves'])}")
-
-            if game_context["valid_moves"]:
-                print("   Available moves:")
-                for i, move in enumerate(game_context["valid_moves"]):
-                    print(
-                        f"     {i}: Token {move['token_id']} - {move['move_type']} "
-                        f"(strategic value: {move['strategic_value']:.1f})"
-                    )
-
-            # Get RL agent decision
-            chosen_token = self.rl_strategy.decide(game_context)
-            print(f"\n🤖 RL Agent chose: Token {chosen_token}")
-
-            # Compare with best strategic move
-            strategic_analysis = game_context.get("strategic_analysis", {})
-            best_move = strategic_analysis.get("best_strategic_move")
-
-            if best_move:
-                print(
-                    f"📋 Best strategic move: Token {best_move['token_id']} "
-                    f"(value: {best_move['strategic_value']:.1f})"
-                )
-
-                if chosen_token == best_move["token_id"]:
-                    print("✅ RL agent chose the optimal move!")
-                else:
-                    print("⚠️  RL agent chose a different move")
-
-        except Exception as e:
-            print(f"❌ Error during analysis: {e}")
 
 
 def main():
