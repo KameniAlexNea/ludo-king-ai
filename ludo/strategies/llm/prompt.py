@@ -31,7 +31,6 @@ SPECIAL RULES:
 GAME SITUATION:
 - My progress: {my_progress}/4 tokens finished, {my_home_tokens} at home, {my_active_tokens} active
 - Opponents' progress: {opponent_progress} (max: {max_opponent_progress}/4)
-- Game phase: {game_phase}
 
 AVAILABLE MOVES:
 {moves_text}
@@ -61,14 +60,14 @@ def create_prompt(game_context: dict, valid_moves: list[dict]) -> str:
         move_type = move.get("move_type", "unknown")
         # strategic_value = move.get("strategic_value", 0.0)
 
-        move_desc = f"Token {token_id}: {move_type}" # (value: {strategic_value:.2f})
+        move_desc = f"Token {token_id}: {move_type}"  # (value: {strategic_value:.2f})
 
         if move.get("captures_opponent"):
             move_desc += " [CAPTURES OPPONENT]"
-        if move.get("is_safe_move"):
-            move_desc += " [SAFE]"
-        else:
-            move_desc += " [RISKY]"
+        # if move.get("is_safe_move"):
+        #     move_desc += " [SAFE]"
+        # else:
+        #     move_desc += " [RISKY]"
 
         moves_info.append(move_desc)
 
@@ -81,13 +80,13 @@ def create_prompt(game_context: dict, valid_moves: list[dict]) -> str:
     opponent_progress = [opp.get("tokens_finished", 0) for opp in opponents]
     max_opponent_progress = max(opponent_progress, default=0)
 
-    # Determine game phase
-    if my_progress == 0:
-        game_phase = "Early"
-    elif my_progress < 3:
-        game_phase = "Mid"
-    else:
-        game_phase = "End"
+    # # Determine game phase
+    # if my_progress == 0:
+    #     game_phase = "Early"
+    # elif my_progress < 3:
+    #     game_phase = "Mid"
+    # else:
+    #     game_phase = "End"
 
     # Create prompt with validated data
     moves_text = "\n".join(f"{i + 1}. {move}" for i, move in enumerate(moves_info))
@@ -98,7 +97,7 @@ def create_prompt(game_context: dict, valid_moves: list[dict]) -> str:
         my_active_tokens=my_active_tokens,
         opponent_progress=opponent_progress,
         max_opponent_progress=max_opponent_progress,
-        game_phase=game_phase,
+        # game_phase=game_phase,
         moves_text=moves_text,
     )
 
