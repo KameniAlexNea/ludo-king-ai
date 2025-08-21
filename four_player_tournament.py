@@ -4,14 +4,16 @@
 Comprehensive tournament between combinations of 4 Ludo AI strategies.
 """
 
-from ludo import LudoGame, PlayerColor, StrategyFactory
-from game_state_saver import GameStateSaver
-import random
 import os
+import random
+import time
 from collections import defaultdict
 from itertools import combinations, combinations_with_replacement
-import time
+
 from dotenv import load_dotenv
+
+from ludo import LudoGame, PlayerColor, StrategyFactory
+from ludo_stats.game_state_saver import GameStateSaver
 
 # Load environment configuration
 load_dotenv()
@@ -40,7 +42,7 @@ class FourPlayerTournament:
         # Generate all 4-strategy combinations
         combi_method = (
             combinations
-            if len(self.all_strategies) > 4
+            if len(self.all_strategies) >= 4
             else combinations_with_replacement
         )
         self.strategy_combinations = list(combi_method(self.all_strategies, 4))
@@ -216,9 +218,9 @@ class FourPlayerTournament:
 
                 if move_result.get("captured_tokens"):
                     captures = len(move_result["captured_tokens"])
-                    game_results["player_stats"][strategy_name][
-                        "tokens_captured"
-                    ] += captures
+                    game_results["player_stats"][strategy_name]["tokens_captured"] += (
+                        captures
+                    )
                     game_results["game_events"].append(
                         f"Turn {turn_count}: {strategy_name} captured {captures} token(s)"
                     )
@@ -324,7 +326,11 @@ class FourPlayerTournament:
             medal = (
                 "🥇"
                 if rank == 1
-                else "🥈" if rank == 2 else "🥉" if rank == 3 else "  "
+                else "🥈"
+                if rank == 2
+                else "🥉"
+                if rank == 3
+                else "  "
             )
             print(
                 f"{rank:<4} {entry['strategy'].upper():<12} {entry['wins']:<6} {entry['games']:<7} "

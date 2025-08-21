@@ -3,6 +3,7 @@ Cautious Strategy - Very cautious strategy that avoids all risks.
 """
 
 from typing import Dict
+
 from .base import Strategy
 
 

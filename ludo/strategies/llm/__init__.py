@@ -1,4 +1,7 @@
-from .config import LLMConfig
+"""
+Simple LLM strategy module.
+"""
+
 from .strategy import LLMStrategy
 
-__all__ = ["LLMConfig", "LLMStrategy"]
+__all__ = ["LLMStrategy"]

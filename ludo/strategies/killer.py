@@ -3,6 +3,7 @@ Killer Strategy - Aggressive strategy focused on capturing opponents.
 """
 
 from typing import Dict
+
 from .base import Strategy
 
 

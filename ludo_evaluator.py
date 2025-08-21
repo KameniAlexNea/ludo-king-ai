@@ -4,7 +4,7 @@ Real Move Evaluation System for Ludo AI
 Evaluates moves based on actual game state and board positions.
 """
 
-from game_state_saver import GameStateSaver
+from ludo_stats.game_state_saver import GameStateSaver
 
 
 class RealMoveEvaluator:

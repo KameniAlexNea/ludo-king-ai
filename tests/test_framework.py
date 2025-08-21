@@ -3,18 +3,19 @@ Core Test Framework for Ludo King AI
 Implements structured testing for game components and AI strategies.
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from typing import Dict, List
+
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
-from ludo.strategy import StrategyFactory, Strategy
+from ludo.strategy import Strategy, StrategyFactory
 from tests.test_models import ExpectedBehavior, TestDataFactory, TestScenarioBuilder
-from typing import Dict, List
 
 
 class LudoTestFramework(unittest.TestCase):

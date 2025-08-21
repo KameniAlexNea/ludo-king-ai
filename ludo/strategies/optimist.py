@@ -3,6 +3,7 @@ Optimist Strategy - Takes calculated risks and plays boldly.
 """
 
 from typing import Dict
+
 from .base import Strategy
 
 

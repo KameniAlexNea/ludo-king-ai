@@ -3,7 +3,7 @@ Base strategy classes and interfaces for Ludo AI.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 
 class Strategy(ABC):
@@ -69,3 +69,9 @@ class Strategy(ABC):
         if not valid_moves:
             return None
         return min(valid_moves, key=lambda m: m["strategic_value"])
+
+    def __str__(self):
+        return f"Strategy(name={self.name}, description={self.description})"
+
+    def __repr__(self):
+        return str(self)
