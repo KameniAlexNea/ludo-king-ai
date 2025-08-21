@@ -4,9 +4,10 @@ Manages game flow, rules, and provides interface for AI players.
 """
 
 import random
-from typing import List, Dict, Optional
-from .player import Player, PlayerColor
+from typing import Dict, List, Optional
+
 from .board import Board
+from .player import Player, PlayerColor
 
 
 class LudoGame:

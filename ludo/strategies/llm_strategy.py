@@ -2,8 +2,9 @@
 LLM Strategy - Uses Language Models (Ollama/Groq) for decision making.
 """
 
-from .llm import LLMStrategy
 import os
+
+from .llm import LLMStrategy
 
 
 class OllamaStrategy(LLMStrategy):

@@ -3,8 +3,9 @@ Token representation for Ludo game.
 Each player has 4 tokens that move around the board.
 """
 
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
+
 from .constants import BoardConstants
 
 

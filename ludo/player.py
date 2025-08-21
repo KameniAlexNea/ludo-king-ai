@@ -4,9 +4,10 @@ Each player has a color and controls 4 tokens.
 """
 
 from enum import Enum
-from typing import List, Dict
-from .token import Token, TokenState
+from typing import Dict, List
+
 from .constants import BoardConstants, StrategyConstants
+from .token import Token, TokenState
 
 
 class PlayerColor(Enum):

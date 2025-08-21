@@ -4,8 +4,8 @@ Defines structured test cases, scenarios, and expected behaviors.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any, Tuple
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class TestScenario(Enum):

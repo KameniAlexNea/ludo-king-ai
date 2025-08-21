@@ -2,15 +2,15 @@
 Strategies module - Collection of all available Ludo AI strategies.
 """
 
-from .base import Strategy
-from .killer import KillerStrategy
-from .winner import WinnerStrategy
-from .optimist import OptimistStrategy
-from .defensive import DefensiveStrategy
 from .balanced import BalancedStrategy
-from .random_strategy import RandomStrategy
+from .base import Strategy
 from .cautious import CautiousStrategy
+from .defensive import DefensiveStrategy
+from .killer import KillerStrategy
 from .llm import LLMStrategy
+from .optimist import OptimistStrategy
+from .random_strategy import RandomStrategy
+from .winner import WinnerStrategy
 
 # Strategy Mapping - Centralized mapping of strategy names to classes
 STRATEGIES: dict[str, Strategy] = {

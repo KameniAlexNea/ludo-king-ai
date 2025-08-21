@@ -3,8 +3,9 @@ Strategic decision-making system for Ludo AI.
 Strategy factory and main interface.
 """
 
-from typing import List, Dict
-from .strategies import Strategy, STRATEGIES
+from typing import Dict, List
+
+from .strategies import STRATEGIES, Strategy
 
 
 # Strategy Factory

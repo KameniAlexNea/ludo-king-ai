@@ -3,9 +3,10 @@ Unit tests for simplified LLM Strategy functionality.
 """
 
 import unittest
-from ludo.strategies.llm.strategy import LLMStrategy
+
 from ludo.strategies.llm.prompt import create_prompt
-from ludo.strategies.llm_strategy import OllamaStrategy, GroqStrategy
+from ludo.strategies.llm.strategy import LLMStrategy
+from ludo.strategies.llm_strategy import GroqStrategy, OllamaStrategy
 
 
 class MockLLMClient:

@@ -2,11 +2,12 @@
 Performance tests for LLM Strategy using unittest.
 """
 
-import unittest
 import time
+import unittest
 from statistics import mean
-from ludo.strategies.llm.strategy import LLMStrategy
+
 from ludo.strategies.llm.prompt import create_prompt
+from ludo.strategies.llm.strategy import LLMStrategy
 
 
 class BenchmarkLLMClient:

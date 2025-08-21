@@ -3,17 +3,17 @@ Unit Tests for Core Ludo Game Components - CORRECTED VERSION
 Tests individual game components with actual API methods.
 """
 
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ludo.token import Token, TokenState
-from ludo.player import Player, PlayerColor
 from ludo.board import Board
 from ludo.game import LudoGame
+from ludo.player import Player, PlayerColor
+from ludo.token import Token, TokenState
 
 
 class TokenTestCase(unittest.TestCase):

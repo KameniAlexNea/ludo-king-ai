@@ -40,7 +40,8 @@ MOVE TYPES EXPLAINED:
 - SAFE: This move positions your token in a safe spot where it cannot be captured
 - RISKY: This move puts your token in a position where opponents might capture it
 
-Analyze the situation and develop your own strategy. Consider the current game state, your position relative to opponents, and the potential outcomes of each move.
+Analyze the situation and develop your own strategy (You receive also some strategics values).
+Consider the current game state, your position relative to opponents, and the potential outcomes of each move.
 
 Choose the token ID (0-3) for your move. Respond with ONLY the token number.
 
@@ -58,16 +59,16 @@ def create_prompt(game_context: dict, valid_moves: list[dict]) -> str:
     for i, move in enumerate(valid_moves):
         token_id = move.get("token_id", 0)
         move_type = move.get("move_type", "unknown")
-        # strategic_value = move.get("strategic_value", 0.0)
+        strategic_value = move.get("strategic_value", 0.0)
 
-        move_desc = f"Token {token_id}: {move_type}"  # (value: {strategic_value:.2f})
+        move_desc = f"Token {token_id}: {move_type} (value: {strategic_value:.2f})"  #
 
         if move.get("captures_opponent"):
             move_desc += " [CAPTURES OPPONENT]"
-        # if move.get("is_safe_move"):
-        #     move_desc += " [SAFE]"
-        # else:
-        #     move_desc += " [RISKY]"
+        if move.get("is_safe_move"):
+            move_desc += " [SAFE]"
+        else:
+            move_desc += " [RISKY]"
 
         moves_info.append(move_desc)
 

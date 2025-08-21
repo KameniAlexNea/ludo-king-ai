@@ -2,9 +2,10 @@
 Simple LLM Strategy - Just call the LLM and parse the response.
 """
 
-import re
 import os
+import re
 from typing import Dict, Optional
+
 from ..base import Strategy
 from ..random_strategy import RandomStrategy
 from .prompt import create_prompt

@@ -3,11 +3,12 @@ Board representation for Ludo game.
 Manages the game board state and validates moves.
 """
 
-from typing import Dict, List, Set, Optional, Tuple
 from dataclasses import dataclass
+from typing import Dict, List, Optional, Set, Tuple
+
+from .constants import BoardConstants
 from .player import Player, PlayerColor
 from .token import Token
-from .constants import BoardConstants
 
 
 @dataclass

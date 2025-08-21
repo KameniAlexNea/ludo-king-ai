@@ -4,6 +4,7 @@ Random Strategy - Makes completely random valid moves.
 
 import random
 from typing import Dict
+
 from .base import Strategy
 
 
