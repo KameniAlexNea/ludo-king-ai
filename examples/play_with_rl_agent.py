@@ -84,7 +84,7 @@ def play_rl_vs_strategies(model_path: str, num_games: int = 10):
 
             # Play game
             turn_count = 0
-            max_turns = 500  # Prevent infinite games
+            max_turns = 1000  # Prevent infinite games
 
             while not game.game_over and turn_count < max_turns:
                 current_player = game.get_current_player()
@@ -93,29 +93,29 @@ def play_rl_vs_strategies(model_path: str, num_games: int = 10):
                 # Get AI decision context
                 game_context = game.get_ai_decision_context(dice_value)
 
-                if current_player.strategy:
+                if game_context["valid_moves"]:
                     # AI player makes decision
-                    token_id = current_player.strategy.make_decision(game_context)
+                    token_id = current_player.make_strategic_decision(game_context)
+                    # Execute the move
+                    move_result = game.execute_move(
+                        current_player, token_id, dice_value
+                    )
 
                     # Save decision for RL agent
-                    if current_player == game.players[0]:  # RL agent
-                        state_saver.save_decision(
-                            strategy="RL-DQN",
-                            game_context=game_context,
-                            chosen_move=token_id,
-                            outcome={"success": True, "game_num": game_num},
-                        )
-                else:
-                    # Fallback: use first valid move
-                    valid_moves = game.get_valid_moves(current_player, dice_value)
-                    token_id = valid_moves[0]["token_id"] if valid_moves else 0
+                    # if current_player == game.players[0]:  # RL agent
+                    state_saver.save_decision(
+                        strategy_name=current_player.strategy.name,
+                        game_context=game_context,
+                        chosen_move=int(token_id),
+                        outcome=move_result,
+                    )
 
-                # Execute turn
-                turn_result = game.play_turn(token_id)
-                turn_count += 1
+                    # Execute turn
+                    turn_result = game.play_turn(token_id)
+                    turn_count += 1
 
-                if turn_result.get("game_over"):
-                    break
+                    if turn_result.get("game_over"):
+                        break
 
             # Record results
             results["total_games"] += 1

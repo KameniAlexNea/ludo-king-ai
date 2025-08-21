@@ -77,7 +77,7 @@ Examples:
 
     parser.add_argument(
         "--save-dir",
-        default="saved_states",
+        default="saved_states/games",
         help="Directory where game data is stored (default: saved_states)",
     )
 

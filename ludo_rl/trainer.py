@@ -74,7 +74,7 @@ class LudoRLTrainer:
         all_data = [
             raw
             for filename in tqdm(json_files, desc="Loading game files")
-            for raw in self.load_game_data_file(os.path.join(save_dir, filename))
+            for raw in self.load_game_data_file(filename)
         ]
 
         return all_data
