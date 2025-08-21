@@ -197,7 +197,7 @@ class LudoDQNAgent:
 
         # Sample batch from memory
         batch = random.sample(self.memory, self.batch_size)
-        
+
         # Convert to numpy arrays first, then to tensors for efficiency
         states = torch.FloatTensor(np.array([e[0] for e in batch])).to(self.device)
         actions = torch.LongTensor(np.array([e[1] for e in batch])).to(self.device)

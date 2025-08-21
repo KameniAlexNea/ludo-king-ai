@@ -9,9 +9,11 @@ from typing import Dict, List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
+from glob import glob
 
 from .dqn_model import LudoDQNAgent
 from .state_encoder import LudoStateEncoder
+from .config import REWARDS
 
 
 class LudoRLTrainer:
@@ -60,19 +62,20 @@ class LudoRLTrainer:
             return all_data
 
         # Get list of JSON files
-        json_files = [f for f in os.listdir(save_dir) if f.endswith(".json")]
-        
+        json_files = glob(os.path.join(save_dir, "*.json"))
+
         if not json_files:
             print(f"No JSON files found in {save_dir}")
             return all_data
 
         print(f"Loading game data from {len(json_files)} files...")
-        
+
         # Load files with progress bar
-        for filename in tqdm(json_files, desc="Loading game files"):
-            file_path = os.path.join(save_dir, filename)
-            data = self.load_game_data_file(file_path)
-            all_data.extend(data)
+        all_data = [
+            raw
+            for filename in tqdm(json_files, desc="Loading game files")
+            for raw in self.load_game_data_file(os.path.join(save_dir, filename))
+        ]
 
         return all_data
 
@@ -94,20 +97,20 @@ class LudoRLTrainer:
 
         # Basic success/failure
         if outcome.get("success", False):
-            reward += 1.0
+            reward += REWARDS.SUCCESS
         else:
-            reward -= 2.0  # penalty for invalid moves
+            reward += REWARDS.FAILS
 
         # Strategic rewards
         captured_tokens = outcome.get("captured_tokens", [])
         if captured_tokens:
-            reward += 10.0 * len(captured_tokens)
+            reward += REWARDS.CAPTURE * len(captured_tokens)
 
         if outcome.get("token_finished", False):
-            reward += 25.0
+            reward += REWARDS.TOKEN_FINISHED
 
         if outcome.get("extra_turn", False):
-            reward += 3.0
+            reward += REWARDS.EXTRA_TURN
 
         # Use strategic value from the game analysis
         valid_moves = context.get("valid_moves", [])
@@ -116,26 +119,29 @@ class LudoRLTrainer:
         if chosen_move_idx < len(valid_moves):
             chosen_move = valid_moves[chosen_move_idx]
             strategic_value = chosen_move.get("strategic_value", 0)
-            reward += strategic_value * 0.1
+            reward += strategic_value * REWARDS.STRATEGIC_WEIGHT
 
             # Bonus for choosing the best strategic move
             strategic_analysis = context.get("strategic_analysis", {})
             best_move = strategic_analysis.get("best_strategic_move", {})
             if best_move and chosen_move.get("token_id") == best_move.get("token_id"):
-                reward += 5.0
+                reward += REWARDS.BEST_MOVE
 
         # Game winning bonus
         player_state = context.get("player_state", {})
         if player_state.get("has_won", False):
-            reward += 100.0
+            reward += REWARDS.WON
 
         # Progress reward: reward for advancing tokens
         if outcome.get("success", False):
             old_pos = outcome.get("old_position", -1)
             new_pos = outcome.get("new_position", -1)
-            if old_pos != -1 and new_pos > old_pos:
-                reward += (new_pos - old_pos) * 0.1
-
+            if old_pos != -1 and new_pos != old_pos:
+                reward += (
+                    (new_pos - old_pos) * REWARDS.STRATEGIC_WEIGHT
+                    if new_pos > old_pos
+                    else (52 - old_pos + new_pos) * REWARDS.STRATEGIC_WEIGHT
+                )
         return reward
 
     def create_training_sequences(self) -> List[List[Tuple]]:
@@ -250,7 +256,7 @@ class LudoRLTrainer:
 
         for epoch in range(epochs):
             epoch_loss = 0.0
-            epoch_reward = 0.0
+            # epoch_reward = 0.0
             num_batches = 0
 
             # Train on multiple batches per epoch

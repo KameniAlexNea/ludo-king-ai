@@ -147,7 +147,7 @@ def play_rl_vs_strategies(model_path: str, num_games: int = 10):
     # Print results
     print(f"\n📊 Results after {results['total_games']} games:")
     print(
-        f"   RL Agent wins: {results['rl_wins']} ({results['rl_wins']/max(results['total_games'], 1)*100:.1f}%)"
+        f"   RL Agent wins: {results['rl_wins']} ({results['rl_wins'] / max(results['total_games'], 1) * 100:.1f}%)"
     )
 
     for strategy, wins in results["opponent_wins"].items():
@@ -193,7 +193,7 @@ def analyze_rl_performance(model_path: str):
                 )
 
         # Get RL agent decision
-        chosen_token = rl_strategy.make_decision(game_context)
+        chosen_token = rl_strategy.decide(game_context)
         print(f"\n🤖 RL Agent chose: Token {chosen_token}")
 
         # Compare with best strategic move
@@ -235,7 +235,7 @@ def main():
     analyze_rl_performance(model_path)
 
     # Play games
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     results = play_rl_vs_strategies(model_path, num_games=5)
 
     if results and results["total_games"] > 0:

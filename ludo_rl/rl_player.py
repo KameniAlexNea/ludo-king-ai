@@ -102,7 +102,7 @@ class LudoRLStrategy:
         self.description = "Deep Q-Network RL agent trained on Ludo game data"
         self.rl_player = LudoRLPlayer(model_path, name)
 
-    def make_decision(self, game_context: Dict) -> int:
+    def decide(self, game_context: Dict) -> int:
         """
         Make a decision based on the game context.
 

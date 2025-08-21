@@ -1,0 +1,9 @@
+class REWARDS:
+    SUCCESS = 1
+    FAILS = -2
+    CAPTURE = 10
+    TOKEN_FINISHED = 25
+    EXTRA_TURN = 3
+    BEST_MOVE = 5
+    WON = 100
+    STRATEGIC_WEIGHT = 0.1
