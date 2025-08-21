@@ -210,3 +210,7 @@ __marimo__/
 .vscode
 saved_states/
 .python-version
+
+# Test and temporary model files
+*.pth
+training_progress.png

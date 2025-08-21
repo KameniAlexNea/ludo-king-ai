@@ -3,12 +3,14 @@
 Example script demonstrating how to train an RL agent on Ludo game data.
 
 This script shows the complete pipeline:
-1. Load saved game data from the GameStateSaver
-2. Train a DQN agent on the data
-3. Evaluate the trained agent
-4. Save the model for later use
+1. Optionally generate training data by running tournaments
+2. Load saved game data from the GameStateSaver
+3. Train a DQN agent on the data
+4. Evaluate the trained agent
+5. Save the model for later use
 """
 
+import argparse
 import os
 import sys
 
@@ -18,18 +20,127 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ludo_rl import LudoRLTrainer, LudoStateEncoder, LudoDQNAgent
 
 
+def generate_training_data(num_games, save_dir):
+    """Generate training data by running tournaments."""
+    print(f"🎮 Generating training data with {num_games} games...")
+    
+    # Import the tournament system
+    from four_player_tournament import FourPlayerTournament
+    
+    # Create tournament instance
+    tournament = FourPlayerTournament()
+    
+    # Set the games per matchup to generate the requested number of games
+    original_games = tournament.games_per_matchup
+    tournament.games_per_matchup = max(1, num_games // len(tournament.strategy_combinations))
+    
+    print(f"   Running {tournament.games_per_matchup} games per matchup")
+    print(f"   Total combinations: {len(tournament.strategy_combinations)}")
+    
+    # Run the tournament to generate data
+    try:
+        tournament.run_tournament()
+        print("✅ Training data generation completed!")
+        
+        # Check how many games were actually saved
+        if os.path.exists(save_dir):
+            saved_files = [f for f in os.listdir(save_dir) if f.endswith('.json')]
+            print(f"   Generated {len(saved_files)} game data files")
+        
+    except Exception as e:
+        print(f"❌ Error generating training data: {e}")
+        raise
+    finally:
+        # Restore original setting
+        tournament.games_per_matchup = original_games
+
+
 def main():
     """Main training example."""
+    parser = argparse.ArgumentParser(
+        description="Train RL agent on Ludo game data",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Generate training data only
+  python train_rl_agent.py --generate-data 100 --skip-training
+  
+  # Train with existing data
+  python train_rl_agent.py --epochs 1000 --output my_model.pth
+  
+  # Generate data and train
+  python train_rl_agent.py --generate-data 50 --epochs 500
+        """
+    )
+    
+    parser.add_argument(
+        "--save-dir",
+        default="saved_states",
+        help="Directory where game data is stored (default: saved_states)"
+    )
+    
+    parser.add_argument(
+        "--output", "--model-path",
+        default="models/ludo_dqn_model.pth",
+        help="Path to save the trained model (default: models/ludo_dqn_model.pth)"
+    )
+    
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=1000,
+        help="Number of training epochs (default: 1000)"
+    )
+    
+    parser.add_argument(
+        "--generate-data",
+        type=int,
+        metavar="NUM_GAMES",
+        help="Generate training data by running NUM_GAMES tournaments before training"
+    )
+    
+    parser.add_argument(
+        "--skip-training",
+        action="store_true",
+        help="Skip the training phase (useful with --generate-data)"
+    )
+    
+    parser.add_argument(
+        "--target-update-freq",
+        type=int,
+        default=100,
+        help="Frequency of target network updates (default: 100)"
+    )
+    
+    parser.add_argument(
+        "--save-freq",
+        type=int,
+        default=200,
+        help="Frequency of model checkpoints during training (default: 200)"
+    )
+    
+    args = parser.parse_args()
+    
     print("🎲 Ludo RL Training Example")
     print("=" * 50)
     
-    # Configuration
-    save_dir = "saved_states"  # Directory where GameStateSaver stores game data
-    model_path = "models/ludo_dqn_model.pth"
-    epochs = 1000
+    # Create models directory if output path contains a directory
+    output_dir = os.path.dirname(args.output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     
-    # Create models directory
-    os.makedirs("models", exist_ok=True)
+    # Generate training data if requested
+    if args.generate_data:
+        generate_training_data(args.generate_data, args.save_dir)
+        
+        if args.skip_training:
+            print("✅ Data generation completed. Skipping training as requested.")
+            return
+    
+    # Configuration from args
+    save_dir = args.save_dir
+    model_path = args.output
+    epochs = args.epochs
     
     # Initialize trainer
     print("📊 Initializing RL trainer...")
@@ -39,8 +150,8 @@ def main():
         if len(trainer.game_data) == 0:
             print("❌ No game data found!")
             print(f"   Make sure you have saved games in '{save_dir}' directory")
-            print("   Run a tournament first to generate training data:")
-            print("   python four_player_tournament.py")
+            print("   Generate training data with:")
+            print(f"   python {sys.argv[0]} --generate-data 100")
             return
         
         print(f"✅ Loaded {len(trainer.game_data)} game records")
@@ -77,8 +188,8 @@ def main():
     try:
         training_stats = trainer.train(
             epochs=epochs,
-            target_update_freq=100,
-            save_freq=200,
+            target_update_freq=args.target_update_freq,
+            save_freq=args.save_freq,
             model_save_path=model_path
         )
         
@@ -95,8 +206,10 @@ def main():
     # Plot training progress
     print("\n📊 Generating training plots...")
     try:
-        trainer.plot_training_progress("models/training_progress.png")
-        print("✅ Training plots saved to models/training_progress.png")
+        plot_dir = os.path.dirname(model_path)
+        plot_path = os.path.join(plot_dir, "training_progress.png")
+        trainer.plot_training_progress(plot_path)
+        print(f"✅ Training plots saved to {plot_path}")
     except Exception as e:
         print(f"⚠️  Could not generate plots: {e}")
     
@@ -115,10 +228,12 @@ def main():
     print(f"\n🎉 Training complete! Model saved to: {model_path}")
     print("\n💡 Next steps:")
     print("   1. Use the trained model in games with:")
-    print("      from ludo_rl import create_rl_strategy")
-    print(f"      rl_strategy = create_rl_strategy('{model_path}')")
-    print("   2. Run more tournaments to gather more training data")
-    print("   3. Experiment with hyperparameters and network architecture")
+    print("      from ludo_rl import LudoRLPlayer")
+    print(f"      # Load and use the model")
+    print("   2. Run more tournaments to gather more training data:")
+    print(f"      python {sys.argv[0]} --generate-data 200")
+    print("   3. Experiment with hyperparameters:")
+    print(f"      python {sys.argv[0]} --epochs 2000 --target-update-freq 50")
 
 
 if __name__ == "__main__":
