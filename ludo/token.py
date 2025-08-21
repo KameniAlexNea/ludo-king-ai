@@ -6,7 +6,7 @@ Each player has 4 tokens that move around the board.
 from dataclasses import dataclass
 from enum import Enum
 
-from .constants import BoardConstants
+from .constants import BoardConstants, GameConstants
 
 
 class TokenState(Enum):
@@ -107,17 +107,20 @@ class Token:
         if self.position <= home_entry_position < new_position:
             # Enter home column at position 100 and advance
             overflow = new_position - home_entry_position - 1
-            return 100 + overflow
+            return BoardConstants.HOME_COLUMN_START + overflow
 
-        # Handle wraparound: after position 51, go to position 0 (except for red)
-        if new_position > 51:
-            if self.player_color == "red" and self.position <= 51:
-                # Red enters home after position 51
-                overflow = new_position - 52
-                return 100 + overflow
+        # Handle wraparound: after position MAIN_BOARD_SIZE-1, go to start or home
+        if new_position > GameConstants.MAIN_BOARD_SIZE - 1:
+            if (
+                self.player_color == "red"
+                and self.position <= GameConstants.MAIN_BOARD_SIZE - 1
+            ):
+                # Red enters home after main loop
+                overflow = new_position - GameConstants.MAIN_BOARD_SIZE
+                return BoardConstants.HOME_COLUMN_START + overflow
             else:
-                # All other colors wrap around to position 0
-                return new_position - 52
+                # All other colors wrap around around to main board
+                return new_position - GameConstants.MAIN_BOARD_SIZE
 
         return new_position
 

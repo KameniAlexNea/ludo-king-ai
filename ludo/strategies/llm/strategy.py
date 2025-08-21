@@ -45,25 +45,20 @@ class LLMStrategy(Strategy):
 
     def _initialize_llm(self):
         """Initialize the LLM client."""
-        try:
-            if self.provider == "ollama":
-                from langchain_ollama import ChatOllama
+        if self.provider == "ollama":
+            from langchain_ollama import ChatOllama
 
-                self.llm = ChatOllama(model=self.model, temperature=0.1)
-            elif self.provider == "groq":
-                from langchain_groq import ChatGroq
+            self.llm = ChatOllama(model=self.model, temperature=0.1)
+        elif self.provider == "groq":
+            from langchain_groq import ChatGroq
 
-                api_key = os.getenv("GROQ_API_KEY")
-                if not api_key:
-                    print("GROQ_API_KEY not found, falling back to random strategy")
-                    return
-                self.llm = ChatGroq(
-                    groq_api_key=api_key, model_name=self.model, temperature=0.1
-                )
-        except ImportError as e:
-            raise e
-        except Exception as e:
-            raise e
+            api_key = os.getenv("GROQ_API_KEY")
+            if not api_key:
+                print("GROQ_API_KEY not found, falling back to random strategy")
+                return
+            self.llm = ChatGroq(
+                groq_api_key=api_key, model_name=self.model, temperature=0.1
+            )
 
     def decide(self, game_context: Dict) -> int:
         """Make a decision using the LLM."""
@@ -92,8 +87,8 @@ class LLMStrategy(Strategy):
             if token_id is not None:
                 return token_id
 
-        except Exception as e:
-            raise e
+        except Exception:
+            pass
 
         # Fallback to random strategy
         return self.fallback_strategy.decide(game_context)

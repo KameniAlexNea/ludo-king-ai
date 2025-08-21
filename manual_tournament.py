@@ -3,6 +3,7 @@
 Interactive Ludo Tournament Setup
 User defines number of players, strategies, LLM parameters, and other configs.
 """
+
 import os
 import random
 
@@ -16,7 +17,9 @@ load_dotenv()
 
 def prompt_int(prompt, min_val=None, max_val=None, default=None):
     while True:
-        val = input(f"{prompt}{' ['+str(default)+']' if default is not None else ''}: ")
+        val = input(
+            f"{prompt}{' [' + str(default) + ']' if default is not None else ''}: "
+        )
         if not val and default is not None:
             return default
         try:
@@ -34,7 +37,9 @@ def prompt_int(prompt, min_val=None, max_val=None, default=None):
 def prompt_choice(prompt, choices, default=None):
     choices_str = ", ".join(choices)
     while True:
-        val = input(f"{prompt} ({choices_str}){' ['+default+']' if default else ''}: ")
+        val = input(
+            f"{prompt} ({choices_str}){' [' + default + ']' if default else ''}: "
+        )
         if not val and default:
             return default
         if val in choices:
