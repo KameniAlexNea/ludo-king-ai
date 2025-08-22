@@ -9,9 +9,9 @@ from typing import Dict, List
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .rl_player import ImprovedRLPlayer
+from .rl_player import RLPlayer
 from .state_encoder import LudoStateEncoder
-from .trainer import ImprovedLudoRLTrainer
+from .trainer import LudoRLTrainer
 
 
 class LudoRLValidator:
@@ -26,13 +26,13 @@ class LudoRLValidator:
             game_data_path: Path to game data for validation
         """
         self.model_path = model_path
-        self.player = ImprovedRLPlayer(model_path)
+        self.player = RLPlayer(model_path)
         self.encoder = LudoStateEncoder()
 
         if game_data_path:
-            self.trainer = ImprovedLudoRLTrainer(game_data_file=game_data_path)
+            self.trainer = LudoRLTrainer(game_data_file=game_data_path)
         else:
-            self.trainer = ImprovedLudoRLTrainer()
+            self.trainer = LudoRLTrainer()
 
     def validate_against_expert_moves(self, expert_data: List[Dict]) -> Dict:
         """
@@ -404,7 +404,7 @@ class ModelComparator:
         self.model_names = model_names or [
             f"Model_{i+1}" for i in range(len(model_paths))
         ]
-        self.models = [ImprovedRLPlayer(path) for path in model_paths]
+        self.models = [RLPlayer(path) for path in model_paths]
 
     def compare_on_dataset(self, test_data: List[Dict]) -> Dict:
         """Compare models on a test dataset."""

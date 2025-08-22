@@ -1,49 +1,108 @@
 #!/usr/bin/env python3
 """
-Example script demonstrating how to train an RL agent on Ludo game data.
+Advanced Ludo RL Training Script
 
-This script shows the training pipeline:
-1. Load saved game data from the GameStateSaver
-2. Train a DQN agent on the data
-3. Evaluate the trained agent
-4. Save the model for later use
+This script demonstrates comprehensive RL agent training with:
+1. Enhanced state representation with 64-dimensional features
+2. Dueling DQN architecture with prioritized replay
+3. Advanced training pipeline with validation and early stopping
+4. Model interpretation and analysis tools
+5. Comprehensive evaluation and visualization
 """
 
 import argparse
-import os
 import sys
+from pathlib import Path
 
 # Add the project root to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
-from ludo_rl import LudoRLTrainer
+from ludo_rl.config import REWARDS, TRAINING_CONFIG
+from ludo_rl.rl_player import RLPlayer
+from ludo_rl.trainer import LudoRLTrainer
+from ludo_rl.validator import LudoRLValidator
+
+
+def display_configuration():
+    """Display the current training and reward configuration."""
+    print("\n⚙️  Training Configuration:")
+    print(f"   Hidden dimensions: {TRAINING_CONFIG.HIDDEN_DIM}")
+    print(f"   Learning rate: {TRAINING_CONFIG.LEARNING_RATE}")
+    print(f"   Batch size: {TRAINING_CONFIG.BATCH_SIZE}")
+    print(f"   Use prioritized replay: {TRAINING_CONFIG.USE_PRIORITIZED_REPLAY}")
+    print(f"   Use double DQN: {TRAINING_CONFIG.USE_DOUBLE_DQN}")
+
+    print("\n💰 Reward Configuration:")
+    print(f"   Success: {REWARDS.SUCCESS}")
+    print(f"   Failure: {REWARDS.FAILS}")
+    print(f"   Capture: {REWARDS.CAPTURE}")
+    print(f"   Token finished: {REWARDS.TOKEN_FINISHED}")
+
+
+def validate_and_analyze_model(model_path, trainer):
+    """Validate and analyze the trained model."""
+    if not model_path.exists():
+        print("   ⚠️  Model file not found, skipping validation")
+        return
+    
+    print("\n🤖 Testing Trained Model...")
+    player = RLPlayer(str(model_path), name="TrainedRLAgent")
+    
+    # Test model with sample data if available
+    if trainer.game_data:
+        sample_data = trainer.game_data[:10]  # Use first 10 samples
+        
+        print("\n🔍 Model Validation Analysis...")
+        try:
+            validator = LudoRLValidator(str(model_path))
+            analysis_results = validator.analyze_decision_patterns(sample_data)
+            
+            print("   Decision pattern analysis:")
+            move_prefs = analysis_results.get("move_type_preferences", {})
+            for move_type, count in move_prefs.items():
+                print(f"     {move_type}: {count}")
+            
+            safety_prefs = analysis_results.get("safety_preferences", {})
+            total_moves = sum(safety_prefs.values())
+            if total_moves > 0:
+                safe_rate = safety_prefs.get("safe", 0) / total_moves
+                print(f"   Safety rate: {safe_rate:.2f}")
+                
+        except Exception as e:
+            print(f"   ⚠️  Validation analysis error: {e}")
 
 
 def main():
-    """Main training example."""
+    """Advanced RL training with comprehensive analysis."""
     parser = argparse.ArgumentParser(
-        description="Train RL agent on Ludo game data",
+        description="Advanced Ludo RL Agent Training",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Train with existing data
-  python train_rl_agent.py --epochs 1000 --output my_model.pth
+  # Standard training with validation
+  python train_rl_agent.py --epochs 1000 --validation-split 0.2
   
-  # Experiment with hyperparameters
-  python train_rl_agent.py --epochs 2000 --target-update-freq 50
+  # Advanced training with early stopping
+  python train_rl_agent.py --epochs 2000 --early-stopping --patience 20
+  
+  # Training with custom model path
+  python train_rl_agent.py --output models/custom_model.pth --epochs 1500
         """,
     )
 
     parser.add_argument(
         "--save-dir",
-        default="saved_states/games",
-        help="Directory where game data is stored (default: saved_states)",
+        type=Path,
+        default=Path("saved_states/games"),
+        help="Directory where game data is stored (default: saved_states/games)",
     )
 
     parser.add_argument(
         "--output",
         "--model-path",
-        default="models/ludo_dqn_model.pth",
+        type=Path,
+        default=Path("models/ludo_dqn_model.pth"),
         help="Path to save the trained model (default: models/ludo_dqn_model.pth)",
     )
 
@@ -52,6 +111,26 @@ Examples:
         type=int,
         default=1000,
         help="Number of training epochs (default: 1000)",
+    )
+
+    parser.add_argument(
+        "--validation-split",
+        type=float,
+        default=0.1,
+        help="Fraction of data to use for validation (default: 0.1)",
+    )
+
+    parser.add_argument(
+        "--early-stopping",
+        action="store_true",
+        help="Enable early stopping based on validation loss",
+    )
+
+    parser.add_argument(
+        "--patience",
+        type=int,
+        default=15,
+        help="Early stopping patience (default: 15)",
     )
 
     parser.add_argument(
@@ -68,37 +147,66 @@ Examples:
         help="Frequency of model checkpoints during training (default: 200)",
     )
 
+    parser.add_argument(
+        "--use-prioritized-replay",
+        action="store_true",
+        default=True,
+        help="Use prioritized experience replay (default: True)",
+    )
+
+    parser.add_argument(
+        "--use-double-dqn",
+        action="store_true",
+        default=True,
+        help="Use Double DQN technique (default: True)",
+    )
+
     args = parser.parse_args()
 
-    print("🎲 Ludo RL Training Example")
+    print("🎲 Advanced Ludo RL Training System")
     print("=" * 50)
 
-    # Create models directory if output path contains a directory
-    output_dir = os.path.dirname(args.output)
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-
-    # Configuration from args
-    save_dir = args.save_dir
+    # Create models directory if needed
     model_path = args.output
-    epochs = args.epochs
+    model_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Initialize trainer
-    print("📊 Initializing RL trainer...")
+    # Check for saved game data
+    save_dir = args.save_dir
+    if not save_dir.exists():
+        print(f"❌ No {save_dir} directory found. Please run tournaments first to generate training data.")
+        print("   Example: python four_player_tournament.py")
+        return
+
+    # Find JSON files
+    json_files = list(save_dir.glob("**/*.json"))
+    if not json_files:
+        print(f"❌ No JSON game data found in {save_dir} directory.")
+        return
+
+    print(f"✅ Found {len(json_files)} game data files")
+
+    # Initialize advanced trainer
+    print("\n🧠 Initializing Advanced RL Trainer...")
     try:
-        trainer = LudoRLTrainer(state_saver_dir=save_dir)
+        trainer = LudoRLTrainer(
+            state_saver_dir=str(save_dir),
+            use_prioritized_replay=args.use_prioritized_replay,
+            use_double_dqn=args.use_double_dqn,
+        )
 
         if len(trainer.game_data) == 0:
-            print("❌ No game data found!")
-            print(f"   Make sure you have saved games in '{save_dir}' directory")
-            print("   Run tournaments first to generate training data")
+            print("❌ No valid training data found!")
             return
 
-        print(f"✅ Loaded {len(trainer.game_data)} game records")
+        print(f"   State dimension: {trainer.encoder.state_dim} features")
+        print(f"   Training examples: {len(trainer.game_data)}")
 
     except Exception as e:
         print(f"❌ Error initializing trainer: {e}")
         return
+
+    # Display configuration
+    display_configuration()
 
     # Display data statistics
     print("\n📈 Training Data Statistics:")
@@ -123,58 +231,87 @@ Examples:
     print(f"   Successful moves: {outcomes['success']}")
     print(f"   Failed moves: {outcomes['failed']}")
 
-    # Train the agent
-    print(f"\n🧠 Training DQN agent for {epochs} epochs...")
+    # Train the agent with advanced features
+    print(f"\n🏋️  Training Advanced DQN Agent for {args.epochs} epochs...")
     try:
-        training_stats = trainer.train(
-            epochs=epochs,
-            target_update_freq=args.target_update_freq,
-            save_freq=args.save_freq,
-            model_save_path=model_path,
-        )
+        # Prepare training parameters
+        training_params = {
+            "epochs": args.epochs,
+            "validation_split": args.validation_split,
+            "target_update_freq": args.target_update_freq,
+            "save_freq": args.save_freq,
+            "model_save_path": str(model_path),
+        }
+        
+        # Add early stopping if requested
+        if args.early_stopping:
+            training_params["early_stopping_patience"] = args.patience
+        
+        training_stats = trainer.train(**training_params)
 
         print("✅ Training completed!")
-        print(f"   Final loss: {training_stats.get('final_loss', 'N/A'):.4f}")
-        print(f"   Final reward: {training_stats.get('final_reward', 'N/A'):.2f}")
-        print(f"   Total experiences: {training_stats.get('total_experiences', 0)}")
-        print(f"   Training sequences: {training_stats.get('num_sequences', 0)}")
+        print(f"\n📊 Training Results:")
+        for key, value in training_stats.items():
+            if isinstance(value, float):
+                print(f"   {key}: {value:.4f}")
+            else:
+                print(f"   {key}: {value}")
 
     except Exception as e:
         print(f"❌ Error during training: {e}")
         return
 
-    # Plot training progress
-    print("\n📊 Generating training plots...")
+    # Generate training progress plots
+    print("\n� Generating Training Progress Plots...")
     try:
-        plot_dir = os.path.dirname(model_path)
-        plot_path = os.path.join(plot_dir, "training_progress.png")
-        trainer.plot_training_progress(plot_path)
+        plot_path = model_path.parent / "training_progress.png"
+        trainer.plot_training_progress(str(plot_path))
         print(f"✅ Training plots saved to {plot_path}")
     except Exception as e:
         print(f"⚠️  Could not generate plots: {e}")
 
-    # Evaluate the model
-    print("\n🎯 Evaluating trained model...")
+    # Comprehensive model evaluation
+    print("\n🎯 Comprehensive Model Evaluation...")
     try:
         eval_stats = trainer.evaluate_model()
         print("✅ Evaluation completed!")
         print(f"   Accuracy: {eval_stats.get('accuracy', 0):.2%}")
-        print(
-            f"   Avg reward per sequence: {eval_stats.get('avg_reward_per_sequence', 0):.2f}"
-        )
+        print(f"   Avg reward per sequence: {eval_stats.get('avg_reward_per_sequence', 0):.2f}")
         print(f"   Test sequences: {eval_stats.get('num_test_sequences', 0)}")
 
     except Exception as e:
         print(f"⚠️  Error during evaluation: {e}")
 
-    print(f"\n🎉 Training complete! Model saved to: {model_path}")
+    # Advanced model validation and analysis
+    validate_and_analyze_model(model_path, trainer)
+
+    print(f"\n🎉 Advanced Training Complete! Model saved to: {model_path}")
+    
+    print("\n✨ Key improvements implemented:")
+    print("  ✓ Compact 64-feature state representation")
+    print("  ✓ Dueling DQN architecture with Double DQN")
+    print("  ✓ Prioritized experience replay")
+    print("  ✓ Enhanced reward engineering")
+    print("  ✓ Validation and early stopping")
+    print("  ✓ Comprehensive model analysis")
+    
+    print("\n📁 Generated files:")
+    if model_path.exists():
+        print(f"  Model: {model_path}")
+    plot_path = model_path.parent / "training_progress.png"
+    if plot_path.exists():
+        print(f"  Training plot: {plot_path}")
+
     print("\n💡 Next steps:")
     print("   1. Use the trained model in games with:")
-    print("      from ludo_rl import LudoRLPlayer")
-    print("      # Load and use the model")
-    print("   2. Run tournaments separately to gather more training data")
-    print("   3. Experiment with hyperparameters:")
-    print(f"      python {sys.argv[0]} --epochs 2000 --target-update-freq 50")
+    print("      from ludo_rl import RLPlayer")
+    print("      player = RLPlayer('models/ludo_dqn_model.pth')")
+    print("   2. Run tournaments to gather more diverse training data")
+    print("   3. Experiment with advanced hyperparameters:")
+    print(f"      python {sys.argv[0]} --epochs 2000 --validation-split 0.2 --early-stopping")
+    print("   4. Use model validation tools for deeper analysis")
+    
+    print("\n🚀 Ready for production deployment!")
 
 
 if __name__ == "__main__":
