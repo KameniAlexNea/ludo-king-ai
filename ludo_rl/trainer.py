@@ -15,7 +15,7 @@ import numpy as np
 from tqdm import tqdm
 
 from .config import REWARDS, TRAINING_CONFIG
-from .dqn_model import LudoDQNAgent
+from .model.dqn_model import LudoDQNAgent
 from .state_encoder import LudoStateEncoder
 
 

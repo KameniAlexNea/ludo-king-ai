@@ -6,8 +6,8 @@ Provides enhanced tools for training RL agents on Ludo game data with modern tec
 from .config import REWARDS, TRAINING_CONFIG
 
 # Import core components
-from .dqn_model import LudoDQN, LudoDQNAgent
-from .rl_player import LudoRLPlayer, create_rl_strategy
+from .model.dqn_model import LudoDQN, LudoDQNAgent
+from .rl_player import create_rl_strategy
 from .state_encoder import LudoStateEncoder
 from .trainer import LudoRLTrainer
 
@@ -27,8 +27,6 @@ __all__ = [
     "LudoDQNAgent",
     # Trainer
     "LudoRLTrainer",
-    # Player
-    "LudoRLPlayer",
     # Strategy factory
     "create_rl_strategy",
     # Configuration

@@ -5,7 +5,7 @@ Improved RL Player for Ludo using the enhanced DQN agent.
 from typing import Dict
 
 from .config import TRAINING_CONFIG
-from .dqn_model import LudoDQNAgent
+from .model.dqn_model import LudoDQNAgent
 from .state_encoder import LudoStateEncoder
 
 
@@ -231,11 +231,6 @@ class RLPlayer:
     def update_strategy(self, game_result: Dict):
         """Update strategy based on game result (not used in inference mode)."""
         pass
-
-
-# Legacy aliases for backward compatibility
-RLPlayer = RLPlayer
-LudoRLPlayer = RLPlayer
 
 
 class LudoRLStrategy:
