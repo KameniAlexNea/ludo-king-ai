@@ -20,7 +20,6 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
-from ludo_rl.config import REWARDS
 from ludo_rl.rl_player import RLPlayer
 from ludo_rl.validator import LudoRLValidator
 from ludo_stats.game_state_saver import GameStateSaver
@@ -57,7 +56,13 @@ class AdvancedRLEvaluation:
         print(f"📋 Available strategies: {available_strategies}")
 
         # Select diverse opponent strategies for comprehensive evaluation
-        preferred_opponents = ["optimist", "winner", "balanced", "cautious", "defensive"]
+        preferred_opponents = [
+            "optimist",
+            "winner",
+            "balanced",
+            "cautious",
+            "defensive",
+        ]
         self.opponent_strategies = [
             s for s in preferred_opponents if s in available_strategies
         ][:3]
@@ -86,15 +91,17 @@ class AdvancedRLEvaluation:
         """Run comprehensive evaluation with detailed analysis."""
         print("\n🎮 Advanced RL Agent Evaluation System 🎮")
         print("=" * 60)
-        print(f"🎯 Playing {self.num_games} games: AdvancedRL vs {self.opponent_strategies}")
-        
+        print(
+            f"🎯 Playing {self.num_games} games: AdvancedRL vs {self.opponent_strategies}"
+        )
+
         # Display model configuration
-        print(f"\n⚙️  Model Configuration:")
+        print("\n⚙️  Model Configuration:")
         print(f"   Model path: {self.model_path}")
         print(f"   Max turns per game: {self.max_turns}")
-        
+
         total_turns = 0
-        
+
         for game_num in range(self.num_games):
             try:
                 turns = self._play_enhanced_game(game_num)
@@ -113,7 +120,7 @@ class AdvancedRLEvaluation:
 
         # Display detailed results
         self._display_enhanced_results()
-        
+
         # Perform model analysis
         self._analyze_model_performance()
 
@@ -122,7 +129,12 @@ class AdvancedRLEvaluation:
     def _play_enhanced_game(self, game_num: int) -> int:
         """Play a single game with enhanced move analysis and tracking."""
         # Setup game with RL agent and opponents
-        colors = [PlayerColor.GREEN, PlayerColor.RED, PlayerColor.YELLOW, PlayerColor.BLUE]
+        colors = [
+            PlayerColor.GREEN,
+            PlayerColor.RED,
+            PlayerColor.YELLOW,
+            PlayerColor.BLUE,
+        ]
         game = LudoGame(colors[: len(self.opponent_strategies) + 1])
 
         # Set RL player as first player
@@ -148,32 +160,40 @@ class AdvancedRLEvaluation:
             if game_context["valid_moves"]:
                 # Enhanced move analysis for RL player
                 if current_player == game.players[0]:  # RL player
-                    move_analysis = self.rl_player.choose_move_with_analysis(game_context)
+                    move_analysis = self.rl_player.choose_move_with_analysis(
+                        game_context
+                    )
                     token_id = move_analysis["move_index"]
-                    
+
                     # Track confidence and analysis
-                    self.results["confidence_scores"].append(move_analysis["confidence"])
+                    self.results["confidence_scores"].append(
+                        move_analysis["confidence"]
+                    )
                     analysis_data = move_analysis.get("analysis", {})
-                    
+
                     # Track strategic decision types
                     move_type = analysis_data.get("move_type", "unknown")
                     self.results["strategic_decisions"][move_type] += 1
-                    
+
                     # Store detailed move analysis
-                    self.results["rl_move_analysis"].append({
-                        "game": game_num,
-                        "turn": turn_count,
-                        "confidence": move_analysis["confidence"],
-                        "reasoning": analysis_data.get("reasoning", ""),
-                        "move_type": move_type,
-                        "dice_value": dice_value,
-                    })
+                    self.results["rl_move_analysis"].append(
+                        {
+                            "game": game_num,
+                            "turn": turn_count,
+                            "confidence": move_analysis["confidence"],
+                            "reasoning": analysis_data.get("reasoning", ""),
+                            "move_type": move_type,
+                            "dice_value": dice_value,
+                        }
+                    )
                 else:
                     # Regular opponent move
                     token_id = current_player.make_strategic_decision(game_context)
 
                 # Execute move
-                move_result = game.execute_move(current_player, int(token_id), dice_value)
+                move_result = game.execute_move(
+                    current_player, int(token_id), dice_value
+                )
 
                 # Save decision data
                 self.state_saver.save_decision(
@@ -197,7 +217,9 @@ class AdvancedRLEvaluation:
         self._process_enhanced_game_result(game, game_num, turn_count)
         return turn_count
 
-    def _process_enhanced_game_result(self, game: LudoGame, game_num: int, turn_count: int):
+    def _process_enhanced_game_result(
+        self, game: LudoGame, game_num: int, turn_count: int
+    ):
         """Process and record detailed game results."""
         self.results["total_games"] += 1
 
@@ -208,41 +230,47 @@ class AdvancedRLEvaluation:
             else:
                 winner_name = game.winner.strategy_name
                 self.results["opponent_wins"][winner_name] += 1
-                print(f"📉 Game {game_num + 1}: {winner_name.upper()} wins ({turn_count} turns)")
+                print(
+                    f"📉 Game {game_num + 1}: {winner_name.upper()} wins ({turn_count} turns)"
+                )
         else:
-            print(f"⏱️  Game {game_num + 1}: Draw - max turns reached ({turn_count} turns)")
+            print(
+                f"⏱️  Game {game_num + 1}: Draw - max turns reached ({turn_count} turns)"
+            )
 
     def _display_enhanced_results(self):
         """Display comprehensive evaluation results."""
         print(f"\n📊 Detailed Results after {self.results['total_games']} games:")
         print("=" * 60)
-        
+
         # Win statistics
         total_games = max(self.results["total_games"], 1)
         rl_win_rate = self.results["rl_wins"] / total_games * 100
-        print(f"🎯 RL Agent Performance:")
+        print("🎯 RL Agent Performance:")
         print(f"   Wins: {self.results['rl_wins']} ({rl_win_rate:.1f}%)")
         print(f"   Average game length: {self.results['average_turns']:.1f} turns")
 
         # Opponent performance
-        print(f"\n🤖 Opponent Performance:")
+        print("\n🤖 Opponent Performance:")
         for strategy, wins in self.results["opponent_wins"].items():
             percentage = wins / total_games * 100
             print(f"   {strategy.upper()}: {wins} wins ({percentage:.1f}%)")
 
         # Confidence analysis
         if self.results["confidence_scores"]:
-            avg_confidence = sum(self.results["confidence_scores"]) / len(self.results["confidence_scores"])
+            avg_confidence = sum(self.results["confidence_scores"]) / len(
+                self.results["confidence_scores"]
+            )
             max_confidence = max(self.results["confidence_scores"])
             min_confidence = min(self.results["confidence_scores"])
-            
-            print(f"\n🎲 RL Agent Decision Analysis:")
+
+            print("\n🎲 RL Agent Decision Analysis:")
             print(f"   Average confidence: {avg_confidence:.3f}")
             print(f"   Confidence range: {min_confidence:.3f} - {max_confidence:.3f}")
 
         # Strategic decision breakdown
         if self.results["strategic_decisions"]:
-            print(f"\n📈 Strategic Decision Types:")
+            print("\n📈 Strategic Decision Types:")
             total_decisions = sum(self.results["strategic_decisions"].values())
             for decision_type, count in self.results["strategic_decisions"].items():
                 percentage = count / total_decisions * 100
@@ -250,39 +278,57 @@ class AdvancedRLEvaluation:
 
     def _analyze_model_performance(self):
         """Perform advanced model performance analysis."""
-        print(f"\n🔍 Advanced Model Analysis:")
+        print("\n🔍 Advanced Model Analysis:")
         print("=" * 40)
-        
+
         try:
             # Use validator to analyze decision patterns
             if self.results["rl_move_analysis"]:
-                sample_decisions = self.results["rl_move_analysis"][:50]  # Analyze recent decisions
-                
+                sample_decisions = self.results["rl_move_analysis"][
+                    :50
+                ]  # Analyze recent decisions
+
                 # Calculate performance metrics
-                high_confidence_moves = [m for m in sample_decisions if m["confidence"] > 0.8]
-                low_confidence_moves = [m for m in sample_decisions if m["confidence"] < 0.3]
-                
-                print(f"   High confidence moves: {len(high_confidence_moves)} ({len(high_confidence_moves)/len(sample_decisions)*100:.1f}%)")
-                print(f"   Low confidence moves: {len(low_confidence_moves)} ({len(low_confidence_moves)/len(sample_decisions)*100:.1f}%)")
-                
+                high_confidence_moves = [
+                    m for m in sample_decisions if m["confidence"] > 0.8
+                ]
+                low_confidence_moves = [
+                    m for m in sample_decisions if m["confidence"] < 0.3
+                ]
+
+                print(
+                    f"   High confidence moves: {len(high_confidence_moves)} ({len(high_confidence_moves)/len(sample_decisions)*100:.1f}%)"
+                )
+                print(
+                    f"   Low confidence moves: {len(low_confidence_moves)} ({len(low_confidence_moves)/len(sample_decisions)*100:.1f}%)"
+                )
+
                 # Analyze move diversity
                 unique_move_types = set(m["move_type"] for m in sample_decisions)
-                print(f"   Move type diversity: {len(unique_move_types)} different types")
-                
+                print(
+                    f"   Move type diversity: {len(unique_move_types)} different types"
+                )
+
         except Exception as e:
             print(f"   ⚠️  Analysis error: {e}")
 
         # Performance recommendations
         rl_win_rate = self.results["rl_wins"] / max(self.results["total_games"], 1)
-        print(f"\n💡 Performance Assessment:")
+        print("\n💡 Performance Assessment:")
         if rl_win_rate > 0.6:
             print("   🏆 Excellent! Model shows strong competitive performance.")
         elif rl_win_rate > 0.4:
-            print("   📈 Good performance. Model is competitive with room for improvement.")
+            print(
+                "   📈 Good performance. Model is competitive with room for improvement."
+            )
         elif rl_win_rate > 0.25:
-            print("   ⚡ Fair performance. Consider additional training or hyperparameter tuning.")
+            print(
+                "   ⚡ Fair performance. Consider additional training or hyperparameter tuning."
+            )
         else:
-            print("   📉 Needs improvement. Review training data quality and model architecture.")
+            print(
+                "   📉 Needs improvement. Review training data quality and model architecture."
+            )
 
 
 def main():
@@ -302,7 +348,7 @@ Examples:
   python play_with_rl_agent.py --num_games 3 --max_turns 500
         """,
     )
-    
+
     parser.add_argument(
         "--model_path",
         type=str,
@@ -330,7 +376,7 @@ Examples:
     model_path = Path(args.model_path)
     if not model_path.exists():
         print(f"❌ Trained model not found: {model_path}")
-        print(f"\n💡 To create a trained model:")
+        print("\n💡 To create a trained model:")
         print("   1. Generate training data by running tournaments:")
         print("      python four_player_tournament.py")
         print("   2. Train the model:")
@@ -341,11 +387,9 @@ Examples:
     try:
         # Initialize advanced evaluation system
         evaluation = AdvancedRLEvaluation(
-            str(model_path), 
-            num_games=args.num_games, 
-            max_turns=args.max_turns
+            str(model_path), num_games=args.num_games, max_turns=args.max_turns
         )
-        
+
         # Run comprehensive evaluation
         results = evaluation.run_evaluation()
 
@@ -353,11 +397,13 @@ Examples:
         if results and results["total_games"] > 0:
             rl_win_rate = results["rl_wins"] / results["total_games"]
 
-            print(f"\n� Final Performance Summary:")
+            print("\n� Final Performance Summary:")
             print("=" * 40)
             print(f"   Overall win rate: {rl_win_rate:.1%}")
             print(f"   Games played: {results['total_games']}")
-            print(f"   Average game length: {results.get('average_turns', 0):.1f} turns")
+            print(
+                f"   Average game length: {results.get('average_turns', 0):.1f} turns"
+            )
 
             # Performance classification
             if rl_win_rate > 0.6:
@@ -371,12 +417,16 @@ Examples:
 
             # Display confidence statistics
             if results.get("confidence_scores"):
-                avg_conf = sum(results["confidence_scores"]) / len(results["confidence_scores"])
+                avg_conf = sum(results["confidence_scores"]) / len(
+                    results["confidence_scores"]
+                )
                 print(f"   Decision confidence: {avg_conf:.3f}")
 
-        print(f"\n🎮 Evaluation complete! Results saved to saved_states/rl_gameplay_states/")
+        print(
+            "\n🎮 Evaluation complete! Results saved to saved_states/rl_gameplay_states/"
+        )
         print(f"📁 Model used: {model_path}")
-        
+
     except FileNotFoundError as e:
         print(f"❌ {e}")
     except Exception as e:

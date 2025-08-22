@@ -14,6 +14,7 @@ from .trainer import LudoRLTrainer
 # Optional validator import (may not be needed in all environments)
 try:
     from .validator import LudoRLValidator, ModelComparator
+
     _has_validator = True
 except ImportError:
     _has_validator = False
@@ -22,7 +23,7 @@ __all__ = [
     # Core components
     "LudoStateEncoder",
     # DQN models
-    "LudoDQN", 
+    "LudoDQN",
     "LudoDQNAgent",
     # Trainer
     "LudoRLTrainer",
@@ -37,7 +38,9 @@ __all__ = [
 
 # Add validator components if available
 if _has_validator:
-    __all__.extend([
-        "LudoRLValidator",
-        "ModelComparator",
-    ])
+    __all__.extend(
+        [
+            "LudoRLValidator",
+            "ModelComparator",
+        ]
+    )

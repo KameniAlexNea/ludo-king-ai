@@ -45,30 +45,30 @@ def validate_and_analyze_model(model_path, trainer):
     if not model_path.exists():
         print("   ⚠️  Model file not found, skipping validation")
         return
-    
+
     print("\n🤖 Testing Trained Model...")
     player = RLPlayer(str(model_path), name="TrainedRLAgent")
-    
+
     # Test model with sample data if available
     if trainer.game_data:
         sample_data = trainer.game_data[:10]  # Use first 10 samples
-        
+
         print("\n🔍 Model Validation Analysis...")
         try:
             validator = LudoRLValidator(str(model_path))
             analysis_results = validator.analyze_decision_patterns(sample_data)
-            
+
             print("   Decision pattern analysis:")
             move_prefs = analysis_results.get("move_type_preferences", {})
             for move_type, count in move_prefs.items():
                 print(f"     {move_type}: {count}")
-            
+
             safety_prefs = analysis_results.get("safety_preferences", {})
             total_moves = sum(safety_prefs.values())
             if total_moves > 0:
                 safe_rate = safety_prefs.get("safe", 0) / total_moves
                 print(f"   Safety rate: {safe_rate:.2f}")
-                
+
         except Exception as e:
             print(f"   ⚠️  Validation analysis error: {e}")
 
@@ -173,7 +173,9 @@ Examples:
     # Check for saved game data
     save_dir = args.save_dir
     if not save_dir.exists():
-        print(f"❌ No {save_dir} directory found. Please run tournaments first to generate training data.")
+        print(
+            f"❌ No {save_dir} directory found. Please run tournaments first to generate training data."
+        )
         print("   Example: python four_player_tournament.py")
         return
 
@@ -242,15 +244,15 @@ Examples:
             "save_freq": args.save_freq,
             "model_save_path": str(model_path),
         }
-        
+
         # Add early stopping if requested
         if args.early_stopping:
             training_params["early_stopping_patience"] = args.patience
-        
+
         training_stats = trainer.train(**training_params)
 
         print("✅ Training completed!")
-        print(f"\n📊 Training Results:")
+        print("\n📊 Training Results:")
         for key, value in training_stats.items():
             if isinstance(value, float):
                 print(f"   {key}: {value:.4f}")
@@ -276,7 +278,9 @@ Examples:
         eval_stats = trainer.evaluate_model()
         print("✅ Evaluation completed!")
         print(f"   Accuracy: {eval_stats.get('accuracy', 0):.2%}")
-        print(f"   Avg reward per sequence: {eval_stats.get('avg_reward_per_sequence', 0):.2f}")
+        print(
+            f"   Avg reward per sequence: {eval_stats.get('avg_reward_per_sequence', 0):.2f}"
+        )
         print(f"   Test sequences: {eval_stats.get('num_test_sequences', 0)}")
 
     except Exception as e:
@@ -286,7 +290,7 @@ Examples:
     validate_and_analyze_model(model_path, trainer)
 
     print(f"\n🎉 Advanced Training Complete! Model saved to: {model_path}")
-    
+
     print("\n✨ Key improvements implemented:")
     print("  ✓ Compact 64-feature state representation")
     print("  ✓ Dueling DQN architecture with Double DQN")
@@ -294,7 +298,7 @@ Examples:
     print("  ✓ Enhanced reward engineering")
     print("  ✓ Validation and early stopping")
     print("  ✓ Comprehensive model analysis")
-    
+
     print("\n📁 Generated files:")
     if model_path.exists():
         print(f"  Model: {model_path}")
@@ -308,9 +312,11 @@ Examples:
     print("      player = RLPlayer('models/ludo_dqn_model.pth')")
     print("   2. Run tournaments to gather more diverse training data")
     print("   3. Experiment with advanced hyperparameters:")
-    print(f"      python {sys.argv[0]} --epochs 2000 --validation-split 0.2 --early-stopping")
+    print(
+        f"      python {sys.argv[0]} --epochs 2000 --validation-split 0.2 --early-stopping"
+    )
     print("   4. Use model validation tools for deeper analysis")
-    
+
     print("\n🚀 Ready for production deployment!")
 
 

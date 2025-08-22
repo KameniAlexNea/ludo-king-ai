@@ -4,7 +4,6 @@ Improved RL Player for Ludo using the enhanced DQN agent.
 
 from typing import Dict
 
-
 from .config import TRAINING_CONFIG
 from .dqn_model import LudoDQNAgent
 from .state_encoder import LudoStateEncoder
