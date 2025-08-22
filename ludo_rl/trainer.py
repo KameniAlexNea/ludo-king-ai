@@ -1,12 +1,14 @@
 """
-Improved training pipeline for Ludo RL agents with better reward engineering and training logic.
+Training pipeline for Ludo RL agents with better reward engineering and training logic.
 """
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from glob import glob
 from typing import Dict, List, Tuple
+import datasets
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,7 +30,7 @@ class LudoRLTrainer:
         use_double_dqn: bool = True,
     ):
         """
-        Initialize the improved trainer.
+        Initialize the trainer.
 
         Args:
             game_data_file: Path to specific game data file (optional)
@@ -53,10 +55,7 @@ class LudoRLTrainer:
         )
 
         # Load game data
-        if game_data_file:
-            self.game_data = self.load_game_data_file(game_data_file)
-        else:
-            self.game_data = self.load_all_game_data(state_saver_dir)
+        self.game_data = self.load_from_hf(state_saver_dir)
 
         # Training metrics
         self.training_losses = []
@@ -64,48 +63,18 @@ class LudoRLTrainer:
         self.training_accuracy = []
 
         print(f"Loaded {len(self.game_data)} game decision records for training")
-        print(f"Using improved state encoding with {self.encoder.state_dim} features")
+        print(f"Using state encoding with {self.encoder.state_dim} features")
+    
+    def load_from_hf(self, repo_id = "alexneakameni/ludo-king-rl"):
+        ds = datasets.load_dataset(repo_id, split="train")
+        print("Dataset Loaded")
+        return ds.to_list()
 
-    def load_game_data_file(self, file_path: str) -> List[Dict]:
-        """Load game data from a specific file."""
-        try:
-            with open(file_path, "r") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error loading game data from {file_path}: {e}")
-            return []
-
-    def load_all_game_data(self, save_dir: str) -> List[Dict]:
-        """Load all game data from saved states directory."""
-        all_data = []
-
-        if not os.path.exists(save_dir):
-            print(f"Save directory {save_dir} does not exist")
-            return all_data
-
-        # Get list of JSON files
-        json_files = glob(os.path.join(save_dir, "*.json"))
-
-        if not json_files:
-            print(f"No JSON files found in {save_dir}")
-            return all_data
-
-        print(f"Loading game data from {len(json_files)} files...")
-
-        # Load files with progress bar
-        all_data = [
-            raw
-            for filename in tqdm(json_files, desc="Loading game files")
-            for raw in self.load_game_data_file(filename)
-        ]
-
-        return all_data
-
-    def calculate_improved_reward(
+    def calculate_reward(
         self, game_data: Dict, game_index: int, next_game_data: Dict = None
     ) -> float:
         """
-        Calculate improved reward with better engineering and game context awareness.
+        Calculate reward with better engineering and game context awareness.
 
         Args:
             game_data: Current game state data
@@ -216,40 +185,30 @@ class LudoRLTrainer:
 
         return reward
 
-    def create_improved_training_sequences(self) -> List[List[Tuple]]:
+    def create_training_sequences(self) -> List[List[Tuple]]:
         """
-        Convert game data to training sequences with better game boundary detection.
+        Convert game data to training sequences with precise game boundary detection using exp_id.
+        
+        Uses exp_id (filename) to reliably identify game boundaries, which is much more accurate
+        than timestamp or turn-based heuristics since all records from the same game file 
+        belong to the same game session.
 
         Returns:
             List[List[Tuple]]: List of game sequences, each containing (s, a, r, s', done) tuples
         """
         sequences = []
         current_sequence = []
-        last_player = None
-        last_timestamp = None
-        last_turn_count = None
+        last_exp_id = None
 
         for i, game_data in enumerate(self.game_data):
             context = game_data["game_context"]
             current_player = context["current_situation"]["player_color"]
-            current_time = game_data.get("timestamp", "")
-            current_turn = context["current_situation"].get("turn_count", 0)
+            current_exp_id = game_data.get("exp_id", "")
 
-            # Improved game boundary detection
+            # Game boundary detection using exp_id
             is_new_game = False
-            if last_player is not None:
-                # Check for new game indicators
-                time_gap = self._is_significant_time_gap(last_timestamp, current_time)
-                turn_reset = (
-                    last_turn_count is not None
-                    and current_turn < last_turn_count
-                    and current_turn < 5
-                )  # Turn count reset
-                player_cycle_complete = (
-                    current_player == last_player and len(current_sequence) > 20
-                )  # Long sequence
-
-                is_new_game = time_gap or turn_reset or player_cycle_complete
+            if last_exp_id is not None and current_exp_id != last_exp_id:
+                is_new_game = True
 
             if is_new_game and current_sequence:
                 # Add sequence completion rewards
@@ -266,18 +225,16 @@ class LudoRLTrainer:
             if action_idx >= len(valid_moves):
                 action_idx = 0
 
-            # Calculate improved reward
-            reward = self.calculate_improved_reward(game_data, i)
+            # Calculate reward
+            reward = self.calculate_reward(game_data, i)
 
             # Determine next state and done flag
-            next_state, done = self._get_improved_next_state_and_done(i, current_player)
+            next_state, done = self._get_next_state_and_done(i, current_player)
 
             current_sequence.append((state, action_idx, reward, next_state, done))
 
             # Update tracking variables
-            last_player = current_player
-            last_timestamp = current_time
-            last_turn_count = current_turn
+            last_exp_id = current_exp_id
 
         # Add the final sequence
         if current_sequence:
@@ -289,41 +246,6 @@ class LudoRLTrainer:
         print(f"Average sequence length: {avg_length:.1f}")
 
         return sequences
-
-    def _is_significant_time_gap(self, last_time: str, current_time: str) -> bool:
-        """Check if there's a significant time gap indicating a new game."""
-        try:
-            if not last_time or not current_time:
-                return False
-
-            # Parse timestamps (handle different formats)
-            last_dt = self._parse_timestamp(last_time)
-            curr_dt = self._parse_timestamp(current_time)
-
-            if last_dt and curr_dt:
-                gap_seconds = (curr_dt - last_dt).total_seconds()
-                return gap_seconds > 1800  # 30 minutes gap
-        except Exception:
-            pass
-        return False
-
-    def _parse_timestamp(self, timestamp: str):
-        """Parse timestamp with multiple format support."""
-        formats = [
-            "%Y-%m-%dT%H:%M:%S.%fZ",
-            "%Y-%m-%dT%H:%M:%SZ",
-            "%Y-%m-%dT%H:%M:%S",
-            "%Y-%m-%d %H:%M:%S",
-        ]
-
-        for fmt in formats:
-            try:
-                return datetime.strptime(
-                    timestamp.replace("Z", ""), fmt.replace("Z", "")
-                )
-            except ValueError:
-                continue
-        return None
 
     def _add_sequence_completion_rewards(self, sequence: List[Tuple]):
         """Add completion rewards to the sequence based on final outcome."""
@@ -351,38 +273,42 @@ class LudoRLTrainer:
                 done,
             )
 
-    def _get_improved_next_state_and_done(
+    def _get_next_state_and_done(
         self, current_index: int, current_player: str
     ) -> Tuple[np.ndarray, bool]:
-        """Get next state and done flag with improved logic."""
-        # Look ahead to find next state for same player
+        """Get next state and done flag with logic using exp_id."""
+        current_exp_id = self.game_data[current_index].get("exp_id", "")
+        
+        # Look ahead to find next state for same player in same game
         for j in range(current_index + 1, min(current_index + 20, len(self.game_data))):
             next_data = self.game_data[j]
+            next_exp_id = next_data.get("exp_id", "")
+            
+            # If we've moved to a different game, episode is done
+            if next_exp_id != current_exp_id:
+                break
+                
             next_context = next_data["game_context"]
             next_player = next_context["current_situation"]["player_color"]
 
             if next_player == current_player:
-                # Found next state for same player
+                # Found next state for same player in same game
                 next_state = self.encoder.encode_state(next_data)
                 return next_state, False
 
-        # No next state found for same player - episode done
+        # No next state found for same player in same game - episode done
         current_state = self.encoder.encode_state(self.game_data[current_index])
         return current_state, True
 
     def _extract_game_id(self, game_data: Dict, index: int) -> str:
-        """Extract a game identifier from game data."""
-        # Use timestamp patterns to identify games
-        timestamp = game_data.get("timestamp", "")
-        strategy = game_data.get("strategy", "unknown")
-
-        # Simple heuristic: group by hour and strategy
-        if timestamp:
-            game_id = f"{strategy}_{timestamp[:13]}"  # YYYY-MM-DDTHH
-        else:
-            game_id = f"{strategy}_{index // 50}"  # Group by chunks
-
-        return game_id
+        """Extract a game identifier from game data using exp_id."""
+        # Use exp_id as the primary game identifier
+        exp_id = game_data.get("exp_id", "")
+        if exp_id:
+            return exp_id
+        
+        # Fallback to index-based grouping if exp_id is missing
+        return f"game_{index // 50}"
 
     def train(
         self,
@@ -394,7 +320,7 @@ class LudoRLTrainer:
         early_stopping_patience: int = 50,
     ) -> Dict:
         """
-        Train the RL agent with improved training loop and validation.
+        Train the RL agent with training loop and validation.
 
         Args:
             epochs: Number of training epochs
@@ -407,7 +333,7 @@ class LudoRLTrainer:
         Returns:
             Dict: Training statistics
         """
-        sequences = self.create_improved_training_sequences()
+        sequences = self.create_training_sequences()
 
         if not sequences:
             print("No training sequences available!")
@@ -654,7 +580,7 @@ class LudoRLTrainer:
         """
         if test_sequences is None:
             # Use last 10% of sequences for testing
-            all_sequences = self.create_improved_training_sequences()
+            all_sequences = self.create_training_sequences()
             test_size = max(1, len(all_sequences) // 10)
             test_sequences = all_sequences[-test_size:]
 
@@ -709,7 +635,7 @@ class LudoRLTrainer:
         Returns:
             List[Dict]: Results for each fold
         """
-        sequences = self.create_improved_training_sequences()
+        sequences = self.create_training_sequences()
         if len(sequences) < k_folds:
             print(f"Not enough sequences ({len(sequences)}) for {k_folds}-fold CV")
             return []
