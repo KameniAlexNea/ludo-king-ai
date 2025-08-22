@@ -1,5 +1,5 @@
 """
-State encoder for converting Ludo game states to numerical vectors
+Improved state encoder for converting Ludo game states to numerical vectors
 suitable for reinforcement learning training.
 """
 
@@ -9,191 +9,302 @@ import numpy as np
 
 
 class LudoStateEncoder:
-    """Converts Ludo game states to fixed-length numerical vectors."""
+    """Converts Ludo game states to compact, fixed-length numerical vectors."""
 
-    def __init__(self, board_size=52, max_tokens=4, num_players=4):
+    def __init__(self):
         """
-        Initialize the state encoder.
+        Initialize the improved state encoder with compact representation.
 
-        Args:
-            board_size: Number of positions on the main board
-            max_tokens: Maximum tokens per player
-            num_players: Maximum number of players
+        State structure (64 features total):
+        - Own tokens: 16 features (4 tokens × 4 features each)
+        - Game context: 8 features
+        - Opponent summary: 12 features (3 opponents × 4 features)
+        - Strategic context: 16 features
+        - Valid moves summary: 12 features
         """
-        self.board_size = board_size
-        self.max_tokens = max_tokens
-        self.num_players = num_players
-        self.state_dim = self._calculate_state_dim()
+        self.state_dim = 64  # Fixed, compact size
+        self.board_size = 52
+        self.max_tokens = 4
+        self.num_players = 4
 
-    def _calculate_state_dim(self):
-        """Calculate the total dimensionality of the state vector."""
-        # Token positions: each token can be in home (-1), board (0-51), or finished (52)
-        # Use one-hot encoding for each token position (54 possible positions)
-        token_positions = self.num_players * self.max_tokens * (self.board_size + 2)
-
-        # Game context features
-        game_context = 4  # dice_value, consecutive_sixes, turn_count, current_player
-
-        # Player statistics per player
-        player_stats = self.num_players * 4  # tokens_home, active, finished, won
-
-        # Valid moves encoding (up to 4 possible moves, each with features)
-        valid_moves_features = (
-            self.max_tokens * 6
-        )  # token_id, move_type, safety, capture, strategic_value, finishing
-
-        return token_positions + game_context + player_stats + valid_moves_features
+    def _calculate_flexible_state_dim(self):
+        """Calculate state dimension for the improved compact representation."""
+        own_tokens = 4 * 4  # position, is_active, is_in_home_column, safety
+        game_context = 8  # dice, sixes, turn, phase, active_tokens, progress, etc.
+        opponents = 3 * 4  # summarized opponent info per opponent
+        strategic = 16  # strategic analysis features
+        moves = 12  # valid moves summary features
+        return own_tokens + game_context + opponents + strategic + moves
 
     def encode_state(self, game_data: Dict) -> np.ndarray:
         """
-        Convert game state to numerical vector.
+        Convert game state to compact numerical vector.
 
         Args:
             game_data: Game state data with structure from GameStateSaver
 
         Returns:
-            np.ndarray: Fixed-length state vector
+            np.ndarray: Fixed-length state vector (64 features)
         """
         state = np.zeros(self.state_dim)
-        idx = 0
 
-        # Extract game context
-        game_context = game_data["game_context"]
-        current_situation = game_context["current_situation"]
-        player_state = game_context["player_state"]
-        opponents = game_context.get("opponents", [])
-        valid_moves = game_context.get("valid_moves", [])
+        context = game_data["game_context"]
+        player_state = context["player_state"]
+        current_situation = context["current_situation"]
+        opponents = context.get("opponents", [])
+        valid_moves = context.get("valid_moves", [])
+        strategic_analysis = context.get("strategic_analysis", {})
 
-        # Encode token positions for all players
-        current_player_color = current_situation["player_color"]
-        player_id = self._get_player_id(current_player_color)
+        # Own tokens (16 features: 4 tokens × 4 features each)
+        tokens = player_state.get("tokens", [])
+        for i in range(4):  # Always process 4 token slots
+            base_idx = i * 4
 
-        # Encode current player's tokens first
-        tokens = player_state["tokens"]
-        idx = self._encode_player_tokens(state, idx, tokens, 0)
+            if i < len(tokens):
+                token = tokens[i]
+                pos = token.get("position", -1)
 
-        # Encode opponent tokens (simplified - we only have limited opponent info)
-        for i, opponent in enumerate(opponents[: self.num_players - 1]):
-            # Create dummy token data for opponents based on available info
-            dummy_tokens = self._create_opponent_dummy_tokens(opponent)
-            idx = self._encode_player_tokens(state, idx, dummy_tokens, i + 1)
+                # Normalized position
+                if pos == -1:
+                    state[base_idx] = -1.0  # Home
+                elif token.get("is_finished", False):
+                    state[base_idx] = 1.0  # Finished
+                else:
+                    state[base_idx] = pos / 52.0  # Board position (normalized)
 
-        # Fill remaining player slots with zeros if fewer than max players
-        remaining_players = self.num_players - 1 - len(opponents)
-        for i in range(remaining_players):
-            idx += self.max_tokens * (self.board_size + 2)
+                state[base_idx + 1] = 1.0 if token.get("is_active", False) else 0.0
+                state[base_idx + 2] = (
+                    1.0 if token.get("is_in_home_column", False) else 0.0
+                )
+                state[base_idx + 3] = self._calculate_token_safety(pos, context)
+            # If no token data, features remain 0.0
 
-        # Encode game context
-        state[idx] = current_situation["dice_value"] / 6.0  # normalize dice value
-        state[idx + 1] = (
-            min(current_situation["consecutive_sixes"], 3) / 3.0
-        )  # normalize
-        state[idx + 2] = (
-            min(current_situation["turn_count"], 200) / 200.0
-        )  # normalize turn count
-        state[idx + 3] = player_id / (self.num_players - 1)  # current player ID
-        idx += 4
+        # Game context (8 features)
+        state[16] = current_situation.get("dice_value", 1) / 6.0
+        state[17] = min(current_situation.get("consecutive_sixes", 0), 3) / 3.0
+        state[18] = min(current_situation.get("turn_count", 0), 100) / 100.0
 
-        # Encode player statistics
-        # Current player stats
-        state[idx] = player_state["tokens_in_home"] / self.max_tokens
-        state[idx + 1] = player_state["active_tokens"] / self.max_tokens
-        state[idx + 2] = player_state["finished_tokens"] / self.max_tokens
-        state[idx + 3] = 1.0 if player_state["has_won"] else 0.0
-        idx += 4
+        # Player progress metrics
+        active_tokens = len([t for t in tokens if t.get("is_active", False)])
+        finished_tokens = len([t for t in tokens if t.get("is_finished", False)])
+        state[19] = active_tokens / 4.0
+        state[20] = finished_tokens / 4.0
+        state[21] = player_state.get("tokens_in_home", 0) / 4.0
+        state[22] = 1.0 if player_state.get("has_won", False) else 0.0
 
-        # Opponent stats
-        for opponent in opponents[: self.num_players - 1]:
-            state[idx] = (
-                self.max_tokens - opponent["tokens_active"]
-            ) / self.max_tokens  # estimated home tokens
-            state[idx + 1] = opponent["tokens_active"] / self.max_tokens
-            state[idx + 2] = opponent["tokens_finished"] / self.max_tokens
-            state[idx + 3] = 0.0  # assume not won (we'd know if they won)
-            idx += 4
+        # Game phase indicator
+        total_progress = (
+            active_tokens + finished_tokens * 2
+        ) / 8.0  # Weighted progress
+        state[23] = total_progress
 
-        # Fill remaining opponent stats with zeros
-        remaining_opponents = self.num_players - 1 - len(opponents)
-        for i in range(remaining_opponents):
-            idx += 4
+        # Opponent summary (12 features: 3 opponents × 4 features)
+        for i in range(3):  # Always process 3 opponent slots
+            base_idx = 24 + i * 4
 
-        # Encode valid moves features
-        for i in range(self.max_tokens):
-            if i < len(valid_moves):
-                move = valid_moves[i]
-                state[idx] = move["token_id"] / (
-                    self.max_tokens - 1
-                )  # normalize token ID
-                state[idx + 1] = self._encode_move_type(move["move_type"])
-                state[idx + 2] = 1.0 if move["is_safe_move"] else 0.0
-                state[idx + 3] = 1.0 if move["captures_opponent"] else 0.0
-                state[idx + 4] = (
-                    min(move["strategic_value"], 30.0) / 30.0
-                )  # normalize strategic value
-                state[idx + 5] = 1.0 if move["move_type"] == "finish" else 0.0
-            # else: zeros for unused move slots
-            idx += 6
+            if i < len(opponents):
+                opp = opponents[i]
+                state[base_idx] = opp.get("tokens_active", 0) / 4.0
+                state[base_idx + 1] = opp.get("tokens_finished", 0) / 4.0
+                state[base_idx + 2] = opp.get("threat_level", 0.0)
+                state[base_idx + 3] = 1.0 if opp.get("tokens_finished", 0) == 4 else 0.0
+            # If no opponent data, features remain 0.0
+
+        # Strategic context (16 features)
+        state[36] = 1.0 if strategic_analysis.get("can_capture", False) else 0.0
+        state[37] = 1.0 if strategic_analysis.get("can_finish_token", False) else 0.0
+        state[38] = 1.0 if strategic_analysis.get("can_exit_home", False) else 0.0
+        state[39] = len(strategic_analysis.get("safe_moves", [])) / 4.0
+        state[40] = len(strategic_analysis.get("risky_moves", [])) / 4.0
+        state[41] = strategic_analysis.get("best_strategic_value", 0.0) / 30.0
+
+        # Tactical features
+        state[42] = (
+            1.0 if any(m.get("captures_opponent", False) for m in valid_moves) else 0.0
+        )
+        state[43] = (
+            1.0 if any(m.get("move_type") == "finish" for m in valid_moves) else 0.0
+        )
+        state[44] = 1.0 if current_situation.get("dice_value", 1) == 6 else 0.0
+        state[45] = len([m for m in valid_moves if m.get("is_safe_move", True)]) / max(
+            len(valid_moves), 1
+        )
+
+        # Position analysis
+        home_tokens = len([t for t in tokens if t.get("position", -1) == -1])
+        board_tokens = len(
+            [
+                t
+                for t in tokens
+                if t.get("position", -1) >= 0 and not t.get("is_finished", False)
+            ]
+        )
+        state[46] = home_tokens / 4.0
+        state[47] = board_tokens / 4.0
+
+        # Risk assessment
+        vulnerable_tokens = self._count_vulnerable_tokens(tokens, context)
+        state[48] = vulnerable_tokens / 4.0
+
+        # Strategic positioning
+        advanced_tokens = len(
+            [t for t in tokens if t.get("position", -1) > 26]
+        )  # Past halfway
+        state[49] = advanced_tokens / 4.0
+
+        # Home column advantage
+        home_column_tokens = len(
+            [t for t in tokens if t.get("is_in_home_column", False)]
+        )
+        state[50] = home_column_tokens / 4.0
+
+        # Relative position to opponents
+        state[51] = self._calculate_relative_position_advantage(tokens, opponents)
+
+        # Valid moves summary (12 features)
+        state[52] = len(valid_moves) / 4.0
+
+        if valid_moves:
+            # Strategic value statistics
+            strategic_values = [m.get("strategic_value", 0) for m in valid_moves]
+            state[53] = np.mean(strategic_values) / 30.0
+            state[54] = np.max(strategic_values) / 30.0
+
+            # Move type distribution
+            state[55] = sum(
+                1 for m in valid_moves if m.get("move_type") == "exit_home"
+            ) / len(valid_moves)
+            state[56] = sum(
+                1 for m in valid_moves if m.get("captures_opponent", False)
+            ) / len(valid_moves)
+            state[57] = sum(
+                1 for m in valid_moves if m.get("is_safe_move", True)
+            ) / len(valid_moves)
+            state[58] = sum(
+                1 for m in valid_moves if m.get("move_type") == "finish"
+            ) / len(valid_moves)
+
+            # Best move indicator
+            best_move = strategic_analysis.get("best_strategic_move", {})
+            if best_move:
+                best_token_id = best_move.get("token_id", -1)
+                state[59] = (
+                    1.0
+                    if any(m.get("token_id") == best_token_id for m in valid_moves)
+                    else 0.0
+                )
+
+            # Move diversity
+            unique_tokens = len(set(m.get("token_id", -1) for m in valid_moves))
+            state[60] = unique_tokens / 4.0
+
+            # Risk distribution
+            risky_moves = sum(1 for m in valid_moves if not m.get("is_safe_move", True))
+            state[61] = risky_moves / len(valid_moves)
+
+            # Progress potential
+            progress_potential = sum(
+                m.get("strategic_value", 0) > 0 for m in valid_moves
+            )
+            state[62] = progress_potential / len(valid_moves)
+
+        # Overall game state
+        state[63] = self._calculate_overall_game_state_score(
+            player_state, opponents, current_situation
+        )
 
         return state
 
-    def _encode_player_tokens(
-        self, state: np.ndarray, start_idx: int, tokens: List[Dict], player_offset: int
-    ) -> int:
-        """Encode tokens for a specific player using one-hot encoding."""
-        idx = start_idx
+    def _calculate_token_safety(self, position: int, context: Dict) -> float:
+        """Calculate safety score for a token position."""
+        if position == -1 or position >= 52:  # Home or finished
+            return 1.0
 
-        for i in range(self.max_tokens):
-            if i < len(tokens):
-                token = tokens[i]
-                position = token["position"]
+        # Check if position is in safe zone (start positions and some special positions)
+        safe_positions = {0, 8, 13, 21, 26, 34, 39, 47}  # Common safe positions in Ludo
+        if position in safe_positions:
+            return 0.8
 
-                # Convert position to one-hot encoding
-                if position == -1:  # home
-                    state[idx] = 1.0
-                elif token.get("is_finished", False):  # finished
-                    state[idx + self.board_size + 1] = 1.0
-                else:  # on board
-                    # Clamp position to valid range
-                    board_pos = max(0, min(position, self.board_size - 1))
-                    state[idx + 1 + board_pos] = 1.0
+        # Check if opponents can capture (simplified heuristic)
+        opponents = context.get("opponents", [])
+        threat_level = sum(opp.get("threat_level", 0.0) for opp in opponents)
+        safety = max(0.0, 1.0 - threat_level / 3.0)  # Normalize threat level
 
-            idx += self.board_size + 2
+        return safety
 
-        return idx
+    def _count_vulnerable_tokens(self, tokens: List[Dict], context: Dict) -> int:
+        """Count tokens that are vulnerable to capture."""
+        vulnerable = 0
+        for token in tokens:
+            pos = token.get("position", -1)
+            if pos >= 0 and pos < 52:  # On board
+                safety = self._calculate_token_safety(pos, context)
+                if safety < 0.5:  # Consider unsafe if safety < 0.5
+                    vulnerable += 1
+        return vulnerable
 
-    def _create_opponent_dummy_tokens(self, opponent: Dict) -> List[Dict]:
-        """Create dummy token data for opponents based on available information."""
-        dummy_tokens = []
-        tokens_active = opponent["tokens_active"]
-        tokens_finished = opponent["tokens_finished"]
-        tokens_home = self.max_tokens - tokens_active - tokens_finished
+    def _calculate_relative_position_advantage(
+        self, own_tokens: List[Dict], opponents: List[Dict]
+    ) -> float:
+        """Calculate relative positional advantage compared to opponents."""
+        # Simple heuristic: compare average progress
+        own_progress = 0
+        active_own = 0
 
-        # Create dummy tokens
-        for i in range(self.max_tokens):
-            if i < tokens_home:
-                dummy_tokens.append({"position": -1, "is_finished": False})
-            elif i < tokens_home + tokens_active:
-                # Place active tokens at random board positions (we don't know exact positions)
-                dummy_tokens.append({"position": 25, "is_finished": False})  # mid-board
-            else:
-                dummy_tokens.append({"position": 52, "is_finished": True})
+        for token in own_tokens:
+            if token.get("is_finished", False):
+                own_progress += 52
+                active_own += 1
+            elif token.get("position", -1) >= 0:
+                own_progress += token.get("position", 0)
+                active_own += 1
 
-        return dummy_tokens
+        own_avg = own_progress / max(active_own, 1)
 
-    def _get_player_id(self, color: str) -> int:
-        """Convert player color to numeric ID."""
-        color_map = {"red": 0, "green": 1, "yellow": 2, "blue": 3}
-        return color_map.get(color.lower(), 0)
+        # Estimate opponent progress
+        opp_progress = 0
+        total_opp_active = 0
 
-    def _encode_move_type(self, move_type: str) -> float:
-        """Encode move type as normalized value."""
-        type_map = {
-            "exit_home": 0.0,
-            "advance_main_board": 0.33,
-            "enter_home_column": 0.66,
-            "finish": 1.0,
-        }
-        return type_map.get(move_type, 0.5)
+        for opp in opponents:
+            active = opp.get("tokens_active", 0)
+            finished = opp.get("tokens_finished", 0)
+            # Estimate average position (crude heuristic)
+            estimated_progress = finished * 52 + active * 26  # Assume average position
+            opp_progress += estimated_progress
+            total_opp_active += active + finished
+
+        opp_avg = opp_progress / max(total_opp_active, 1)
+
+        # Return normalized advantage (-1 to 1)
+        if opp_avg == 0:
+            return 1.0 if own_avg > 0 else 0.0
+
+        advantage = (own_avg - opp_avg) / 52.0
+        return max(-1.0, min(1.0, advantage))
+
+    def _calculate_overall_game_state_score(
+        self, player_state: Dict, opponents: List[Dict], situation: Dict
+    ) -> float:
+        """Calculate overall game state score."""
+        score = 0.0
+
+        # Own progress weight
+        finished = player_state.get("finished_tokens", 0)
+        active = player_state.get("active_tokens", 0)
+        score += finished * 0.4 + active * 0.1
+
+        # Opponent threat assessment
+        max_opp_finished = max(
+            (opp.get("tokens_finished", 0) for opp in opponents), default=0
+        )
+        score -= max_opp_finished * 0.3
+
+        # Turn momentum (consecutive sixes give advantage)
+        sixes = situation.get("consecutive_sixes", 0)
+        score += min(sixes, 2) * 0.1
+
+        # Normalize to 0-1 range
+        return max(0.0, min(1.0, score))
 
     def encode_action(self, chosen_move: int, valid_moves: List[Dict]) -> int:
         """
@@ -204,8 +315,23 @@ class LudoStateEncoder:
             valid_moves: List of valid moves
 
         Returns:
-            int: Action index (0-3, representing token to move)
+            int: Action index (move index, not token ID)
         """
-        if chosen_move < len(valid_moves):
-            return valid_moves[chosen_move]["token_id"]
-        return 0  # default to first token
+        if 0 <= chosen_move < len(valid_moves):
+            return chosen_move
+        return 0  # Default to first move
+
+    def decode_action(self, action_idx: int, valid_moves: List[Dict]) -> Dict:
+        """
+        Convert action index back to move information.
+
+        Args:
+            action_idx: Action index
+            valid_moves: List of valid moves
+
+        Returns:
+            Dict: Move information
+        """
+        if 0 <= action_idx < len(valid_moves):
+            return valid_moves[action_idx]
+        return valid_moves[0] if valid_moves else {}

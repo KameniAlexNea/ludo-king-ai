@@ -9,9 +9,9 @@ This demonstrates:
 4. Analyzing RL agent performance
 """
 
+import argparse
 import os
 import sys
-import argparse
 from collections import defaultdict
 
 # Add the project root to Python path

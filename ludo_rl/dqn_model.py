@@ -1,52 +1,63 @@
 """
-Deep Q-Network implementation for Ludo RL training.
+Improved Deep Q-Network implementation for Ludo RL training with Dueling DQN architecture.
 """
 
 import random
 from collections import deque
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 
 
-class LudoDQN(nn.Module):
-    """Deep Q-Network for Ludo decision making."""
+class ImprovedLudoDQN(nn.Module):
+    """Dueling DQN architecture for Ludo decision making with better feature extraction."""
 
-    def __init__(self, state_dim: int, action_dim: int = 4, hidden_dim: int = 512):
+    def __init__(self, state_dim: int, max_actions: int = 4, hidden_dim: int = 256):
         """
-        Initialize the DQN.
+        Initialize the improved DQN with Dueling architecture.
 
         Args:
             state_dim: Dimensionality of the state space
-            action_dim: Number of possible actions (tokens to move)
+            max_actions: Maximum number of possible actions
             hidden_dim: Size of hidden layers
         """
-        super(LudoDQN, self).__init__()
+        super(ImprovedLudoDQN, self).__init__()
         self.state_dim = state_dim
-        self.action_dim = action_dim
+        self.max_actions = max_actions
 
-        # Define the network architecture
-        self.network = nn.Sequential(
+        # Better feature extractor
+        self.feature_extractor = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(0.1),
             nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(0.1),
+        )
+
+        # Dueling DQN: Separate value and advantage streams
+        self.value_head = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
-            nn.Linear(hidden_dim // 2, action_dim),
+            nn.Linear(hidden_dim // 2, 1),
+        )
+
+        self.advantage_head = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, max_actions),
         )
 
         # Initialize weights
         self.apply(self._init_weights)
 
     def _init_weights(self, module):
-        """Initialize network weights."""
+        """Initialize network weights with proper initialization."""
         if isinstance(module, nn.Linear):
             torch.nn.init.xavier_uniform_(module.weight)
             if module.bias is not None:
@@ -54,7 +65,7 @@ class LudoDQN(nn.Module):
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass through the network.
+        Forward pass through the Dueling DQN.
 
         Args:
             state: Input state tensor
@@ -62,31 +73,106 @@ class LudoDQN(nn.Module):
         Returns:
             torch.Tensor: Q-values for each action
         """
-        return self.network(state)
+        features = self.feature_extractor(state)
+
+        # Separate value and advantage computation
+        value = self.value_head(features)
+        advantages = self.advantage_head(features)
+
+        # Dueling DQN combination: Q(s,a) = V(s) + A(s,a) - mean(A(s,a))
+        q_values = value + (advantages - advantages.mean(dim=-1, keepdim=True))
+
+        return q_values
 
 
-class LudoDQNAgent:
-    """DQN Agent for Ludo with experience replay and target network."""
+class PrioritizedReplayBuffer:
+    """Prioritized Experience Replay Buffer for more efficient learning."""
+
+    def __init__(self, capacity: int, alpha: float = 0.6, beta: float = 0.4):
+        """
+        Initialize prioritized replay buffer.
+
+        Args:
+            capacity: Maximum buffer size
+            alpha: Prioritization exponent
+            beta: Importance sampling exponent
+        """
+        self.capacity = capacity
+        self.alpha = alpha
+        self.beta = beta
+        self.buffer = []
+        self.priorities = np.zeros((capacity,), dtype=np.float32)
+        self.position = 0
+        self.max_priority = 1.0
+
+    def push(self, experience: Tuple):
+        """Add experience to buffer with maximum priority."""
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(experience)
+        else:
+            self.buffer[self.position] = experience
+
+        # Assign maximum priority to new experience
+        self.priorities[self.position] = self.max_priority
+        self.position = (self.position + 1) % self.capacity
+
+    def sample(self, batch_size: int) -> Tuple[List, np.ndarray, np.ndarray]:
+        """Sample batch with prioritized sampling."""
+        if len(self.buffer) == 0:
+            return [], np.array([]), np.array([])
+
+        # Calculate sampling probabilities
+        priorities = self.priorities[: len(self.buffer)]
+        probs = priorities**self.alpha
+        probs /= probs.sum()
+
+        # Sample indices
+        indices = np.random.choice(len(self.buffer), batch_size, p=probs, replace=False)
+
+        # Calculate importance sampling weights
+        weights = (len(self.buffer) * probs[indices]) ** (-self.beta)
+        weights /= weights.max()
+
+        # Get experiences
+        experiences = [self.buffer[idx] for idx in indices]
+
+        return experiences, indices, weights
+
+    def update_priorities(self, indices: np.ndarray, errors: np.ndarray):
+        """Update priorities based on TD errors."""
+        for idx, error in zip(indices, errors):
+            priority = (abs(error) + 1e-5) ** self.alpha
+            self.priorities[idx] = priority
+            self.max_priority = max(self.max_priority, priority)
+
+    def __len__(self):
+        return len(self.buffer)
+
+
+class ImprovedLudoDQNAgent:
+    """Enhanced DQN Agent with Dueling DQN, Prioritized Replay, and Double DQN."""
 
     def __init__(
         self,
         state_dim: int,
-        action_dim: int = 4,
+        max_actions: int = 4,
         lr: float = 0.001,
         gamma: float = 0.99,
         epsilon: float = 1.0,
         epsilon_decay: float = 0.995,
         epsilon_min: float = 0.01,
-        memory_size: int = 10000,
-        batch_size: int = 32,
-        target_update_freq: int = 100,
+        memory_size: int = 50000,
+        batch_size: int = 64,
+        target_update_freq: int = 1000,
+        use_prioritized_replay: bool = True,
+        use_double_dqn: bool = True,
     ):
         """
-        Initialize the DQN agent.
+        Initialize the improved DQN agent.
 
         Args:
             state_dim: Dimensionality of state space
-            action_dim: Number of possible actions
+            max_actions: Maximum number of possible actions
             lr: Learning rate
             gamma: Discount factor
             epsilon: Initial exploration rate
@@ -95,27 +181,37 @@ class LudoDQNAgent:
             memory_size: Size of experience replay buffer
             batch_size: Mini-batch size for training
             target_update_freq: Frequency of target network updates
+            use_prioritized_replay: Whether to use prioritized experience replay
+            use_double_dqn: Whether to use Double DQN
         """
         self.state_dim = state_dim
-        self.action_dim = action_dim
+        self.max_actions = max_actions
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.batch_size = batch_size
         self.target_update_freq = target_update_freq
+        self.use_prioritized_replay = use_prioritized_replay
+        self.use_double_dqn = use_double_dqn
         self.training_step = 0
 
         # Device configuration
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {self.device}")
 
         # Neural networks
-        self.q_network = LudoDQN(state_dim, action_dim).to(self.device)
-        self.target_network = LudoDQN(state_dim, action_dim).to(self.device)
-        self.optimizer = optim.Adam(self.q_network.parameters(), lr=lr)
+        self.q_network = ImprovedLudoDQN(state_dim, max_actions).to(self.device)
+        self.target_network = ImprovedLudoDQN(state_dim, max_actions).to(self.device)
+        self.optimizer = optim.Adam(
+            self.q_network.parameters(), lr=lr, weight_decay=1e-5
+        )
 
-        # Experience replay buffer
-        self.memory = deque(maxlen=memory_size)
+        # Experience replay
+        if use_prioritized_replay:
+            self.memory = PrioritizedReplayBuffer(memory_size)
+        else:
+            self.memory = deque(maxlen=memory_size)
 
         # Initialize target network
         self.update_target_network()
@@ -132,98 +228,128 @@ class LudoDQNAgent:
         next_state: np.ndarray,
         done: bool,
     ):
-        """
-        Store experience in replay buffer.
+        """Store experience in replay buffer."""
+        experience = (state, action, reward, next_state, done)
 
-        Args:
-            state: Current state
-            action: Action taken
-            reward: Reward received
-            next_state: Next state
-            done: Whether episode is done
-        """
-        self.memory.append((state, action, reward, next_state, done))
+        if self.use_prioritized_replay:
+            self.memory.push(experience)
+        else:
+            self.memory.append(experience)
 
     def act(self, state: np.ndarray, valid_moves: List[Dict]) -> int:
         """
-        Choose action using epsilon-greedy policy with valid move masking.
+        Choose action using improved epsilon-greedy policy with move evaluation.
 
         Args:
             state: Current state
             valid_moves: List of valid moves available
 
         Returns:
-            int: Action index (token ID to move)
+            int: Action index (move index in valid_moves)
         """
         if not valid_moves:
             return 0
 
-        # Extract valid token IDs
-        valid_token_ids = [move["token_id"] for move in valid_moves]
-
         # Epsilon-greedy exploration
         if np.random.random() <= self.epsilon:
-            return random.choice(valid_token_ids)
+            return np.random.randint(0, len(valid_moves))
 
-        # Exploitation: choose best action among valid ones
+        # Evaluate each valid move
         with torch.no_grad():
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+
+            # Get Q-values for all possible actions
             q_values = self.q_network(state_tensor).cpu().data.numpy()[0]
 
-            # Mask invalid actions by setting their Q-values to very low values
-            masked_q_values = np.full(self.action_dim, -float("inf"))
-            for token_id in valid_token_ids:
-                if token_id < self.action_dim:
-                    masked_q_values[token_id] = q_values[token_id]
+            # For each valid move, calculate its value
+            move_values = []
+            for i, move in enumerate(valid_moves):
+                # Use a simple heuristic: combine Q-value with strategic value
+                token_id = move.get("token_id", 0)
+                base_q_value = q_values[min(token_id, self.max_actions - 1)]
 
-            # Choose action with highest Q-value among valid actions
-            best_action = np.argmax(masked_q_values)
+                # Add strategic bonus
+                strategic_value = move.get("strategic_value", 0) / 30.0  # Normalize
+                safety_bonus = 0.1 if move.get("is_safe_move", True) else -0.1
+                capture_bonus = 0.2 if move.get("captures_opponent", False) else 0.0
 
-            # Ensure the action is valid
-            if best_action in valid_token_ids:
-                return best_action
-            else:
-                return valid_token_ids[0]  # fallback to first valid action
+                total_value = (
+                    base_q_value + strategic_value + safety_bonus + capture_bonus
+                )
+                move_values.append(total_value)
+
+            # Choose best move
+            best_move_idx = np.argmax(move_values)
+            return best_move_idx
 
     def replay(self) -> float:
-        """
-        Train the agent on a batch of experiences.
+        """Train the agent on a batch of experiences using improved learning."""
+        if self.use_prioritized_replay:
+            if len(self.memory) < self.batch_size:
+                return 0.0
 
-        Returns:
-            float: Training loss
-        """
-        if len(self.memory) < self.batch_size:
-            return 0.0
+            # Sample from prioritized replay buffer
+            experiences, indices, weights = self.memory.sample(self.batch_size)
+            weights = torch.FloatTensor(weights).to(self.device)
+        else:
+            if len(self.memory) < self.batch_size:
+                return 0.0
 
-        # Sample batch from memory
-        batch = random.sample(self.memory, self.batch_size)
+            # Sample from regular replay buffer
+            experiences = random.sample(self.memory, self.batch_size)
+            weights = torch.ones(self.batch_size).to(self.device)
 
-        # Convert to numpy arrays first, then to tensors for efficiency
-        states = torch.FloatTensor(np.array([e[0] for e in batch])).to(self.device)
-        actions = torch.LongTensor(np.array([e[1] for e in batch])).to(self.device)
-        rewards = torch.FloatTensor(np.array([e[2] for e in batch])).to(self.device)
-        next_states = torch.FloatTensor(np.array([e[3] for e in batch])).to(self.device)
-        dones = torch.BoolTensor(np.array([e[4] for e in batch])).to(self.device)
+        # Convert to tensors
+        states = torch.FloatTensor(np.array([e[0] for e in experiences])).to(
+            self.device
+        )
+        actions = torch.LongTensor(np.array([e[1] for e in experiences])).to(
+            self.device
+        )
+        rewards = torch.FloatTensor(np.array([e[2] for e in experiences])).to(
+            self.device
+        )
+        next_states = torch.FloatTensor(np.array([e[3] for e in experiences])).to(
+            self.device
+        )
+        dones = torch.BoolTensor(np.array([e[4] for e in experiences])).to(self.device)
 
         # Current Q values
         current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1))
 
-        # Next Q values from target network
+        # Next Q values
         with torch.no_grad():
-            next_q_values = self.target_network(next_states).max(1)[0]
+            if self.use_double_dqn:
+                # Double DQN: use main network to select actions, target network to evaluate
+                next_actions = self.q_network(next_states).max(1)[1]
+                next_q_values = (
+                    self.target_network(next_states)
+                    .gather(1, next_actions.unsqueeze(1))
+                    .squeeze()
+                )
+            else:
+                # Standard DQN
+                next_q_values = self.target_network(next_states).max(1)[0]
+
             target_q_values = rewards + (self.gamma * next_q_values * ~dones)
 
-        # Compute loss
-        loss = F.mse_loss(current_q_values.squeeze(), target_q_values)
+        # Compute weighted loss
+        td_errors = target_q_values - current_q_values.squeeze()
+        loss = (td_errors.pow(2) * weights).mean()
 
         # Optimize
         self.optimizer.zero_grad()
         loss.backward()
 
-        # Gradient clipping
+        # Gradient clipping for stability
         torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=1.0)
 
         self.optimizer.step()
+
+        # Update priorities if using prioritized replay
+        if self.use_prioritized_replay:
+            td_errors_np = td_errors.abs().cpu().data.numpy()
+            self.memory.update_priorities(indices, td_errors_np)
 
         # Update epsilon
         if self.epsilon > self.epsilon_min:
@@ -237,7 +363,7 @@ class LudoDQNAgent:
         return loss.item()
 
     def save_model(self, filepath: str):
-        """Save the trained model."""
+        """Save the trained model with additional metadata."""
         torch.save(
             {
                 "q_network_state_dict": self.q_network.state_dict(),
@@ -245,6 +371,10 @@ class LudoDQNAgent:
                 "optimizer_state_dict": self.optimizer.state_dict(),
                 "epsilon": self.epsilon,
                 "training_step": self.training_step,
+                "state_dim": self.state_dim,
+                "max_actions": self.max_actions,
+                "use_prioritized_replay": self.use_prioritized_replay,
+                "use_double_dqn": self.use_double_dqn,
             },
             filepath,
         )
@@ -263,6 +393,6 @@ class LudoDQNAgent:
         self.epsilon = 0.0
         self.q_network.eval()
 
-    def set_train_mode(self):
-        """Set agent to training mode."""
-        self.q_network.train()
+
+# Legacy alias for backward compatibility
+LudoDQNAgent = ImprovedLudoDQNAgent

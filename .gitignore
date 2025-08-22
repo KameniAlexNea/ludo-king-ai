@@ -215,3 +215,4 @@ saved_states/
 *.pth
 training_progress.png
 models/
+*.out
