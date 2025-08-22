@@ -11,8 +11,8 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from ludo_rl.config import REWARDS, TRAINING_CONFIG
-from ludo_rl.rl_player import ImprovedRLPlayer
-from ludo_rl.trainer import ImprovedLudoRLTrainer
+from ludo_rl.rl_player import RLPlayer
+from ludo_rl.trainer import LudoRLTrainer
 from ludo_rl.validator import LudoRLValidator
 
 
@@ -40,7 +40,7 @@ def main():
 
     # 1. Create improved trainer
     print("\n🧠 Initializing Improved RL Trainer...")
-    trainer = ImprovedLudoRLTrainer(
+    trainer = LudoRLTrainer(
         state_saver_dir=str(saved_states_dir),
         use_prioritized_replay=True,
         use_double_dqn=True,
@@ -91,7 +91,7 @@ def main():
     # 4. Test the trained model
     if model_path.exists():
         print("\n🤖 Testing Trained Model...")
-        player = ImprovedRLPlayer(str(model_path), name="ImprovedRLAgent")
+        player = RLPlayer(str(model_path), name="ImprovedRLAgent")
 
         # Create a sample game state for testing
         sample_game_state = create_sample_game_state()

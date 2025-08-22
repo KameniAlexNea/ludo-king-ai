@@ -13,11 +13,11 @@ import numpy as np
 from tqdm import tqdm
 
 from .config import REWARDS, TRAINING_CONFIG
-from .dqn_model import ImprovedLudoDQNAgent
+from .dqn_model import LudoDQNAgent
 from .state_encoder import LudoStateEncoder
 
 
-class ImprovedLudoRLTrainer:
+class LudoRLTrainer:
     """Enhanced training pipeline for Ludo RL agents with better learning algorithms."""
 
     def __init__(
@@ -37,7 +37,7 @@ class ImprovedLudoRLTrainer:
             use_double_dqn: Whether to use Double DQN
         """
         self.encoder = LudoStateEncoder()
-        self.agent = ImprovedLudoDQNAgent(
+        self.agent = LudoDQNAgent(
             state_dim=self.encoder.state_dim,
             max_actions=4,
             lr=TRAINING_CONFIG.LEARNING_RATE,
@@ -728,9 +728,9 @@ class ImprovedLudoRLTrainer:
             train_sequences = sequences[:start_idx] + sequences[end_idx:]
 
             # Create new trainer for this fold
-            fold_trainer = ImprovedLudoRLTrainer()
+            fold_trainer = LudoRLTrainer()
             fold_trainer.encoder = self.encoder
-            fold_trainer.agent = ImprovedLudoDQNAgent(
+            fold_trainer.agent = LudoDQNAgent(
                 state_dim=self.encoder.state_dim,
                 max_actions=4,
                 **TRAINING_CONFIG.__dict__,
@@ -779,7 +779,3 @@ class ImprovedLudoRLTrainer:
                     }
                 )
         return game_data
-
-
-# Legacy alias for backward compatibility
-LudoRLTrainer = ImprovedLudoRLTrainer

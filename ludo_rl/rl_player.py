@@ -6,14 +6,14 @@ from typing import Dict
 
 
 from .config import TRAINING_CONFIG
-from .dqn_model import ImprovedLudoDQNAgent
+from .dqn_model import LudoDQNAgent
 from .state_encoder import LudoStateEncoder
 
 
-class ImprovedRLPlayer:
+class RLPlayer:
     """Enhanced RL Player that uses the improved DQN agent for move selection."""
 
-    def __init__(self, model_path: str = None, name: str = "ImprovedRLPlayer"):
+    def __init__(self, model_path: str = None, name: str = "RLPlayer"):
         """
         Initialize the improved RL player.
 
@@ -25,7 +25,7 @@ class ImprovedRLPlayer:
         self.encoder = LudoStateEncoder()
 
         # Initialize with improved agent
-        self.agent = ImprovedLudoDQNAgent(
+        self.agent = LudoDQNAgent(
             state_dim=self.encoder.state_dim,
             max_actions=4,
             lr=TRAINING_CONFIG.LEARNING_RATE,
@@ -235,8 +235,8 @@ class ImprovedRLPlayer:
 
 
 # Legacy aliases for backward compatibility
-RLPlayer = ImprovedRLPlayer
-LudoRLPlayer = ImprovedRLPlayer
+RLPlayer = RLPlayer
+LudoRLPlayer = RLPlayer
 
 
 class LudoRLStrategy:
@@ -257,7 +257,7 @@ class LudoRLStrategy:
         self.description = (
             "Improved Deep Q-Network RL agent with Dueling DQN and prioritized replay"
         )
-        self.rl_player = ImprovedRLPlayer(model_path, name)
+        self.rl_player = RLPlayer(model_path, name)
 
     def decide(self, game_context: Dict) -> int:
         """

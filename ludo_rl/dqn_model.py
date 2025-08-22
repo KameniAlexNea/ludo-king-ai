@@ -12,19 +12,19 @@ import torch.nn as nn
 import torch.optim as optim
 
 
-class ImprovedLudoDQN(nn.Module):
+class LudoDQN(nn.Module):
     """Dueling DQN architecture for Ludo decision making with better feature extraction."""
 
     def __init__(self, state_dim: int, max_actions: int = 4, hidden_dim: int = 256):
         """
-        Initialize the improved DQN with Dueling architecture.
+        Initialize the DQN with Dueling architecture.
 
         Args:
             state_dim: Dimensionality of the state space
             max_actions: Maximum number of possible actions
             hidden_dim: Size of hidden layers
         """
-        super(ImprovedLudoDQN, self).__init__()
+        super(LudoDQN, self).__init__()
         self.state_dim = state_dim
         self.max_actions = max_actions
 
@@ -149,7 +149,7 @@ class PrioritizedReplayBuffer:
         return len(self.buffer)
 
 
-class ImprovedLudoDQNAgent:
+class LudoDQNAgent:
     """Enhanced DQN Agent with Dueling DQN, Prioritized Replay, and Double DQN."""
 
     def __init__(
@@ -168,7 +168,7 @@ class ImprovedLudoDQNAgent:
         use_double_dqn: bool = True,
     ):
         """
-        Initialize the improved DQN agent.
+        Initialize the DQN agent.
 
         Args:
             state_dim: Dimensionality of state space
@@ -201,8 +201,8 @@ class ImprovedLudoDQNAgent:
         print(f"Using device: {self.device}")
 
         # Neural networks
-        self.q_network = ImprovedLudoDQN(state_dim, max_actions).to(self.device)
-        self.target_network = ImprovedLudoDQN(state_dim, max_actions).to(self.device)
+        self.q_network = LudoDQN(state_dim, max_actions).to(self.device)
+        self.target_network = LudoDQN(state_dim, max_actions).to(self.device)
         self.optimizer = optim.Adam(
             self.q_network.parameters(), lr=lr, weight_decay=1e-5
         )
@@ -392,7 +392,3 @@ class ImprovedLudoDQNAgent:
         """Set agent to evaluation mode (no exploration)."""
         self.epsilon = 0.0
         self.q_network.eval()
-
-
-# Legacy alias for backward compatibility
-LudoDQNAgent = ImprovedLudoDQNAgent

@@ -1,20 +1,19 @@
 """
-Improved Reinforcement Learning module for Ludo AI training.
+Reinforcement Learning module for Ludo AI training.
 Provides enhanced tools for training RL agents on Ludo game data with modern techniques.
 """
 
 from .config import REWARDS, TRAINING_CONFIG
 
-# Import improved components
-from .dqn_model import ImprovedLudoDQN, ImprovedLudoDQNAgent, LudoDQNAgent
-from .rl_player import ImprovedRLPlayer, LudoRLPlayer, create_rl_strategy
+# Import core components
+from .dqn_model import LudoDQN, LudoDQNAgent
+from .rl_player import LudoRLPlayer, create_rl_strategy
 from .state_encoder import LudoStateEncoder
-from .trainer import ImprovedLudoRLTrainer, LudoRLTrainer
+from .trainer import LudoRLTrainer
 
 # Optional validator import (may not be needed in all environments)
 try:
     from .validator import LudoRLValidator, ModelComparator
-
     _has_validator = True
 except ImportError:
     _has_validator = False
@@ -22,18 +21,12 @@ except ImportError:
 __all__ = [
     # Core components
     "LudoStateEncoder",
-    # Improved models
-    "ImprovedLudoDQN",
-    "ImprovedLudoDQNAgent",
-    # Legacy models (for backward compatibility)
+    # DQN models
+    "LudoDQN", 
     "LudoDQNAgent",
-    # Improved trainer
-    "ImprovedLudoRLTrainer",
-    # Legacy trainer (for backward compatibility)
+    # Trainer
     "LudoRLTrainer",
-    # Improved player
-    "ImprovedRLPlayer",
-    # Legacy player (alias to improved)
+    # Player
     "LudoRLPlayer",
     # Strategy factory
     "create_rl_strategy",
@@ -44,9 +37,7 @@ __all__ = [
 
 # Add validator components if available
 if _has_validator:
-    __all__.extend(
-        [
-            "LudoRLValidator",
-            "ModelComparator",
-        ]
-    )
+    __all__.extend([
+        "LudoRLValidator",
+        "ModelComparator",
+    ])

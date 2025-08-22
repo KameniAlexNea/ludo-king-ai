@@ -2,12 +2,11 @@
 """
 Example script demonstrating how to train an RL agent on Ludo game data.
 
-This script shows the complete pipeline:
-1. Optionally generate training data by running tournaments
-2. Load saved game data from the GameStateSaver
-3. Train a DQN agent on the data
-4. Evaluate the trained agent
-5. Save the model for later use
+This script shows the training pipeline:
+1. Load saved game data from the GameStateSaver
+2. Train a DQN agent on the data
+3. Evaluate the trained agent
+4. Save the model for later use
 """
 
 import argparse
@@ -20,43 +19,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ludo_rl import LudoRLTrainer
 
 
-def generate_training_data(num_games, save_dir):
-    """Generate training data by running tournaments."""
-    print(f"🎮 Generating training data with {num_games} games...")
-
-    # Import the tournament system
-    from four_player_tournament import FourPlayerTournament
-
-    # Create tournament instance
-    tournament = FourPlayerTournament()
-
-    # Set the games per matchup to generate the requested number of games
-    original_games = tournament.games_per_matchup
-    tournament.games_per_matchup = max(
-        1, num_games // len(tournament.strategy_combinations)
-    )
-
-    print(f"   Running {tournament.games_per_matchup} games per matchup")
-    print(f"   Total combinations: {len(tournament.strategy_combinations)}")
-
-    # Run the tournament to generate data
-    try:
-        tournament.run_tournament()
-        print("✅ Training data generation completed!")
-
-        # Check how many games were actually saved
-        if os.path.exists(save_dir):
-            saved_files = [f for f in os.listdir(save_dir) if f.endswith(".json")]
-            print(f"   Generated {len(saved_files)} game data files")
-
-    except Exception as e:
-        print(f"❌ Error generating training data: {e}")
-        raise
-    finally:
-        # Restore original setting
-        tournament.games_per_matchup = original_games
-
-
 def main():
     """Main training example."""
     parser = argparse.ArgumentParser(
@@ -64,14 +26,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Generate training data only
-  python train_rl_agent.py --generate-data 100 --skip-training
-  
   # Train with existing data
   python train_rl_agent.py --epochs 1000 --output my_model.pth
   
-  # Generate data and train
-  python train_rl_agent.py --generate-data 50 --epochs 500
+  # Experiment with hyperparameters
+  python train_rl_agent.py --epochs 2000 --target-update-freq 50
         """,
     )
 
@@ -93,19 +52,6 @@ Examples:
         type=int,
         default=1000,
         help="Number of training epochs (default: 1000)",
-    )
-
-    parser.add_argument(
-        "--generate-data",
-        type=int,
-        metavar="NUM_GAMES",
-        help="Generate training data by running NUM_GAMES tournaments before training",
-    )
-
-    parser.add_argument(
-        "--skip-training",
-        action="store_true",
-        help="Skip the training phase (useful with --generate-data)",
     )
 
     parser.add_argument(
@@ -132,14 +78,6 @@ Examples:
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
-    # Generate training data if requested
-    if args.generate_data:
-        generate_training_data(args.generate_data, args.save_dir)
-
-        if args.skip_training:
-            print("✅ Data generation completed. Skipping training as requested.")
-            return
-
     # Configuration from args
     save_dir = args.save_dir
     model_path = args.output
@@ -153,8 +91,7 @@ Examples:
         if len(trainer.game_data) == 0:
             print("❌ No game data found!")
             print(f"   Make sure you have saved games in '{save_dir}' directory")
-            print("   Generate training data with:")
-            print(f"   python {sys.argv[0]} --generate-data 100")
+            print("   Run tournaments first to generate training data")
             return
 
         print(f"✅ Loaded {len(trainer.game_data)} game records")
@@ -235,8 +172,7 @@ Examples:
     print("   1. Use the trained model in games with:")
     print("      from ludo_rl import LudoRLPlayer")
     print("      # Load and use the model")
-    print("   2. Run more tournaments to gather more training data:")
-    print(f"      python {sys.argv[0]} --generate-data 200")
+    print("   2. Run tournaments separately to gather more training data")
     print("   3. Experiment with hyperparameters:")
     print(f"      python {sys.argv[0]} --epochs 2000 --target-update-freq 50")
 
