@@ -3,7 +3,6 @@ from typing import Dict, List
 import numpy as np
 
 
-
 class DynamicActionEncoder:
     """Handle variable number of valid moves more effectively."""
 

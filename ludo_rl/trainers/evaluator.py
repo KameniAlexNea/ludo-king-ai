@@ -4,7 +4,6 @@ Handles the evaluation of the trained model.
 
 from typing import Dict, List, Tuple
 
-
 from ..model.dqn_model import LudoDQNAgent
 from .sequence_builder import SequenceBuilder
 
