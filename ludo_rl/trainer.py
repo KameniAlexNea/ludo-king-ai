@@ -2,19 +2,19 @@
 Training pipeline for Ludo RL agents with better reward engineering and training logic.
 """
 
-from typing import Dict, List, Tuple
 import random
+from typing import Dict, List, Tuple
 
 import numpy as np
 
 from .config import TRAINING_CONFIG
 from .model.dqn_model import LudoDQNAgent
+from .online_env import OnlineLudoEnv
 from .states import LudoStateEncoder
 from .trainers.data_loader import DataLoader
 from .trainers.evaluator import Evaluator
 from .trainers.model_manager import ModelManager
 from .trainers.sequence_builder import SequenceBuilder
-from .online_env import OnlineLudoEnv
 
 
 class LudoRLTrainer:
@@ -47,14 +47,14 @@ class LudoRLTrainer:
             use_prioritized_replay=use_prioritized_replay,
             use_double_dqn=use_double_dqn,
         )
-    self.game_data = DataLoader().load_from_hf()
-    self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
-    self.model_manager = ModelManager(self.agent, self.encoder)
-    self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
-    self.online_env = None  # type: ignore
+        self.game_data = DataLoader().load_from_hf()
+        self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
+        self.model_manager = ModelManager(self.agent, self.encoder)
+        self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
+        self.online_env = None  # type: ignore
 
-    print(f"Loaded {len(self.game_data)} game decision records for training")
-    print(f"Using state encoding with {self.encoder.state_dim} features")
+        print(f"Loaded {len(self.game_data)} game decision records for training")
+        print(f"Using state encoding with {self.encoder.state_dim} features")
 
     def train(
         self,
@@ -106,7 +106,9 @@ class LudoRLTrainer:
                 for experience in sequence:
                     self.agent.remember(*experience)
 
-            print(f"Experience buffer populated with {len(self.agent.memory)} experiences")
+            print(
+                f"Experience buffer populated with {len(self.agent.memory)} experiences"
+            )
         else:
             train_sequences = []
             val_sequences = []
@@ -124,23 +126,37 @@ class LudoRLTrainer:
         import csv
         import os
 
-        log_path = os.path.join(os.path.dirname(model_save_path), "training_log.csv")
+        # Separate logs for online vs offline to avoid mixed headers
+        log_filename = "training_log_online.csv" if use_online else "training_log.csv"
+        log_path = os.path.join(os.path.dirname(model_save_path), log_filename)
         write_header = not os.path.exists(log_path)
         log_file = open(log_path, "a", newline="")
         csv_writer = csv.writer(log_file)
         if write_header:
-            csv_writer.writerow(
-                [
-                    "epoch",
-                    "loss",
-                    "recent_reward",
-                    "policy_acc",
-                    "val_reward",
-                    "val_accuracy",
-                    "epsilon",
-                    "buffer_size",
-                ]
-            )
+            if use_online:
+                csv_writer.writerow(
+                    [
+                        "epoch",
+                        "loss",
+                        "recent_reward",
+                        "policy_acc",
+                        "epsilon",
+                        "buffer_size",
+                    ]
+                )
+            else:
+                csv_writer.writerow(
+                    [
+                        "epoch",
+                        "loss",
+                        "recent_reward",
+                        "policy_acc",
+                        "val_reward",
+                        "val_accuracy",
+                        "epsilon",
+                        "buffer_size",
+                    ]
+                )
 
         for epoch in range(epochs):
             epoch_loss = 0.0
@@ -172,13 +188,23 @@ class LudoRLTrainer:
                         # store
                         self.agent.remember(state, action_idx, reward, next_state, done)
                         state = next_state
-                        valid_moves = self.online_env.get_current_valid_moves() if not done else []
+                        valid_moves = (
+                            self.online_env.get_current_valid_moves()
+                            if not done
+                            else []
+                        )
                         steps += 1
             # Training batches from buffer
             for _ in range(batches_per_epoch):
-                if hasattr(self.agent.memory, "__len__") and len(self.agent.memory) >= self.agent.batch_size:
+                if (
+                    hasattr(self.agent.memory, "__len__")
+                    and len(self.agent.memory) >= self.agent.batch_size
+                ):
                     loss = self.agent.replay()
-                elif hasattr(self.agent.memory, "buffer") and len(self.agent.memory.buffer) >= self.agent.batch_size:
+                elif (
+                    hasattr(self.agent.memory, "buffer")
+                    and len(self.agent.memory.buffer) >= self.agent.batch_size
+                ):
                     loss = self.agent.replay()
                 else:
                     loss = 0.0
@@ -198,7 +224,9 @@ class LudoRLTrainer:
             # Validation
             val_reward = 0.0
             val_accuracy = 0.0
-            if not use_online and val_sequences and epoch % 10 == 0:  # Validate every 10 epochs
+            if (
+                not use_online and val_sequences and epoch % 10 == 0
+            ):  # Validate every 10 epochs
                 val_metrics = self.evaluator.evaluate_model(val_sequences)
                 val_reward = val_metrics.get("avg_reward_per_sequence", 0)
                 val_accuracy = val_metrics.get("accuracy", 0)
@@ -217,9 +245,14 @@ class LudoRLTrainer:
             # Console progress (sparser)
             if epoch % 50 == 0:
                 epsilon = self.agent.epsilon
-                print(
-                    f"Epoch {epoch}: loss={avg_loss:.4f} reward={recent_rewards:.2f} policy_acc={policy_acc:.3f} val_reward={val_reward:.2f} val_acc={val_accuracy:.3f} eps={epsilon:.3f}"
-                )
+                if use_online:
+                    print(
+                        f"Epoch {epoch}: loss={avg_loss:.4f} reward={recent_rewards:.2f} policy_acc={policy_acc:.3f} eps={epsilon:.3f} buffer={len(self.agent.memory)}"
+                    )
+                else:
+                    print(
+                        f"Epoch {epoch}: loss={avg_loss:.4f} reward={recent_rewards:.2f} policy_acc={policy_acc:.3f} val_reward={val_reward:.2f} val_acc={val_accuracy:.3f} eps={epsilon:.3f}"
+                    )
 
             # CSV log each epoch
             buffer_size = (
@@ -227,21 +260,37 @@ class LudoRLTrainer:
                 if hasattr(self.agent.memory, "__len__")
                 else len(self.agent.memory.buffer)
             )
-            csv_writer.writerow(
-                [
-                    epoch,
-                    f"{avg_loss:.6f}",
-                    f"{recent_rewards:.4f}",
-                    f"{policy_acc:.4f}",
-                    f"{val_reward:.4f}",
-                    f"{val_accuracy:.4f}",
-                    f"{self.agent.epsilon:.4f}",
-                    buffer_size,
-                ]
-            )
+            if use_online:
+                csv_writer.writerow(
+                    [
+                        epoch,
+                        f"{avg_loss:.6f}",
+                        f"{recent_rewards:.4f}",
+                        f"{policy_acc:.4f}",
+                        f"{self.agent.epsilon:.4f}",
+                        buffer_size,
+                    ]
+                )
+            else:
+                csv_writer.writerow(
+                    [
+                        epoch,
+                        f"{avg_loss:.6f}",
+                        f"{recent_rewards:.4f}",
+                        f"{policy_acc:.4f}",
+                        f"{val_reward:.4f}",
+                        f"{val_accuracy:.4f}",
+                        f"{self.agent.epsilon:.4f}",
+                        buffer_size,
+                    ]
+                )
 
             # Early stopping
-            if not use_online and patience_counter >= early_stopping_patience and epoch > 100:
+            if (
+                not use_online
+                and patience_counter >= early_stopping_patience
+                and epoch > 100
+            ):
                 print(f"Early stopping at epoch {epoch} (patience: {patience_counter})")
                 break
 
@@ -308,8 +357,9 @@ class LudoRLTrainer:
         sample = random.sample(list(data), sample_size)
         states = [s for (s, a, r, ns, d) in sample]
         actions = [a for (s, a, r, ns, d) in sample]
-        import torch
         import numpy as np
+        import torch
+
         self.agent.q_network.eval()
         with torch.no_grad():
             state_tensor = torch.FloatTensor(np.array(states)).to(self.agent.device)
