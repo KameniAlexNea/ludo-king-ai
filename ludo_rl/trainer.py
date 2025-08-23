@@ -3,6 +3,7 @@ Training pipeline for Ludo RL agents with better reward engineering and training
 """
 
 from typing import Dict, List, Tuple
+import random
 
 import numpy as np
 
@@ -13,6 +14,7 @@ from .trainers.data_loader import DataLoader
 from .trainers.evaluator import Evaluator
 from .trainers.model_manager import ModelManager
 from .trainers.sequence_builder import SequenceBuilder
+from .online_env import OnlineLudoEnv
 
 
 class LudoRLTrainer:
@@ -45,15 +47,14 @@ class LudoRLTrainer:
             use_prioritized_replay=use_prioritized_replay,
             use_double_dqn=use_double_dqn,
         )
+    self.game_data = DataLoader().load_from_hf()
+    self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
+    self.model_manager = ModelManager(self.agent, self.encoder)
+    self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
+    self.online_env = None  # type: ignore
 
-        self.game_data = DataLoader().load_from_hf()
-
-        self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
-        self.model_manager = ModelManager(self.agent, self.encoder)
-        self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
-
-        print(f"Loaded {len(self.game_data)} game decision records for training")
-        print(f"Using state encoding with {self.encoder.state_dim} features")
+    print(f"Loaded {len(self.game_data)} game decision records for training")
+    print(f"Using state encoding with {self.encoder.state_dim} features")
 
     def train(
         self,
@@ -77,27 +78,39 @@ class LudoRLTrainer:
         Returns:
             Dict: Training statistics
         """
-        sequences = self.sequence_builder.create_training_sequences()
+        use_online = kwargs.get("online", False)
+        if use_online:
+            # Initialize online environment (single-agent vs random opponents)
+            if self.online_env is None:
+                self.online_env = OnlineLudoEnv(agent_color="red")
+            sequences = []  # Not used in online mode
+        else:
+            sequences = self.sequence_builder.create_training_sequences()
 
-        if not sequences:
+        if not use_online and not sequences:
             print("No training sequences available!")
             return {}
 
-        # Split data for validation
-        val_size = int(len(sequences) * validation_split)
-        train_sequences = sequences[:-val_size] if val_size > 0 else sequences
-        val_sequences = sequences[-val_size:] if val_size > 0 else []
+        if not use_online:
+            # Split data for validation
+            val_size = int(len(sequences) * validation_split)
+            train_sequences = sequences[:-val_size] if val_size > 0 else sequences
+            val_sequences = sequences[-val_size:] if val_size > 0 else []
 
-        print(
-            f"Training on {len(train_sequences)} sequences, validating on {len(val_sequences)}"
-        )
+            print(
+                f"Training on {len(train_sequences)} sequences, validating on {len(val_sequences)}"
+            )
 
-        # Populate experience replay buffer
-        for sequence in train_sequences:
-            for experience in sequence:
-                self.agent.remember(*experience)
+            # Populate experience replay buffer
+            for sequence in train_sequences:
+                for experience in sequence:
+                    self.agent.remember(*experience)
 
-        print(f"Experience buffer populated with {len(self.agent.memory)} experiences")
+            print(f"Experience buffer populated with {len(self.agent.memory)} experiences")
+        else:
+            train_sequences = []
+            val_sequences = []
+            print("Online training mode: generating experience through self-play.")
 
         # Training loop with early stopping
         best_val_reward = float("-inf")
@@ -121,6 +134,7 @@ class LudoRLTrainer:
                     "epoch",
                     "loss",
                     "recent_reward",
+                    "policy_acc",
                     "val_reward",
                     "val_accuracy",
                     "epsilon",
@@ -141,32 +155,50 @@ class LudoRLTrainer:
             else:
                 batches_per_epoch = max(1, buffer_size // (self.agent.batch_size * 10))
 
-            # Training batches
+            # Online data generation (if enabled)
+            if use_online:
+                episodes_per_epoch = kwargs.get("episodes_per_epoch", 5)
+                max_steps = kwargs.get("max_steps_per_episode", 200)
+                for ep in range(episodes_per_epoch):
+                    state = self.online_env.reset()
+                    done = False
+                    steps = 0
+                    # prepare agent turn
+                    state, valid_moves = self.online_env.agent_turn_prepare()
+                    while not done and steps < max_steps:
+                        # choose action
+                        action_idx = self.agent.act(state, valid_moves)
+                        next_state, reward, done = self.online_env.step(action_idx)
+                        # store
+                        self.agent.remember(state, action_idx, reward, next_state, done)
+                        state = next_state
+                        valid_moves = self.online_env.get_current_valid_moves() if not done else []
+                        steps += 1
+            # Training batches from buffer
             for _ in range(batches_per_epoch):
-                if (
-                    hasattr(self.agent.memory, "__len__")
-                    and len(self.agent.memory) >= self.agent.batch_size
-                ) or (
-                    hasattr(self.agent.memory, "buffer")
-                    and len(self.agent.memory.buffer) >= self.agent.batch_size
-                ):
+                if hasattr(self.agent.memory, "__len__") and len(self.agent.memory) >= self.agent.batch_size:
                     loss = self.agent.replay()
-                    if loss > 0:  # Valid loss
-                        epoch_loss += loss
-                        num_batches += 1
+                elif hasattr(self.agent.memory, "buffer") and len(self.agent.memory.buffer) >= self.agent.batch_size:
+                    loss = self.agent.replay()
+                else:
+                    loss = 0.0
+                if loss > 0:
+                    epoch_loss += loss
+                    num_batches += 1
 
             # Calculate metrics
             avg_loss = epoch_loss / max(num_batches, 1)
             self.model_manager.training_losses.append(avg_loss)
 
-            # Calculate training reward from recent experiences
+            # Offline dataset reward is mostly static; also compute policy accuracy vs stored actions
             recent_rewards = self._calculate_recent_performance()
+            policy_acc = self._calculate_policy_accuracy(sample_size=512)
             self.model_manager.training_rewards.append(recent_rewards)
 
             # Validation
             val_reward = 0.0
             val_accuracy = 0.0
-            if val_sequences and epoch % 10 == 0:  # Validate every 10 epochs
+            if not use_online and val_sequences and epoch % 10 == 0:  # Validate every 10 epochs
                 val_metrics = self.evaluator.evaluate_model(val_sequences)
                 val_reward = val_metrics.get("avg_reward_per_sequence", 0)
                 val_accuracy = val_metrics.get("accuracy", 0)
@@ -186,7 +218,7 @@ class LudoRLTrainer:
             if epoch % 50 == 0:
                 epsilon = self.agent.epsilon
                 print(
-                    f"Epoch {epoch}: loss={avg_loss:.4f} reward={recent_rewards:.2f} val_reward={val_reward:.2f} val_acc={val_accuracy:.3f} eps={epsilon:.3f}"
+                    f"Epoch {epoch}: loss={avg_loss:.4f} reward={recent_rewards:.2f} policy_acc={policy_acc:.3f} val_reward={val_reward:.2f} val_acc={val_accuracy:.3f} eps={epsilon:.3f}"
                 )
 
             # CSV log each epoch
@@ -200,6 +232,7 @@ class LudoRLTrainer:
                     epoch,
                     f"{avg_loss:.6f}",
                     f"{recent_rewards:.4f}",
+                    f"{policy_acc:.4f}",
                     f"{val_reward:.4f}",
                     f"{val_accuracy:.4f}",
                     f"{self.agent.epsilon:.4f}",
@@ -208,7 +241,7 @@ class LudoRLTrainer:
             )
 
             # Early stopping
-            if patience_counter >= early_stopping_patience and epoch > 100:
+            if not use_online and patience_counter >= early_stopping_patience and epoch > 100:
                 print(f"Early stopping at epoch {epoch} (patience: {patience_counter})")
                 break
 
@@ -244,6 +277,7 @@ class LudoRLTrainer:
             "num_sequences": len(train_sequences),
             "final_epsilon": self.agent.epsilon,
             "training_epochs": len(self.model_manager.training_losses),
+            "mode": "online" if use_online else "offline",
         }
 
     def _calculate_recent_performance(self) -> float:
@@ -261,6 +295,29 @@ class LudoRLTrainer:
             recent_rewards = [exp[2] for exp in recent_experiences]
             return np.mean(recent_rewards)
         return 0.0
+
+    def _calculate_policy_accuracy(self, sample_size: int = 256) -> float:
+        """Estimate policy accuracy vs stored actions in replay buffer."""
+        if hasattr(self.agent.memory, "buffer"):
+            data = self.agent.memory.buffer
+        else:
+            data = self.agent.memory
+        if len(data) == 0:
+            return 0.0
+        sample_size = min(sample_size, len(data))
+        sample = random.sample(list(data), sample_size)
+        states = [s for (s, a, r, ns, d) in sample]
+        actions = [a for (s, a, r, ns, d) in sample]
+        import torch
+        import numpy as np
+        self.agent.q_network.eval()
+        with torch.no_grad():
+            state_tensor = torch.FloatTensor(np.array(states)).to(self.agent.device)
+            q_vals = self.agent.q_network(state_tensor).cpu().numpy()
+        predicted = q_vals.argmax(axis=1)
+        correct = sum(1 for p, a in zip(predicted, actions) if p == a)
+        self.agent.q_network.train()
+        return correct / sample_size
 
     # Plotting removed in refactor (CSV logging instead)
     def plot_training_progress(self, save_path: str = "training_progress.png"):

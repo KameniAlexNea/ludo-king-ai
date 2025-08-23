@@ -135,6 +135,24 @@ Examples:
         help="Use Double DQN technique (default: True)",
     )
 
+    parser.add_argument(
+        "--online",
+        action="store_true",
+        help="Enable online self-play training mode (ignores offline dataset sequences)",
+    )
+    parser.add_argument(
+        "--episodes-per-epoch",
+        type=int,
+        default=5,
+        help="Number of self-play episodes per epoch in online mode (default: 5)",
+    )
+    parser.add_argument(
+        "--max-steps-per-episode",
+        type=int,
+        default=200,
+        help="Step cap per episode in online mode (default: 200)",
+    )
+
     args = parser.parse_args()
 
     print("🎲 Advanced Ludo RL Training System")
@@ -222,6 +240,10 @@ Examples:
     if args.early_stopping:
         training_params["early_stopping_patience"] = args.patience
 
+    if args.online:
+        training_params["online"] = True
+        training_params["episodes_per_epoch"] = args.episodes_per_epoch
+        training_params["max_steps_per_episode"] = args.max_steps_per_episode
     training_stats = trainer.train(**training_params)
 
     print("✅ Training completed!")
