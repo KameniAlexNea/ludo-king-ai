@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from ludo import StrategyFactory
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
 
@@ -23,6 +24,7 @@ class OnlineLudoEnv:
         self,
         agent_color: str = "red",
         opponent_colors: Optional[List[str]] = None,
+        opponent_strategies: Optional[List[str]] = None,
         add_noise: bool = False,
         max_turns: int = 500,
     ):
@@ -38,6 +40,24 @@ class OnlineLudoEnv:
         self.encoder = LudoStateEncoder(add_noise=add_noise)
         self.max_turns = max_turns
         self.turns_elapsed = 0
+        # Choose opponent strategies (exclude any LLM strategies for speed)
+        allowed = [
+            s
+            for s in StrategyFactory.get_available_strategies()
+            if "llm" not in s.lower()
+        ]
+        if opponent_strategies:
+            self.opponent_strategy_names = [
+                s for s in opponent_strategies if s in allowed
+            ]
+        else:
+            # Randomly assign (with replacement) strategies to each opponent
+            self.opponent_strategy_names = [
+                random.choice(allowed) for _ in opponent_colors
+            ]
+        # Keep original opponent colors for potential reshuffling logic
+        self.opponent_colors = opponent_colors
+        self._assign_opponent_strategies()
 
     def reset(self) -> np.ndarray:
         # Re-create the game to fully reset
@@ -46,7 +66,31 @@ class OnlineLudoEnv:
         ]
         self.game = LudoGame(enum_colors)
         self.turns_elapsed = 0
+        # Shuffle strategy assignment order each new game for variability
+        if (
+            hasattr(self, "opponent_strategy_names")
+            and len(self.opponent_strategy_names) > 1
+        ):
+            random.shuffle(self.opponent_strategy_names)
+        self._assign_opponent_strategies()
         return self._get_state()
+
+    def _assign_opponent_strategies(self):
+        """Assign chosen strategies to all opponent players (agent stays with RL)."""
+        non_agent_players = [
+            p for p in self.game.players if p.color.value != self.agent_color
+        ]
+        for idx, p in enumerate(non_agent_players):
+            if not self.opponent_strategy_names:
+                continue
+            strat_name = self.opponent_strategy_names[
+                min(idx, len(self.opponent_strategy_names) - 1)
+            ]
+            if "llm" in strat_name.lower():  # Safety filter
+                continue
+            impl = StrategyFactory.create_strategy(strat_name)
+            p.set_strategy(impl)
+            p.strategy_name = strat_name
 
     def _build_encoder_input(self, dice_value: int) -> Dict:
         # current_player = self.game.get_current_player()
@@ -95,13 +139,18 @@ class OnlineLudoEnv:
         ):
             dice = self.game.roll_dice()
             current_player = self.game.get_current_player()
-            moves = self.game.get_valid_moves(current_player, dice)
+            context = self.game.get_ai_decision_context(dice)
+            moves = context["valid_moves"]
             if moves:
-                # random opponent move
-                move = random.choice(moves)
-                self.game.execute_move(current_player, move["token_id"], dice)
-            # If no extra turn, advance
-            if not moves or not moves[0].get("extra_turn", False):
+                if hasattr(current_player, "make_strategic_decision"):
+                    chosen_token = current_player.make_strategic_decision(context)
+                else:
+                    chosen_token = random.choice(moves)["token_id"]
+                move_result = self.game.execute_move(current_player, chosen_token, dice)
+                extra = move_result.get("extra_turn", False)
+            else:
+                extra = False
+            if not extra:
                 self.game.next_turn()
             safety_counter += 1
         if safety_counter >= 1000:

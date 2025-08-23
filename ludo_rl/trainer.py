@@ -47,14 +47,15 @@ class LudoRLTrainer:
             use_prioritized_replay=use_prioritized_replay,
             use_double_dqn=use_double_dqn,
         )
-        self.game_data = DataLoader().load_from_hf()
-        self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
+        # Lazy-load offline dataset only if/when needed (skip for pure online training)
+        self.game_data = None  # will hold list of decision records when loaded
+        self.sequence_builder = None  # type: ignore
+        self.evaluator = None  # type: ignore
         self.model_manager = ModelManager(self.agent, self.encoder)
-        self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
         self.online_env = None  # type: ignore
-
-        print(f"Loaded {len(self.game_data)} game decision records for training")
-        print(f"Using state encoding with {self.encoder.state_dim} features")
+        print(
+            f"State encoder ready with {self.encoder.state_dim} features (dataset lazy-loaded)"
+        )
 
     def train(
         self,
@@ -85,7 +86,14 @@ class LudoRLTrainer:
                 self.online_env = OnlineLudoEnv(agent_color="red")
             sequences = []  # Not used in online mode
         else:
-            sequences = self.sequence_builder.create_training_sequences()
+            # Load data & helpers only once when first needed
+            if self.game_data is None:
+                print("Loading offline dataset (first use)...")
+                self.game_data = DataLoader().load_from_hf()
+                print(f"Loaded {len(self.game_data)} decision records")
+                self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
+                self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
+            sequences = self.sequence_builder.create_training_sequences()  # type: ignore
 
         if not use_online and not sequences:
             print("No training sequences available!")
@@ -227,7 +235,7 @@ class LudoRLTrainer:
             if (
                 not use_online and val_sequences and epoch % 10 == 0
             ):  # Validate every 10 epochs
-                val_metrics = self.evaluator.evaluate_model(val_sequences)
+                val_metrics = self.evaluator.evaluate_model(val_sequences)  # type: ignore
                 val_reward = val_metrics.get("avg_reward_per_sequence", 0)
                 val_accuracy = val_metrics.get("accuracy", 0)
                 self.model_manager.training_accuracy.append(val_accuracy)
@@ -391,6 +399,15 @@ class LudoRLTrainer:
         Returns:
             Dict: Evaluation metrics
         """
+        if self.evaluator is None:
+            # Need offline data to evaluate
+            print(
+                "Evaluator not initialized. Loading offline dataset for evaluation..."
+            )
+            if self.game_data is None:
+                self.game_data = DataLoader().load_from_hf()
+                self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
+            self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
         return self.evaluator.evaluate_model(test_sequences)
 
     def cross_validate(self, k_folds: int = 5) -> List[Dict]:
@@ -403,6 +420,11 @@ class LudoRLTrainer:
         Returns:
             List[Dict]: Results for each fold
         """
+        if self.sequence_builder is None:
+            print("Loading dataset for cross-validation...")
+            if self.game_data is None:
+                self.game_data = DataLoader().load_from_hf()
+            self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
         sequences = self.sequence_builder.create_training_sequences()
         if len(sequences) < k_folds:
             print(f"Not enough sequences ({len(sequences)}) for {k_folds}-fold CV")
