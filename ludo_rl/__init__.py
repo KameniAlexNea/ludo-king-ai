@@ -10,14 +10,7 @@ from .model.dqn_model import LudoDQN, LudoDQNAgent
 from .rl_player import create_rl_strategy
 from .states import LudoStateEncoder
 from .trainer import LudoRLTrainer
-
-# Optional validator import (may not be needed in all environments)
-try:
-    from .validator import LudoRLValidator, ModelComparator
-
-    _has_validator = True
-except ImportError:
-    _has_validator = False
+from .validator import LudoRLValidator, ModelComparator
 
 __all__ = [
     # Core components
@@ -32,13 +25,7 @@ __all__ = [
     # Configuration
     "REWARDS",
     "TRAINING_CONFIG",
+    # validators optional
+    "LudoRLValidator",
+    "ModelComparator",
 ]
-
-# Add validator components if available
-if _has_validator:
-    __all__.extend(
-        [
-            "LudoRLValidator",
-            "ModelComparator",
-        ]
-    )

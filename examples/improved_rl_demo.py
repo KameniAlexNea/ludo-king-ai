@@ -7,8 +7,7 @@ import sys
 from pathlib import Path
 
 # Add the project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ludo_rl.config import REWARDS, TRAINING_CONFIG
 from ludo_rl.rl_player import RLPlayer
@@ -22,6 +21,7 @@ def main():
     print("=" * 50)
 
     # Check for saved game data
+    project_root = Path(__file__).parent.parent
     saved_states_dir = project_root / "saved_states"
     if not saved_states_dir.exists():
         print(
@@ -41,7 +41,7 @@ def main():
     # 1. Create improved trainer
     print("\n🧠 Initializing Improved RL Trainer...")
     trainer = LudoRLTrainer(
-        state_saver_dir=str(saved_states_dir),
+        # state_saver_dir=str(saved_states_dir),
         use_prioritized_replay=True,
         use_double_dqn=True,
     )
@@ -65,7 +65,7 @@ def main():
 
     # 2. Quick training demo (short epochs for demo)
     print("\n🏋️  Starting Training Demo (reduced epochs for demo)...")
-
+    project_root = Path(__file__).parent.parent
     models_dir = project_root / "models"
     models_dir.mkdir(exist_ok=True)
     model_path = models_dir / "improved_ludo_model_demo.pth"

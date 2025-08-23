@@ -15,11 +15,9 @@ import sys
 from pathlib import Path
 
 # Add the project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ludo_rl.config import REWARDS, TRAINING_CONFIG
-from ludo_rl.rl_player import RLPlayer
 from ludo_rl.trainer import LudoRLTrainer
 from ludo_rl.validator import LudoRLValidator
 
@@ -47,7 +45,7 @@ def validate_and_analyze_model(model_path, trainer):
         return
 
     print("\n🤖 Testing Trained Model...")
-    player = RLPlayer(str(model_path), name="TrainedRLAgent")
+    # player = RLPlayer(str(model_path), name="TrainedRLAgent")
 
     # Test model with sample data if available
     if trainer.game_data:
@@ -191,7 +189,7 @@ Examples:
     print("\n🧠 Initializing Advanced RL Trainer...")
     try:
         trainer = LudoRLTrainer(
-            state_saver_dir=str(save_dir),
+            # state_saver_dir=str(save_dir),
             use_prioritized_replay=args.use_prioritized_replay,
             use_double_dqn=args.use_double_dqn,
         )

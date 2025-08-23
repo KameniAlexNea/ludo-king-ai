@@ -9,12 +9,13 @@ import matplotlib.pyplot as plt
 
 from ..config import TRAINING_CONFIG
 from ..model.dqn_model import LudoDQNAgent
+from ..model.ludo_dqn import LudoDQN
 
 
 class ModelManager:
     """Manages the DQN model."""
 
-    def __init__(self, agent: LudoDQNAgent, encoder):
+    def __init__(self, agent: LudoDQNAgent, encoder: LudoDQN):
         self.agent = agent
         self.encoder = encoder
         self.training_losses = []

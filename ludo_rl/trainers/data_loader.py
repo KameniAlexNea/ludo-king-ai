@@ -5,6 +5,7 @@ Handles loading of the Ludo game data from Hugging Face Hub.
 from typing import Dict, List
 
 import datasets
+import pandas as pd
 
 
 class DataLoader:
@@ -22,4 +23,5 @@ class DataLoader:
         """
         ds = datasets.load_dataset(self.repo_id, split="train")
         print("Dataset Loaded")
-        return ds.to_list()
+        df: pd.DataFrame = ds.to_pandas()
+        return df.to_dict(orient="records")

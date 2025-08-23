@@ -16,8 +16,7 @@ from collections import defaultdict
 from pathlib import Path
 
 # Add the project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
 from ludo_rl.rl_player import RLPlayer
@@ -297,10 +296,10 @@ class AdvancedRLEvaluation:
                 ]
 
                 print(
-                    f"   High confidence moves: {len(high_confidence_moves)} ({len(high_confidence_moves)/len(sample_decisions)*100:.1f}%)"
+                    f"   High confidence moves: {len(high_confidence_moves)} ({len(high_confidence_moves) / len(sample_decisions) * 100:.1f}%)"
                 )
                 print(
-                    f"   Low confidence moves: {len(low_confidence_moves)} ({len(low_confidence_moves)/len(sample_decisions)*100:.1f}%)"
+                    f"   Low confidence moves: {len(low_confidence_moves)} ({len(low_confidence_moves) / len(sample_decisions) * 100:.1f}%)"
                 )
 
                 # Analyze move diversity

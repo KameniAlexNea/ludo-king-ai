@@ -29,10 +29,7 @@ class LudoRLValidator:
         self.player = RLPlayer(model_path)
         self.encoder = LudoStateEncoder()
 
-        if game_data_path:
-            self.trainer = LudoRLTrainer(game_data_file=game_data_path)
-        else:
-            self.trainer = LudoRLTrainer()
+        self.trainer = LudoRLTrainer()
 
     def validate_against_expert_moves(self, expert_data: List[Dict]) -> Dict:
         """
@@ -402,7 +399,7 @@ class ModelComparator:
         """
         self.model_paths = model_paths
         self.model_names = model_names or [
-            f"Model_{i+1}" for i in range(len(model_paths))
+            f"Model_{i + 1}" for i in range(len(model_paths))
         ]
         self.models = [RLPlayer(path) for path in model_paths]
 
