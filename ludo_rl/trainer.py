@@ -107,6 +107,15 @@ class LudoRLTrainer:
         self.model_manager.training_rewards = []
         self.model_manager.training_accuracy = []
 
+        # Prepare CSV logging
+        import csv, os
+        log_path = os.path.join(os.path.dirname(model_save_path), "training_log.csv")
+        write_header = not os.path.exists(log_path)
+        log_file = open(log_path, "a", newline="")
+        csv_writer = csv.writer(log_file)
+        if write_header:
+            csv_writer.writerow(["epoch","loss","recent_reward","val_reward","val_accuracy","epsilon","buffer_size"])
+
         for epoch in range(epochs):
             epoch_loss = 0.0
             num_batches = 0
@@ -161,13 +170,14 @@ class LudoRLTrainer:
                     patience_counter += 1
 
             # Progress reporting
-            if epoch % 20 == 0:
+            # Console progress (sparser)
+            if epoch % 50 == 0:
                 epsilon = self.agent.epsilon
-                print(
-                    f"Epoch {epoch}/{epochs} - Loss: {avg_loss:.4f}, "
-                    f"Reward: {recent_rewards:.2f}, Val Reward: {val_reward:.2f}, "
-                    f"Val Acc: {val_accuracy:.3f}, Epsilon: {epsilon:.3f}"
-                )
+                print(f"Epoch {epoch}: loss={avg_loss:.4f} reward={recent_rewards:.2f} val_reward={val_reward:.2f} val_acc={val_accuracy:.3f} eps={epsilon:.3f}")
+
+            # CSV log each epoch
+            buffer_size = len(self.agent.memory) if hasattr(self.agent.memory, '__len__') else len(self.agent.memory.buffer)
+            csv_writer.writerow([epoch, f"{avg_loss:.6f}", f"{recent_rewards:.4f}", f"{val_reward:.4f}", f"{val_accuracy:.4f}", f"{self.agent.epsilon:.4f}", buffer_size])
 
             # Early stopping
             if patience_counter >= early_stopping_patience and epoch > 100:
@@ -177,6 +187,9 @@ class LudoRLTrainer:
             # Save model periodically
             if epoch % save_freq == 0 and epoch > 0:
                 self.model_manager.save_model(f"{model_save_path}.epoch_{epoch}")
+
+        # Close log file
+        log_file.close()
 
         # Save final model
         self.model_manager.save_model(model_save_path)
@@ -221,9 +234,9 @@ class LudoRLTrainer:
             return np.mean(recent_rewards)
         return 0.0
 
+    # Plotting removed in refactor (CSV logging instead)
     def plot_training_progress(self, save_path: str = "training_progress.png"):
-        """Plot comprehensive training metrics."""
-        self.model_manager.plot_training_progress(save_path)
+        print("Plotting disabled. Use training_log.csv for analysis.")
 
     def save_model(self, path: str):
         """Save the trained model with metadata."""

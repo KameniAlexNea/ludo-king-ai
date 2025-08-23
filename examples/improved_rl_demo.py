@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from ludo_rl.config import REWARDS, TRAINING_CONFIG
 from ludo_rl.rl_player import RLPlayer
 from ludo_rl.trainer import LudoRLTrainer
-from ludo_rl.validator import LudoRLValidator
+# Validator removed in refactor
 
 
 def main():
@@ -85,8 +85,8 @@ def main():
 
     # 3. Create training progress plot
     print("\n📈 Generating Training Progress Plot...")
-    progress_plot_path = models_dir / "training_progress_demo.png"
-    trainer.plot_training_progress(str(progress_plot_path))
+    # Plotting disabled; metrics in CSV log
+    progress_plot_path = models_dir / "training_log.csv"
 
     # 4. Test the trained model
     if model_path.exists():
@@ -106,27 +106,7 @@ def main():
 
         # 5. Model validation demo
         print("\n🔍 Model Validation Demo...")
-        validator = LudoRLValidator(str(model_path))
-
-        # Create some sample validation data
-        validation_data = [sample_game_state] * 10  # Simple demo data
-
-        try:
-            analysis_results = validator.analyze_decision_patterns(validation_data)
-
-            print("   Decision pattern analysis:")
-            move_prefs = analysis_results.get("move_type_preferences", {})
-            for move_type, count in move_prefs.items():
-                print(f"     {move_type}: {count}")
-
-            safety_prefs = analysis_results.get("safety_preferences", {})
-            total_moves = sum(safety_prefs.values())
-            if total_moves > 0:
-                safe_rate = safety_prefs.get("safe", 0) / total_moves
-                print(f"   Safety rate: {safe_rate:.2f}")
-
-        except Exception as e:
-            print(f"   Validation demo skipped due to: {e}")
+    print("Validator removed; skipping detailed analysis.")
 
     print("\n✨ Demo completed successfully!")
     print("\nKey improvements demonstrated:")
@@ -142,7 +122,7 @@ def main():
     if model_path.exists():
         print(f"  Model: {model_path}")
     if progress_plot_path.exists():
-        print(f"  Training plot: {progress_plot_path}")
+        print(f"  Training log: {progress_plot_path}")
 
     print("\n🚀 Ready for production use!")
 

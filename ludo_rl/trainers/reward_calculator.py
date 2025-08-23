@@ -41,8 +41,17 @@ class RewardCalculator:
 
         # Strategic rewards with better scaling
         captured_tokens = outcome.get("captured_tokens", [])
-        if captured_tokens:
-            reward += REWARDS.CAPTURE * len(captured_tokens)
+        # Handle numpy arrays or lists uniformly
+        if isinstance(captured_tokens, (list, tuple, set)):
+            ct_len = len(captured_tokens)
+        else:
+            try:
+                # e.g., numpy array
+                ct_len = int(getattr(captured_tokens, "size", len(captured_tokens)))
+            except Exception:
+                ct_len = 0
+        if ct_len > 0:
+            reward += REWARDS.CAPTURE * ct_len
 
         if outcome.get("token_finished", False):
             reward += REWARDS.TOKEN_FINISHED
@@ -97,7 +106,16 @@ class RewardCalculator:
 
         # Relative positioning reward
         opponents = context.get("opponents", [])
-        if opponents:
+        # Support numpy arrays
+        opp_len = 0
+        try:
+            opp_len = len(opponents)
+        except Exception:
+            try:
+                opp_len = int(getattr(opponents, "size", 0))
+            except Exception:
+                opp_len = 0
+        if opp_len > 0:
             # Calculate relative advantage
             max_opp_finished = max(
                 (opp.get("tokens_finished", 0) for opp in opponents), default=0

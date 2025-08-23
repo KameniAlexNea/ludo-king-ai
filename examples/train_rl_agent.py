@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ludo_rl.config import REWARDS, TRAINING_CONFIG
 from ludo_rl.trainer import LudoRLTrainer
-from ludo_rl.validator import LudoRLValidator
+# Validator removed in simplification
 
 
 def display_configuration():
@@ -39,36 +39,11 @@ def display_configuration():
 
 
 def validate_and_analyze_model(model_path, trainer):
-    """Validate and analyze the trained model."""
+    """Simplified quick eval (validator removed)."""
     if not model_path.exists():
-        print("   ⚠️  Model file not found, skipping validation")
         return
-
-    print("\n🤖 Testing Trained Model...")
-    # player = RLPlayer(str(model_path), name="TrainedRLAgent")
-
-    # Test model with sample data if available
-    if trainer.game_data:
-        sample_data = trainer.game_data[:10]  # Use first 10 samples
-
-        print("\n🔍 Model Validation Analysis...")
-        try:
-            validator = LudoRLValidator(str(model_path))
-            analysis_results = validator.analyze_decision_patterns(sample_data)
-
-            print("   Decision pattern analysis:")
-            move_prefs = analysis_results.get("move_type_preferences", {})
-            for move_type, count in move_prefs.items():
-                print(f"     {move_type}: {count}")
-
-            safety_prefs = analysis_results.get("safety_preferences", {})
-            total_moves = sum(safety_prefs.values())
-            if total_moves > 0:
-                safe_rate = safety_prefs.get("safe", 0) / total_moves
-                print(f"   Safety rate: {safe_rate:.2f}")
-
-        except Exception as e:
-            print(f"   ⚠️  Validation analysis error: {e}")
+    eval_stats = trainer.evaluate_model()
+    print(f"Quick eval accuracy: {eval_stats.get('accuracy',0):.2%}")
 
 
 def main():
@@ -233,42 +208,35 @@ Examples:
 
     # Train the agent with advanced features
     print(f"\n🏋️  Training Advanced DQN Agent for {args.epochs} epochs...")
-    try:
-        # Prepare training parameters
-        training_params = {
-            "epochs": args.epochs,
-            "validation_split": args.validation_split,
-            "target_update_freq": args.target_update_freq,
-            "save_freq": args.save_freq,
-            "model_save_path": str(model_path),
-        }
 
-        # Add early stopping if requested
-        if args.early_stopping:
-            training_params["early_stopping_patience"] = args.patience
+    # Prepare training parameters
+    training_params = {
+        "epochs": args.epochs,
+        "validation_split": args.validation_split,
+        "target_update_freq": args.target_update_freq,
+        "save_freq": args.save_freq,
+        "model_save_path": str(model_path),
+    }
 
-        training_stats = trainer.train(**training_params)
+    # Add early stopping if requested
+    if args.early_stopping:
+        training_params["early_stopping_patience"] = args.patience
 
-        print("✅ Training completed!")
-        print("\n📊 Training Results:")
-        for key, value in training_stats.items():
-            if isinstance(value, float):
-                print(f"   {key}: {value:.4f}")
-            else:
-                print(f"   {key}: {value}")
+    training_stats = trainer.train(**training_params)
 
-    except Exception as e:
-        print(f"❌ Error during training: {e}")
-        return
+    print("✅ Training completed!")
+    print("\n📊 Training Results:")
+    for key, value in training_stats.items():
+        if isinstance(value, float):
+            print(f"   {key}: {value:.4f}")
+        else:
+            print(f"   {key}: {value}")
 
-    # Generate training progress plots
-    print("\n� Generating Training Progress Plots...")
-    try:
-        plot_path = model_path.parent / "training_progress.png"
-        trainer.plot_training_progress(str(plot_path))
-        print(f"✅ Training plots saved to {plot_path}")
-    except Exception as e:
-        print(f"⚠️  Could not generate plots: {e}")
+
+    # Plotting removed; training logged to CSV automatically
+    log_path = model_path.parent / "training_log.csv"
+    if log_path.exists():
+        print(f"📄 Training log: {log_path}")
 
     # Comprehensive model evaluation
     print("\n🎯 Comprehensive Model Evaluation...")
@@ -294,15 +262,14 @@ Examples:
     print("  ✓ Dueling DQN architecture with Double DQN")
     print("  ✓ Prioritized experience replay")
     print("  ✓ Enhanced reward engineering")
-    print("  ✓ Validation and early stopping")
-    print("  ✓ Comprehensive model analysis")
+    print("  ✓ Simplified logging (CSV)")
 
     print("\n📁 Generated files:")
     if model_path.exists():
         print(f"  Model: {model_path}")
-    plot_path = model_path.parent / "training_progress.png"
-    if plot_path.exists():
-        print(f"  Training plot: {plot_path}")
+    log_path = model_path.parent / "training_log.csv"
+    if log_path.exists():
+        print(f"  Training log: {log_path}")
 
     print("\n💡 Next steps:")
     print("   1. Use the trained model in games with:")
@@ -313,7 +280,7 @@ Examples:
     print(
         f"      python {sys.argv[0]} --epochs 2000 --validation-split 0.2 --early-stopping"
     )
-    print("   4. Use model validation tools for deeper analysis")
+    print("   4. Inspect CSV log for learning curves")
 
     print("\n🚀 Ready for production deployment!")
 

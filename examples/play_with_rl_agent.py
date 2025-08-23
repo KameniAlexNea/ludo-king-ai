@@ -20,7 +20,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
 from ludo_rl.rl_player import RLPlayer
-from ludo_rl.validator import LudoRLValidator
 from ludo_stats.game_state_saver import GameStateSaver
 
 
@@ -47,8 +46,7 @@ class AdvancedRLEvaluation:
         print(f"🤖 Loading Advanced RL Agent from {self.model_path}")
         self.rl_player = RLPlayer(str(self.model_path), name="AdvancedRL-DQN")
 
-        # Initialize model validator for analysis
-        self.validator = LudoRLValidator(str(self.model_path))
+    # Validator removed
 
         # Get opponent strategies
         available_strategies = StrategyFactory.get_available_strategies()
@@ -159,32 +157,7 @@ class AdvancedRLEvaluation:
             if game_context["valid_moves"]:
                 # Enhanced move analysis for RL player
                 if current_player == game.players[0]:  # RL player
-                    move_analysis = self.rl_player.choose_move_with_analysis(
-                        game_context
-                    )
-                    token_id = move_analysis["move_index"]
-
-                    # Track confidence and analysis
-                    self.results["confidence_scores"].append(
-                        move_analysis["confidence"]
-                    )
-                    analysis_data = move_analysis.get("analysis", {})
-
-                    # Track strategic decision types
-                    move_type = analysis_data.get("move_type", "unknown")
-                    self.results["strategic_decisions"][move_type] += 1
-
-                    # Store detailed move analysis
-                    self.results["rl_move_analysis"].append(
-                        {
-                            "game": game_num,
-                            "turn": turn_count,
-                            "confidence": move_analysis["confidence"],
-                            "reasoning": analysis_data.get("reasoning", ""),
-                            "move_type": move_type,
-                            "dice_value": dice_value,
-                        }
-                    )
+                    token_id = self.rl_player.choose_move(game_context)
                 else:
                     # Regular opponent move
                     token_id = current_player.make_strategic_decision(game_context)

@@ -68,6 +68,9 @@ class LudoStateEncoder:
         current_situation = context.get("current_situation", {})
         opponents = context.get("opponents", [])
         valid_moves = context.get("valid_moves", [])
+        # Normalize valid_moves to a list to avoid ambiguous truth value errors if it's a numpy array
+        if isinstance(valid_moves, np.ndarray):
+            valid_moves = list(valid_moves)
         strategic_analysis = context.get("strategic_analysis", {})
 
         # Enhanced encoding with modular approach
@@ -186,65 +189,39 @@ class LudoStateEncoder:
         """Enhanced strategic features with better tactical awareness."""
         # Basic strategic flags
         state[start_idx] = 1.0 if strategic_analysis.get("can_capture", False) else 0.0
-        state[start_idx + 1] = (
-            1.0 if strategic_analysis.get("can_finish_token", False) else 0.0
-        )
-        state[start_idx + 2] = (
-            1.0 if strategic_analysis.get("can_exit_home", False) else 0.0
-        )
+        state[start_idx + 1] = 1.0 if strategic_analysis.get("can_finish_token", False) else 0.0
+        state[start_idx + 2] = 1.0 if strategic_analysis.get("can_exit_home", False) else 0.0
 
         # Move quality metrics
         safe_moves = strategic_analysis.get("safe_moves", [])
         risky_moves = strategic_analysis.get("risky_moves", [])
         total_moves = len(valid_moves)
-
         state[start_idx + 3] = len(safe_moves) / max(total_moves, 1)
         state[start_idx + 4] = len(risky_moves) / max(total_moves, 1)
 
         # Strategic value analysis
-        if valid_moves:
+        if len(valid_moves) > 0:
             strategic_values = [m.get("strategic_value", 0) for m in valid_moves]
-            state[start_idx + 5] = (
-                np.mean(strategic_values)
-                / self.normalization_constants["strategic_value_scale"]
-            )
-            state[start_idx + 6] = (
-                np.max(strategic_values)
-                / self.normalization_constants["strategic_value_scale"]
-            )
-            state[start_idx + 7] = (
-                np.std(strategic_values)
-                / self.normalization_constants["strategic_value_scale"]
-            )  # Value diversity
+            state[start_idx + 5] = np.mean(strategic_values) / self.normalization_constants["strategic_value_scale"]
+            state[start_idx + 6] = np.max(strategic_values) / self.normalization_constants["strategic_value_scale"]
+            state[start_idx + 7] = np.std(strategic_values) / self.normalization_constants["strategic_value_scale"]  # Value diversity
 
         # Tactical opportunities
-        state[start_idx + 8] = (
-            1.0 if any(m.get("captures_opponent", False) for m in valid_moves) else 0.0
-        )
-        state[start_idx + 9] = (
-            1.0 if any(m.get("move_type") == "finish" for m in valid_moves) else 0.0
-        )
-        state[start_idx + 10] = (
-            1.0 if current_situation.get("dice_value", 1) == 6 else 0.0
-        )
+        state[start_idx + 8] = 1.0 if any(m.get("captures_opponent", False) for m in valid_moves) else 0.0
+        state[start_idx + 9] = 1.0 if any(m.get("move_type") == "finish" for m in valid_moves) else 0.0
+        state[start_idx + 10] = 1.0 if current_situation.get("dice_value", 1) == 6 else 0.0
 
         # Move distribution analysis
-        if valid_moves:
+        if len(valid_moves) > 0:
             move_types = [m.get("move_type", "") for m in valid_moves]
             state[start_idx + 11] = move_types.count("exit_home") / len(valid_moves)
-            state[start_idx + 12] = move_types.count("advance_main_board") / len(
-                valid_moves
-            )
-            state[start_idx + 13] = move_types.count("enter_home_column") / len(
-                valid_moves
-            )
-
-            # Token diversity in moves
+            state[start_idx + 12] = move_types.count("advance_main_board") / len(valid_moves)
+            state[start_idx + 13] = move_types.count("enter_home_column") / len(valid_moves)
             unique_tokens = len(set(m.get("token_id", -1) for m in valid_moves))
             state[start_idx + 14] = unique_tokens / 4.0
 
         # Decision pressure (fewer good options = higher pressure)
-        good_moves = len([m for m in valid_moves if m.get("strategic_value", 0) > 10])
+        good_moves = len([m for m in valid_moves if m.get("strategic_value", 0) > 10]) if len(valid_moves) > 0 else 0
         state[start_idx + 15] = 1.0 - (good_moves / max(len(valid_moves), 1))
 
         return start_idx + 16
@@ -254,62 +231,28 @@ class LudoStateEncoder:
     ):
         """Enhanced move summary with comprehensive analysis."""
         state[start_idx] = len(valid_moves) / 4.0
-
-        if valid_moves:
-            # Strategic value statistics
+        if len(valid_moves) > 0:
             strategic_values = [m.get("strategic_value", 0) for m in valid_moves]
-            state[start_idx + 1] = (
-                np.mean(strategic_values)
-                / self.normalization_constants["strategic_value_scale"]
-            )
-            state[start_idx + 2] = (
-                np.max(strategic_values)
-                / self.normalization_constants["strategic_value_scale"]
-            )
+            state[start_idx + 1] = np.mean(strategic_values) / self.normalization_constants["strategic_value_scale"]
+            state[start_idx + 2] = np.max(strategic_values) / self.normalization_constants["strategic_value_scale"]
+            state[start_idx + 3] = sum(1 for m in valid_moves if m.get("move_type") == "exit_home") / len(valid_moves)
+            state[start_idx + 4] = sum(1 for m in valid_moves if m.get("captures_opponent", False)) / len(valid_moves)
+            state[start_idx + 5] = sum(1 for m in valid_moves if m.get("is_safe_move", True)) / len(valid_moves)
+            state[start_idx + 6] = sum(1 for m in valid_moves if m.get("move_type") == "finish") / len(valid_moves)
 
-            # Move type distribution
-            state[start_idx + 3] = sum(
-                1 for m in valid_moves if m.get("move_type") == "exit_home"
-            ) / len(valid_moves)
-            state[start_idx + 4] = sum(
-                1 for m in valid_moves if m.get("captures_opponent", False)
-            ) / len(valid_moves)
-            state[start_idx + 5] = sum(
-                1 for m in valid_moves if m.get("is_safe_move", True)
-            ) / len(valid_moves)
-            state[start_idx + 6] = sum(
-                1 for m in valid_moves if m.get("move_type") == "finish"
-            ) / len(valid_moves)
-
-            # Best move indicator
             best_move = strategic_analysis.get("best_strategic_move", {})
             if best_move:
                 best_token_id = best_move.get("token_id", -1)
-                state[start_idx + 7] = (
-                    1.0
-                    if any(m.get("token_id") == best_token_id for m in valid_moves)
-                    else 0.0
-                )
+                state[start_idx + 7] = 1.0 if any(m.get("token_id") == best_token_id for m in valid_moves) else 0.0
 
-            # Move diversity and risk analysis
             unique_tokens = len(set(m.get("token_id", -1) for m in valid_moves))
             state[start_idx + 8] = unique_tokens / 4.0
-
             risky_moves = sum(1 for m in valid_moves if not m.get("is_safe_move", True))
             state[start_idx + 9] = risky_moves / len(valid_moves)
-
-            # Progress potential
-            progress_potential = sum(
-                m.get("strategic_value", 0) > 0 for m in valid_moves
-            )
+            progress_potential = sum(m.get("strategic_value", 0) > 0 for m in valid_moves)
             state[start_idx + 10] = progress_potential / len(valid_moves)
-
-            # Move quality variance (decision difficulty)
             if len(strategic_values) > 1:
-                state[start_idx + 11] = np.var(strategic_values) / (
-                    self.normalization_constants["strategic_value_scale"] ** 2
-                )
-
+                state[start_idx + 11] = np.var(strategic_values) / (self.normalization_constants["strategic_value_scale"] ** 2)
         return start_idx + 12
 
     def _calculate_enhanced_token_safety(
