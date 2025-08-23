@@ -9,6 +9,7 @@ from typing import Dict, List
 import numpy as np
 import torch
 import torch.optim as optim
+from loguru import logger
 
 from .ludo_buffer import PrioritizedReplayBuffer
 from .ludo_dqn import LudoDQN
@@ -63,7 +64,7 @@ class LudoDQNAgent:
 
         # Device configuration
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"Using device: {self.device}")
+        logger.info(f"Using device: {self.device}")
 
         # Neural networks
         self.q_network = LudoDQN(state_dim, max_actions).to(self.device)

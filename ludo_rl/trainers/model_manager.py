@@ -6,6 +6,7 @@ import json
 import os
 
 import matplotlib.pyplot as plt
+from loguru import logger
 
 from ..config import TRAINING_CONFIG
 from ..model.dqn_model import LudoDQNAgent
@@ -45,7 +46,7 @@ class ModelManager:
         with open(metadata_path, "w") as f:
             json.dump(metadata, f, indent=2)
 
-        print(f"Model and metadata saved to {path}")
+        logger.info(f"Model and metadata saved to {path}")
 
     def load_model(self, path: str):
         """Load a trained model with metadata."""
@@ -59,14 +60,14 @@ class ModelManager:
             self.training_losses = metadata.get("training_losses", [])
             self.training_rewards = metadata.get("training_rewards", [])
             self.training_accuracy = metadata.get("training_accuracy", [])
-            print(f"Model and metadata loaded from {path}")
+            logger.info(f"Model and metadata loaded from {path}")
         else:
-            print(f"Model loaded from {path} (no metadata found)")
+            logger.info(f"Model loaded from {path} (no metadata found)")
 
     def plot_training_progress(self, save_path: str = "training_progress.png"):
         """Plot comprehensive training metrics."""
         if not self.training_losses and not self.training_rewards:
-            print("No training data to plot")
+            logger.warning("No training data to plot")
             return
 
         fig, axes = plt.subplots(2, 2, figsize=(15, 10))
@@ -115,4 +116,4 @@ class ModelManager:
         plt.tight_layout()
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         plt.close()
-        print(f"Training progress saved to {save_path}")
+        logger.info(f"Training progress saved to {save_path}")

@@ -5,6 +5,7 @@ Builds training sequences from game data.
 from typing import Dict, List, Tuple
 
 import numpy as np
+from loguru import logger
 
 from ..states import LudoStateEncoder
 from .reward_calculator import RewardCalculator
@@ -74,9 +75,9 @@ class SequenceBuilder:
             self._add_sequence_completion_rewards(current_sequence)
             sequences.append(current_sequence)
 
-        print(f"Created {len(sequences)} training sequences")
+        logger.info(f"Created {len(sequences)} training sequences")
         avg_length = np.mean([len(seq) for seq in sequences]) if sequences else 0
-        print(f"Average sequence length: {avg_length:.1f}")
+        logger.info(f"Average sequence length: {avg_length:.1f}")
 
         return sequences
 

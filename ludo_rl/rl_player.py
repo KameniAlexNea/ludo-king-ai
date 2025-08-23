@@ -2,6 +2,8 @@
 
 from typing import Dict
 
+from loguru import logger
+
 from .config import TRAINING_CONFIG
 from .model.dqn_model import LudoDQNAgent
 from .states import LudoStateEncoder
@@ -36,9 +38,9 @@ class RLPlayer:
         try:
             self.agent.load_model(model_path)
             self.agent.set_eval_mode()
-            print(f"Loaded RL model from {model_path}")
+            logger.info(f"Loaded RL model from {model_path}")
         except Exception as e:
-            print(f"Error loading model from {model_path}: {e}")
+            logger.error(f"Error loading model from {model_path}: {e}")
 
 
 class LudoRLStrategy:

@@ -6,6 +6,7 @@ suitable for reinforcement learning training with enhanced robustness and featur
 from typing import Dict, List, Optional
 
 import numpy as np
+from loguru import logger
 
 
 class LudoStateEncoder:
@@ -487,13 +488,13 @@ class LudoStateEncoder:
             plt.tight_layout()
             if save_path:
                 plt.savefig(save_path, dpi=150, bbox_inches="tight")
-                print(f"State visualization saved to {save_path}")
+                logger.info(f"State visualization saved to {save_path}")
             plt.show()
 
         except ImportError:
-            print("Matplotlib not available for visualization")
+            logger.warning("Matplotlib not available for visualization")
         except Exception as e:
-            print(f"Error in visualization: {e}")
+            logger.error(f"Error in visualization: {e}")
 
     def encode_action(self, chosen_move: int, valid_moves: List[Dict]) -> int:
         """

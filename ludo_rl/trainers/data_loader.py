@@ -6,6 +6,7 @@ from typing import Dict, List
 
 import datasets
 import pandas as pd
+from loguru import logger
 
 
 class DataLoader:
@@ -22,6 +23,6 @@ class DataLoader:
             List[Dict]: A list of game decision records.
         """
         ds = datasets.load_dataset(self.repo_id, split="train").take(100_000)
-        print("Dataset Loaded")
+        logger.info("Dataset Loaded")
         df: pd.DataFrame = ds.to_pandas()
         return df.to_dict(orient="records")

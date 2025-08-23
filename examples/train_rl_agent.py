@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ludo_rl.config import REWARDS, TRAINING_CONFIG
 from ludo_rl.trainer import LudoRLTrainer
-
+from loguru import logger
 # Validator removed in simplification
 
 

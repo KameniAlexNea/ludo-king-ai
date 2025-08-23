@@ -6,6 +6,7 @@ import random
 from typing import Dict, List, Tuple
 
 import numpy as np
+from loguru import logger
 
 from .config import TRAINING_CONFIG
 from .model.dqn_model import LudoDQNAgent
@@ -56,7 +57,7 @@ class LudoRLTrainer:
         self.evaluator = None  # type: ignore
         self.model_manager = ModelManager(self.agent, self.encoder)
         self.online_env = None  # type: ignore
-        print(f"State encoder ready with {self.encoder.state_dim} features (dataset lazy-loaded)")
+        logger.info(f"State encoder ready with {self.encoder.state_dim} features (dataset lazy-loaded)")
 
     def train(
         self,
@@ -89,7 +90,7 @@ class LudoRLTrainer:
             sequences = self.sequence_builder.create_training_sequences()  # type: ignore
 
         if not use_online and not sequences:
-            print("No training sequences available!")
+            logger.warning("No training sequences available!")
             return {}
 
         if not use_online:
@@ -98,7 +99,7 @@ class LudoRLTrainer:
             train_sequences = sequences[:-val_size] if val_size > 0 else sequences
             val_sequences = sequences[-val_size:] if val_size > 0 else []
 
-            print(
+            logger.info(
                 f"Training on {len(train_sequences)} sequences, validating on {len(val_sequences)}"
             )
 
@@ -107,13 +108,13 @@ class LudoRLTrainer:
                 for experience in sequence:
                     self.agent.remember(*experience)
 
-            print(
+            logger.info(
                 f"Experience buffer populated with {len(self.agent.memory)} experiences"
             )
         else:
             train_sequences = []
             val_sequences = []
-            print("Online training mode: generating experience through self-play.")
+            logger.info("Online training mode: generating experience through self-play.")
 
         # Training loop with early stopping
         best_val_reward = float("-inf")
@@ -257,7 +258,7 @@ class LudoRLTrainer:
                 and patience_counter >= early_stopping_patience
                 and epoch > 100
             ):
-                print(f"Early stopping at epoch {epoch} (patience: {patience_counter})")
+                logger.info(f"Early stopping at epoch {epoch} (patience: {patience_counter})")
                 break
 
             # Save model periodically
@@ -270,7 +271,7 @@ class LudoRLTrainer:
         # Save final model
         self.model_manager.save_model(model_save_path)
 
-        print("Training completed!")
+        logger.success("Training completed!")
 
         return {
             "final_loss": (
@@ -337,7 +338,7 @@ class LudoRLTrainer:
 
     # Plotting removed in refactor (CSV logging instead)
     def plot_training_progress(self, save_path: str = "training_progress.png"):
-        print("Plotting disabled. Use training_log.csv for analysis.")
+        logger.info("Plotting disabled. Use training_log.csv for analysis.")
 
     def save_model(self, path: str):
         """Save the trained model with metadata."""
@@ -375,14 +376,14 @@ class LudoRLTrainer:
             self._ensure_offline()
         sequences = self.sequence_builder.create_training_sequences()
         if len(sequences) < k_folds:
-            print(f"Not enough sequences ({len(sequences)}) for {k_folds}-fold CV")
+            logger.warning(f"Not enough sequences ({len(sequences)}) for {k_folds}-fold CV")
             return []
 
         fold_size = len(sequences) // k_folds
         results = []
 
         for fold in range(k_folds):
-            print(f"Training fold {fold + 1}/{k_folds}")
+            logger.info(f"Training fold {fold + 1}/{k_folds}")
 
             # Split data
             start_idx = fold * fold_size
@@ -413,9 +414,9 @@ class LudoRLTrainer:
     def _ensure_offline(self):
         if self.game_data is not None:
             return
-        print("Loading offline dataset (lazy)...")
+        logger.info("Loading offline dataset (lazy)...")
         self.game_data = DataLoader().load_from_hf()
-        print(f"Loaded {len(self.game_data)} decision records")
+        logger.info(f"Loaded {len(self.game_data)} decision records")
         self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
         self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
 
@@ -457,11 +458,11 @@ class LudoRLTrainer:
     def _print_progress(self, epoch, loss, reward, acc, val_reward, val_acc, online, extra=""):
         epsilon = self.agent.epsilon
         if online:
-            print(
+            logger.info(
                 f"Epoch {epoch}: loss={loss:.4f} reward={reward:.2f} policy_acc={acc:.3f} eps={epsilon:.3f} buffer={len(self.agent.memory)}{extra}"
             )
         else:
-            print(
+            logger.info(
                 f"Epoch {epoch}: loss={loss:.4f} reward={reward:.2f} policy_acc={acc:.3f} val_reward={val_reward:.2f} val_acc={val_acc:.3f} eps={epsilon:.3f}"
             )
 
