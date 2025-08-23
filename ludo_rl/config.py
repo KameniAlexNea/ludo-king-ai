@@ -48,7 +48,8 @@ class TRAINING_CONFIG:
     # Exploration
     EPSILON_START = 1.0
     EPSILON_END = 0.01
-    EPSILON_DECAY = 0.995
+    # Slower decay (reach near-min later); original 0.995 was too fast for long runs
+    EPSILON_DECAY = 0.999  # applied per replay update
 
     # Discount factor
     GAMMA = 0.99

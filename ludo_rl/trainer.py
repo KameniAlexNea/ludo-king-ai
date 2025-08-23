@@ -143,6 +143,8 @@ class LudoRLTrainer:
                         "policy_acc",
                         "epsilon",
                         "buffer_size",
+                        "eval_avg_return",
+                        "eval_win_rate",
                     ]
                 )
             else:
@@ -211,6 +213,12 @@ class LudoRLTrainer:
 
             # Progress reporting
             # Console progress (sparser)
+            # Online evaluation (greedy) every N epochs
+            eval_avg_return = 0.0
+            eval_win_rate = 0.0
+            if use_online and epoch % 50 == 0:
+                eval_avg_return, eval_win_rate = self._evaluate_online(n_episodes=5, max_steps=kwargs.get("max_steps_per_episode", 200))
+
             if epoch % 50 == 0:
                 self._print_progress(
                     epoch,
@@ -220,6 +228,7 @@ class LudoRLTrainer:
                     val_reward,
                     val_accuracy,
                     use_online,
+                    extra=f" eval_ret={eval_avg_return:.2f} win%={eval_win_rate*100:.1f}" if use_online else "",
                 )
 
             # CSV log each epoch
@@ -238,6 +247,8 @@ class LudoRLTrainer:
                 val_reward,
                 val_accuracy,
                 buffer_size,
+                eval_avg_return if use_online else None,
+                eval_win_rate if use_online else None,
             )
 
             # Early stopping
@@ -443,11 +454,11 @@ class LudoRLTrainer:
                 num_batches += 1
         return epoch_loss, num_batches
 
-    def _print_progress(self, epoch, loss, reward, acc, val_reward, val_acc, online):
+    def _print_progress(self, epoch, loss, reward, acc, val_reward, val_acc, online, extra=""):
         epsilon = self.agent.epsilon
         if online:
             print(
-                f"Epoch {epoch}: loss={loss:.4f} reward={reward:.2f} policy_acc={acc:.3f} eps={epsilon:.3f} buffer={len(self.agent.memory)}"
+                f"Epoch {epoch}: loss={loss:.4f} reward={reward:.2f} policy_acc={acc:.3f} eps={epsilon:.3f} buffer={len(self.agent.memory)}{extra}"
             )
         else:
             print(
@@ -465,6 +476,8 @@ class LudoRLTrainer:
         val_reward: float,
         val_acc: float,
         buffer_size: int,
+        eval_avg_return: float | None = None,
+        eval_win_rate: float | None = None,
     ):
         if online:
             csv_writer.writerow(
@@ -475,6 +488,8 @@ class LudoRLTrainer:
                     f"{policy_acc:.4f}",
                     f"{self.agent.epsilon:.4f}",
                     buffer_size,
+                    f"{(eval_avg_return if eval_avg_return is not None else 0):.4f}",
+                    f"{(eval_win_rate if eval_win_rate is not None else 0):.4f}",
                 ]
             )
         else:
@@ -490,3 +505,43 @@ class LudoRLTrainer:
                     buffer_size,
                 ]
             )
+
+    def _evaluate_online(self, n_episodes: int = 5, max_steps: int = 200) -> Tuple[float, float]:
+        """Run greedy evaluation episodes (epsilon=0) and return avg return & win rate."""
+        if self.online_env is None:
+            return 0.0, 0.0
+        saved_epsilon = self.agent.epsilon
+        self.agent.epsilon = 0.0
+        returns = []
+        wins = 0
+        for _ in range(n_episodes):
+            state = self.online_env.reset()
+            total_r = 0.0
+            done = False
+            steps = 0
+            state, valid_moves = self.online_env.agent_turn_prepare()
+            while not done and steps < max_steps:
+                action_idx = self.agent.act(state, valid_moves)
+                next_state, reward, done = self.online_env.step(action_idx)
+                total_r += reward
+                state = next_state
+                if not done:
+                    valid_moves = self.online_env.get_current_valid_moves()
+                steps += 1
+            returns.append(total_r)
+            if self.online_env.game.game_over:
+                # Determine if agent color won
+                # Assuming game tracks winner via players' finished tokens – quick heuristic
+                # We'll approximate: win if agent's player has all tokens finished
+                # (Game object specifics not fully exposed here)
+                # Fallback: count finished tokens attribute if present
+                try:
+                    agent_player = next(p for p in self.online_env.game.players if p.color.value == self.online_env.agent_color)
+                    if hasattr(agent_player, "all_tokens_finished") and agent_player.all_tokens_finished():
+                        wins += 1
+                except StopIteration:
+                    pass
+        self.agent.epsilon = saved_epsilon
+        avg_return = float(np.mean(returns)) if returns else 0.0
+        win_rate = wins / n_episodes if n_episodes > 0 else 0.0
+        return avg_return, win_rate

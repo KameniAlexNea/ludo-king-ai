@@ -17,6 +17,7 @@ from ludo.game import LudoGame
 from ludo.player import PlayerColor
 
 from .states import LudoStateEncoder
+from .config import REWARDS
 
 
 class OnlineLudoEnv:
@@ -203,22 +204,26 @@ class OnlineLudoEnv:
         return next_state, reward, done
 
     def _compute_reward(self, move_result: Dict) -> float:
+        """Compute scaled reward using REWARDS config (divided by 10 for stability)."""
+        SCALE = 0.1
         if not move_result.get("success", False):
-            return -5.0
-        r = 1.0
+            return REWARDS.FAILS * SCALE
+        r = REWARDS.SUCCESS * SCALE
         if move_result.get("captured_tokens"):
-            r += 15.0 * len(move_result["captured_tokens"])
+            r += REWARDS.CAPTURE * SCALE * len(move_result["captured_tokens"])
         if move_result.get("token_finished"):
-            r += 30.0
+            r += REWARDS.TOKEN_FINISHED * SCALE
         if move_result.get("extra_turn"):
-            r += 3.0
+            r += REWARDS.EXTRA_TURN * SCALE
+        # Progress reward (distance advanced along track)
         old_pos = move_result.get("old_position", -1)
         new_pos = move_result.get("new_position", -1)
         if old_pos != -1 and new_pos != -1 and new_pos != old_pos:
             delta = new_pos - old_pos
             if delta < 0:
                 delta += 52
-            r += (delta / 52.0) * 2.0
+            # Scale by configured progress weight
+            r += (delta / 52.0) * REWARDS.PROGRESS_WEIGHT * SCALE
         if move_result.get("game_won"):
-            r += 100.0
+            r += REWARDS.WON * SCALE
         return r
