@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from .rl_player import RLPlayer
-from .state_encoder import LudoStateEncoder
+from .states import LudoStateEncoder
 from .trainer import LudoRLTrainer
 
 

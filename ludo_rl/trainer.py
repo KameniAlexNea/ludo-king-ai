@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 from .config import REWARDS, TRAINING_CONFIG
 from .model.dqn_model import LudoDQNAgent
-from .state_encoder import LudoStateEncoder
+from .states import LudoStateEncoder
 
 
 class LudoRLTrainer:
@@ -25,7 +25,7 @@ class LudoRLTrainer:
     def __init__(
         self,
         game_data_file: str = None,
-        state_saver_dir: str = "saved_states",
+        state_saver_dir: str = None,
         use_prioritized_replay: bool = True,
         use_double_dqn: bool = True,
     ):
@@ -55,7 +55,7 @@ class LudoRLTrainer:
         )
 
         # Load game data
-        self.game_data = self.load_from_hf(state_saver_dir)
+        self.game_data = self.load_from_hf()
 
         # Training metrics
         self.training_losses = []
@@ -64,8 +64,8 @@ class LudoRLTrainer:
 
         print(f"Loaded {len(self.game_data)} game decision records for training")
         print(f"Using state encoding with {self.encoder.state_dim} features")
-    
-    def load_from_hf(self, repo_id = "alexneakameni/ludo-king-rl"):
+
+    def load_from_hf(self, repo_id="alexneakameni/ludo-king-rl"):
         ds = datasets.load_dataset(repo_id, split="train")
         print("Dataset Loaded")
         return ds.to_list()
@@ -188,9 +188,9 @@ class LudoRLTrainer:
     def create_training_sequences(self) -> List[List[Tuple]]:
         """
         Convert game data to training sequences with precise game boundary detection using exp_id.
-        
+
         Uses exp_id (filename) to reliably identify game boundaries, which is much more accurate
-        than timestamp or turn-based heuristics since all records from the same game file 
+        than timestamp or turn-based heuristics since all records from the same game file
         belong to the same game session.
 
         Returns:
@@ -278,16 +278,16 @@ class LudoRLTrainer:
     ) -> Tuple[np.ndarray, bool]:
         """Get next state and done flag with logic using exp_id."""
         current_exp_id = self.game_data[current_index].get("exp_id", "")
-        
+
         # Look ahead to find next state for same player in same game
         for j in range(current_index + 1, min(current_index + 20, len(self.game_data))):
             next_data = self.game_data[j]
             next_exp_id = next_data.get("exp_id", "")
-            
+
             # If we've moved to a different game, episode is done
             if next_exp_id != current_exp_id:
                 break
-                
+
             next_context = next_data["game_context"]
             next_player = next_context["current_situation"]["player_color"]
 
@@ -306,7 +306,7 @@ class LudoRLTrainer:
         exp_id = game_data.get("exp_id", "")
         if exp_id:
             return exp_id
-        
+
         # Fallback to index-based grouping if exp_id is missing
         return f"game_{index // 50}"
 
@@ -701,7 +701,7 @@ class LudoRLTrainer:
                         },
                         "chosen_move": action,
                         "outcome": {"success": reward > 0},
-                        "timestamp": f"2024-{seq_idx:02d}-{step_idx:02d}T12:00:00Z",
+                        "timestamp": f"2025-{seq_idx:02d}-{step_idx:02d}T12:00:00Z",
                     }
                 )
         return game_data

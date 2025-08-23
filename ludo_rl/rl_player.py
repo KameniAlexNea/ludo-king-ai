@@ -6,7 +6,7 @@ from typing import Dict
 
 from .config import TRAINING_CONFIG
 from .model.dqn_model import LudoDQNAgent
-from .state_encoder import LudoStateEncoder
+from .states import LudoStateEncoder
 
 
 class RLPlayer:

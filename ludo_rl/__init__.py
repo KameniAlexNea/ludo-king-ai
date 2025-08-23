@@ -8,7 +8,7 @@ from .config import REWARDS, TRAINING_CONFIG
 # Import core components
 from .model.dqn_model import LudoDQN, LudoDQNAgent
 from .rl_player import create_rl_strategy
-from .state_encoder import LudoStateEncoder
+from .states import LudoStateEncoder
 from .trainer import LudoRLTrainer
 
 # Optional validator import (may not be needed in all environments)
