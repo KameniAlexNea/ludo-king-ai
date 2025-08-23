@@ -17,9 +17,10 @@ from pathlib import Path
 # Add the project root to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+
 from ludo_rl.config import REWARDS, TRAINING_CONFIG
 from ludo_rl.trainer import LudoRLTrainer
-from loguru import logger
+
 # Validator removed in simplification
 
 
@@ -173,7 +174,9 @@ Examples:
             return
         json_files = list(save_dir.glob("**/*.json"))
         if not json_files:
-            print(f"❌ No JSON game data found in {save_dir} directory. Use --online to bypass.")
+            print(
+                f"❌ No JSON game data found in {save_dir} directory. Use --online to bypass."
+            )
             return
         print(f"✅ Found {len(json_files)} game data files")
     else:

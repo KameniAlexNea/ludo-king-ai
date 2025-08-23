@@ -16,8 +16,8 @@ from ludo import StrategyFactory
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
 
-from .states import LudoStateEncoder
 from .config import REWARDS
+from .states import LudoStateEncoder
 
 
 class OnlineLudoEnv:

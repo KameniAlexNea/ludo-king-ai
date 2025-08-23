@@ -57,7 +57,9 @@ class LudoRLTrainer:
         self.evaluator = None  # type: ignore
         self.model_manager = ModelManager(self.agent, self.encoder)
         self.online_env = None  # type: ignore
-        logger.info(f"State encoder ready with {self.encoder.state_dim} features (dataset lazy-loaded)")
+        logger.info(
+            f"State encoder ready with {self.encoder.state_dim} features (dataset lazy-loaded)"
+        )
 
     def train(
         self,
@@ -114,7 +116,9 @@ class LudoRLTrainer:
         else:
             train_sequences = []
             val_sequences = []
-            logger.info("Online training mode: generating experience through self-play.")
+            logger.info(
+                "Online training mode: generating experience through self-play."
+            )
 
         # Training loop with early stopping
         best_val_reward = float("-inf")
@@ -218,7 +222,9 @@ class LudoRLTrainer:
             eval_avg_return = 0.0
             eval_win_rate = 0.0
             if use_online and epoch % 50 == 0:
-                eval_avg_return, eval_win_rate = self._evaluate_online(n_episodes=5, max_steps=kwargs.get("max_steps_per_episode", 200))
+                eval_avg_return, eval_win_rate = self._evaluate_online(
+                    n_episodes=5, max_steps=kwargs.get("max_steps_per_episode", 200)
+                )
 
             if epoch % 50 == 0:
                 self._print_progress(
@@ -229,7 +235,11 @@ class LudoRLTrainer:
                     val_reward,
                     val_accuracy,
                     use_online,
-                    extra=f" eval_ret={eval_avg_return:.2f} win%={eval_win_rate*100:.1f}" if use_online else "",
+                    extra=(
+                        f" eval_ret={eval_avg_return:.2f} win%={eval_win_rate * 100:.1f}"
+                        if use_online
+                        else ""
+                    ),
                 )
 
             # CSV log each epoch
@@ -258,7 +268,9 @@ class LudoRLTrainer:
                 and patience_counter >= early_stopping_patience
                 and epoch > 100
             ):
-                logger.info(f"Early stopping at epoch {epoch} (patience: {patience_counter})")
+                logger.info(
+                    f"Early stopping at epoch {epoch} (patience: {patience_counter})"
+                )
                 break
 
             # Save model periodically
@@ -376,7 +388,9 @@ class LudoRLTrainer:
             self._ensure_offline()
         sequences = self.sequence_builder.create_training_sequences()
         if len(sequences) < k_folds:
-            logger.warning(f"Not enough sequences ({len(sequences)}) for {k_folds}-fold CV")
+            logger.warning(
+                f"Not enough sequences ({len(sequences)}) for {k_folds}-fold CV"
+            )
             return []
 
         fold_size = len(sequences) // k_folds
@@ -444,9 +458,15 @@ class LudoRLTrainer:
         epoch_loss = 0.0
         num_batches = 0
         for _ in range(batches_per_epoch):
-            if hasattr(self.agent.memory, "__len__") and len(self.agent.memory) >= self.agent.batch_size:
+            if (
+                hasattr(self.agent.memory, "__len__")
+                and len(self.agent.memory) >= self.agent.batch_size
+            ):
                 loss = self.agent.replay()
-            elif hasattr(self.agent.memory, "buffer") and len(self.agent.memory.buffer) >= self.agent.batch_size:
+            elif (
+                hasattr(self.agent.memory, "buffer")
+                and len(self.agent.memory.buffer) >= self.agent.batch_size
+            ):
                 loss = self.agent.replay()
             else:
                 loss = 0.0
@@ -455,7 +475,9 @@ class LudoRLTrainer:
                 num_batches += 1
         return epoch_loss, num_batches
 
-    def _print_progress(self, epoch, loss, reward, acc, val_reward, val_acc, online, extra=""):
+    def _print_progress(
+        self, epoch, loss, reward, acc, val_reward, val_acc, online, extra=""
+    ):
         epsilon = self.agent.epsilon
         if online:
             logger.info(
@@ -507,7 +529,9 @@ class LudoRLTrainer:
                 ]
             )
 
-    def _evaluate_online(self, n_episodes: int = 5, max_steps: int = 200) -> Tuple[float, float]:
+    def _evaluate_online(
+        self, n_episodes: int = 5, max_steps: int = 200
+    ) -> Tuple[float, float]:
         """Run greedy evaluation episodes (epsilon=0) and return avg return & win rate."""
         if self.online_env is None:
             return 0.0, 0.0
@@ -537,8 +561,15 @@ class LudoRLTrainer:
                 # (Game object specifics not fully exposed here)
                 # Fallback: count finished tokens attribute if present
                 try:
-                    agent_player = next(p for p in self.online_env.game.players if p.color.value == self.online_env.agent_color)
-                    if hasattr(agent_player, "all_tokens_finished") and agent_player.all_tokens_finished():
+                    agent_player = next(
+                        p
+                        for p in self.online_env.game.players
+                        if p.color.value == self.online_env.agent_color
+                    )
+                    if (
+                        hasattr(agent_player, "all_tokens_finished")
+                        and agent_player.all_tokens_finished()
+                    ):
                         wins += 1
                 except StopIteration:
                     pass
