@@ -1,5 +1,5 @@
 """
-Training pipeline for Ludo RL agents with better reward engineering and training logic.
+RL trainer with clearer modular helper methods.
 """
 
 import random
@@ -18,7 +18,10 @@ from .trainers.sequence_builder import SequenceBuilder
 
 
 class LudoRLTrainer:
-    """Orchestrates the training process for the Ludo RL agent."""
+    """High-level façade that wraps online & offline training modes.
+
+    Public API kept minimal: train / evaluate_model / save_model / load_model / cross_validate.
+    Internal complexity reduced via private helpers (all prefixed with _)."""
 
     def __init__(
         self,
@@ -53,9 +56,7 @@ class LudoRLTrainer:
         self.evaluator = None  # type: ignore
         self.model_manager = ModelManager(self.agent, self.encoder)
         self.online_env = None  # type: ignore
-        print(
-            f"State encoder ready with {self.encoder.state_dim} features (dataset lazy-loaded)"
-        )
+        print(f"State encoder ready with {self.encoder.state_dim} features (dataset lazy-loaded)")
 
     def train(
         self,
@@ -81,18 +82,10 @@ class LudoRLTrainer:
         """
         use_online = kwargs.get("online", False)
         if use_online:
-            # Initialize online environment (single-agent vs random opponents)
-            if self.online_env is None:
-                self.online_env = OnlineLudoEnv(agent_color="red")
-            sequences = []  # Not used in online mode
+            self._ensure_online_env()
+            sequences = []
         else:
-            # Load data & helpers only once when first needed
-            if self.game_data is None:
-                print("Loading offline dataset (first use)...")
-                self.game_data = DataLoader().load_from_hf()
-                print(f"Loaded {len(self.game_data)} decision records")
-                self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
-                self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
+            self._ensure_offline()
             sequences = self.sequence_builder.create_training_sequences()  # type: ignore
 
         if not use_online and not sequences:
@@ -179,52 +172,19 @@ class LudoRLTrainer:
             else:
                 batches_per_epoch = max(1, buffer_size // (self.agent.batch_size * 10))
 
-            # Online data generation (if enabled)
+            # Online data generation
             if use_online:
-                episodes_per_epoch = kwargs.get("episodes_per_epoch", 5)
-                max_steps = kwargs.get("max_steps_per_episode", 200)
-                for ep in range(episodes_per_epoch):
-                    state = self.online_env.reset()
-                    done = False
-                    steps = 0
-                    # prepare agent turn
-                    state, valid_moves = self.online_env.agent_turn_prepare()
-                    while not done and steps < max_steps:
-                        # choose action
-                        action_idx = self.agent.act(state, valid_moves)
-                        next_state, reward, done = self.online_env.step(action_idx)
-                        # store
-                        self.agent.remember(state, action_idx, reward, next_state, done)
-                        state = next_state
-                        valid_moves = (
-                            self.online_env.get_current_valid_moves()
-                            if not done
-                            else []
-                        )
-                        steps += 1
-            # Training batches from buffer
-            for _ in range(batches_per_epoch):
-                if (
-                    hasattr(self.agent.memory, "__len__")
-                    and len(self.agent.memory) >= self.agent.batch_size
-                ):
-                    loss = self.agent.replay()
-                elif (
-                    hasattr(self.agent.memory, "buffer")
-                    and len(self.agent.memory.buffer) >= self.agent.batch_size
-                ):
-                    loss = self.agent.replay()
-                else:
-                    loss = 0.0
-                if loss > 0:
-                    epoch_loss += loss
-                    num_batches += 1
+                self._generate_online_experience(
+                    episodes=kwargs.get("episodes_per_epoch", 5),
+                    max_steps=kwargs.get("max_steps_per_episode", 200),
+                )
+            # Gradient updates
+            epoch_loss, num_batches = self._train_batches(batches_per_epoch)
 
             # Calculate metrics
             avg_loss = epoch_loss / max(num_batches, 1)
             self.model_manager.training_losses.append(avg_loss)
 
-            # Offline dataset reward is mostly static; also compute policy accuracy vs stored actions
             recent_rewards = self._calculate_recent_performance()
             policy_acc = self._calculate_policy_accuracy(sample_size=512)
             self.model_manager.training_rewards.append(recent_rewards)
@@ -252,15 +212,15 @@ class LudoRLTrainer:
             # Progress reporting
             # Console progress (sparser)
             if epoch % 50 == 0:
-                epsilon = self.agent.epsilon
-                if use_online:
-                    print(
-                        f"Epoch {epoch}: loss={avg_loss:.4f} reward={recent_rewards:.2f} policy_acc={policy_acc:.3f} eps={epsilon:.3f} buffer={len(self.agent.memory)}"
-                    )
-                else:
-                    print(
-                        f"Epoch {epoch}: loss={avg_loss:.4f} reward={recent_rewards:.2f} policy_acc={policy_acc:.3f} val_reward={val_reward:.2f} val_acc={val_accuracy:.3f} eps={epsilon:.3f}"
-                    )
+                self._print_progress(
+                    epoch,
+                    avg_loss,
+                    recent_rewards,
+                    policy_acc,
+                    val_reward,
+                    val_accuracy,
+                    use_online,
+                )
 
             # CSV log each epoch
             buffer_size = (
@@ -268,30 +228,17 @@ class LudoRLTrainer:
                 if hasattr(self.agent.memory, "__len__")
                 else len(self.agent.memory.buffer)
             )
-            if use_online:
-                csv_writer.writerow(
-                    [
-                        epoch,
-                        f"{avg_loss:.6f}",
-                        f"{recent_rewards:.4f}",
-                        f"{policy_acc:.4f}",
-                        f"{self.agent.epsilon:.4f}",
-                        buffer_size,
-                    ]
-                )
-            else:
-                csv_writer.writerow(
-                    [
-                        epoch,
-                        f"{avg_loss:.6f}",
-                        f"{recent_rewards:.4f}",
-                        f"{policy_acc:.4f}",
-                        f"{val_reward:.4f}",
-                        f"{val_accuracy:.4f}",
-                        f"{self.agent.epsilon:.4f}",
-                        buffer_size,
-                    ]
-                )
+            self._write_csv_epoch(
+                csv_writer,
+                use_online,
+                epoch,
+                avg_loss,
+                recent_rewards,
+                policy_acc,
+                val_reward,
+                val_accuracy,
+                buffer_size,
+            )
 
             # Early stopping
             if (
@@ -400,14 +347,7 @@ class LudoRLTrainer:
             Dict: Evaluation metrics
         """
         if self.evaluator is None:
-            # Need offline data to evaluate
-            print(
-                "Evaluator not initialized. Loading offline dataset for evaluation..."
-            )
-            if self.game_data is None:
-                self.game_data = DataLoader().load_from_hf()
-                self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
-            self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
+            self._ensure_offline()
         return self.evaluator.evaluate_model(test_sequences)
 
     def cross_validate(self, k_folds: int = 5) -> List[Dict]:
@@ -421,10 +361,7 @@ class LudoRLTrainer:
             List[Dict]: Results for each fold
         """
         if self.sequence_builder is None:
-            print("Loading dataset for cross-validation...")
-            if self.game_data is None:
-                self.game_data = DataLoader().load_from_hf()
-            self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
+            self._ensure_offline()
         sequences = self.sequence_builder.create_training_sequences()
         if len(sequences) < k_folds:
             print(f"Not enough sequences ({len(sequences)}) for {k_folds}-fold CV")
@@ -460,3 +397,96 @@ class LudoRLTrainer:
             results.append(metrics)
 
         return results
+
+    # ----------------------- Internal helpers ----------------------------
+    def _ensure_offline(self):
+        if self.game_data is not None:
+            return
+        print("Loading offline dataset (lazy)...")
+        self.game_data = DataLoader().load_from_hf()
+        print(f"Loaded {len(self.game_data)} decision records")
+        self.sequence_builder = SequenceBuilder(self.game_data, self.encoder)
+        self.evaluator = Evaluator(self.agent, self.game_data, self.encoder)
+
+    def _ensure_online_env(self):
+        if self.online_env is None:
+            self.online_env = OnlineLudoEnv(agent_color="red")
+
+    def _generate_online_experience(self, episodes: int, max_steps: int):
+        for _ in range(episodes):
+            state = self.online_env.reset()
+            done = False
+            steps = 0
+            state, valid_moves = self.online_env.agent_turn_prepare()
+            while not done and steps < max_steps:
+                action_idx = self.agent.act(state, valid_moves)
+                next_state, reward, done = self.online_env.step(action_idx)
+                self.agent.remember(state, action_idx, reward, next_state, done)
+                state = next_state
+                valid_moves = (
+                    self.online_env.get_current_valid_moves() if not done else []
+                )
+                steps += 1
+
+    def _train_batches(self, batches_per_epoch: int) -> Tuple[float, int]:
+        epoch_loss = 0.0
+        num_batches = 0
+        for _ in range(batches_per_epoch):
+            if hasattr(self.agent.memory, "__len__") and len(self.agent.memory) >= self.agent.batch_size:
+                loss = self.agent.replay()
+            elif hasattr(self.agent.memory, "buffer") and len(self.agent.memory.buffer) >= self.agent.batch_size:
+                loss = self.agent.replay()
+            else:
+                loss = 0.0
+            if loss > 0:
+                epoch_loss += loss
+                num_batches += 1
+        return epoch_loss, num_batches
+
+    def _print_progress(self, epoch, loss, reward, acc, val_reward, val_acc, online):
+        epsilon = self.agent.epsilon
+        if online:
+            print(
+                f"Epoch {epoch}: loss={loss:.4f} reward={reward:.2f} policy_acc={acc:.3f} eps={epsilon:.3f} buffer={len(self.agent.memory)}"
+            )
+        else:
+            print(
+                f"Epoch {epoch}: loss={loss:.4f} reward={reward:.2f} policy_acc={acc:.3f} val_reward={val_reward:.2f} val_acc={val_acc:.3f} eps={epsilon:.3f}"
+            )
+
+    def _write_csv_epoch(
+        self,
+        csv_writer,
+        online: bool,
+        epoch: int,
+        loss: float,
+        reward: float,
+        policy_acc: float,
+        val_reward: float,
+        val_acc: float,
+        buffer_size: int,
+    ):
+        if online:
+            csv_writer.writerow(
+                [
+                    epoch,
+                    f"{loss:.6f}",
+                    f"{reward:.4f}",
+                    f"{policy_acc:.4f}",
+                    f"{self.agent.epsilon:.4f}",
+                    buffer_size,
+                ]
+            )
+        else:
+            csv_writer.writerow(
+                [
+                    epoch,
+                    f"{loss:.6f}",
+                    f"{reward:.4f}",
+                    f"{policy_acc:.4f}",
+                    f"{val_reward:.4f}",
+                    f"{val_acc:.4f}",
+                    f"{self.agent.epsilon:.4f}",
+                    buffer_size,
+                ]
+            )

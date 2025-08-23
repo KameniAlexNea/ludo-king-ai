@@ -162,22 +162,22 @@ Examples:
     model_path = args.output
     model_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Check for saved game data
-    save_dir = args.save_dir
-    if not save_dir.exists():
-        print(
-            f"❌ No {save_dir} directory found. Please run tournaments first to generate training data."
-        )
-        print("   Example: python four_player_tournament.py")
-        return
-
-    # Find JSON files
-    json_files = list(save_dir.glob("**/*.json"))
-    if not json_files:
-        print(f"❌ No JSON game data found in {save_dir} directory.")
-        return
-
-    print(f"✅ Found {len(json_files)} game data files")
+    # Offline dataset only required if NOT in online mode
+    if not args.online:
+        save_dir = args.save_dir
+        if not save_dir.exists():
+            print(
+                f"❌ No {save_dir} directory found. Please run tournaments first to generate training data or use --online mode."
+            )
+            print("   Example: python four_player_tournament.py")
+            return
+        json_files = list(save_dir.glob("**/*.json"))
+        if not json_files:
+            print(f"❌ No JSON game data found in {save_dir} directory. Use --online to bypass.")
+            return
+        print(f"✅ Found {len(json_files)} game data files")
+    else:
+        print("🕹️  Online mode: skipping offline dataset checks.")
 
     # Initialize advanced trainer
     print("\n🧠 Initializing Advanced RL Trainer...")
@@ -187,12 +187,14 @@ Examples:
             use_double_dqn=args.use_double_dqn,
         )
 
-        if len(trainer.game_data) == 0:
-            print("❌ No valid training data found!")
-            return
-
         print(f"   State dimension: {trainer.encoder.state_dim} features")
-        print(f"   Training examples: {len(trainer.game_data)}")
+        if not args.online:
+            if not trainer.game_data:
+                print("❌ No valid training data found!")
+                return
+            print(f"   Training examples: {len(trainer.game_data)}")
+        else:
+            print("   (Online self-play mode – offline dataset not loaded)")
 
     except Exception as e:
         print(f"❌ Error initializing trainer: {e}")
@@ -202,27 +204,26 @@ Examples:
     display_configuration()
 
     # Display data statistics
-    print("\n📈 Training Data Statistics:")
-    strategies = {}
-    outcomes = {"success": 0, "failed": 0}
-
-    for record in trainer.game_data:
-        strategy = record.get("strategy", "unknown")
-        if isinstance(strategy, dict):
-            strategy = strategy.get("name", "unknown")
-
-        strategies[strategy] = strategies.get(strategy, 0) + 1
-
-        if record.get("outcome", {}).get("success", False):
-            outcomes["success"] += 1
-        else:
-            outcomes["failed"] += 1
-
-    print(f"   Strategies represented: {list(strategies.keys())}")
-    for strategy, count in strategies.items():
-        print(f"   - {strategy}: {count} decisions")
-    print(f"   Successful moves: {outcomes['success']}")
-    print(f"   Failed moves: {outcomes['failed']}")
+    if not args.online:
+        print("\n📈 Training Data Statistics:")
+        strategies = {}
+        outcomes = {"success": 0, "failed": 0}
+        for record in trainer.game_data:
+            strategy = record.get("strategy", "unknown")
+            if isinstance(strategy, dict):
+                strategy = strategy.get("name", "unknown")
+            strategies[strategy] = strategies.get(strategy, 0) + 1
+            if record.get("outcome", {}).get("success", False):
+                outcomes["success"] += 1
+            else:
+                outcomes["failed"] += 1
+        print(f"   Strategies represented: {list(strategies.keys())}")
+        for strategy, count in strategies.items():
+            print(f"   - {strategy}: {count} decisions")
+        print(f"   Successful moves: {outcomes['success']}")
+        print(f"   Failed moves: {outcomes['failed']}")
+    else:
+        print("\n📈 Skipping offline data statistics (online mode).")
 
     # Train the agent with advanced features
     print(f"\n🏋️  Training Advanced DQN Agent for {args.epochs} epochs...")
@@ -260,18 +261,20 @@ Examples:
         print(f"📄 Training log: {log_path}")
 
     # Comprehensive model evaluation
-    print("\n🎯 Comprehensive Model Evaluation...")
-    try:
-        eval_stats = trainer.evaluate_model()
-        print("✅ Evaluation completed!")
-        print(f"   Accuracy: {eval_stats.get('accuracy', 0):.2%}")
-        print(
-            f"   Avg reward per sequence: {eval_stats.get('avg_reward_per_sequence', 0):.2f}"
-        )
-        print(f"   Test sequences: {eval_stats.get('num_test_sequences', 0)}")
-
-    except Exception as e:
-        print(f"⚠️  Error during evaluation: {e}")
+    if not args.online:
+        print("\n🎯 Comprehensive Model Evaluation...")
+        try:
+            eval_stats = trainer.evaluate_model()
+            print("✅ Evaluation completed!")
+            print(f"   Accuracy: {eval_stats.get('accuracy', 0):.2%}")
+            print(
+                f"   Avg reward per sequence: {eval_stats.get('avg_reward_per_sequence', 0):.2f}"
+            )
+            print(f"   Test sequences: {eval_stats.get('num_test_sequences', 0)}")
+        except Exception as e:
+            print(f"⚠️  Error during evaluation: {e}")
+    else:
+        print("\n🎯 Skipping offline evaluation (no dataset loaded in online mode).")
 
     # Advanced model validation and analysis
     validate_and_analyze_model(model_path, trainer)
