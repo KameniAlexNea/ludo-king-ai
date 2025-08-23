@@ -1,8 +1,10 @@
+from collections import deque
+from typing import Dict
+
+import numpy as np
+
 from .base import LudoStateEncoder
 
-from collections import deque
-from typing import Dict, List, Optional
-import numpy as np
 
 class StatefulLudoEncoder(LudoStateEncoder):
     """Encoder with memory of previous states for better decision making."""
@@ -42,4 +44,3 @@ class StatefulLudoEncoder(LudoStateEncoder):
     def reset_history(self):
         """Reset the state history (e.g., at the start of a new game)."""
         self.state_history.clear()
-

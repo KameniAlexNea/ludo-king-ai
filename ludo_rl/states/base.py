@@ -3,7 +3,6 @@ Advanced state encoder for converting Ludo game states to numerical vectors
 suitable for reinforcement learning training with enhanced robustness and features.
 """
 
-from collections import deque
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -538,4 +537,3 @@ class LudoStateEncoder:
         if 0 <= action_idx < len(valid_moves):
             return valid_moves[action_idx]
         return valid_moves[0] if valid_moves else {}
-

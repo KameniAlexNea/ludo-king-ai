@@ -1,8 +1,8 @@
-from .base import LudoStateEncoder
+from typing import Dict, List
 
-from collections import deque
-from typing import Dict, List, Optional
 import numpy as np
+
+
 
 class DynamicActionEncoder:
     """Handle variable number of valid moves more effectively."""

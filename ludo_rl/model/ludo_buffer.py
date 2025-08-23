@@ -2,9 +2,10 @@
 Improved Deep Q-Network implementation for Ludo RL training with Dueling DQN architecture.
 """
 
-from typing import  List, Tuple
+from typing import List, Tuple
 
 import numpy as np
+
 
 class PrioritizedReplayBuffer:
     """Prioritized Experience Replay Buffer for more efficient learning."""

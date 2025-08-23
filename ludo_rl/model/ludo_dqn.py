@@ -2,14 +2,9 @@
 Improved Deep Q-Network implementation for Ludo RL training with Dueling DQN architecture.
 """
 
-import random
-from collections import deque
-from typing import Dict, List, Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 
 
 class LudoDQN(nn.Module):

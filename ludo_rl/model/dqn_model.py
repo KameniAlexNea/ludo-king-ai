@@ -4,14 +4,15 @@ Improved Deep Q-Network implementation for Ludo RL training with Dueling DQN arc
 
 import random
 from collections import deque
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.optim as optim
+
 from .ludo_buffer import PrioritizedReplayBuffer
 from .ludo_dqn import LudoDQN
+
 
 class LudoDQNAgent:
     """Enhanced DQN Agent with Dueling DQN, Prioritized Replay, and Double DQN."""
@@ -256,3 +257,8 @@ class LudoDQNAgent:
         """Set agent to evaluation mode (no exploration)."""
         self.epsilon = 0.0
         self.q_network.eval()
+        return self
+
+    def set_train_mode(self):
+        self.q_network.train()
+        return self
