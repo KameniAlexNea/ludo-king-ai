@@ -33,6 +33,8 @@ class Evaluator:
             test_size = max(1, len(all_sequences) // 10)
             test_sequences = all_sequences[-test_size:]
 
+        # Preserve current epsilon so evaluation doesn't zero it permanently
+        prev_epsilon = self.agent.epsilon
         self.agent.set_eval_mode()
 
         total_reward = 0.0
@@ -63,7 +65,9 @@ class Evaluator:
         )
         avg_reward_per_step = total_reward / total_steps if total_steps > 0 else 0
 
+        # Restore training mode and previous epsilon
         self.agent.set_train_mode()
+        self.agent.epsilon = prev_epsilon
 
         return {
             "accuracy": accuracy,

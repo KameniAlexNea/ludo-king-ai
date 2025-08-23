@@ -21,7 +21,7 @@ class DataLoader:
         Returns:
             List[Dict]: A list of game decision records.
         """
-        ds = datasets.load_dataset(self.repo_id, split="train").take(10_000)
+        ds = datasets.load_dataset(self.repo_id, split="train").take(100_000)
         print("Dataset Loaded")
         df: pd.DataFrame = ds.to_pandas()
         return df.to_dict(orient="records")

@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ludo_rl.config import REWARDS, TRAINING_CONFIG
 from ludo_rl.trainer import LudoRLTrainer
+
 # Validator removed in simplification
 
 
@@ -43,7 +44,7 @@ def validate_and_analyze_model(model_path, trainer):
     if not model_path.exists():
         return
     eval_stats = trainer.evaluate_model()
-    print(f"Quick eval accuracy: {eval_stats.get('accuracy',0):.2%}")
+    print(f"Quick eval accuracy: {eval_stats.get('accuracy', 0):.2%}")
 
 
 def main():
@@ -164,7 +165,6 @@ Examples:
     print("\n🧠 Initializing Advanced RL Trainer...")
     try:
         trainer = LudoRLTrainer(
-            # state_saver_dir=str(save_dir),
             use_prioritized_replay=args.use_prioritized_replay,
             use_double_dqn=args.use_double_dqn,
         )
@@ -231,7 +231,6 @@ Examples:
             print(f"   {key}: {value:.4f}")
         else:
             print(f"   {key}: {value}")
-
 
     # Plotting removed; training logged to CSV automatically
     log_path = model_path.parent / "training_log.csv"

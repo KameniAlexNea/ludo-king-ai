@@ -62,7 +62,7 @@ class LudoRLTrainer:
         model_save_path: str = "ludo_dqn_model.pth",
         validation_split: float = 0.1,
         early_stopping_patience: int = 50,
-        **kwargs
+        **kwargs,
     ) -> Dict:
         """
         Train the RL agent with training loop and validation.
@@ -108,13 +108,25 @@ class LudoRLTrainer:
         self.model_manager.training_accuracy = []
 
         # Prepare CSV logging
-        import csv, os
+        import csv
+        import os
+
         log_path = os.path.join(os.path.dirname(model_save_path), "training_log.csv")
         write_header = not os.path.exists(log_path)
         log_file = open(log_path, "a", newline="")
         csv_writer = csv.writer(log_file)
         if write_header:
-            csv_writer.writerow(["epoch","loss","recent_reward","val_reward","val_accuracy","epsilon","buffer_size"])
+            csv_writer.writerow(
+                [
+                    "epoch",
+                    "loss",
+                    "recent_reward",
+                    "val_reward",
+                    "val_accuracy",
+                    "epsilon",
+                    "buffer_size",
+                ]
+            )
 
         for epoch in range(epochs):
             epoch_loss = 0.0
@@ -173,11 +185,27 @@ class LudoRLTrainer:
             # Console progress (sparser)
             if epoch % 50 == 0:
                 epsilon = self.agent.epsilon
-                print(f"Epoch {epoch}: loss={avg_loss:.4f} reward={recent_rewards:.2f} val_reward={val_reward:.2f} val_acc={val_accuracy:.3f} eps={epsilon:.3f}")
+                print(
+                    f"Epoch {epoch}: loss={avg_loss:.4f} reward={recent_rewards:.2f} val_reward={val_reward:.2f} val_acc={val_accuracy:.3f} eps={epsilon:.3f}"
+                )
 
             # CSV log each epoch
-            buffer_size = len(self.agent.memory) if hasattr(self.agent.memory, '__len__') else len(self.agent.memory.buffer)
-            csv_writer.writerow([epoch, f"{avg_loss:.6f}", f"{recent_rewards:.4f}", f"{val_reward:.4f}", f"{val_accuracy:.4f}", f"{self.agent.epsilon:.4f}", buffer_size])
+            buffer_size = (
+                len(self.agent.memory)
+                if hasattr(self.agent.memory, "__len__")
+                else len(self.agent.memory.buffer)
+            )
+            csv_writer.writerow(
+                [
+                    epoch,
+                    f"{avg_loss:.6f}",
+                    f"{recent_rewards:.4f}",
+                    f"{val_reward:.4f}",
+                    f"{val_accuracy:.4f}",
+                    f"{self.agent.epsilon:.4f}",
+                    buffer_size,
+                ]
+            )
 
             # Early stopping
             if patience_counter >= early_stopping_patience and epoch > 100:
