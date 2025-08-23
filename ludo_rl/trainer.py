@@ -62,6 +62,7 @@ class LudoRLTrainer:
         model_save_path: str = "ludo_dqn_model.pth",
         validation_split: float = 0.1,
         early_stopping_patience: int = 50,
+        **kwargs
     ) -> Dict:
         """
         Train the RL agent with training loop and validation.

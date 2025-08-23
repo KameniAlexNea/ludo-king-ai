@@ -43,7 +43,7 @@ class TRAINING_CONFIG:
     # Training parameters
     BATCH_SIZE = 64
     MEMORY_SIZE = 50000
-    TARGET_UPDATE_FREQ = 1000
+    TARGET_UPDATE_FREQ = 500
 
     # Exploration
     EPSILON_START = 1.0

@@ -60,36 +60,31 @@ class LudoStateEncoder:
         """
         state = np.zeros(self.state_dim)
 
-        try:
-            context = game_data.get("game_context", {})
-            if not context:
-                return self._get_default_state()
-
-            player_state = context.get("player_state", {})
-            current_situation = context.get("current_situation", {})
-            opponents = context.get("opponents", [])
-            valid_moves = context.get("valid_moves", [])
-            strategic_analysis = context.get("strategic_analysis", {})
-
-            # Enhanced encoding with modular approach
-            idx = self._encode_own_tokens_enhanced(state, 0, player_state, context)
-            idx = self._encode_game_context_enhanced(
-                state, idx, current_situation, player_state
-            )
-            idx = self._encode_opponents_enhanced(state, idx, opponents)
-            idx = self._encode_strategic_context_enhanced(
-                state, idx, strategic_analysis, valid_moves, current_situation
-            )
-            idx = self._encode_moves_summary_enhanced(
-                state, idx, valid_moves, strategic_analysis
-            )
-
-            # Add state validation and normalization
-            state = self._validate_and_normalize_state(state)
-
-        except Exception as e:
-            print(f"Warning: Error in state encoding: {e}")
+        context = game_data.get("game_context", {})
+        if not context:
             return self._get_default_state()
+
+        player_state = context.get("player_state", {})
+        current_situation = context.get("current_situation", {})
+        opponents = context.get("opponents", [])
+        valid_moves = context.get("valid_moves", [])
+        strategic_analysis = context.get("strategic_analysis", {})
+
+        # Enhanced encoding with modular approach
+        idx = self._encode_own_tokens_enhanced(state, 0, player_state, context)
+        idx = self._encode_game_context_enhanced(
+            state, idx, current_situation, player_state
+        )
+        idx = self._encode_opponents_enhanced(state, idx, opponents)
+        idx = self._encode_strategic_context_enhanced(
+            state, idx, strategic_analysis, valid_moves, current_situation
+        )
+        idx = self._encode_moves_summary_enhanced(
+            state, idx, valid_moves, strategic_analysis
+        )
+
+        # Add state validation and normalization
+        state = self._validate_and_normalize_state(state)
 
         return state
 
