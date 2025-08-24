@@ -173,11 +173,16 @@ class LudoRLTrainer:
             # Adaptive batches per epoch based on buffer size
             buffer_size = len(self.agent.memory)
             if hasattr(self.agent.memory, "__len__"):
-                batches_per_epoch = max(
-                    1, min(10, buffer_size // (self.agent.batch_size * 5))
-                )
+                # For online training, do more gradient updates per epoch for better learning
+                if use_online:
+                    batches_per_epoch = max(5, min(20, buffer_size // self.agent.batch_size))
+                else:
+                    batches_per_epoch = max(1, min(10, buffer_size // (self.agent.batch_size * 5)))
             else:
-                batches_per_epoch = max(1, buffer_size // (self.agent.batch_size * 10))
+                if use_online:
+                    batches_per_epoch = max(5, buffer_size // (self.agent.batch_size * 2))
+                else:
+                    batches_per_epoch = max(1, buffer_size // (self.agent.batch_size * 10))
 
             # Online data generation
             if use_online:
@@ -185,6 +190,11 @@ class LudoRLTrainer:
                     episodes=kwargs.get("episodes_per_epoch", 5),
                     max_steps=kwargs.get("max_steps_per_episode", 200),
                 )
+            
+            # Skip gradient updates for first few epochs to collect experience
+            if use_online and epoch < 5 and len(self.agent.memory) < self.agent.batch_size * 10:
+                continue
+                
             # Gradient updates
             epoch_loss, num_batches = self._train_batches(batches_per_epoch)
 
@@ -216,8 +226,7 @@ class LudoRLTrainer:
                 else:
                     patience_counter += 1
 
-            # Progress reporting
-            # Console progress (sparser)
+            # Progress reporting (more frequent for online training)
             # Online evaluation (greedy) every N epochs
             eval_avg_return = 0.0
             eval_win_rate = 0.0
@@ -226,7 +235,8 @@ class LudoRLTrainer:
                     n_episodes=5, max_steps=kwargs.get("max_steps_per_episode", 200)
                 )
 
-            if epoch % 50 == 0:
+            report_freq = 20 if use_online else 50
+            if epoch % report_freq == 0:
                 self._print_progress(
                     epoch,
                     avg_loss,
@@ -480,12 +490,13 @@ class LudoRLTrainer:
     ):
         epsilon = self.agent.epsilon
         if online:
+            buffer_size = len(self.agent.memory) if hasattr(self.agent.memory, "__len__") else len(self.agent.memory.buffer)
             logger.info(
-                f"Epoch {epoch}: loss={loss:.4f} reward={reward:.2f} policy_acc={acc:.3f} eps={epsilon:.3f} buffer={len(self.agent.memory)}{extra}"
+                f"Epoch {epoch}: loss={loss:.4f} reward={reward:.4f} policy_acc={acc:.3f} eps={epsilon:.4f} buffer={buffer_size}{extra}"
             )
         else:
             logger.info(
-                f"Epoch {epoch}: loss={loss:.4f} reward={reward:.2f} policy_acc={acc:.3f} val_reward={val_reward:.2f} val_acc={val_acc:.3f} eps={epsilon:.3f}"
+                f"Epoch {epoch}: loss={loss:.4f} reward={reward:.4f} policy_acc={acc:.3f} val_reward={val_reward:.4f} val_acc={val_acc:.3f} eps={epsilon:.4f}"
             )
 
     def _write_csv_epoch(
@@ -539,12 +550,14 @@ class LudoRLTrainer:
         self.agent.epsilon = 0.0
         returns = []
         wins = 0
-        for _ in range(n_episodes):
+        
+        for episode in range(n_episodes):
             state = self.online_env.reset()
             total_r = 0.0
             done = False
             steps = 0
             state, valid_moves = self.online_env.agent_turn_prepare()
+            
             while not done and steps < max_steps:
                 action_idx = self.agent.act(state, valid_moves)
                 next_state, reward, done = self.online_env.step(action_idx)
@@ -553,26 +566,23 @@ class LudoRLTrainer:
                 if not done:
                     valid_moves = self.online_env.get_current_valid_moves()
                 steps += 1
+                
             returns.append(total_r)
-            if self.online_env.game.game_over:
-                # Determine if agent color won
-                # Assuming game tracks winner via players' finished tokens – quick heuristic
-                # We'll approximate: win if agent's player has all tokens finished
-                # (Game object specifics not fully exposed here)
-                # Fallback: count finished tokens attribute if present
+            
+            # Check if game completed naturally (not due to step limit)
+            if self.online_env.game.game_over and steps < max_steps:
+                # Find the agent player and check if they won
                 try:
                     agent_player = next(
                         p
                         for p in self.online_env.game.players
                         if p.color.value == self.online_env.agent_color
                     )
-                    if (
-                        hasattr(agent_player, "all_tokens_finished")
-                        and agent_player.all_tokens_finished()
-                    ):
+                    if agent_player.has_won():
                         wins += 1
                 except StopIteration:
                     pass
+                    
         self.agent.epsilon = saved_epsilon
         avg_return = float(np.mean(returns)) if returns else 0.0
         win_rate = wins / n_episodes if n_episodes > 0 else 0.0

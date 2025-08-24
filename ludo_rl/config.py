@@ -6,30 +6,30 @@ Configuration for improved Ludo RL training with better reward engineering.
 class REWARDS:
     """Improved reward configuration with better balance and scaling."""
 
-    # Basic action rewards
-    SUCCESS = 1.0
-    FAILS = -5.0  # Higher penalty for invalid moves
+    # Basic action rewards (scaled down for better learning stability)
+    SUCCESS = 0.1
+    FAILS = -0.5  # Moderate penalty for invalid moves
 
     # Strategic rewards with better scaling
-    CAPTURE = 15.0  # Increased reward for capturing
-    TOKEN_FINISHED = 30.0  # High reward for finishing tokens
-    EXTRA_TURN = 3.0
-    BEST_MOVE = 5.0
-    WON = 100.0
+    CAPTURE = 1.5  # Good reward for capturing
+    TOKEN_FINISHED = 3.0  # High reward for finishing tokens
+    EXTRA_TURN = 0.3
+    BEST_MOVE = 0.5
+    WON = 10.0
 
     # Progress and positioning rewards
-    PROGRESS_WEIGHT = 2.0  # Reward for advancing tokens
-    SAFETY_BONUS = 2.0  # Bonus for safe moves
-    RISK_PENALTY = -2.0  # Penalty for risky moves
-    FIRST_TOKEN_OUT = 10.0  # Bonus for getting first token out
+    PROGRESS_WEIGHT = 0.2  # Reward for advancing tokens
+    SAFETY_BONUS = 0.2  # Bonus for safe moves
+    RISK_PENALTY = -0.2  # Penalty for risky moves
+    FIRST_TOKEN_OUT = 1.0  # Bonus for getting first token out
 
     # Strategic weights
-    STRATEGIC_WEIGHT = 0.2  # Increased weight for strategic value
-    RELATIVE_POSITION_WEIGHT = 1.0  # Weight for relative positioning
+    STRATEGIC_WEIGHT = 0.02  # Weight for strategic value
+    RELATIVE_POSITION_WEIGHT = 0.1  # Weight for relative positioning
 
     # Game phase bonuses
-    EARLY_GAME_BONUS = 0.5  # Bonus for early progress
-    END_GAME_BONUS = 2.0  # Bonus for late game positioning
+    EARLY_GAME_BONUS = 0.05  # Bonus for early progress
+    END_GAME_BONUS = 0.2  # Bonus for late game positioning
 
 
 class TRAINING_CONFIG:
@@ -43,13 +43,13 @@ class TRAINING_CONFIG:
     # Training parameters
     BATCH_SIZE = 64
     MEMORY_SIZE = 50000
-    TARGET_UPDATE_FREQ = 500
+    TARGET_UPDATE_FREQ = 100  # More frequent updates for online training
 
     # Exploration
     EPSILON_START = 1.0
     EPSILON_END = 0.01
-    # Slower decay (reach near-min later); original 0.995 was too fast for long runs
-    EPSILON_DECAY = 0.999  # applied per replay update
+    # Faster decay for online training - reach exploration minimum sooner
+    EPSILON_DECAY = 0.9995  # applied per replay update
 
     # Discount factor
     GAMMA = 0.99
