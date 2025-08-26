@@ -161,6 +161,7 @@ The environment provides rich state information perfect for AI learning:
 - **Structured**: Consistent format across all game phases
 - **Rich Context**: Strategic analysis and move evaluation included
 - **Scalable**: Efficient representation suitable for large-scale training
+- **Reinforcement Learning Ready**: Complete RL training pipeline with DQN implementation
 
 ### Move Analysis
 Each possible move includes:
@@ -175,6 +176,44 @@ Each possible move includes:
 - Performance benchmarking tools
 - Reproducible game seeds
 - Comprehensive logging
+
+## 🤖 Reinforcement Learning Training
+
+The environment includes a complete RL training framework using Deep Q-Networks (DQN):
+
+### Quick RL Training
+```python
+# 1. Generate training data
+python four_player_tournament.py
+
+# 2. Train RL agent
+python examples/train_rl_agent.py
+
+# 3. Use trained agent
+from ludo_rl import create_rl_strategy
+rl_strategy = create_rl_strategy("models/ludo_dqn_model.pth")
+```
+
+### RL Features
+- **State Encoding**: Converts game states to 908-dimensional vectors
+- **DQN Architecture**: Feed-forward network with experience replay
+- **Reward Engineering**: Multi-factor reward function including strategic value
+- **Training Pipeline**: Automated training on saved game data
+- **Game Integration**: Seamless integration with existing strategy system
+
+### Training Data Format
+Uses existing `GameStateSaver` output:
+```json
+{
+  "timestamp": "2025-01-21T10:00:00.000000",
+  "strategy": "killer",
+  "game_context": { ... },
+  "chosen_move": 1,
+  "outcome": { ... }
+}
+```
+
+See `ludo_rl/README.md` for detailed documentation.
 
 ## 📊 Game State Learning System
 
@@ -355,8 +394,8 @@ This environment is designed to be easily extensible. Areas for enhancement:
 - [x] **Game state learning** - Automatic decision tracking and analysis
 - [x] **Move evaluation framework** - Real-time move quality assessment
 - [x] **Performance correlation analysis** - Move quality vs outcome validation
-- [ ] **Neural network training examples** - Deep learning integration examples
-- [ ] **Reinforcement learning integration** - RL agent training framework
+- [x] **Reinforcement learning integration** - Complete RL agent training framework with DQN
+- [ ] **Neural network training examples** - Deep learning integration examples beyond RL
 - [ ] **Advanced move evaluation** - True board position analysis (not meta-evaluation)
 - [ ] **Predictive modeling** - Outcome prediction from game states
 - [ ] **Rule variations** - Team play, different board sizes, custom rules

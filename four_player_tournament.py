@@ -30,7 +30,9 @@ class FourPlayerTournament:
         self.verbose_output = os.getenv("VERBOSE_OUTPUT", "true").lower() == "true"
 
         # Initialize state saver
-        self.state_saver = GameStateSaver()
+        self.state_saver = GameStateSaver(
+            os.getenv("STATE_SAVE_DIR", "saved_states/games")
+        )
 
         # Get all available strategies or use selected ones
         selected_strategies = os.getenv("SELECTED_STRATEGIES", "").strip()
