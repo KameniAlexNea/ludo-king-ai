@@ -207,29 +207,38 @@ class OnlineLudoEnv:
         """Compute reward using REWARDS config with improved consistency."""
         if not move_result.get("success", False):
             return REWARDS.FAILS
-        
+
         r = REWARDS.SUCCESS
-        
+
         # Major rewards
         if move_result.get("captured_tokens"):
             r += REWARDS.CAPTURE * len(move_result["captured_tokens"])
-        
+
         if move_result.get("token_finished"):
             r += REWARDS.TOKEN_FINISHED
-            
+
         if move_result.get("extra_turn"):
             r += REWARDS.EXTRA_TURN
-            
+
         if move_result.get("game_won"):
             r += REWARDS.WON
-            
+
         # Progress reward (distance advanced along track) - simplified and more stable
         old_pos = move_result.get("old_position", -1)
         new_pos = move_result.get("new_position", -1)
         if old_pos != -1 and new_pos != -1 and new_pos != old_pos:
             # Simple distance reward - just reward forward progress
-            if new_pos > old_pos or (old_pos > 45 and new_pos < 10):  # Handle wrap-around
-                progress_steps = abs(new_pos - old_pos) if new_pos > old_pos else (52 - old_pos + new_pos)
-                r += min(progress_steps * REWARDS.PROGRESS_WEIGHT, REWARDS.PROGRESS_WEIGHT * 6)  # Cap at 6 steps
-                
+            if new_pos > old_pos or (
+                old_pos > REWARDS.WRAP_THRESHOLD and new_pos < REWARDS.WRAP_RESET
+            ):  # Handle wrap-around
+                progress_steps = (
+                    abs(new_pos - old_pos)
+                    if new_pos > old_pos
+                    else (REWARDS.MAIN_BOARD_SIZE - old_pos + new_pos)
+                )
+                r += min(
+                    progress_steps * REWARDS.PROGRESS_WEIGHT,
+                    REWARDS.PROGRESS_WEIGHT * REWARDS.PROGRESS_CAP,
+                )  # Cap at 6 steps
+
         return r

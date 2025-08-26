@@ -31,6 +31,11 @@ class REWARDS:
     EARLY_GAME_BONUS = 0.05  # Bonus for early progress
     END_GAME_BONUS = 0.2  # Bonus for late game positioning
 
+    WRAP_THRESHOLD = 45
+    WRAP_RESET = 10
+    MAIN_BOARD_SIZE = 52
+    PROGRESS_CAP = 6
+
 
 class TRAINING_CONFIG:
     """Training hyperparameters and configuration."""

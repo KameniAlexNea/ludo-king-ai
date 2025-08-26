@@ -369,7 +369,7 @@ Examples:
         if results and results["total_games"] > 0:
             rl_win_rate = results["rl_wins"] / results["total_games"]
 
-            print("\n� Final Performance Summary:")
+            print("\n🏁 Final Performance Summary:")
             print("=" * 40)
             print(f"   Overall win rate: {rl_win_rate:.1%}")
             print(f"   Games played: {results['total_games']}")
