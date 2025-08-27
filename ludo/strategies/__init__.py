@@ -4,6 +4,7 @@ Strategies module - Collection of all available Ludo AI strategies.
 
 from .balanced import BalancedStrategy
 from .probabilistic import ProbabilisticStrategy
+from .probabilistic_v3 import ProbabilisticV3Strategy, V3Config
 from .probabilistic_v2 import ProbabilisticV2Strategy
 from .base import Strategy
 from .cautious import CautiousStrategy
@@ -22,7 +23,8 @@ STRATEGIES: dict[str, Strategy] = {
     "defensive": DefensiveStrategy,
     "balanced": BalancedStrategy,
     "probabilistic": ProbabilisticStrategy,
-    "probabilistic2": ProbabilisticV2Strategy,
+    "probabilistic_v3": ProbabilisticV3Strategy,
+    "probabilistic_v2": ProbabilisticV2Strategy,
     "random": RandomStrategy,
     "cautious": CautiousStrategy,
     "llm": LLMStrategy,
