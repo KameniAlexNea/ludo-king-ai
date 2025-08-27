@@ -414,46 +414,59 @@ class LudoGymEnv(gym.Env):
 
     def _ensure_agent_turn(self):
         # Simulate opponents until agent color is current player or game over
-        while not self.game.game_over and self.game.get_current_player().color.value != self.agent_color:
+        while (
+            not self.game.game_over
+            and self.game.get_current_player().color.value != self.agent_color
+        ):
             self._simulate_single_opponent_turn()
 
-    def _simulate_single_opponent_turn(self):
+    def _simulate_single_opponent_turn(self, reward_components: Optional[List[float]] = None):
+        """Simulate exactly one opponent player sequence including any extra turns.
+
+        Converted from recursive form to iterative to avoid deep recursion in
+        pathological chains (captures + sixes). Safety-capped.
+        If reward_components provided, apply capture penalties immediately.
+        """
         current_player = self.game.get_current_player()
         if current_player.color.value == self.agent_color:
             return
-        dice_value = self._roll_dice()
-        valid_moves = self.game.get_valid_moves(current_player, dice_value)
-        if not valid_moves:
-            # no moves -> turn ends
-            self.game.next_turn()
-            return
-        # Strategy decision
-        try:
-            ctx = self._make_strategy_context(current_player, dice_value, valid_moves)
-            token_choice = current_player.make_strategic_decision(ctx)
-        except Exception:
-            token_choice = valid_moves[0]["token_id"]
-        move_res = self.game.execute_move(current_player, token_choice, dice_value)
-        # Handle extra turn chain for opponent
-        if move_res.get("extra_turn") and not self.game.game_over:
-            # Recursively continue same player
-            self._simulate_single_opponent_turn()
-        else:
-            if not self.game.game_over:
+        max_chain = 20  # generous safety cap
+        chain_count = 0
+        while not self.game.game_over and chain_count < max_chain:
+            dice_value = self._roll_dice()
+            valid_moves = self.game.get_valid_moves(current_player, dice_value)
+            if not valid_moves:
+                # forfeited turn (e.g., 3 sixes or no moves)
                 self.game.next_turn()
+                return
+            try:
+                ctx = self._make_strategy_context(current_player, dice_value, valid_moves)
+                token_choice = current_player.make_strategic_decision(ctx)
+            except Exception:
+                token_choice = valid_moves[0]["token_id"]
+            move_res = self.game.execute_move(current_player, token_choice, dice_value)
+            # Immediate capture penalty if this move captured agent tokens
+            if reward_components and move_res.get("captured_tokens"):
+                for ct in move_res["captured_tokens"]:
+                    if ct.get("player_color") == self.agent_color:
+                        reward_components.append(self.cfg.reward_cfg.got_captured)
+            if not move_res.get("extra_turn") or self.game.game_over:
+                if not self.game.game_over:
+                    self.game.next_turn()
+                return
+            chain_count += 1
+        # Safety: force turn end if chain exceeded
+        if not self.game.game_over and self.game.get_current_player() is current_player:
+            self.game.next_turn()
 
     def _simulate_opponents(self, reward_components: List[float]):
-        # Simulate until it becomes agent's turn
-        while not self.game.game_over and self.game.get_current_player().color.value != self.agent_color:
-            cur_player = self.game.get_current_player()
-            pre_agent_tokens = self._snapshot_agent_tokens()
-            self._simulate_single_opponent_turn()
-            # Check captures of agent tokens during this opponent sequence
-            post_agent_tokens = self._snapshot_agent_tokens()
-            # If any agent token returned home (position -1) while previously on board -> captured
-            for before, after in zip(pre_agent_tokens, post_agent_tokens):
-                if before >= 0 and after == -1:
-                    reward_components.append(self.cfg.reward_cfg.got_captured)
+        # Simulate opponents in order until agent's turn or game over.
+        # Capture penalties are handled inside _simulate_single_opponent_turn now.
+        while (
+            not self.game.game_over
+            and self.game.get_current_player().color.value != self.agent_color
+        ):
+            self._simulate_single_opponent_turn(reward_components)
 
     def _snapshot_agent_tokens(self) -> List[int]:
         player = next(p for p in self.game.players if p.color.value == self.agent_color)
