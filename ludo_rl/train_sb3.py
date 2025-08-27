@@ -54,7 +54,13 @@ def main():
     vec_env = VecMonitor(vec_env, filename=os.path.join(args.logdir, "monitor.csv"))
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)
 
-    eval_env = LudoGymEnv(base_cfg)
+    # Build evaluation env with identical wrapper stack (Monitor + VecNormalize) so
+    # normalization stats can be synchronized without assertion errors.
+    eval_env_raw = DummyVecEnv([make_env(999, 42, base_cfg)])
+    eval_env_raw = VecMonitor(eval_env_raw)
+    eval_env = VecNormalize(
+        eval_env_raw, training=False, norm_obs=True, norm_reward=False, clip_obs=10.0
+    )
 
     model = PPO(
         "MlpPolicy",

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
@@ -42,19 +42,31 @@ from ludo.strategy import StrategyFactory
 
 @dataclass
 class RewardConfig:
-    capture: float = 8.0
-    got_captured: float = -6.0
-    finish_token: float = 12.0
-    win: float = 120.0
-    lose: float = -60.0
-    progress_scale: float = 1.5  # multiplied by normalized progress delta sum
-    time_penalty: float = -0.01
-    illegal_action: float = -0.2
-    extra_turn: float = 0.5
-    blocking_bonus: float = 0.3  # reward for creating/maintaining blocks
-    diversity_bonus: float = (
-        0.1  # reward per newly activated token (first time leaving home)
-    )
+        """Reward shaping configuration (scaled for stable RL training).
+
+        Magnitudes chosen to avoid sparse domination while preserving signal:
+            - Win / lose kept an order of magnitude above per-move signals (10 / -10)
+            - Progress shaping small dense signal encourages forward motion
+            - Capture / finish moderate bonuses; capture symmetrical with loss
+            - Illegal action mildly discouraged (mask should usually prevent it)
+        """
+
+        # Primary events
+        capture: float = 2.0
+        got_captured: float = -2.5
+        finish_token: float = 5.0
+        win: float = 10.0
+        lose: float = -10.0
+
+        # Dense shaping (per total normalized progress delta across 4 tokens)
+        progress_scale: float = 0.5
+
+        # Miscellaneous
+        time_penalty: float = -0.001
+        illegal_action: float = -0.05
+        extra_turn: float = 0.3
+        blocking_bonus: float = 0.15
+        diversity_bonus: float = 0.2  # first time a token leaves home
 
 
 @dataclass
@@ -129,13 +141,18 @@ class LudoGymEnv(gym.Env):
         self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
 
         # Episode / bookkeeping
-        self.turns = 0
+        self.turns = 0  # count of agent decision turns (not full game cycles)
         self.episode_steps = 0
         self.done = False
         self.last_obs: Optional[np.ndarray] = None
         self._token_activation_flags = {
             i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
         }
+
+        # Internal per-turn state
+        self._pending_agent_dice: Optional[int] = None
+        self._pending_valid_moves: List[Dict] = []
+        self._last_progress_sum: float = 0.0
 
     # ----------------------------------------------------------------------------------
     # Gym API
@@ -147,6 +164,8 @@ class LudoGymEnv(gym.Env):
             self.cfg.seed = seed
         if self.cfg.seed is not None:
             self.rng.seed(self.cfg.seed)
+            # Seed global random so core game (which uses random module) is reproducible
+            random.seed(self.cfg.seed)
         # Recreate game for clean state
         order = [
             PlayerColor.RED,
@@ -174,108 +193,99 @@ class LudoGymEnv(gym.Env):
         self._token_activation_flags = {
             i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
         }
-        obs = self._build_observation(last_dice=None)
+        self._pending_agent_dice = None
+        self._pending_valid_moves = []
+        self._last_progress_sum = self._compute_agent_progress_sum()
+
+        # Advance until it's agent's turn (initial current_player_index is 0 so usually unnecessary)
+        self._ensure_agent_turn()
+        # Roll initial dice for agent decision
+        self._roll_new_agent_dice()
+        obs = self._build_observation()
         self.last_obs = obs
         info = {}
         return obs, info
 
     def step(self, action: int):  # type: ignore[override]
+        """Advance environment by one agent decision (one dice roll).
+
+        Correct turn mechanics:
+          - One agent decision per step
+          - Extra turns generate a new decision (another step) without opponents moving
+          - Opponents play complete sequence (including their extra turns) between agent decisions
+        """
         if self.done:
             return self.last_obs, 0.0, True, False, {}
 
-        reward_components = []
         rcfg = self.cfg.reward_cfg
+        reward_components: List[float] = []
+        agent_player = next(p for p in self.game.players if p.color.value == self.agent_color)
 
-        # 1. Agent turn sequence (may include extra turns)
-        agent_player = next(
-            p for p in self.game.players if p.color.value == self.agent_color
-        )
-        total_reward = 0.0
-        terminated = False
-        truncated = False
-        dice_value = None
+        # Ensure we have a pending dice & valid moves (should always be true except pathological cases)
+        if self._pending_agent_dice is None:
+            self._roll_new_agent_dice()
 
-        extra_turn_chain = True
-        local_turns = 0
-        while extra_turn_chain and not self.game.game_over:
-            local_turns += 1
-            dice_value = self._roll_dice()
-            valid_moves = self.game.get_valid_moves(agent_player, dice_value)
-            token_choice = action
-            illegal = token_choice not in [m["token_id"] for m in valid_moves]
-            if illegal:
+        dice_value = self._pending_agent_dice
+        valid_moves = self._pending_valid_moves
+
+        # Compute progress baseline
+        progress_before = self._last_progress_sum
+
+        # Handle no-move situation
+        no_moves_available = len(valid_moves) == 0
+        chosen_move: Optional[Dict] = None
+        illegal = False
+        if not no_moves_available:
+            valid_token_ids = [m["token_id"] for m in valid_moves]
+            if action not in valid_token_ids:
+                illegal = True
                 reward_components.append(rcfg.illegal_action)
-                # fallback: choose a move (simple heuristic)
-                if valid_moves:
-                    token_choice = valid_moves[0]["token_id"]
-                else:
-                    token_choice = 0
-            if valid_moves:
-                move_res = self.game.execute_move(
-                    agent_player, token_choice, dice_value
-                )
-                # progress delta measure
-                # total_progress = sum(
-                #     t.position
-                #     for t in agent_player.tokens
-                #     if t.position >= 0 and t.position < 100
-                # )
-                # Reward pieces
-                if move_res.get("captured_tokens"):
-                    reward_components.append(
-                        rcfg.capture * len(move_res["captured_tokens"])
-                    )
-                if move_res.get("token_finished"):
-                    reward_components.append(rcfg.finish_token)
-                if move_res.get("extra_turn"):
-                    reward_components.append(rcfg.extra_turn)
-                # Token diversity activation
-                tok = agent_player.tokens[token_choice]
-                if tok.position >= 0 and not self._token_activation_flags[token_choice]:
-                    reward_components.append(rcfg.diversity_bonus)
-                    self._token_activation_flags[token_choice] = True
-                # simple progress shaping (difference vs baseline?)
-                # (Could track previous positions; omitted for brevity)
+                # choose fallback (first valid) for execution so environment state advances
+                exec_token_id = valid_token_ids[0]
             else:
-                extra_turn_chain = False
-                break
-            extra_turn_chain = move_res.get("extra_turn", False)
-            # If extra turn we use same external action again (agent chooses one token index) - simple baseline
+                exec_token_id = action
+            chosen_move = next(m for m in valid_moves if m["token_id"] == exec_token_id)
+            move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
 
-            if local_turns > 10:  # fail-safe
-                break
+            if move_res.get("captured_tokens"):
+                reward_components.append(rcfg.capture * len(move_res["captured_tokens"]))
+            if move_res.get("token_finished"):
+                reward_components.append(rcfg.finish_token)
+            if move_res.get("extra_turn"):
+                reward_components.append(rcfg.extra_turn)
+            # Diversity bonus
+            tok = agent_player.tokens[exec_token_id]
+            if tok.position >= 0 and not self._token_activation_flags[exec_token_id]:
+                reward_components.append(rcfg.diversity_bonus)
+                self._token_activation_flags[exec_token_id] = True
+            extra_turn = move_res.get("extra_turn", False)
+        else:
+            # No valid moves: treat as skipped turn (no illegal penalty)
+            extra_turn = False
 
-        # 2. Opponents each get one turn sequentially until it returns to agent (no recursion of extra turns for simplicity)
-        if not self.game.game_over:
-            for p in self.game.players:
-                if p.color.value == self.agent_color:
-                    continue
-                dice_val = self._roll_dice()
-                val_moves = self.game.get_valid_moves(p, dice_val)
-                if val_moves:
-                    # ask strategy
-                    ctx = self._make_strategy_context(p, dice_val, val_moves)
-                    try:
-                        token_choice = p.make_strategic_decision(ctx)
-                    except Exception:
-                        token_choice = val_moves[0]["token_id"]
-                    mv_res = self.game.execute_move(p, token_choice, dice_val)
-                    # negative reward if agent tokens captured
-                    if mv_res.get("captured_tokens"):
-                        for ct in mv_res["captured_tokens"]:
-                            if ct["player_color"] == self.agent_color:
-                                reward_components.append(rcfg.got_captured)
+        # Opponent simulation if no extra turn and game not over
+        if not extra_turn and not self.game.game_over:
+            # Advance turn for agent (dice consumed)
+            self.game.next_turn()
+            self._simulate_opponents(reward_components)
 
-        # 3. Time penalty
+        # Progress shaping (after agent + opponents if any)
+        progress_after = self._compute_agent_progress_sum()
+        delta = progress_after - progress_before
+        if abs(delta) > 1e-9:
+            reward_components.append(delta * rcfg.progress_scale)
+        self._last_progress_sum = progress_after
+
+        # Time penalty (light)
         reward_components.append(rcfg.time_penalty)
 
-        # 4. Terminal conditions
+        # Terminal checks
+        terminated = False
+        truncated = False
         if agent_player.has_won():
             reward_components.append(rcfg.win)
             terminated = True
-        elif any(
-            p.has_won() for p in self.game.players if p.color.value != self.agent_color
-        ):
+        elif any(p.has_won() for p in self.game.players if p.color.value != self.agent_color):
             reward_components.append(rcfg.lose)
             terminated = True
 
@@ -284,11 +294,26 @@ class LudoGymEnv(gym.Env):
         if self.turns >= self.cfg.max_turns and not terminated:
             truncated = True
 
-        total_reward = float(sum(reward_components))
-        obs = self._build_observation(last_dice=dice_value)
+        # Prepare next agent dice if continuing (extra turn) and not done
+        if not terminated and not truncated and not self.game.game_over:
+            if extra_turn:
+                self._roll_new_agent_dice()  # agent retains turn
+            else:
+                self._ensure_agent_turn()  # move through opponents done above
+                if not self.game.game_over:
+                    self._roll_new_agent_dice()
+
+        obs = self._build_observation()
         self.last_obs = obs
         self.done = terminated or truncated
-        info = {"reward_components": reward_components, "dice": dice_value}
+        info = {
+            "reward_components": reward_components,
+            "dice": self._pending_agent_dice,
+            "illegal_action": illegal,
+            "action_mask": self.action_masks(),
+            "had_extra_turn": extra_turn,
+        }
+        total_reward = float(sum(reward_components))
         return obs, total_reward, terminated, truncated, info
 
     # ----------------------------------------------------------------------------------
@@ -318,10 +343,8 @@ class LudoGymEnv(gym.Env):
             return 0.5 + depth * 0.5
         return (pos / (GameConstants.MAIN_BOARD_SIZE - 1)) * 0.5  # [0,0.5]
 
-    def _build_observation(self, last_dice: Optional[int]) -> np.ndarray:
-        agent_player = next(
-            p for p in self.game.players if p.color.value == self.agent_color
-        )
+    def _build_observation(self) -> np.ndarray:
+        agent_player = next(p for p in self.game.players if p.color.value == self.agent_color)
         vec: List[float] = []
         # agent tokens
         for t in agent_player.tokens:
@@ -346,11 +369,11 @@ class LudoGymEnv(gym.Env):
                     can_finish = 1.0
                     break
         vec.append(can_finish)
-        # dice norm
-        if last_dice is None:
+        # dice norm (pending dice for current decision)
+        if self._pending_agent_dice is None:
             vec.append(0.0)
         else:
-            vec.append((last_dice - 3.5) / 3.5)  # ~[-1,1]
+            vec.append((self._pending_agent_dice - 3.5) / 3.5)
         # progress stats
         agent_progress = (
             agent_player.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER
@@ -373,15 +396,92 @@ class LudoGymEnv(gym.Env):
             vec.append(min(1.0, self.turns / self.cfg.max_turns))
         # blocking count
         if self.cfg.obs_cfg.include_blocking_count:
-            # simple placeholder (could query board blocking positions)
-            vec.append(0.0)
+            blocking_positions = self.game.board.get_blocking_positions(self.agent_color)
+            vec.append(min(1.0, len(blocking_positions) / 6.0))  # normalize roughly
         return np.asarray(vec, dtype=np.float32)
 
     # ----------------------------------------------------------------------------------
     # Helpers
     # ----------------------------------------------------------------------------------
     def _roll_dice(self) -> int:
-        return self.rng.randint(GameConstants.DICE_MIN, GameConstants.DICE_MAX)
+        # Use core game mechanics (seeding done via global random seed)
+        return self.game.roll_dice()
+
+    def _roll_new_agent_dice(self):
+        self._pending_agent_dice = self._roll_dice()
+        agent_player = next(p for p in self.game.players if p.color.value == self.agent_color)
+        self._pending_valid_moves = self.game.get_valid_moves(agent_player, self._pending_agent_dice)
+
+    def _ensure_agent_turn(self):
+        # Simulate opponents until agent color is current player or game over
+        while not self.game.game_over and self.game.get_current_player().color.value != self.agent_color:
+            self._simulate_single_opponent_turn()
+
+    def _simulate_single_opponent_turn(self):
+        current_player = self.game.get_current_player()
+        if current_player.color.value == self.agent_color:
+            return
+        dice_value = self._roll_dice()
+        valid_moves = self.game.get_valid_moves(current_player, dice_value)
+        if not valid_moves:
+            # no moves -> turn ends
+            self.game.next_turn()
+            return
+        # Strategy decision
+        try:
+            ctx = self._make_strategy_context(current_player, dice_value, valid_moves)
+            token_choice = current_player.make_strategic_decision(ctx)
+        except Exception:
+            token_choice = valid_moves[0]["token_id"]
+        move_res = self.game.execute_move(current_player, token_choice, dice_value)
+        # Handle extra turn chain for opponent
+        if move_res.get("extra_turn") and not self.game.game_over:
+            # Recursively continue same player
+            self._simulate_single_opponent_turn()
+        else:
+            if not self.game.game_over:
+                self.game.next_turn()
+
+    def _simulate_opponents(self, reward_components: List[float]):
+        # Simulate until it becomes agent's turn
+        while not self.game.game_over and self.game.get_current_player().color.value != self.agent_color:
+            cur_player = self.game.get_current_player()
+            pre_agent_tokens = self._snapshot_agent_tokens()
+            self._simulate_single_opponent_turn()
+            # Check captures of agent tokens during this opponent sequence
+            post_agent_tokens = self._snapshot_agent_tokens()
+            # If any agent token returned home (position -1) while previously on board -> captured
+            for before, after in zip(pre_agent_tokens, post_agent_tokens):
+                if before >= 0 and after == -1:
+                    reward_components.append(self.cfg.reward_cfg.got_captured)
+
+    def _snapshot_agent_tokens(self) -> List[int]:
+        player = next(p for p in self.game.players if p.color.value == self.agent_color)
+        return [t.position for t in player.tokens]
+
+    def _compute_agent_progress_sum(self) -> float:
+        player = next(p for p in self.game.players if p.color.value == self.agent_color)
+        total = 0.0
+        for t in player.tokens:
+            if t.position == -1:
+                continue
+            if 0 <= t.position < GameConstants.MAIN_BOARD_SIZE:
+                total += t.position / float(GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
+            elif t.position >= 100:
+                # Home column progress: 52..58 mapped
+                offset = (t.position - 100) + GameConstants.MAIN_BOARD_SIZE
+                total += offset / float(GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
+        return total
+
+    # Action masking (for algorithms that support it)
+    def action_masks(self) -> np.ndarray:
+        mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
+        if self._pending_valid_moves:
+            valid_ids = {m["token_id"] for m in self._pending_valid_moves}
+            for i in range(GameConstants.TOKENS_PER_PLAYER):
+                if i in valid_ids:
+                    mask[i] = 1
+        return mask
 
     def _make_strategy_context(
         self, player: Player, dice_value: int, valid_moves: List[Dict]
