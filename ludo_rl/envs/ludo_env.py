@@ -251,7 +251,6 @@ class LudoGymEnv(gym.Env):
 
         # Handle no-move situation
         no_moves_available = len(valid_moves) == 0
-        chosen_move: Optional[Dict] = None
         illegal = False
         if not no_moves_available:
             valid_token_ids = [m["token_id"] for m in valid_moves]
@@ -262,7 +261,6 @@ class LudoGymEnv(gym.Env):
                 exec_token_id = valid_token_ids[0]
             else:
                 exec_token_id = action
-            chosen_move = next(m for m in valid_moves if m["token_id"] == exec_token_id)
             move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
 
             if move_res.get("captured_tokens"):
