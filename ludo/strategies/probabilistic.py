@@ -28,8 +28,8 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from .base import Strategy
 from ..constants import BoardConstants, GameConstants
+from .base import Strategy
 
 
 class ProbabilisticStrategy(Strategy):
@@ -66,7 +66,9 @@ class ProbabilisticStrategy(Strategy):
         else:
             risk_weight = 1.0
 
-        opponent_positions = self._collect_opponent_positions(game_context, current_color)
+        opponent_positions = self._collect_opponent_positions(
+            game_context, current_color
+        )
 
         # Compute scores for each move
         best_move = None
@@ -92,7 +94,9 @@ class ProbabilisticStrategy(Strategy):
         return best_move["token_id"] if best_move else valid_moves[0]["token_id"]
 
     # ---- Internal helpers ----
-    def _collect_opponent_positions(self, game_context: Dict, current_color: str) -> List[int]:
+    def _collect_opponent_positions(
+        self, game_context: Dict, current_color: str
+    ) -> List[int]:
         """Extract all opponent token positions on the main path (0-51)."""
         board_state = game_context.get("board", {})
         board_positions = board_state.get("board_positions", {})
@@ -104,7 +108,9 @@ class ProbabilisticStrategy(Strategy):
                 pos = pos_str  # if already int
             if not isinstance(pos, int):
                 continue
-            if pos < 0 or pos >= GameConstants.MAIN_BOARD_SIZE:  # ignore home columns / invalid
+            if (
+                pos < 0 or pos >= GameConstants.MAIN_BOARD_SIZE
+            ):  # ignore home columns / invalid
                 continue
             for token in tokens:
                 if token.get("player_color") != current_color:
@@ -116,14 +122,19 @@ class ProbabilisticStrategy(Strategy):
 
         If opponent is behind within 1..6 inclusive, it threatens with a single dice.
         """
-        if not (0 <= from_pos < GameConstants.MAIN_BOARD_SIZE and 0 <= opp_pos < GameConstants.MAIN_BOARD_SIZE):
+        if not (
+            0 <= from_pos < GameConstants.MAIN_BOARD_SIZE
+            and 0 <= opp_pos < GameConstants.MAIN_BOARD_SIZE
+        ):
             return 999  # Not on main path / irrelevant
         if opp_pos < from_pos:
             return from_pos - opp_pos
         # wrap-around
         return GameConstants.MAIN_BOARD_SIZE - (opp_pos - from_pos)
 
-    def _estimate_risk(self, move: Dict, opponent_positions: List[int], player_color: str) -> float:
+    def _estimate_risk(
+        self, move: Dict, opponent_positions: List[int], player_color: str
+    ) -> float:
         target = move.get("target_position")
         move_type = move.get("move_type")
         # Safe contexts eliminate immediate capture risk
@@ -172,20 +183,27 @@ class ProbabilisticStrategy(Strategy):
         current_pos = move.get("current_position")
         if isinstance(target, int) and isinstance(current_pos, int):
             progress_delta = 0.0
-            if 0 <= current_pos < GameConstants.MAIN_BOARD_SIZE and 0 <= target < GameConstants.MAIN_BOARD_SIZE:
+            if (
+                0 <= current_pos < GameConstants.MAIN_BOARD_SIZE
+                and 0 <= target < GameConstants.MAIN_BOARD_SIZE
+            ):
                 # forward distance along path ignoring wrap risk; simple delta
-                raw_delta = (target - current_pos) if target >= current_pos else (
-                    (GameConstants.MAIN_BOARD_SIZE - current_pos) + target
+                raw_delta = (
+                    (target - current_pos)
+                    if target >= current_pos
+                    else ((GameConstants.MAIN_BOARD_SIZE - current_pos) + target)
                 )
                 progress_delta = raw_delta / GameConstants.MAIN_BOARD_SIZE
-            elif target >= BoardConstants.HOME_COLUMN_START:  # entering / inside home column
+            elif (
+                target >= BoardConstants.HOME_COLUMN_START
+            ):  # entering / inside home column
                 progress_delta = 0.2  # modest constant
             opportunity += progress_delta
 
         return opportunity
 
     def __repr__(self):  # pragma: no cover - debug helper
-        return f"ProbabilisticStrategy(risk/opportunity adaptive)"
+        return "ProbabilisticStrategy(risk/opportunity adaptive)"
 
 
 __all__ = ["ProbabilisticStrategy"]

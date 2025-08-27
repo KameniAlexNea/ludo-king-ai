@@ -19,25 +19,26 @@ Action space: Discrete(4) choose token index. Invalid selections resolved to NOO
 
 Future extensions: maskable action space, multi-agent self-play environment.
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any
-import math
 import random
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
-import numpy as np
 import gymnasium as gym
+import numpy as np
 from gymnasium import spaces
 
+from ludo.constants import Colors, GameConstants
 from ludo.game import LudoGame
-from ludo.player import PlayerColor, Player
-from ludo.constants import GameConstants, BoardConstants, Colors
+from ludo.player import Player, PlayerColor
 from ludo.strategy import StrategyFactory
 
 # --------------------------------------------------------------------------------------
 # Config dataclasses
 # --------------------------------------------------------------------------------------
+
 
 @dataclass
 class RewardConfig:
@@ -51,7 +52,10 @@ class RewardConfig:
     illegal_action: float = -0.2
     extra_turn: float = 0.5
     blocking_bonus: float = 0.3  # reward for creating/maintaining blocks
-    diversity_bonus: float = 0.1  # reward per newly activated token (first time leaving home)
+    diversity_bonus: float = (
+        0.1  # reward per newly activated token (first time leaving home)
+    )
+
 
 @dataclass
 class ObservationConfig:
@@ -60,9 +64,13 @@ class ObservationConfig:
     include_raw_dice: bool = True
     normalize_positions: bool = True
 
+
 @dataclass
 class OpponentsConfig:
-    strategies: List[str] = field(default_factory=lambda: ["balanced", "probabilistic_v3", "optimist"])  # length 3
+    strategies: List[str] = field(
+        default_factory=lambda: ["balanced", "probabilistic_v3", "optimist"]
+    )  # length 3
+
 
 @dataclass
 class EnvConfig:
@@ -73,28 +81,41 @@ class EnvConfig:
     opponents: OpponentsConfig = field(default_factory=OpponentsConfig)
     seed: Optional[int] = None
 
+
 # --------------------------------------------------------------------------------------
 # Environment
 # --------------------------------------------------------------------------------------
 
+
 class LudoGymEnv(gym.Env):
     metadata = {"render_modes": ["human"], "name": "LudoGymEnv-v0"}
 
-    def __init__(self, config: Optional[EnvConfig] = None):  # gym style accepts **kwargs
+    def __init__(
+        self, config: Optional[EnvConfig] = None
+    ):  # gym style accepts **kwargs
         super().__init__()
         self.cfg = config or EnvConfig()
         self.rng = random.Random(self.cfg.seed)
 
         # Build core game with fixed 4 players in canonical order (R,G,Y,B) if present
-        order = [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
+        order = [
+            PlayerColor.RED,
+            PlayerColor.GREEN,
+            PlayerColor.YELLOW,
+            PlayerColor.BLUE,
+        ]
         self.game = LudoGame(order)
 
         # Attach opponent strategies
         self.agent_color = self.cfg.agent_color
         for p in self.game.players:
             if p.color.value != self.agent_color:
-                idx = [c for c in Colors.ALL_COLORS if c != self.agent_color].index(p.color.value)
-                strat_name = self.cfg.opponents.strategies[idx % len(self.cfg.opponents.strategies)]
+                idx = [c for c in Colors.ALL_COLORS if c != self.agent_color].index(
+                    p.color.value
+                )
+                strat_name = self.cfg.opponents.strategies[
+                    idx % len(self.cfg.opponents.strategies)
+                ]
                 try:
                     p.set_strategy(StrategyFactory.create_strategy(strat_name))
                 except Exception:
@@ -102,7 +123,9 @@ class LudoGymEnv(gym.Env):
 
         # Spaces
         obs_dim = self._compute_observation_size()
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(obs_dim,), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(obs_dim,), dtype=np.float32
+        )
         self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
 
         # Episode / bookkeeping
@@ -110,24 +133,37 @@ class LudoGymEnv(gym.Env):
         self.episode_steps = 0
         self.done = False
         self.last_obs: Optional[np.ndarray] = None
-        self._token_activation_flags = {i: False for i in range(GameConstants.TOKENS_PER_PLAYER)}
+        self._token_activation_flags = {
+            i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
+        }
 
     # ----------------------------------------------------------------------------------
     # Gym API
     # ----------------------------------------------------------------------------------
-    def reset(self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None):  # type: ignore[override]
+    def reset(
+        self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
+    ):  # type: ignore[override]
         if seed is not None:
             self.cfg.seed = seed
         if self.cfg.seed is not None:
             self.rng.seed(self.cfg.seed)
         # Recreate game for clean state
-        order = [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
+        order = [
+            PlayerColor.RED,
+            PlayerColor.GREEN,
+            PlayerColor.YELLOW,
+            PlayerColor.BLUE,
+        ]
         self.game = LudoGame(order)
         # Reattach strategies
         for p in self.game.players:
             if p.color.value != self.agent_color:
-                idx = [c for c in Colors.ALL_COLORS if c != self.agent_color].index(p.color.value)
-                strat_name = self.cfg.opponents.strategies[idx % len(self.cfg.opponents.strategies)]
+                idx = [c for c in Colors.ALL_COLORS if c != self.agent_color].index(
+                    p.color.value
+                )
+                strat_name = self.cfg.opponents.strategies[
+                    idx % len(self.cfg.opponents.strategies)
+                ]
                 try:
                     p.set_strategy(StrategyFactory.create_strategy(strat_name))
                 except Exception:
@@ -135,7 +171,9 @@ class LudoGymEnv(gym.Env):
         self.turns = 0
         self.episode_steps = 0
         self.done = False
-        self._token_activation_flags = {i: False for i in range(GameConstants.TOKENS_PER_PLAYER)}
+        self._token_activation_flags = {
+            i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
+        }
         obs = self._build_observation(last_dice=None)
         self.last_obs = obs
         info = {}
@@ -149,7 +187,9 @@ class LudoGymEnv(gym.Env):
         rcfg = self.cfg.reward_cfg
 
         # 1. Agent turn sequence (may include extra turns)
-        agent_player = next(p for p in self.game.players if p.color.value == self.agent_color)
+        agent_player = next(
+            p for p in self.game.players if p.color.value == self.agent_color
+        )
         total_reward = 0.0
         terminated = False
         truncated = False
@@ -171,12 +211,20 @@ class LudoGymEnv(gym.Env):
                 else:
                     token_choice = 0
             if valid_moves:
-                move_res = self.game.execute_move(agent_player, token_choice, dice_value)
+                move_res = self.game.execute_move(
+                    agent_player, token_choice, dice_value
+                )
                 # progress delta measure
-                total_progress = sum(t.position for t in agent_player.tokens if t.position >= 0 and t.position < 100)
+                # total_progress = sum(
+                #     t.position
+                #     for t in agent_player.tokens
+                #     if t.position >= 0 and t.position < 100
+                # )
                 # Reward pieces
                 if move_res.get("captured_tokens"):
-                    reward_components.append(rcfg.capture * len(move_res["captured_tokens"]))
+                    reward_components.append(
+                        rcfg.capture * len(move_res["captured_tokens"])
+                    )
                 if move_res.get("token_finished"):
                     reward_components.append(rcfg.finish_token)
                 if move_res.get("extra_turn"):
@@ -225,7 +273,9 @@ class LudoGymEnv(gym.Env):
         if agent_player.has_won():
             reward_components.append(rcfg.win)
             terminated = True
-        elif any(p.has_won() for p in self.game.players if p.color.value != self.agent_color):
+        elif any(
+            p.has_won() for p in self.game.players if p.color.value != self.agent_color
+        ):
             reward_components.append(rcfg.lose)
             terminated = True
 
@@ -269,7 +319,9 @@ class LudoGymEnv(gym.Env):
         return (pos / (GameConstants.MAIN_BOARD_SIZE - 1)) * 0.5  # [0,0.5]
 
     def _build_observation(self, last_dice: Optional[int]) -> np.ndarray:
-        agent_player = next(p for p in self.game.players if p.color.value == self.agent_color)
+        agent_player = next(
+            p for p in self.game.players if p.color.value == self.agent_color
+        )
         vec: List[float] = []
         # agent tokens
         for t in agent_player.tokens:
@@ -300,14 +352,20 @@ class LudoGymEnv(gym.Env):
         else:
             vec.append((last_dice - 3.5) / 3.5)  # ~[-1,1]
         # progress stats
-        agent_progress = agent_player.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER
+        agent_progress = (
+            agent_player.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER
+        )
         opp_progresses = []
         for color in Colors.ALL_COLORS:
             if color == self.agent_color:
                 continue
             pl = next(p for p in self.game.players if p.color.value == color)
-            opp_progresses.append(pl.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER)
-        opp_mean = sum(opp_progresses) / max(1, len(opp_progresses)) if opp_progresses else 0.0
+            opp_progresses.append(
+                pl.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER
+            )
+        opp_mean = (
+            sum(opp_progresses) / max(1, len(opp_progresses)) if opp_progresses else 0.0
+        )
         vec.append(agent_progress)
         vec.append(opp_mean)
         # turn index scaled
@@ -325,7 +383,9 @@ class LudoGymEnv(gym.Env):
     def _roll_dice(self) -> int:
         return self.rng.randint(GameConstants.DICE_MIN, GameConstants.DICE_MAX)
 
-    def _make_strategy_context(self, player: Player, dice_value: int, valid_moves: List[Dict]):
+    def _make_strategy_context(
+        self, player: Player, dice_value: int, valid_moves: List[Dict]
+    ):
         # Basic context bridging existing strategies expecting a structure similar to tournaments
         board_state = self.game.board.get_board_state_for_ai(player)
         opponents = []
@@ -348,4 +408,11 @@ class LudoGymEnv(gym.Env):
     def close(self):
         pass
 
-__all__ = ["LudoGymEnv", "EnvConfig", "RewardConfig", "ObservationConfig", "OpponentsConfig"]
+
+__all__ = [
+    "LudoGymEnv",
+    "EnvConfig",
+    "RewardConfig",
+    "ObservationConfig",
+    "OpponentsConfig",
+]

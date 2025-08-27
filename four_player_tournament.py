@@ -10,17 +10,20 @@ import time
 from collections import defaultdict
 from itertools import combinations, combinations_with_replacement
 
-from dotenv import load_dotenv
 import numpy as np
+from dotenv import load_dotenv
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
 from ludo_stats.game_state_saver import GameStateSaver
 
 # Load environment configuration
 load_dotenv()
+
+
 def run_game_with_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
+
 
 class FourPlayerTournament:
     """Advanced 4-player tournament system for strategic AI evaluation."""

@@ -3,15 +3,15 @@ Strategies module - Collection of all available Ludo AI strategies.
 """
 
 from .balanced import BalancedStrategy
-from .probabilistic import ProbabilisticStrategy
-from .probabilistic_v3 import ProbabilisticV3Strategy, V3Config
-from .probabilistic_v2 import ProbabilisticV2Strategy
 from .base import Strategy
 from .cautious import CautiousStrategy
 from .defensive import DefensiveStrategy
 from .killer import KillerStrategy
 from .llm import LLMStrategy
 from .optimist import OptimistStrategy
+from .probabilistic import ProbabilisticStrategy
+from .probabilistic_v2 import ProbabilisticV2Strategy
+from .probabilistic_v3 import ProbabilisticV3Strategy, V3Config
 from .random_strategy import RandomStrategy
 from .winner import WinnerStrategy
 
@@ -43,4 +43,5 @@ __all__ = [
     "CautiousStrategy",
     "LLMStrategy",
     "STRATEGIES",
+    "V3Config",
 ]

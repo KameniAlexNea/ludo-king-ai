@@ -3,8 +3,8 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Optional
 
+from ..constants import GameConstants
 from .base import Strategy
-from ..constants import BoardConstants, GameConstants
 
 # Utility type hint for a move dict
 MoveDict = Dict[str, object]
@@ -24,7 +24,10 @@ class ProbabilisticV2Strategy(Strategy):
     """
 
     def __init__(self):
-        super().__init__("ProbabilisticV2", "Adaptive prob strategy with multi turn risk and non linear scoring")
+        super().__init__(
+            "ProbabilisticV2",
+            "Adaptive prob strategy with multi turn risk and non linear scoring",
+        )
 
     # ---- public API ----
     def decide(self, game_context: Dict) -> int:  # type: ignore[override]
@@ -34,15 +37,21 @@ class ProbabilisticV2Strategy(Strategy):
 
         player_state = game_context.get("player_state", {})
         opponents = game_context.get("opponents", [])
-        board = game_context.get("board", {})
+        # board = game_context.get("board", {})
         current_color = player_state.get("color")
 
         # phase and progress metrics
         my_finished = float(player_state.get("finished_tokens", 0))
         my_progress = my_finished / float(GameConstants.TOKENS_PER_PLAYER)
-        opp_progresses = [float(opp.get("tokens_finished", 0)) / float(GameConstants.TOKENS_PER_PLAYER) for opp in opponents]
+        opp_progresses = [
+            float(opp.get("tokens_finished", 0))
+            / float(GameConstants.TOKENS_PER_PLAYER)
+            for opp in opponents
+        ]
         opp_mean = sum(opp_progresses) / max(1.0, len(opp_progresses))
-        opp_var = (sum((p - opp_mean) ** 2 for p in opp_progresses) / max(1.0, len(opp_progresses)))
+        opp_var = sum((p - opp_mean) ** 2 for p in opp_progresses) / max(
+            1.0, len(opp_progresses)
+        )
         opp_std = math.sqrt(opp_var)
 
         # lead factor normalized by variance to get dynamic threshold
@@ -61,7 +70,9 @@ class ProbabilisticV2Strategy(Strategy):
             lookahead_turns = 3
 
         # collect opponent positions on main path
-        opponent_positions = self._collect_opponent_positions(game_context, current_color)
+        opponent_positions = self._collect_opponent_positions(
+            game_context, current_color
+        )
 
         best_move: Optional[MoveDict] = None
         best_score = float("-inf")
@@ -82,23 +93,31 @@ class ProbabilisticV2Strategy(Strategy):
             )
 
             # convert to a non linear risk score, penalize close threats more harshly
-            min_dist = self._min_backward_distance_to_any_opponent(move.get("target_position"), opponent_positions)
-            proximity_penalty = math.exp(max(0.0, (7 - min_dist)) / 3.0) if min_dist is not None else 1.0
+            min_dist = self._min_backward_distance_to_any_opponent(
+                move.get("target_position"), opponent_positions
+            )
+            proximity_penalty = (
+                math.exp(max(0.0, (7 - min_dist)) / 3.0)
+                if min_dist is not None
+                else 1.0
+            )
             # clamp proximity factor
             proximity_penalty = min(6.0, max(1.0, proximity_penalty))
 
             # final risk score non linear
-            risk_score = risk_prob * (proximity_penalty ** 1.1)
+            risk_score = risk_prob * (proximity_penalty**1.1)
 
             # opportunity evaluation
-            opportunity_score = self._opportunity_v2(move, current_color, opp_token_progress_map)
+            opportunity_score = self._opportunity_v2(
+                move, current_color, opp_token_progress_map
+            )
 
             # adjust opportunity based on phase of game
             phase_multiplier = self._phase_multiplier(my_progress, opp_mean)
             opportunity_score *= phase_multiplier
 
             # composite objective
-            composite = opportunity_score - risk_weight * (risk_score ** 1.05)
+            composite = opportunity_score - risk_weight * (risk_score**1.05)
 
             # attach diagnostics for logging and RL use
             move["v2_prob_risk"] = risk_prob
@@ -116,10 +135,14 @@ class ProbabilisticV2Strategy(Strategy):
         return valid_moves[0]["token_id"]
 
     # ---- helpers ----
-    def _collect_opponent_positions(self, game_context: Dict, current_color: str) -> List[int]:
+    def _collect_opponent_positions(
+        self, game_context: Dict, current_color: str
+    ) -> List[int]:
         """Return list of opponent token positions on main loop 0..51."""
         board_state = game_context.get("board", {})
-        board_positions = board_state.get("board_positions", {})  # map pos -> list of tokens
+        board_positions = board_state.get(
+            "board_positions", {}
+        )  # map pos -> list of tokens
         positions: List[int] = []
         for pos_key, tokens in board_positions.items():
             try:
@@ -142,20 +165,36 @@ class ProbabilisticV2Strategy(Strategy):
             for t in opp.get("tokens", []):
                 tid = t.get("token_id")
                 finished = float(t.get("finished_steps", 0))  # optional
-                result[tid] = min(1.0, max(0.0, finished / float(GameConstants.FINISH_POSITION if GameConstants.FINISH_POSITION else 1)))
+                result[tid] = min(
+                    1.0,
+                    max(
+                        0.0,
+                        finished
+                        / float(
+                            GameConstants.FINISH_POSITION
+                            if GameConstants.FINISH_POSITION
+                            else 1
+                        ),
+                    ),
+                )
         return result
 
     def _circular_backward_distance(self, from_pos: int, opp_pos: int) -> Optional[int]:
         """Distance moving backward from from_pos to opp_pos along 0..51 loop."""
         if not isinstance(from_pos, int) or not isinstance(opp_pos, int):
             return None
-        if not (0 <= from_pos < GameConstants.MAIN_BOARD_SIZE and 0 <= opp_pos < GameConstants.MAIN_BOARD_SIZE):
+        if not (
+            0 <= from_pos < GameConstants.MAIN_BOARD_SIZE
+            and 0 <= opp_pos < GameConstants.MAIN_BOARD_SIZE
+        ):
             return None
         if opp_pos <= from_pos:
             return from_pos - opp_pos
         return from_pos + (GameConstants.MAIN_BOARD_SIZE - opp_pos)
 
-    def _min_backward_distance_to_any_opponent(self, target: object, opponent_positions: List[int]) -> Optional[int]:
+    def _min_backward_distance_to_any_opponent(
+        self, target: object, opponent_positions: List[int]
+    ) -> Optional[int]:
         if not isinstance(target, int):
             return None
         distances = []
@@ -183,7 +222,9 @@ class ProbabilisticV2Strategy(Strategy):
             return 1.0 / 216.0
         return 0.0
 
-    def _multi_turn_capture_probability(self, target: object, opponent_positions: List[int], turns: int) -> float:
+    def _multi_turn_capture_probability(
+        self, target: object, opponent_positions: List[int], turns: int
+    ) -> float:
         """
         Approximate probability at least one opponent captures within next `turns` opponent moves.
         We approximate each opponent token as independent and each opponent move as identical.
@@ -202,7 +243,12 @@ class ProbabilisticV2Strategy(Strategy):
             p_no_capture *= p_fail_all_turns
         return 1.0 - p_no_capture
 
-    def _opportunity_v2(self, move: MoveDict, player_color: str, opp_token_progress_map: Dict[str, float]) -> float:
+    def _opportunity_v2(
+        self,
+        move: MoveDict,
+        player_color: str,
+        opp_token_progress_map: Dict[str, float],
+    ) -> float:
         """
         Opportunity components:
         - immediate capture reward scaled with captured token progress
@@ -221,7 +267,7 @@ class ProbabilisticV2Strategy(Strategy):
             for c in captured:
                 tid = c.get("token_id")
                 prog = opp_token_progress_map.get(tid, 0.5)  # fallback mid value
-                total_scale += (1.0 + prog)  # prefer removing advanced tokens
+                total_scale += 1.0 + prog  # prefer removing advanced tokens
             opportunity += 2.0 * max(1.0, total_scale)
 
         # finishing and home column
@@ -242,13 +288,20 @@ class ProbabilisticV2Strategy(Strategy):
         tgt = move.get("target_position")
         progress_delta = 0.0
         if isinstance(cur, int) and isinstance(tgt, int):
-            if 0 <= cur < GameConstants.MAIN_BOARD_SIZE and 0 <= tgt < GameConstants.MAIN_BOARD_SIZE:
-                raw = (tgt - cur) if tgt >= cur else (GameConstants.MAIN_BOARD_SIZE - cur + tgt)
+            if (
+                0 <= cur < GameConstants.MAIN_BOARD_SIZE
+                and 0 <= tgt < GameConstants.MAIN_BOARD_SIZE
+            ):
+                raw = (
+                    (tgt - cur)
+                    if tgt >= cur
+                    else (GameConstants.MAIN_BOARD_SIZE - cur + tgt)
+                )
                 progress_delta = raw / float(GameConstants.MAIN_BOARD_SIZE)
             elif tgt >= 100:
                 progress_delta = 0.25
         # non linear boost to favor larger advances
-        opportunity += (progress_delta ** 1.4) * 3.0
+        opportunity += (progress_delta**1.4) * 3.0
 
         return opportunity
 
@@ -267,4 +320,3 @@ class ProbabilisticV2Strategy(Strategy):
 
     def __repr__(self) -> str:  # pragma: no cover
         return "ProbabilisticV2Strategy(v2 multi turn risk, adaptive)"
-

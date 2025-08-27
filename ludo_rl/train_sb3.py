@@ -5,18 +5,18 @@ Usage (after installing requirements):
 
 Produces models/, logs/ and tensorboard metrics.
 """
+
 from __future__ import annotations
 
 import argparse
 import os
-from functools import partial
 
 from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
-from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 
-from .envs.ludo_env import LudoGymEnv, EnvConfig
+from .envs.ludo_env import EnvConfig, LudoGymEnv
 
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig):
@@ -25,6 +25,7 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig):
         cfg.seed = seed + rank
         env = LudoGymEnv(cfg)
         return env
+
     return _init
 
 
