@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import gymnasium as gym
 import numpy as np
@@ -42,31 +42,31 @@ from ludo.strategy import StrategyFactory
 
 @dataclass
 class RewardConfig:
-        """Reward shaping configuration (scaled for stable RL training).
+    """Reward shaping configuration (scaled for stable RL training).
 
-        Magnitudes chosen to avoid sparse domination while preserving signal:
-            - Win / lose kept an order of magnitude above per-move signals (10 / -10)
-            - Progress shaping small dense signal encourages forward motion
-            - Capture / finish moderate bonuses; capture symmetrical with loss
-            - Illegal action mildly discouraged (mask should usually prevent it)
-        """
+    Magnitudes chosen to avoid sparse domination while preserving signal:
+        - Win / lose kept an order of magnitude above per-move signals (10 / -10)
+        - Progress shaping small dense signal encourages forward motion
+        - Capture / finish moderate bonuses; capture symmetrical with loss
+        - Illegal action mildly discouraged (mask should usually prevent it)
+    """
 
-        # Primary events
-        capture: float = 2.0
-        got_captured: float = -2.5
-        finish_token: float = 5.0
-        win: float = 10.0
-        lose: float = -10.0
+    # Primary events
+    capture: float = 2.0
+    got_captured: float = -2.5
+    finish_token: float = 5.0
+    win: float = 10.0
+    lose: float = -10.0
 
-        # Dense shaping (per total normalized progress delta across 4 tokens)
-        progress_scale: float = 0.5
+    # Dense shaping (per total normalized progress delta across 4 tokens)
+    progress_scale: float = 0.5
 
-        # Miscellaneous
-        time_penalty: float = -0.001
-        illegal_action: float = -0.05
-        extra_turn: float = 0.3
-        blocking_bonus: float = 0.15
-        diversity_bonus: float = 0.2  # first time a token leaves home
+    # Miscellaneous
+    time_penalty: float = -0.001
+    illegal_action: float = -0.05
+    extra_turn: float = 0.3
+    blocking_bonus: float = 0.15
+    diversity_bonus: float = 0.2  # first time a token leaves home
 
 
 @dataclass
@@ -79,9 +79,20 @@ class ObservationConfig:
 
 @dataclass
 class OpponentsConfig:
-    strategies: List[str] = field(
-        default_factory=lambda: ["balanced", "probabilistic_v3", "optimist"]
-    )  # length 3
+    candidates: List[str] = field(
+        default_factory=lambda: [
+            "killer",
+            "winner",
+            "optimist",
+            "balanced",
+            "defensive",
+            "random",
+            "cautious",
+            "probabilistic",
+            "probabilistic_v2",
+            "probabilistic_v3",
+        ]
+    )
 
 
 @dataclass
@@ -109,6 +120,9 @@ class LudoGymEnv(gym.Env):
         self.cfg = config or EnvConfig()
         self.rng = random.Random(self.cfg.seed)
 
+        # Sample opponent strategies for this environment instance
+        self.opponent_strategies = self.rng.sample(self.cfg.opponents.candidates, 3)
+
         # Build core game with fixed 4 players in canonical order (R,G,Y,B) if present
         order = [
             PlayerColor.RED,
@@ -125,8 +139,8 @@ class LudoGymEnv(gym.Env):
                 idx = [c for c in Colors.ALL_COLORS if c != self.agent_color].index(
                     p.color.value
                 )
-                strat_name = self.cfg.opponents.strategies[
-                    idx % len(self.cfg.opponents.strategies)
+                strat_name = self.opponent_strategies[
+                    idx % len(self.opponent_strategies)
                 ]
                 try:
                     p.set_strategy(StrategyFactory.create_strategy(strat_name))
@@ -166,6 +180,8 @@ class LudoGymEnv(gym.Env):
             self.rng.seed(self.cfg.seed)
             # Seed global random so core game (which uses random module) is reproducible
             random.seed(self.cfg.seed)
+        # Sample new opponent strategies for this episode
+        self.opponent_strategies = self.rng.sample(self.cfg.opponents.candidates, 3)
         # Recreate game for clean state
         order = [
             PlayerColor.RED,
@@ -180,8 +196,8 @@ class LudoGymEnv(gym.Env):
                 idx = [c for c in Colors.ALL_COLORS if c != self.agent_color].index(
                     p.color.value
                 )
-                strat_name = self.cfg.opponents.strategies[
-                    idx % len(self.cfg.opponents.strategies)
+                strat_name = self.opponent_strategies[
+                    idx % len(self.opponent_strategies)
                 ]
                 try:
                     p.set_strategy(StrategyFactory.create_strategy(strat_name))
@@ -219,7 +235,9 @@ class LudoGymEnv(gym.Env):
 
         rcfg = self.cfg.reward_cfg
         reward_components: List[float] = []
-        agent_player = next(p for p in self.game.players if p.color.value == self.agent_color)
+        agent_player = next(
+            p for p in self.game.players if p.color.value == self.agent_color
+        )
 
         # Ensure we have a pending dice & valid moves (should always be true except pathological cases)
         if self._pending_agent_dice is None:
@@ -248,7 +266,9 @@ class LudoGymEnv(gym.Env):
             move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
 
             if move_res.get("captured_tokens"):
-                reward_components.append(rcfg.capture * len(move_res["captured_tokens"]))
+                reward_components.append(
+                    rcfg.capture * len(move_res["captured_tokens"])
+                )
             if move_res.get("token_finished"):
                 reward_components.append(rcfg.finish_token)
             if move_res.get("extra_turn"):
@@ -285,7 +305,9 @@ class LudoGymEnv(gym.Env):
         if agent_player.has_won():
             reward_components.append(rcfg.win)
             terminated = True
-        elif any(p.has_won() for p in self.game.players if p.color.value != self.agent_color):
+        elif any(
+            p.has_won() for p in self.game.players if p.color.value != self.agent_color
+        ):
             reward_components.append(rcfg.lose)
             terminated = True
 
@@ -344,7 +366,9 @@ class LudoGymEnv(gym.Env):
         return (pos / (GameConstants.MAIN_BOARD_SIZE - 1)) * 0.5  # [0,0.5]
 
     def _build_observation(self) -> np.ndarray:
-        agent_player = next(p for p in self.game.players if p.color.value == self.agent_color)
+        agent_player = next(
+            p for p in self.game.players if p.color.value == self.agent_color
+        )
         vec: List[float] = []
         # agent tokens
         for t in agent_player.tokens:
@@ -396,7 +420,9 @@ class LudoGymEnv(gym.Env):
             vec.append(min(1.0, self.turns / self.cfg.max_turns))
         # blocking count
         if self.cfg.obs_cfg.include_blocking_count:
-            blocking_positions = self.game.board.get_blocking_positions(self.agent_color)
+            blocking_positions = self.game.board.get_blocking_positions(
+                self.agent_color
+            )
             vec.append(min(1.0, len(blocking_positions) / 6.0))  # normalize roughly
         return np.asarray(vec, dtype=np.float32)
 
@@ -409,8 +435,12 @@ class LudoGymEnv(gym.Env):
 
     def _roll_new_agent_dice(self):
         self._pending_agent_dice = self._roll_dice()
-        agent_player = next(p for p in self.game.players if p.color.value == self.agent_color)
-        self._pending_valid_moves = self.game.get_valid_moves(agent_player, self._pending_agent_dice)
+        agent_player = next(
+            p for p in self.game.players if p.color.value == self.agent_color
+        )
+        self._pending_valid_moves = self.game.get_valid_moves(
+            agent_player, self._pending_agent_dice
+        )
 
     def _ensure_agent_turn(self):
         # Simulate opponents until agent color is current player or game over
@@ -420,7 +450,9 @@ class LudoGymEnv(gym.Env):
         ):
             self._simulate_single_opponent_turn()
 
-    def _simulate_single_opponent_turn(self, reward_components: Optional[List[float]] = None):
+    def _simulate_single_opponent_turn(
+        self, reward_components: Optional[List[float]] = None
+    ):
         """Simulate exactly one opponent player sequence including any extra turns.
 
         Converted from recursive form to iterative to avoid deep recursion in
@@ -440,7 +472,9 @@ class LudoGymEnv(gym.Env):
                 self.game.next_turn()
                 return
             try:
-                ctx = self._make_strategy_context(current_player, dice_value, valid_moves)
+                ctx = self._make_strategy_context(
+                    current_player, dice_value, valid_moves
+                )
                 token_choice = current_player.make_strategic_decision(ctx)
             except Exception:
                 token_choice = valid_moves[0]["token_id"]
@@ -479,11 +513,15 @@ class LudoGymEnv(gym.Env):
             if t.position == -1:
                 continue
             if 0 <= t.position < GameConstants.MAIN_BOARD_SIZE:
-                total += t.position / float(GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
+                total += t.position / float(
+                    GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+                )
             elif t.position >= 100:
                 # Home column progress: 52..58 mapped
                 offset = (t.position - 100) + GameConstants.MAIN_BOARD_SIZE
-                total += offset / float(GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
+                total += offset / float(
+                    GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+                )
         return total
 
     # Action masking (for algorithms that support it)

@@ -5,7 +5,8 @@ Tournament pitting the best PPO model against all available Ludo strategies.
 """
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]=""
+
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import random
 import time
@@ -13,11 +14,12 @@ from collections import defaultdict
 from itertools import combinations
 
 import numpy as np
+from dotenv import load_dotenv
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
-from ludo_stats.game_state_saver import GameStateSaver
 from ludo_rl.ppo_strategy import PPOStrategy
-from dotenv import load_dotenv
+from ludo_stats.game_state_saver import GameStateSaver
+
 load_dotenv()
 
 
@@ -103,7 +105,7 @@ class FourPlayerPPOTournament:
                     if part.isdigit():
                         step_models.append((int(part), f.replace(".zip", "")))
                         break
-            except:
+            except Exception:
                 continue
 
         if step_models:
