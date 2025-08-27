@@ -74,7 +74,7 @@ def main():
     )
 
     checkpoint_cb = CheckpointCallback(
-        save_freq=args.checkpoint_freq // env_fns.__len__(),
+        save_freq=args.checkpoint_freq // len(env_fns),
         save_path=args.model_dir,
         name_prefix="ppo_ludo",
         save_replay_buffer=True,
@@ -85,7 +85,7 @@ def main():
         eval_env,
         best_model_save_path=args.model_dir,
         log_path=args.logdir,
-        eval_freq=args.eval_freq // env_fns.__len__(),
+        eval_freq=args.eval_freq // len(env_fns),
         deterministic=True,
     )
 

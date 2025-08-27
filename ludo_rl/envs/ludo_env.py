@@ -23,87 +23,18 @@ Future extensions: maskable action space, multi-agent self-play environment.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from ludo.constants import Colors, GameConstants
+from ludo.constants import BoardConstants, Colors, GameConstants
 from ludo.game import LudoGame
 from ludo.player import Player, PlayerColor
 from ludo.strategy import StrategyFactory
 
-# --------------------------------------------------------------------------------------
-# Config dataclasses
-# --------------------------------------------------------------------------------------
-
-
-@dataclass
-class RewardConfig:
-    """Reward shaping configuration (scaled for stable RL training).
-
-    Magnitudes chosen to avoid sparse domination while preserving signal:
-        - Win / lose kept an order of magnitude above per-move signals (10 / -10)
-        - Progress shaping small dense signal encourages forward motion
-        - Capture / finish moderate bonuses; capture symmetrical with loss
-        - Illegal action mildly discouraged (mask should usually prevent it)
-    """
-
-    # Primary events
-    capture: float = 2.0
-    got_captured: float = -2.5
-    finish_token: float = 5.0
-    win: float = 10.0
-    lose: float = -10.0
-
-    # Dense shaping (per total normalized progress delta across 4 tokens)
-    progress_scale: float = 0.5
-
-    # Miscellaneous
-    time_penalty: float = -0.001
-    illegal_action: float = -0.05
-    extra_turn: float = 0.3
-    blocking_bonus: float = 0.15
-    diversity_bonus: float = 0.2  # first time a token leaves home
-
-
-@dataclass
-class ObservationConfig:
-    include_blocking_count: bool = True
-    include_turn_index: bool = True
-    include_raw_dice: bool = True
-    normalize_positions: bool = True
-
-
-@dataclass
-class OpponentsConfig:
-    candidates: List[str] = field(
-        default_factory=lambda: [
-            "killer",
-            "winner",
-            "optimist",
-            "balanced",
-            "defensive",
-            "random",
-            "cautious",
-            "probabilistic",
-            "probabilistic_v2",
-            "probabilistic_v3",
-        ]
-    )
-
-
-@dataclass
-class EnvConfig:
-    agent_color: str = Colors.RED
-    max_turns: int = 1000
-    reward_cfg: RewardConfig = field(default_factory=RewardConfig)
-    obs_cfg: ObservationConfig = field(default_factory=ObservationConfig)
-    opponents: OpponentsConfig = field(default_factory=OpponentsConfig)
-    seed: Optional[int] = None
-
+from .model import EnvConfig
 
 # --------------------------------------------------------------------------------------
 # Environment
@@ -356,12 +287,19 @@ class LudoGymEnv(gym.Env):
         return base
 
     def _normalize_position(self, pos: int) -> float:
-        if pos == -1:
+        if pos == GameConstants.HOME_POSITION:
             return -1.0
-        if pos >= 100:
-            depth = (pos - 100) / 5.0  # 0..1
-            return 0.5 + depth * 0.5
-        return (pos / (GameConstants.MAIN_BOARD_SIZE - 1)) * 0.5  # [0,0.5]
+        if pos >= BoardConstants.HOME_COLUMN_START:
+            depth = (
+                pos - BoardConstants.HOME_COLUMN_START
+            ) / GameConstants.HOME_COLUMN_DEPTH_SCALE  # 0..1
+            return (
+                GameConstants.POSITION_NORMALIZATION_FACTOR
+                + depth * GameConstants.POSITION_NORMALIZATION_FACTOR
+            )
+        return (
+            pos / (GameConstants.MAIN_BOARD_SIZE - 1)
+        ) * GameConstants.POSITION_NORMALIZATION_FACTOR  # [0,0.5]
 
     def _build_observation(self) -> np.ndarray:
         agent_player = next(
@@ -385,9 +323,9 @@ class LudoGymEnv(gym.Env):
         # can any finish
         can_finish = 0.0
         for t in agent_player.tokens:
-            if 0 <= t.position < 100:
-                remaining = 105 - t.position
-                if remaining <= 6:
+            if 0 <= t.position < BoardConstants.HOME_COLUMN_START:
+                remaining = GameConstants.FINISH_POSITION - t.position
+                if remaining <= GameConstants.DICE_MAX:
                     can_finish = 1.0
                     break
         vec.append(can_finish)
@@ -395,7 +333,10 @@ class LudoGymEnv(gym.Env):
         if self._pending_agent_dice is None:
             vec.append(0.0)
         else:
-            vec.append((self._pending_agent_dice - 3.5) / 3.5)
+            vec.append(
+                (self._pending_agent_dice - GameConstants.DICE_NORMALIZATION_MEAN)
+                / GameConstants.DICE_NORMALIZATION_MEAN
+            )
         # progress stats
         agent_progress = (
             agent_player.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER
@@ -415,13 +356,21 @@ class LudoGymEnv(gym.Env):
         vec.append(opp_mean)
         # turn index scaled
         if self.cfg.obs_cfg.include_turn_index:
-            vec.append(min(1.0, self.turns / self.cfg.max_turns))
+            vec.append(
+                min(GameConstants.TURN_INDEX_MAX_SCALE, self.turns / self.cfg.max_turns)
+            )
         # blocking count
         if self.cfg.obs_cfg.include_blocking_count:
             blocking_positions = self.game.board.get_blocking_positions(
                 self.agent_color
             )
-            vec.append(min(1.0, len(blocking_positions) / 6.0))  # normalize roughly
+            vec.append(
+                min(
+                    GameConstants.TURN_INDEX_MAX_SCALE,
+                    len(blocking_positions)
+                    / GameConstants.BLOCKING_COUNT_NORMALIZATION,
+                )
+            )  # normalize roughly
         return np.asarray(vec, dtype=np.float32)
 
     # ----------------------------------------------------------------------------------
@@ -460,7 +409,7 @@ class LudoGymEnv(gym.Env):
         current_player = self.game.get_current_player()
         if current_player.color.value == self.agent_color:
             return
-        max_chain = 20  # generous safety cap
+        max_chain = GameConstants.MAX_OPPONENT_CHAIN_LENGTH  # generous safety cap
         chain_count = 0
         while not self.game.game_over and chain_count < max_chain:
             dice_value = self._roll_dice()
@@ -514,9 +463,11 @@ class LudoGymEnv(gym.Env):
                 total += t.position / float(
                     GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
                 )
-            elif t.position >= 100:
+            elif t.position >= BoardConstants.HOME_COLUMN_START:
                 # Home column progress: 52..58 mapped
-                offset = (t.position - 100) + GameConstants.MAIN_BOARD_SIZE
+                offset = (
+                    t.position - BoardConstants.HOME_COLUMN_START
+                ) + GameConstants.MAIN_BOARD_SIZE
                 total += offset / float(
                     GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
                 )
@@ -556,12 +507,3 @@ class LudoGymEnv(gym.Env):
 
     def close(self):
         pass
-
-
-__all__ = [
-    "LudoGymEnv",
-    "EnvConfig",
-    "RewardConfig",
-    "ObservationConfig",
-    "OpponentsConfig",
-]
