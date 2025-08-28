@@ -17,6 +17,7 @@ import numpy as np
 from dotenv import load_dotenv
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
+from ludo_rl.envs.model import EnvConfig
 from ludo_rl.ppo_strategy import PPOStrategy
 from ludo_stats.game_state_saver import GameStateSaver
 
@@ -192,13 +193,17 @@ class FourPlayerPPOTournament:
                     ppo_idx = game_players.index(self.ppo_model)
                     # Swap to front if not already
                     if ppo_idx != 0:
-                        game_players[0], game_players[ppo_idx] = game_players[ppo_idx], game_players[0]
+                        game_players[0], game_players[ppo_idx] = (
+                            game_players[ppo_idx],
+                            game_players[0],
+                        )
                 for i, player_name in enumerate(game_players):
                     if player_name == self.ppo_model:
-                        from ludo_rl.envs.model import EnvConfig
                         model_path = f"./models/{player_name}.zip"
                         # Force agent_color red to match training seat
-                        strategy = PPOStrategy(model_path, player_name, EnvConfig(agent_color='red'))
+                        strategy = PPOStrategy(
+                            model_path, player_name, EnvConfig(agent_color="red")
+                        )
                     else:
                         strategy = StrategyFactory.create_strategy(player_name)
                     game.players[i].set_strategy(strategy)

@@ -2,14 +2,17 @@ import numpy as np
 import torch
 from stable_baselines3 import PPO
 
+from ludo.constants import BoardConstants, Colors, GameConstants
+
 from .envs.ludo_env import EnvConfig, LudoGymEnv
-from ludo.constants import Colors, GameConstants, BoardConstants
 
 
 class PPOStrategy:
     """Wrapper to use PPO model as a Ludo strategy."""
 
-    def __init__(self, model_path: str, model_name: str, env_config: EnvConfig | None = None):
+    def __init__(
+        self, model_path: str, model_name: str, env_config: EnvConfig | None = None
+    ):
         self.model_name = model_name
         self.model = PPO.load(model_path)
         self.env_cfg = env_config or EnvConfig()
@@ -28,9 +31,16 @@ class PPOStrategy:
         if pos == GameConstants.HOME_POSITION:
             return -1.0
         if pos >= BoardConstants.HOME_COLUMN_START:
-            depth = (pos - BoardConstants.HOME_COLUMN_START) / GameConstants.HOME_COLUMN_DEPTH_SCALE
-            return GameConstants.POSITION_NORMALIZATION_FACTOR + depth * GameConstants.POSITION_NORMALIZATION_FACTOR
-        return (pos / (GameConstants.MAIN_BOARD_SIZE - 1)) * GameConstants.POSITION_NORMALIZATION_FACTOR
+            depth = (
+                pos - BoardConstants.HOME_COLUMN_START
+            ) / GameConstants.HOME_COLUMN_DEPTH_SCALE
+            return (
+                GameConstants.POSITION_NORMALIZATION_FACTOR
+                + depth * GameConstants.POSITION_NORMALIZATION_FACTOR
+            )
+        return (
+            pos / (GameConstants.MAIN_BOARD_SIZE - 1)
+        ) * GameConstants.POSITION_NORMALIZATION_FACTOR
 
     def _build_action_mask(self, valid_moves: list[dict]) -> np.ndarray:
         mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.float32)
@@ -71,8 +81,12 @@ class PPOStrategy:
         if "players" in context:
             game_info = context.get("game_info", {})
             players = self._ordered_players(context.get("players", []))
-            current_player_color = game_info.get("current_player", self.env_cfg.agent_color)
-            current_player = next((p for p in players if p.get("color") == current_player_color), None)
+            current_player_color = game_info.get(
+                "current_player", self.env_cfg.agent_color
+            )
+            current_player = next(
+                (p for p in players if p.get("color") == current_player_color), None
+            )
             if current_player is None:
                 return np.zeros(self.obs_dim, dtype=np.float32)
             vec: list[float] = []
@@ -87,7 +101,9 @@ class PPOStrategy:
                 if opp:
                     token_list = opp.get("tokens", [])
                     for tok in token_list:
-                        vec.append(self._normalize_position_static(tok.get("position", -1)))
+                        vec.append(
+                            self._normalize_position_static(tok.get("position", -1))
+                        )
                     while len(token_list) < 4:
                         vec.append(-1.0)
                 else:
@@ -106,16 +122,26 @@ class PPOStrategy:
                         break
             vec.append(can_finish)
             dice_value = context.get("dice_value") or game_info.get("dice_value") or 0
-            vec.append((dice_value - GameConstants.DICE_NORMALIZATION_MEAN) / GameConstants.DICE_NORMALIZATION_MEAN)
-            agent_finished = current_player.get("finished_tokens", 0) / GameConstants.TOKENS_PER_PLAYER
+            vec.append(
+                (dice_value - GameConstants.DICE_NORMALIZATION_MEAN)
+                / GameConstants.DICE_NORMALIZATION_MEAN
+            )
+            agent_finished = (
+                current_player.get("finished_tokens", 0)
+                / GameConstants.TOKENS_PER_PLAYER
+            )
             opp_progress = []
             for color in Colors.ALL_COLORS:
                 if color == current_player_color:
                     continue
                 pl = next((p for p in players if p.get("color") == color), None)
                 if pl:
-                    opp_progress.append(pl.get("finished_tokens", 0) / GameConstants.TOKENS_PER_PLAYER)
-            opp_mean = sum(opp_progress) / max(1, len(opp_progress)) if opp_progress else 0.0
+                    opp_progress.append(
+                        pl.get("finished_tokens", 0) / GameConstants.TOKENS_PER_PLAYER
+                    )
+            opp_mean = (
+                sum(opp_progress) / max(1, len(opp_progress)) if opp_progress else 0.0
+            )
             vec.append(agent_finished)
             vec.append(opp_mean)
             if self.env_cfg.obs_cfg.include_turn_index:
@@ -144,7 +170,9 @@ class PPOStrategy:
         while added_opp_tokens < 12:
             vec.extend([-1.0] * 4)
             added_opp_tokens += 4
-        vec.append(player_state.get("finished_tokens", 0) / GameConstants.TOKENS_PER_PLAYER)
+        vec.append(
+            player_state.get("finished_tokens", 0) / GameConstants.TOKENS_PER_PLAYER
+        )
         for opp in opponents[:3]:
             vec.append(opp.get("tokens_finished", 0) / GameConstants.TOKENS_PER_PLAYER)
         while len(vec) < 4 + 12 + 4:
@@ -159,10 +187,20 @@ class PPOStrategy:
                     break
         vec.append(can_finish)
         dice_value = context.get("dice_value", 0)
-        vec.append((dice_value - GameConstants.DICE_NORMALIZATION_MEAN) / GameConstants.DICE_NORMALIZATION_MEAN)
-        agent_finished = player_state.get("finished_tokens", 0) / GameConstants.TOKENS_PER_PLAYER
-        opp_progress = [opp.get("tokens_finished", 0) / GameConstants.TOKENS_PER_PLAYER for opp in opponents[:3]]
-        opp_mean = sum(opp_progress) / max(1, len(opp_progress)) if opp_progress else 0.0
+        vec.append(
+            (dice_value - GameConstants.DICE_NORMALIZATION_MEAN)
+            / GameConstants.DICE_NORMALIZATION_MEAN
+        )
+        agent_finished = (
+            player_state.get("finished_tokens", 0) / GameConstants.TOKENS_PER_PLAYER
+        )
+        opp_progress = [
+            opp.get("tokens_finished", 0) / GameConstants.TOKENS_PER_PLAYER
+            for opp in opponents[:3]
+        ]
+        opp_mean = (
+            sum(opp_progress) / max(1, len(opp_progress)) if opp_progress else 0.0
+        )
         vec.append(agent_finished)
         vec.append(opp_mean)
         if self.env_cfg.obs_cfg.include_turn_index:
