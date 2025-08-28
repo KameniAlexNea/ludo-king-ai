@@ -9,6 +9,9 @@ from .defensive import DefensiveStrategy
 from .killer import KillerStrategy
 from .llm import LLMStrategy
 from .optimist import OptimistStrategy
+from .probabilistic import ProbabilisticStrategy
+from .probabilistic_v2 import ProbabilisticV2Strategy
+from .probabilistic_v3 import ProbabilisticV3Strategy, V3Config
 from .random_strategy import RandomStrategy
 from .winner import WinnerStrategy
 
@@ -19,6 +22,9 @@ STRATEGIES: dict[str, Strategy] = {
     "optimist": OptimistStrategy,
     "defensive": DefensiveStrategy,
     "balanced": BalancedStrategy,
+    "probabilistic": ProbabilisticStrategy,
+    "probabilistic_v3": ProbabilisticV3Strategy,
+    "probabilistic_v2": ProbabilisticV2Strategy,
     "random": RandomStrategy,
     "cautious": CautiousStrategy,
     "llm": LLMStrategy,
@@ -31,8 +37,11 @@ __all__ = [
     "OptimistStrategy",
     "DefensiveStrategy",
     "BalancedStrategy",
+    "ProbabilisticStrategy",
+    "ProbabilisticV2Strategy",
     "RandomStrategy",
     "CautiousStrategy",
     "LLMStrategy",
     "STRATEGIES",
+    "V3Config",
 ]

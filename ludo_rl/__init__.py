@@ -1,27 +1,13 @@
+"""RL training package for Ludo.
+
+Provides:
+- Gymnasium-compatible environments (single-agent + self-play variants)
+- Observation / reward shaping utilities
+- Opponent strategy factory wrappers
+- Training helpers for Stable-Baselines3 and RLlib
+
+Entry points:
+    from ludo_rl.envs import LudoGymEnv
 """
-Reinforcement Learning module for Ludo AI training.
-Simplified RL tools for training and using a DQN-based Ludo agent.
-"""
 
-from .config import REWARDS, TRAINING_CONFIG
-
-# Import core components
-from .model.dqn_model import LudoDQN, LudoDQNAgent
-from .rl_player import create_rl_strategy
-from .states import LudoStateEncoder
-from .trainer import LudoRLTrainer
-
-__all__ = [
-    # Core components
-    "LudoStateEncoder",
-    # DQN models
-    "LudoDQN",
-    "LudoDQNAgent",
-    # Trainer
-    "LudoRLTrainer",
-    # Strategy factory
-    "create_rl_strategy",
-    # Configuration
-    "REWARDS",
-    "TRAINING_CONFIG",
-]
+from .envs.ludo_env import LudoGymEnv  # noqa: F401

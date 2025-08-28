@@ -26,6 +26,17 @@ class GameConstants:
     # Special positions
     FINISH_POSITION = 105  # Final position in home column
     HOME_POSITION = -1  # Tokens start in home (-1)
+    HOME_COLUMN_START = 100  # Start of home column positions
+
+    # Normalization constants for RL environment
+    DICE_NORMALIZATION_MEAN = 3.5  # (DICE_MIN + DICE_MAX) / 2
+    HOME_COLUMN_DEPTH_SCALE = 5.0  # HOME_COLUMN_SIZE - 1
+    POSITION_NORMALIZATION_FACTOR = 0.5  # For scaling positions to [0,1]
+    TURN_INDEX_MAX_SCALE = 1.0  # Maximum normalized turn index
+    BLOCKING_COUNT_NORMALIZATION = 6.0  # Maximum expected blocking positions
+
+    # Opponent simulation
+    MAX_OPPONENT_CHAIN_LENGTH = 20  # Safety cap for opponent turn chains
 
 
 class BoardConstants:
@@ -139,9 +150,3 @@ class Colors:
     def is_valid_color(cls, color: str) -> bool:
         """Check if a color is valid."""
         return color in cls.ALL_COLORS
-
-
-# Legacy constants for backward compatibility
-SAFE_SQUARES = BoardConstants.STAR_SQUARES
-START_POSITIONS = BoardConstants.START_POSITIONS
-COLORED_SAFE_SQUARES = BoardConstants.COLORED_SAFE_SQUARES

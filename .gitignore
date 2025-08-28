@@ -216,3 +216,4 @@ saved_states/
 training_progress.png
 models/
 *.out
+logs

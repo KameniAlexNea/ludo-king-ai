@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 """
-4-Player Strategic Tournament System
-Comprehensive tournament between combinations of 4 Ludo AI strategies.
+PPO vs Strategies Tournament System
+Tournament pitting the best PPO model against all available Ludo strategies.
 """
 
 import os
+
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 import random
 import time
 from collections import defaultdict
-from itertools import combinations, combinations_with_replacement
+from itertools import combinations
 
 import numpy as np
 from dotenv import load_dotenv
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
+from ludo_rl.envs.model import EnvConfig
+from ludo_rl.ppo_strategy import PPOStrategy
 from ludo_stats.game_state_saver import GameStateSaver
 
-# Load environment configuration
 load_dotenv()
 
 
@@ -25,35 +29,32 @@ def run_game_with_seed(seed):
     np.random.seed(seed)
 
 
-class FourPlayerTournament:
-    """Advanced 4-player tournament system for strategic AI evaluation."""
+class FourPlayerPPOTournament:
+    """Tournament system pitting PPO model against Ludo strategies."""
+
+    def get_strategies(self):
+        if os.getenv("SELECTED_STRATEGIES"):
+            return list(os.getenv("SELECTED_STRATEGIES").split(","))
+        return StrategyFactory.get_available_strategies()
 
     def __init__(self):
-        # Load configuration from .env
-        self.max_turns_per_game = int(os.getenv("MAX_TURNS_PER_GAME", 500))
+        # Configuration
+        self.max_turns_per_game = int(os.getenv("MAX_TURNS_PER_GAME", 1000))
         self.games_per_matchup = int(os.getenv("GAMES_PER_MATCHUP", 10))
-        self.tournament_seed = int(os.getenv("TOURNAMENT_SEED", 42))
-        self.verbose_output = os.getenv("VERBOSE_OUTPUT", "true").lower() == "true"
+        self.tournament_seed = 42
+        self.verbose_output = True
 
         # Initialize state saver
-        self.state_saver = GameStateSaver(
-            os.getenv("STATE_SAVE_DIR", "saved_states/games")
-        )
+        self.state_saver = GameStateSaver("saved_states/ppo_vs_strategies")
 
-        # Get all available strategies or use selected ones
-        selected_strategies = os.getenv("SELECTED_STRATEGIES", "").strip()
-        if selected_strategies:
-            self.all_strategies = [s.strip() for s in selected_strategies.split(",")]
-        else:
-            self.all_strategies = StrategyFactory.get_available_strategies()
+        # Select the best PPO model (use FINAL or the one with most steps)
+        self.ppo_model = self._select_best_ppo_model()
 
-        # Generate all 4-strategy combinations
-        combi_method = (
-            combinations
-            if len(self.all_strategies) >= 4
-            else combinations_with_replacement
-        )
-        self.strategy_combinations = list(combi_method(self.all_strategies, 4))
+        # Get all available strategies
+        self.all_strategies = self.get_strategies()
+
+        # Generate combinations: PPO + 3 different strategies
+        self.strategy_combinations = list(combinations(self.all_strategies, 3))
 
         # Tournament tracking
         self.results = defaultdict(lambda: defaultdict(int))
@@ -70,18 +71,54 @@ class FourPlayerTournament:
         )
 
         if self.verbose_output:
-            print("🎯 Tournament Configuration:")
+            print("🎯 PPO vs Strategies Tournament Configuration:")
+            print(f"   • PPO Model: {self.ppo_model}")
             print(f"   • Available strategies: {len(self.all_strategies)}")
-            print(f"   • 4-player combinations: {len(self.strategy_combinations)}")
+            print(f"   • Strategy combinations: {len(self.strategy_combinations)}")
             print(f"   • Games per matchup: {self.games_per_matchup}")
             print(f"   • Max turns per game: {self.max_turns_per_game}")
             print(
                 f"   • Total games to play: {len(self.strategy_combinations) * self.games_per_matchup}"
             )
 
+    def _select_best_ppo_model(self):
+        """Select the best PPO model (prefer FINAL, then highest step count)."""
+        models_dir = "./models"
+        if not os.path.exists(models_dir):
+            raise FileNotFoundError(f"Models directory {models_dir} not found")
+
+        model_files = [f for f in os.listdir(models_dir) if f.endswith(".zip")]
+        if not model_files:
+            raise FileNotFoundError("No PPO model files found in ./models/")
+
+        # Prefer FINAL model, then highest step count
+        final_model = next((f for f in model_files if "final" in f.lower()), None)
+        if final_model:
+            return final_model.replace(".zip", "")
+
+        # Extract step numbers and find highest
+        step_models = []
+        for f in model_files:
+            try:
+                # Extract number from filename like "ppo_ludo_1000000_steps"
+                parts = f.replace(".zip", "").split("_")
+                for part in parts:
+                    if part.isdigit():
+                        step_models.append((int(part), f.replace(".zip", "")))
+                        break
+            except Exception:
+                continue
+
+        if step_models:
+            step_models.sort(reverse=True)
+            return step_models[0][1]
+
+        # Fallback to first model
+        return model_files[0].replace(".zip", "")
+
     def run_tournament(self):
-        """Execute complete 4-player tournament."""
-        print("🏆 4-PLAYER STRATEGIC LUDO TOURNAMENT 🏆")
+        """Execute PPO vs Strategies tournament."""
+        print("🏆 PPO vs STRATEGIES TOURNAMENT 🏆")
         print("=" * 70)
 
         self._display_participants()
@@ -92,13 +129,16 @@ class FourPlayerTournament:
         return self._get_tournament_summary()
 
     def _display_participants(self):
-        """Show tournament participants and their strategies."""
+        """Show tournament participants."""
         print("\n🤖 Tournament Participants:")
         print("-" * 50)
+        print(f"PPO: {self.ppo_model.upper()}")
+        print("\nStrategies:")
 
         descriptions = StrategyFactory.get_strategy_descriptions()
         for i, strategy in enumerate(self.all_strategies, 1):
-            print(f"{i}. {strategy.upper()}: {descriptions[strategy]}")
+            desc = descriptions.get(strategy, "No description")
+            print(f"{i}. {strategy.upper()}: {desc}")
 
         print("\n📋 Tournament Format:")
         print(f"   • {self.games_per_matchup} games per 4-player combination")
@@ -107,7 +147,7 @@ class FourPlayerTournament:
         print("   • All combinations tournament with detailed analytics")
 
     def _run_round_robin(self):
-        """Run tournament with all 4-player combinations."""
+        """Run tournament with PPO vs strategy combinations."""
         print("\n🎮 Tournament Execution:")
         print("=" * 70)
 
@@ -116,23 +156,25 @@ class FourPlayerTournament:
         start_time = time.time()
 
         for combo_idx, strategy_combo in enumerate(self.strategy_combinations, 1):
+            # Create combination: PPO + 3 strategies
+            game_players = [self.ppo_model] + list(strategy_combo)
+
             print(
                 f"\nCombination {combo_idx}/{len(self.strategy_combinations)}: "
-                f"{' vs '.join([s.upper() for s in strategy_combo])}"
+                f"{' vs '.join([p.upper() for p in game_players])}"
             )
             print("-" * 60)
 
-            combo_wins = {strategy: 0 for strategy in strategy_combo}
+            combo_wins = {player: 0 for player in game_players}
 
             # Play multiple games for this combination
             for game_num in range(self.games_per_matchup):
                 # Randomize starting order for fairness
-                game_strategies = list(strategy_combo)
-                random.shuffle(game_strategies)
+                random.shuffle(game_players)
 
                 if self.verbose_output:
                     print(
-                        f"  Game {game_num + 1}: {' → '.join([s.upper() for s in game_strategies])}"
+                        f"  Game {game_num + 1}: {' → '.join([p.upper() for p in game_players])}"
                     )
 
                 # Create 4-player game
@@ -145,11 +187,27 @@ class FourPlayerTournament:
                     ]
                 )
 
-                # Assign strategies to players
-                for i, strategy_name in enumerate(game_strategies):
-                    strategy = StrategyFactory.create_strategy(strategy_name)
+                # Assign strategies ensuring PPO always sits at RED (index 0)
+                # Find PPO index in randomized order
+                if self.ppo_model in game_players:
+                    ppo_idx = game_players.index(self.ppo_model)
+                    # Swap to front if not already
+                    if ppo_idx != 0:
+                        game_players[0], game_players[ppo_idx] = (
+                            game_players[ppo_idx],
+                            game_players[0],
+                        )
+                for i, player_name in enumerate(game_players):
+                    if player_name == self.ppo_model:
+                        model_path = f"./models/{player_name}.zip"
+                        # Force agent_color red to match training seat
+                        strategy = PPOStrategy(
+                            model_path, player_name, EnvConfig(agent_color="red")
+                        )
+                    else:
+                        strategy = StrategyFactory.create_strategy(player_name)
                     game.players[i].set_strategy(strategy)
-                    game.players[i].strategy_name = strategy_name
+                    game.players[i].strategy_name = player_name
 
                 # Play the game
                 results = self._play_four_player_game(
@@ -163,14 +221,14 @@ class FourPlayerTournament:
                     combo_wins[winner_name] += 1
 
                 # Process results
-                self._process_game_results(results, game_strategies)
+                self._process_game_results(results, game_players)
 
             # Show combination summary
             combo_summary = ", ".join(
-                [f"{s.upper()}: {wins}" for s, wins in combo_wins.items()]
+                [f"{p.upper()}: {wins}" for p, wins in combo_wins.items()]
             )
             print(f"  Results: {combo_summary}")
-            combination_results.append((strategy_combo, combo_wins))
+            combination_results.append((game_players, combo_wins))
 
         elapsed = time.time() - start_time
         print(f"\n⏱️  Tournament completed in {elapsed:.1f} seconds")
@@ -205,10 +263,11 @@ class FourPlayerTournament:
             dice_value = game.roll_dice()
 
             # Get AI decision context
-            context = game.get_ai_decision_context(dice_value)
+            context = game.get_game_state_for_ai()
+            context["dice_value"] = dice_value  # Add dice value to context
 
             if context["valid_moves"]:
-                # AI makes strategic decision
+                # PPO makes strategic decision
                 selected_token = current_player.make_strategic_decision(context)
 
                 # Execute the move
@@ -265,34 +324,32 @@ class FourPlayerTournament:
 
         return game_results
 
-    def _process_game_results(self, results, game_strategies):
+    def _process_game_results(self, results, game_models):
         """Process and store game results for analysis."""
         winner_name = results["winner"].strategy_name if results["winner"] else None
 
-        for strategy_name in game_strategies:
-            stats = self.detailed_stats[strategy_name]
+        for model_name in game_models:
+            stats = self.detailed_stats[model_name]
             stats["games_played"] += 1
-            stats["total_turns"] += results["player_stats"][strategy_name][
-                "turns_taken"
-            ]
-            stats["tokens_captured"] += results["player_stats"][strategy_name][
+            stats["total_turns"] += results["player_stats"][model_name]["turns_taken"]
+            stats["tokens_captured"] += results["player_stats"][model_name][
                 "tokens_captured"
             ]
-            stats["tokens_finished"] += results["player_stats"][strategy_name][
+            stats["tokens_finished"] += results["player_stats"][model_name][
                 "tokens_finished"
             ]
 
-            if strategy_name == winner_name:
+            if model_name == winner_name:
                 stats["games_won"] += 1
-                self.results[strategy_name]["wins"] += 1
+                self.results[model_name]["wins"] += 1
             else:
-                self.results[strategy_name]["losses"] += 1
+                self.results[model_name]["losses"] += 1
 
             # Update head-to-head records
-            for opponent in game_strategies:
-                if opponent != strategy_name:
+            for opponent in game_models:
+                if opponent != model_name:
                     stats["head_to_head"][opponent]["games"] += 1
-                    if strategy_name == winner_name:
+                    if model_name == winner_name:
                         stats["head_to_head"][opponent]["wins"] += 1
 
     def _display_final_results(self):
@@ -300,8 +357,29 @@ class FourPlayerTournament:
         print("\n🏆 FINAL TOURNAMENT STANDINGS 🏆")
         print("=" * 70)
 
-        # Calculate standings for all strategies that played
+        # Calculate standings for all participants that played
         standings = []
+
+        # Add PPO model if it played
+        if self.ppo_model in self.detailed_stats:
+            stats = self.detailed_stats[self.ppo_model]
+            wins = stats["games_won"]
+            games = stats["games_played"]
+            win_rate = (wins / games * 100) if games > 0 else 0
+
+            standings.append(
+                {
+                    "model": self.ppo_model,
+                    "wins": wins,
+                    "games": games,
+                    "win_rate": win_rate,
+                    "avg_turns": stats["total_turns"] / games if games > 0 else 0,
+                    "captures": stats["tokens_captured"],
+                    "finished": stats["tokens_finished"],
+                }
+            )
+
+        # Add strategies that played
         for strategy in self.all_strategies:
             if strategy in self.detailed_stats:
                 stats = self.detailed_stats[strategy]
@@ -311,7 +389,7 @@ class FourPlayerTournament:
 
                 standings.append(
                     {
-                        "strategy": strategy,
+                        "model": strategy,
                         "wins": wins,
                         "games": games,
                         "win_rate": win_rate,
@@ -326,9 +404,9 @@ class FourPlayerTournament:
 
         # Display standings table
         print(
-            f"{'Rank':<4} {'Strategy':<12} {'Wins':<6} {'Games':<7} {'Win Rate':<10} {'Avg Turns':<10}"
+            f"{'Rank':<4} {'Model':<20} {'Wins':<6} {'Games':<7} {'Win Rate':<10} {'Avg Turns':<10}"
         )
-        print("-" * 65)
+        print("-" * 75)
 
         for rank, entry in enumerate(standings, 1):
             medal = (
@@ -341,7 +419,7 @@ class FourPlayerTournament:
                 else "  "
             )
             print(
-                f"{rank:<4} {entry['strategy'].upper():<12} {entry['wins']:<6} {entry['games']:<7} "
+                f"{rank:<4} {entry['model'].upper():<20} {entry['wins']:<6} {entry['games']:<7} "
                 f"{entry['win_rate']:<9.1f}% {entry['avg_turns']:<9.1f} {medal}"
             )
 
@@ -353,11 +431,22 @@ class FourPlayerTournament:
         print("=" * 70)
 
         # Performance metrics
-        print(
-            f"\n{'Strategy':<12} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}"
-        )
-        print("-" * 50)
+        print(f"\n{'Model':<20} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}")
+        print("-" * 60)
 
+        # Add PPO model
+        if self.ppo_model in self.detailed_stats:
+            stats = self.detailed_stats[self.ppo_model]
+            efficiency = (
+                (stats["tokens_finished"] / stats["games_played"])
+                if stats["games_played"] > 0
+                else 0
+            )
+            print(
+                f"{self.ppo_model.upper():<20} {stats['tokens_captured']:<10} {stats['tokens_finished']:<10} {efficiency:<11.2f}"
+            )
+
+        # Add strategies
         for strategy in self.all_strategies:
             if strategy in self.detailed_stats:
                 stats = self.detailed_stats[strategy]
@@ -366,15 +455,29 @@ class FourPlayerTournament:
                     if stats["games_played"] > 0
                     else 0
                 )
-
                 print(
-                    f"{strategy.upper():<12} {stats['tokens_captured']:<10} {stats['tokens_finished']:<10} {efficiency:<11.2f}"
+                    f"{strategy.upper():<20} {stats['tokens_captured']:<10} {stats['tokens_finished']:<10} {efficiency:<11.2f}"
                 )
 
-        # Head-to-head analysis (only show strategies with significant interactions)
+        # Head-to-head analysis (only show models with significant interactions)
         print("\n🥊 HEAD-TO-HEAD ANALYSIS 🥊")
         print("-" * 50)
 
+        # Check PPO model
+        if self.ppo_model in self.detailed_stats:
+            h2h = self.detailed_stats[self.ppo_model]["head_to_head"]
+            has_interactions = any(record["games"] > 0 for record in h2h.values())
+
+            if has_interactions:
+                print(f"\n{self.ppo_model.upper()} vs Others:")
+                for opponent, record in h2h.items():
+                    if record["games"] > 0:
+                        win_rate = (record["wins"] / record["games"]) * 100
+                        print(
+                            f"  vs {opponent.upper():<18}: {record['wins']}/{record['games']} ({win_rate:.1f}%)"
+                        )
+
+        # Check strategies
         for strategy in self.all_strategies:
             if strategy in self.detailed_stats:
                 h2h = self.detailed_stats[strategy]["head_to_head"]
@@ -386,34 +489,46 @@ class FourPlayerTournament:
                         if record["games"] > 0:
                             win_rate = (record["wins"] / record["games"]) * 100
                             print(
-                                f"  vs {opponent.upper():<10}: {record['wins']}/{record['games']} ({win_rate:.1f}%)"
+                                f"  vs {opponent.upper():<18}: {record['wins']}/{record['games']} ({win_rate:.1f}%)"
                             )
 
     def _get_tournament_summary(self):
         """Return structured tournament summary."""
-        # Find champion among strategies that actually played
-        played_strategies = [
-            s
-            for s in self.all_strategies
-            if s in self.detailed_stats and self.detailed_stats[s]["games_played"] > 0
-        ]
+        # Find champion among participants that actually played
+        played_participants = []
+
+        # Add PPO model if it played
+        if (
+            self.ppo_model in self.detailed_stats
+            and self.detailed_stats[self.ppo_model]["games_played"] > 0
+        ):
+            played_participants.append(self.ppo_model)
+
+        # Add strategies that played
+        for strategy in self.all_strategies:
+            if (
+                strategy in self.detailed_stats
+                and self.detailed_stats[strategy]["games_played"] > 0
+            ):
+                played_participants.append(strategy)
 
         champion = (
             max(
-                played_strategies,
-                key=lambda s: (
-                    self.detailed_stats[s]["games_won"],
-                    self.detailed_stats[s]["games_won"]
-                    / max(1, self.detailed_stats[s]["games_played"]),
+                played_participants,
+                key=lambda p: (
+                    self.detailed_stats[p]["games_won"],
+                    self.detailed_stats[p]["games_won"]
+                    / max(1, self.detailed_stats[p]["games_played"]),
                 ),
             )
-            if played_strategies
+            if played_participants
             else None
         )
 
         summary = {
-            "tournament_type": "4-Player Strategic Combinations",
-            "participants": self.all_strategies,
+            "tournament_type": "PPO vs Strategies Tournament",
+            "ppo_model": self.ppo_model,
+            "strategies": self.all_strategies,
             "combinations_tested": len(self.strategy_combinations),
             "games_per_matchup": self.games_per_matchup,
             "total_games": sum(
@@ -426,58 +541,17 @@ class FourPlayerTournament:
         return summary
 
 
-def run_strategic_analysis():
-    """Run additional strategic performance analysis."""
-    print("\n🔬 STRATEGIC BEHAVIOR ANALYSIS 🔬")
-    print("=" * 70)
-
-    strategies = StrategyFactory.get_available_strategies()
-
-    # Analyze decision patterns
-    print("\nDecision Pattern Analysis:")
-    print("-" * 40)
-
-    for strategy_name in strategies:
-        strategy = StrategyFactory.create_strategy(strategy_name)
-        print(f"\n{strategy_name.upper()}: {strategy.description}")
-
-        # Test with different scenarios
-        test_scenarios = [
-            (
-                "Aggressive",
-                {"capture_opportunities": [{"value": 8}], "safety_concerns": []},
-            ),
-            (
-                "Defensive",
-                {"capture_opportunities": [], "safety_concerns": [{"risk": 7}]},
-            ),
-            (
-                "Balanced",
-                {
-                    "capture_opportunities": [{"value": 5}],
-                    "safety_concerns": [{"risk": 4}],
-                },
-            ),
-        ]
-
-        for scenario_name, analysis in test_scenarios:
-            print(f"  {scenario_name} scenario: Strategic preference detected")
-
-
 if __name__ == "__main__":
-    # Set random seed from environment
-    run_game_with_seed(int(os.getenv("TOURNAMENT_SEED", 42)))
+    # Set random seed
+    run_game_with_seed(42)
 
-    print("🎯 LUDO 4-PLAYER COMBINATION TOURNAMENT 🎯")
+    print("🎯 LUDO PPO vs STRATEGIES TOURNAMENT 🎯")
     print("=" * 70)
-    print("Starting comprehensive all-combinations tournament...")
+    print("Starting comprehensive PPO vs Strategies tournament...")
 
     # Run main tournament
-    tournament = FourPlayerTournament()
+    tournament = FourPlayerPPOTournament()
     summary = tournament.run_tournament()
-
-    # Additional analysis
-    run_strategic_analysis()
 
     # Final summary
     print("\n🎯 TOURNAMENT COMPLETE! 🎯")
@@ -488,6 +562,7 @@ if __name__ == "__main__":
         print("🏆 No clear champion (no games completed)")
     print(f"📊 Total Games: {summary['total_games']}")
     print(f"🎯 Combinations Tested: {summary['combinations_tested']}")
-    print(f"🎮 Participants: {', '.join([s.upper() for s in summary['participants']])}")
-    print("\n✅ 4-Player Strategic Tournament System Ready!")
-    print("🔬 Advanced AI evaluation and comparison complete!")
+    print(f"🤖 PPO Model: {summary['ppo_model'].upper()}")
+    print(f"🎮 Strategies: {', '.join([s.upper() for s in summary['strategies']])}")
+    print("\n✅ PPO vs Strategies Tournament System Ready!")
+    print("🔬 Advanced PPO vs Strategies evaluation complete!")
