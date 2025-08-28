@@ -40,10 +40,6 @@ from .model import EnvConfig
 from .simulators.opponent_simulator import OpponentSimulator
 from .utils.move_utils import MoveUtils
 
-# --------------------------------------------------------------------------------------
-# Environment
-# --------------------------------------------------------------------------------------
-
 
 class LudoGymEnv(gym.Env):
     metadata = {"render_modes": ["human"], "name": "LudoGymEnv-v0"}
@@ -109,9 +105,6 @@ class LudoGymEnv(gym.Env):
         )
         self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
 
-    # ----------------------------------------------------------------------------------
-    # Gym API
-    # ----------------------------------------------------------------------------------
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
     ):  # type: ignore[override]
@@ -283,9 +276,6 @@ class LudoGymEnv(gym.Env):
         total_reward = float(sum(reward_components))
         return obs, total_reward, terminated, truncated, info
 
-    # ----------------------------------------------------------------------------------
-    # Helpers
-    # ----------------------------------------------------------------------------------
     def render(self):  # minimal
         print(f"Turn {self.turns} agent_color={self.agent_color}")
 

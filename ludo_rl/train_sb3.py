@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback

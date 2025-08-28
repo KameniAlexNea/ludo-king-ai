@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 
 from ludo.constants import Colors, GameConstants
 from ludo.game import LudoGame
+from ludo.player import Player
 
 from ..model import EnvConfig
 
@@ -106,7 +107,7 @@ class RewardCalculator:
             return delta * self.cfg.reward_cfg.progress_scale
         return 0.0
 
-    def get_terminal_reward(self, agent_player, opponents) -> float:
+    def get_terminal_reward(self, agent_player: Player, opponents: list[Player]) -> float:
         """Compute terminal rewards (win/lose)."""
         if agent_player.has_won():
             return self.cfg.reward_cfg.win
