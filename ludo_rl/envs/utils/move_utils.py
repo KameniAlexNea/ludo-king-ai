@@ -4,7 +4,7 @@ from typing import Dict, List
 
 import numpy as np
 
-from ludo.constants import BoardConstants, Colors, GameConstants
+from ludo.constants import BoardConstants, GameConstants
 from ludo.game import LudoGame
 from ludo.player import Player
 

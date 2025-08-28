@@ -1,10 +1,9 @@
 """Opponent simulation utilities for LudoGymEnv."""
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from ludo.constants import GameConstants
 from ludo.game import LudoGame
-from ludo.player import Player
 
 from ..model import EnvConfig
 
@@ -12,7 +11,14 @@ from ..model import EnvConfig
 class OpponentSimulator:
     """Handles simulation of opponent turns."""
 
-    def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: str, roll_dice_func, make_strategy_context_func):
+    def __init__(
+        self,
+        cfg: EnvConfig,
+        game: LudoGame,
+        agent_color: str,
+        roll_dice_func,
+        make_strategy_context_func,
+    ):
         self.cfg = cfg
         self.game = game
         self.agent_color = agent_color

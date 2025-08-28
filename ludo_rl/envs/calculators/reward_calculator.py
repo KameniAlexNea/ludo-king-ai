@@ -2,7 +2,7 @@
 
 from typing import Dict, List, Optional
 
-from ludo.constants import BoardConstants, Colors, GameConstants
+from ludo.constants import Colors, GameConstants
 from ludo.game import LudoGame
 
 from ..model import EnvConfig
@@ -44,8 +44,12 @@ class RewardCalculator:
             return 0.0
 
         # Single step risk
-        threats = sum(1 for opp in opponent_positions if 1 <= self._backward_distance(tgt, opp) <= 6)
-        immediate_risk = 1 - (5/6)**threats if threats > 0 else 0.0
+        threats = sum(
+            1
+            for opp in opponent_positions
+            if 1 <= self._backward_distance(tgt, opp) <= 6
+        )
+        immediate_risk = 1 - (5 / 6) ** threats if threats > 0 else 0.0
 
         # Horizon risk (simplified)
         horizon_risk = 0.0
@@ -55,12 +59,14 @@ class RewardCalculator:
                 continue
             p_turn = self._single_turn_capture_probability(d)
             # Discounted over horizon
-            p_capture = 1 - (1 - p_turn)**self.cfg.reward_cfg.horizon_turns
+            p_capture = 1 - (1 - p_turn) ** self.cfg.reward_cfg.horizon_turns
             horizon_risk = max(horizon_risk, p_capture)
 
         return (immediate_risk + horizon_risk) / 2.0  # blend
 
-    def _compute_probabilistic_reward_modifier(self, move: Dict, reward_components: List[float]) -> float:
+    def _compute_probabilistic_reward_modifier(
+        self, move: Dict, reward_components: List[float]
+    ) -> float:
         """Compute modifier for rewards based on probabilities."""
         if not self.cfg.reward_cfg.use_probabilistic_rewards:
             return 1.0
@@ -77,15 +83,23 @@ class RewardCalculator:
         modifier = 1.0 - self.cfg.reward_cfg.risk_weight * risk
         return max(0.1, modifier)  # floor to prevent negative
 
-    def compute_capture_reward(self, move_res: Dict, reward_components: List[float]) -> float:
+    def compute_capture_reward(
+        self, move_res: Dict, reward_components: List[float]
+    ) -> float:
         """Compute capture reward with probabilistic modifier."""
         if not move_res.get("captured_tokens"):
             return 0.0
-        base_capture_reward = self.cfg.reward_cfg.capture * len(move_res["captured_tokens"])
-        modifier = self._compute_probabilistic_reward_modifier(move_res, reward_components)
+        base_capture_reward = self.cfg.reward_cfg.capture * len(
+            move_res["captured_tokens"]
+        )
+        modifier = self._compute_probabilistic_reward_modifier(
+            move_res, reward_components
+        )
         return base_capture_reward * modifier
 
-    def compute_progress_reward(self, progress_before: float, progress_after: float) -> float:
+    def compute_progress_reward(
+        self, progress_before: float, progress_after: float
+    ) -> float:
         """Compute progress-based reward."""
         delta = progress_after - progress_before
         if abs(delta) > 1e-9:

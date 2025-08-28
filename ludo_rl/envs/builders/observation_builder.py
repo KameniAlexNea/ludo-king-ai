@@ -6,7 +6,6 @@ import numpy as np
 
 from ludo.constants import BoardConstants, Colors, GameConstants
 from ludo.game import LudoGame
-from ludo.player import Player
 
 from ..model import EnvConfig
 
@@ -50,7 +49,9 @@ class ObservationBuilder:
             pos / (GameConstants.MAIN_BOARD_SIZE - 1)
         ) * GameConstants.POSITION_NORMALIZATION_FACTOR  # [0,0.5]
 
-    def _build_observation(self, turns: int, pending_agent_dice: int = None) -> np.ndarray:
+    def _build_observation(
+        self, turns: int, pending_agent_dice: int = None
+    ) -> np.ndarray:
         agent_player = next(
             p for p in self.game.players if p.color.value == self.agent_color
         )

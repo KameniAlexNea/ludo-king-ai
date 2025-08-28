@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from ludo.constants import Colors
 
+
 @dataclass
 class RewardConfig:
     """Reward shaping configuration (scaled for stable RL training).

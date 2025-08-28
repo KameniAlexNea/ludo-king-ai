@@ -22,7 +22,6 @@ Future extensions: maskable action space, multi-agent self-play environment.
 
 from __future__ import annotations
 
-import math
 import random
 from typing import Any, Dict, List, Optional
 
@@ -30,9 +29,9 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from ludo.constants import BoardConstants, Colors, GameConstants
+from ludo.constants import Colors, GameConstants
 from ludo.game import LudoGame
-from ludo.player import Player, PlayerColor
+from ludo.player import PlayerColor
 from ludo.strategy import StrategyFactory
 
 from .builders.observation_builder import ObservationBuilder
@@ -102,7 +101,11 @@ class LudoGymEnv(gym.Env):
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
         self.reward_calc = RewardCalculator(self.cfg, self.game, self.agent_color)
         self.opp_simulator = OpponentSimulator(
-            self.cfg, self.game, self.agent_color, self.move_utils._roll_dice, self.move_utils._make_strategy_context
+            self.cfg,
+            self.game,
+            self.agent_color,
+            self.move_utils._roll_dice,
+            self.move_utils._make_strategy_context,
         )
         self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
 
@@ -154,7 +157,9 @@ class LudoGymEnv(gym.Env):
         # Advance until it's agent's turn (initial current_player_index is 0 so usually unnecessary)
         self.opp_simulator._ensure_agent_turn()
         # Roll initial dice for agent decision
-        self._pending_agent_dice, self._pending_valid_moves = self.move_utils._roll_new_agent_dice()
+        self._pending_agent_dice, self._pending_valid_moves = (
+            self.move_utils._roll_new_agent_dice()
+        )
         obs = self.obs_builder._build_observation(self.turns, self._pending_agent_dice)
         self.last_obs = obs
         info = {}
@@ -179,7 +184,9 @@ class LudoGymEnv(gym.Env):
 
         # Ensure we have a pending dice & valid moves (should always be true except pathological cases)
         if self._pending_agent_dice is None:
-            self._pending_agent_dice, self._pending_valid_moves = self.move_utils._roll_new_agent_dice()
+            self._pending_agent_dice, self._pending_valid_moves = (
+                self.move_utils._roll_new_agent_dice()
+            )
 
         dice_value = self._pending_agent_dice
         valid_moves = self._pending_valid_moves
@@ -202,7 +209,9 @@ class LudoGymEnv(gym.Env):
             move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
 
             if move_res.get("captured_tokens"):
-                capture_reward = self.reward_calc.compute_capture_reward(move_res, reward_components)
+                capture_reward = self.reward_calc.compute_capture_reward(
+                    move_res, reward_components
+                )
                 reward_components.append(capture_reward)
             if move_res.get("token_finished"):
                 reward_components.append(rcfg.finish_token)
@@ -226,7 +235,9 @@ class LudoGymEnv(gym.Env):
 
         # Progress shaping (after agent + opponents if any)
         progress_after = self.move_utils._compute_agent_progress_sum()
-        progress_reward = self.reward_calc.compute_progress_reward(progress_before, progress_after)
+        progress_reward = self.reward_calc.compute_progress_reward(
+            progress_before, progress_after
+        )
         if progress_reward != 0.0:
             reward_components.append(progress_reward)
         self._last_progress_sum = progress_after
@@ -249,11 +260,15 @@ class LudoGymEnv(gym.Env):
         # Prepare next agent dice if continuing (extra turn) and not done
         if not terminated and not truncated and not self.game.game_over:
             if extra_turn:
-                self._pending_agent_dice, self._pending_valid_moves = self.move_utils._roll_new_agent_dice()  # agent retains turn
+                self._pending_agent_dice, self._pending_valid_moves = (
+                    self.move_utils._roll_new_agent_dice()
+                )  # agent retains turn
             else:
                 self.opp_simulator._ensure_agent_turn()  # move through opponents done above
                 if not self.game.game_over:
-                    self._pending_agent_dice, self._pending_valid_moves = self.move_utils._roll_new_agent_dice()
+                    self._pending_agent_dice, self._pending_valid_moves = (
+                        self.move_utils._roll_new_agent_dice()
+                    )
 
         obs = self.obs_builder._build_observation(self.turns, self._pending_agent_dice)
         self.last_obs = obs
