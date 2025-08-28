@@ -150,9 +150,3 @@ class Colors:
     def is_valid_color(cls, color: str) -> bool:
         """Check if a color is valid."""
         return color in cls.ALL_COLORS
-
-
-# Legacy constants for backward compatibility
-SAFE_SQUARES = BoardConstants.STAR_SQUARES
-START_POSITIONS = BoardConstants.START_POSITIONS
-COLORED_SAFE_SQUARES = BoardConstants.COLORED_SAFE_SQUARES

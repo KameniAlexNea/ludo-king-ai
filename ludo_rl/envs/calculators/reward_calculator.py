@@ -4,7 +4,6 @@ from typing import Dict, List, Optional
 
 from ludo.constants import Colors, GameConstants
 from ludo.game import LudoGame
-from ludo.player import Player
 
 from ..model import EnvConfig
 
@@ -74,9 +73,11 @@ class RewardCalculator:
 
         opponent_positions = []
         for color in Colors.ALL_COLORS:
-            if color == self.agent_color:
+            if color.lower() == self.agent_color.lower():
                 continue
-            opp = next(p for p in self.game.players if p.color.value == color)
+            opp = next(
+                p for p in self.game.players if p.color.value.lower() == color.lower()
+            )
             opponent_positions.extend(t.position for t in opp.tokens if t.position >= 0)
 
         risk = self._compute_move_risk(move, opponent_positions)
@@ -107,10 +108,203 @@ class RewardCalculator:
             return delta * self.cfg.reward_cfg.progress_scale
         return 0.0
 
-    def get_terminal_reward(self, agent_player: Player, opponents: list[Player]) -> float:
-        """Compute terminal rewards (win/lose)."""
-        if agent_player.has_won():
-            return self.cfg.reward_cfg.win
-        elif any(p.has_won() for p in opponents):
-            return self.cfg.reward_cfg.lose
-        return 0.0
+    def _compute_opportunity_score(
+        self, move: Dict, opponent_positions: List[int]
+    ) -> float:
+        """Compute opportunity score for capturing opponents or strategic advantage."""
+        tgt = move.get("target_position")
+        if not isinstance(tgt, int) or tgt < 0:
+            return 0.0
+
+        opportunity_score = 0.0
+
+        # Capture opportunity: probability of capturing opponent tokens from this position
+        for opp_pos in opponent_positions:
+            if opp_pos < 0:
+                continue
+            # Distance from target position to opponent
+            distance_to_opp = self._backward_distance(opp_pos, tgt)
+            if distance_to_opp is not None and 1 <= distance_to_opp <= 6:
+                # Probability of capturing this opponent in next turn
+                capture_prob = self._single_turn_capture_probability(distance_to_opp)
+                # Discounted probability over horizon
+                horizon_capture_prob = (
+                    1 - (1 - capture_prob) ** self.cfg.reward_cfg.horizon_turns
+                )
+                opportunity_score += horizon_capture_prob
+
+        # Finishing opportunity: bonus for moves that set up finishing
+        if move.get("move_type") == "finish":
+            opportunity_score += 1.0
+        elif tgt >= 50:  # Close to finishing
+            finishing_distance = 56 - tgt  # Assuming finish at 56
+            if finishing_distance <= 6:
+                opportunity_score += (
+                    self.cfg.reward_cfg.finishing_probability_weight
+                    * (1.0 - finishing_distance / 6.0)
+                )
+
+        return opportunity_score
+
+    def _compute_agent_vulnerability(
+        self, agent_positions: List[int], opponent_positions: List[int]
+    ) -> float:
+        """Compute overall vulnerability of agent's tokens to capture."""
+        if not agent_positions:
+            return 0.0
+
+        total_risk = 0.0
+        for agent_pos in agent_positions:
+            if agent_pos < 0:
+                continue
+
+            # Immediate risk from current position
+            immediate_threats = sum(
+                1
+                for opp_pos in opponent_positions
+                if opp_pos >= 0
+                and 1 <= self._backward_distance(agent_pos, opp_pos) <= 6
+            )
+            immediate_risk = (
+                1 - (5 / 6) ** immediate_threats if immediate_threats > 0 else 0.0
+            )
+
+            # Horizon risk
+            horizon_risk = 0.0
+            for opp_pos in opponent_positions:
+                if opp_pos < 0:
+                    continue
+                distance = self._backward_distance(agent_pos, opp_pos)
+                if distance is not None:
+                    p_turn = self._single_turn_capture_probability(distance)
+                    p_capture = 1 - (1 - p_turn) ** self.cfg.reward_cfg.horizon_turns
+                    horizon_risk = max(horizon_risk, p_capture)
+
+            position_risk = (immediate_risk + horizon_risk) / 2.0
+            total_risk += position_risk
+
+        return (
+            total_risk / len([p for p in agent_positions if p >= 0])
+            if agent_positions
+            else 0.0
+        )
+
+    def _compute_probabilistic_move_reward(
+        self, move: Dict, reward_components: List[float]
+    ) -> float:
+        """Compute comprehensive probabilistic reward modifier for any move."""
+        if not self.cfg.reward_cfg.use_probabilistic_rewards:
+            return 0.0
+
+        # Get current positions
+        agent_positions = []
+        opponent_positions = []
+
+        agent_player = next(
+            p
+            for p in self.game.players
+            if p.color.value.lower() == self.agent_color.lower()
+        )
+        agent_positions.extend(
+            t.position for t in agent_player.tokens if t.position >= 0
+        )
+
+        for color in Colors.ALL_COLORS:
+            if color == self.agent_color:
+                continue
+            opp = next(p for p in self.game.players if p.color.value == color)
+            opponent_positions.extend(t.position for t in opp.tokens if t.position >= 0)
+
+        # Calculate risk and opportunity
+        move_risk = self._compute_move_risk(move, opponent_positions)
+        opportunity_score = self._compute_opportunity_score(move, opponent_positions)
+
+        # Calculate overall agent vulnerability (for risk penalty)
+        agent_vulnerability = self._compute_agent_vulnerability(
+            agent_positions, opponent_positions
+        )
+
+        # Combine into probabilistic reward
+        risk_penalty = (
+            self.cfg.reward_cfg.risk_weight * (move_risk + agent_vulnerability) / 2.0
+        )
+        opportunity_bonus = self.cfg.reward_cfg.opportunity_weight * opportunity_score
+
+        probabilistic_reward = self.cfg.reward_cfg.opportunity_bonus_scale * (
+            opportunity_bonus - risk_penalty
+        )
+
+        return probabilistic_reward
+
+    def apply_probabilistic_modifier(
+        self, base_reward: float, move: Optional[Dict] = None
+    ) -> float:
+        """Apply probabilistic modifier to any base reward."""
+        if not self.cfg.reward_cfg.use_probabilistic_rewards or move is None:
+            return base_reward
+
+        probabilistic_adjustment = self._compute_probabilistic_move_reward(move, [])
+        return base_reward + probabilistic_adjustment
+
+    def compute_comprehensive_reward(
+        self,
+        move_res: Dict,
+        progress_delta: float,
+        extra_turn: bool,
+        diversity_bonus: bool,
+        illegal_action: bool,
+        reward_components: List[float],
+    ) -> float:
+        """Compute comprehensive reward including all components with probabilistic modifiers."""
+        rcfg = self.cfg.reward_cfg
+        total_reward = 0.0
+
+        # Base rewards with probabilistic modifiers
+        if move_res.get("captured_tokens"):
+            capture_reward = self.apply_probabilistic_modifier(
+                rcfg.capture * len(move_res["captured_tokens"]), move_res
+            )
+            total_reward += capture_reward
+            reward_components.append(capture_reward)
+
+        if move_res.get("token_finished"):
+            finish_reward = self.apply_probabilistic_modifier(
+                rcfg.finish_token, move_res
+            )
+            total_reward += finish_reward
+            reward_components.append(finish_reward)
+
+        if extra_turn:
+            extra_turn_reward = self.apply_probabilistic_modifier(
+                rcfg.extra_turn, move_res
+            )
+            total_reward += extra_turn_reward
+            reward_components.append(extra_turn_reward)
+
+        if diversity_bonus:
+            diversity_reward = self.apply_probabilistic_modifier(
+                rcfg.diversity_bonus, move_res
+            )
+            total_reward += diversity_reward
+            reward_components.append(diversity_reward)
+
+        if illegal_action:
+            illegal_reward = self.apply_probabilistic_modifier(
+                rcfg.illegal_action, move_res
+            )
+            total_reward += illegal_reward
+            reward_components.append(illegal_reward)
+
+        # Progress reward with probabilistic consideration
+        if abs(progress_delta) > 1e-9:
+            progress_reward = self.apply_probabilistic_modifier(
+                progress_delta * rcfg.progress_scale, move_res
+            )
+            total_reward += progress_reward
+            reward_components.append(progress_reward)
+
+        # Time penalty (usually not modified probabilistically)
+        total_reward += rcfg.time_penalty
+        reward_components.append(rcfg.time_penalty)
+
+        return total_reward

@@ -37,8 +37,11 @@ class RewardConfig:
     # Probabilistic reward scaling
     use_probabilistic_rewards: bool = False
     risk_weight: float = 1.0
+    opportunity_weight: float = 0.8
     horizon_turns: int = 3
     discount_lambda: float = 0.85
+    opportunity_bonus_scale: float = 0.3
+    finishing_probability_weight: float = 0.6
 
 
 @dataclass

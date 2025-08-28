@@ -190,31 +190,26 @@ class LudoGymEnv(gym.Env):
         # Handle no-move situation
         no_moves_available = len(valid_moves) == 0
         illegal = False
+        move_res = {}
+        diversity_bonus_triggered = False
+
         if not no_moves_available:
             valid_token_ids = [m["token_id"] for m in valid_moves]
             if action not in valid_token_ids:
                 illegal = True
-                reward_components.append(rcfg.illegal_action)
                 # choose fallback (first valid) for execution so environment state advances
                 exec_token_id = valid_token_ids[0]
             else:
                 exec_token_id = action
+
             move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
 
-            if move_res.get("captured_tokens"):
-                capture_reward = self.reward_calc.compute_capture_reward(
-                    move_res, reward_components
-                )
-                reward_components.append(capture_reward)
-            if move_res.get("token_finished"):
-                reward_components.append(rcfg.finish_token)
-            if move_res.get("extra_turn"):
-                reward_components.append(rcfg.extra_turn)
-            # Diversity bonus
+            # Check diversity bonus
             tok = agent_player.tokens[exec_token_id]
             if tok.position >= 0 and not self._token_activation_flags[exec_token_id]:
-                reward_components.append(rcfg.diversity_bonus)
+                diversity_bonus_triggered = True
                 self._token_activation_flags[exec_token_id] = True
+
             extra_turn = move_res.get("extra_turn", False)
         else:
             # No valid moves: treat as skipped turn (no illegal penalty)
@@ -228,22 +223,34 @@ class LudoGymEnv(gym.Env):
 
         # Progress shaping (after agent + opponents if any)
         progress_after = self.move_utils._compute_agent_progress_sum()
-        progress_reward = self.reward_calc.compute_progress_reward(
-            progress_before, progress_after
-        )
-        if progress_reward != 0.0:
-            reward_components.append(progress_reward)
-        self._last_progress_sum = progress_after
+        progress_delta = progress_after - progress_before
 
-        # Time penalty (light)
-        reward_components.append(rcfg.time_penalty)
+        # Use comprehensive reward calculation
+        move_reward = self.reward_calc.compute_comprehensive_reward(
+            move_res=move_res,
+            progress_delta=progress_delta,
+            extra_turn=extra_turn,
+            diversity_bonus=diversity_bonus_triggered,
+            illegal_action=illegal,
+            reward_components=reward_components,
+        )
+
+        total_reward = move_reward
 
         # Terminal checks
         opponents = [p for p in self.game.players if p.color.value != self.agent_color]
         terminal_reward = self.reward_calc.get_terminal_reward(agent_player, opponents)
+        terminated = False
+        truncated = False
+
         if terminal_reward != 0.0:
+            # Apply probabilistic modifier to terminal rewards as well
+            terminal_reward = self.reward_calc.apply_probabilistic_modifier(
+                terminal_reward, move_res if move_res else None
+            )
             reward_components.append(terminal_reward)
             terminated = True
+            total_reward += terminal_reward
 
         self.turns += 1
         self.episode_steps += 1
@@ -273,7 +280,6 @@ class LudoGymEnv(gym.Env):
             "action_mask": self.move_utils.action_masks(self._pending_valid_moves),
             "had_extra_turn": extra_turn,
         }
-        total_reward = float(sum(reward_components))
         return obs, total_reward, terminated, truncated, info
 
     def render(self):  # minimal
