@@ -127,19 +127,15 @@ class LudoGymEnv(gym.Env):
             PlayerColor.BLUE,
         ]
         self.game = LudoGame(order)
-        # Reattach strategies
-        for p in self.game.players:
-            if p.color.value != self.agent_color:
-                idx = [c for c in Colors.ALL_COLORS if c != self.agent_color].index(
-                    p.color.value
-                )
-                strat_name = self.opponent_strategies[
-                    idx % len(self.opponent_strategies)
-                ]
-                try:
-                    p.set_strategy(StrategyFactory.create_strategy(strat_name))
-                except Exception:
-                    pass
+        # Reattach strategies - ensure different strategies for each opponent
+        non_agent_colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
+        for i, color in enumerate(non_agent_colors):
+            player = next(p for p in self.game.players if p.color.value == color)
+            strat_name = self.opponent_strategies[i]
+            try:
+                player.set_strategy(StrategyFactory.create_strategy(strat_name))
+            except Exception:
+                pass
         self.turns = 0
         self.episode_steps = 0
         self.done = False

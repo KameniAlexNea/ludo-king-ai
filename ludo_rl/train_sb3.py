@@ -39,12 +39,30 @@ def main():
     parser.add_argument("--model-dir", type=str, default="./models")
     parser.add_argument("--eval-freq", type=int, default=50_000)
     parser.add_argument("--checkpoint-freq", type=int, default=100_000)
+    parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=1000,
+        help="Max turns per episode (reduce to increase variance)",
+    )
+    parser.add_argument(
+        "--no-reward-norm",
+        action="store_true",
+        help="Disable VecNormalize reward normalization for debugging",
+    )
+    parser.add_argument(
+        "--no-probabilistic-rewards",
+        action="store_true",
+        help="Disable probabilistic reward shaping for debugging",
+    )
     args = parser.parse_args()
 
     os.makedirs(args.logdir, exist_ok=True)
     os.makedirs(args.model_dir, exist_ok=True)
 
-    base_cfg = EnvConfig()
+    base_cfg = EnvConfig(max_turns=args.max_turns)
+    if args.no_probabilistic_rewards:
+        base_cfg.reward_cfg.use_probabilistic_rewards = False
 
     if args.n_envs == 1:
         env_fns = [make_env(0, 42, base_cfg)]
@@ -54,14 +72,24 @@ def main():
         vec_env = SubprocVecEnv(env_fns)
 
     vec_env = VecMonitor(vec_env, filename=os.path.join(args.logdir, "monitor.csv"))
-    vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)
+    vec_env = VecNormalize(
+        vec_env,
+        norm_obs=True,
+        norm_reward=not args.no_reward_norm,
+        clip_obs=10.0,
+    )
 
     # Build evaluation env with identical wrapper stack (Monitor + VecNormalize) so
     # normalization stats can be synchronized without assertion errors.
     eval_env_raw = DummyVecEnv([make_env(999, 42, base_cfg)])
     eval_env_raw = VecMonitor(eval_env_raw)
+    # For evaluation we typically want raw rewards; keep norm_reward False always
     eval_env = VecNormalize(
-        eval_env_raw, training=False, norm_obs=True, norm_reward=False, clip_obs=10.0
+        eval_env_raw,
+        training=False,
+        norm_obs=True,
+        norm_reward=False,
+        clip_obs=10.0,
     )
 
     model = PPO(

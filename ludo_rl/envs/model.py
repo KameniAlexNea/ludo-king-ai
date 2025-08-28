@@ -35,7 +35,7 @@ class RewardConfig:
     diversity_bonus: float = 0.2  # first time a token leaves home
 
     # Probabilistic reward scaling
-    use_probabilistic_rewards: bool = False
+    use_probabilistic_rewards: bool = True  # Enable for more diverse reward signals
     risk_weight: float = 1.0
     opportunity_weight: float = 0.8
     horizon_turns: int = 3
