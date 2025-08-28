@@ -186,16 +186,21 @@ class FourPlayerPPOTournament:
                     ]
                 )
 
-                # Assign strategies to players
+                # Assign strategies ensuring PPO always sits at RED (index 0)
+                # Find PPO index in randomized order
+                if self.ppo_model in game_players:
+                    ppo_idx = game_players.index(self.ppo_model)
+                    # Swap to front if not already
+                    if ppo_idx != 0:
+                        game_players[0], game_players[ppo_idx] = game_players[ppo_idx], game_players[0]
                 for i, player_name in enumerate(game_players):
                     if player_name == self.ppo_model:
-                        # This is the PPO player
+                        from ludo_rl.envs.model import EnvConfig
                         model_path = f"./models/{player_name}.zip"
-                        strategy = PPOStrategy(model_path, player_name)
+                        # Force agent_color red to match training seat
+                        strategy = PPOStrategy(model_path, player_name, EnvConfig(agent_color='red'))
                     else:
-                        # This is a regular strategy player
                         strategy = StrategyFactory.create_strategy(player_name)
-
                     game.players[i].set_strategy(strategy)
                     game.players[i].strategy_name = player_name
 
