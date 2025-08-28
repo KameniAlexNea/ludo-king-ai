@@ -33,6 +33,12 @@ class RewardConfig:
     blocking_bonus: float = 0.15
     diversity_bonus: float = 0.2  # first time a token leaves home
 
+    # Probabilistic reward scaling
+    use_probabilistic_rewards: bool = False
+    risk_weight: float = 1.0
+    horizon_turns: int = 3
+    discount_lambda: float = 0.85
+
 
 @dataclass
 class ObservationConfig:
