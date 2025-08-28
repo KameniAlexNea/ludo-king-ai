@@ -52,7 +52,8 @@ class LudoGymEnv(gym.Env):
         self.rng = random.Random(self.cfg.seed)
 
         # Sample opponent strategies for this environment instance
-        self.opponent_strategies = self.rng.sample(self.cfg.opponents.candidates, 3)
+        # Don't sample here - wait for reset() to ensure proper seeding
+        self.opponent_strategies = []
 
         # Build core game with fixed 4 players in canonical order (R,G,Y,B) if present
         order = [
@@ -63,25 +64,15 @@ class LudoGymEnv(gym.Env):
         ]
         self.game = LudoGame(order)
 
-        # Attach opponent strategies
+        # Attach opponent strategies (deferred to reset for proper seeding)
         self.agent_color = self.cfg.agent_color
-        for p in self.game.players:
-            if p.color.value != self.agent_color:
-                idx = [c for c in Colors.ALL_COLORS if c != self.agent_color].index(
-                    p.color.value
-                )
-                strat_name = self.opponent_strategies[
-                    idx % len(self.opponent_strategies)
-                ]
-                try:
-                    p.set_strategy(StrategyFactory.create_strategy(strat_name))
-                except Exception:
-                    pass
 
-        # Spaces
-        obs_dim = self.obs_builder._compute_observation_size()
+        # Spaces (will be properly set after objects are created)
         self.observation_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(obs_dim,), dtype=np.float32
+            low=-1.0,
+            high=1.0,
+            shape=(50,),
+            dtype=np.float32,  # Temporary shape
         )
         self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
 
@@ -94,6 +85,13 @@ class LudoGymEnv(gym.Env):
             i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
         }
 
+        # Initialize state variables that reset() expects
+        self._pending_agent_dice = None
+        self._pending_valid_moves = []
+        self._last_progress_sum = 0.0
+
+        # Create utilities in correct dependency order
+        self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
         self.reward_calc = RewardCalculator(self.cfg, self.game, self.agent_color)
         self.opp_simulator = OpponentSimulator(
@@ -103,7 +101,12 @@ class LudoGymEnv(gym.Env):
             self.move_utils._roll_dice,
             self.move_utils._make_strategy_context,
         )
-        self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
+
+        # Now that all objects are created, set the proper observation space
+        obs_dim = self.obs_builder._compute_observation_size()
+        self.observation_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(obs_dim,), dtype=np.float32
+        )
 
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
@@ -169,7 +172,6 @@ class LudoGymEnv(gym.Env):
         if self.done:
             return self.last_obs, 0.0, True, False, {}
 
-        rcfg = self.cfg.reward_cfg
         reward_components: List[float] = []
         agent_player = next(
             p for p in self.game.players if p.color.value == self.agent_color
@@ -244,10 +246,7 @@ class LudoGymEnv(gym.Env):
         truncated = False
 
         if terminal_reward != 0.0:
-            # Apply probabilistic modifier to terminal rewards as well
-            terminal_reward = self.reward_calc.apply_probabilistic_modifier(
-                terminal_reward, move_res if move_res else None
-            )
+            # Terminal rewards should be absolute constants (no probabilistic modification)
             reward_components.append(terminal_reward)
             terminated = True
             total_reward += terminal_reward
