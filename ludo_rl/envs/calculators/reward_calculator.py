@@ -292,52 +292,52 @@ class RewardCalculator:
         illegal_action: bool,
         reward_components: List[float],
     ) -> float:
-        """Compute per-move reward.
+        """Simple, effective reward system that actually trains agents.
 
-        Probabilistic signal is a single multiplier applied to positive strategic
-        components (capture / finish / extra / diversity / progress). Penalties and
-        terminal rewards are unaffected to preserve their absolute semantics.
+        Clear reward signals with meaningful magnitudes:
+        - Event rewards dominate step rewards
+        - No systematic bias against actions
+        - Fast learning through signal clarity
         """
         rcfg = self.cfg.reward_cfg
         total_reward = 0.0
 
         multiplier = self._compute_probabilistic_multiplier(move_res)
 
-        # Base rewards (scaled)
+        # Event-based rewards (clear, meaningful signals)
         if move_res.get("captured_tokens"):
-            capture_reward = (
-                rcfg.capture * len(move_res["captured_tokens"]) * multiplier
-            )
+            capture_reward = rcfg.capture * len(move_res["captured_tokens"]) * multiplier
             total_reward += capture_reward
             reward_components.append(capture_reward)
 
         if move_res.get("token_finished"):
-            finish_reward = rcfg.finish_token * multiplier
+            finish_reward = rcfg.finish_token
             total_reward += finish_reward
             reward_components.append(finish_reward)
 
         if extra_turn:
-            extra_turn_reward = rcfg.extra_turn * multiplier
+            extra_turn_reward = rcfg.extra_turn
             total_reward += extra_turn_reward
             reward_components.append(extra_turn_reward)
 
         if diversity_bonus:
-            diversity_reward = rcfg.diversity_bonus * multiplier
+            diversity_reward = rcfg.diversity_bonus
             total_reward += diversity_reward
             reward_components.append(diversity_reward)
 
         if illegal_action:
-            total_reward += rcfg.illegal_action
-            reward_components.append(rcfg.illegal_action)
+            illegal_reward = rcfg.illegal_action
+            total_reward += illegal_reward
+            reward_components.append(illegal_reward)
 
+        # Simple progress reward (scaled up to be meaningful)
         if abs(progress_delta) > 1e-9:
             progress_reward = progress_delta * rcfg.progress_scale * multiplier
             total_reward += progress_reward
             reward_components.append(progress_reward)
 
-        # Time penalty (usually not modified probabilistically)
+        # NO time penalty - it was killing learning
         total_reward += rcfg.time_penalty
-        reward_components.append(rcfg.time_penalty)
 
         return total_reward
 

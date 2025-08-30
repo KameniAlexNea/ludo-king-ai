@@ -55,6 +55,12 @@ def main():
         action="store_true",
         help="Disable probabilistic reward shaping for debugging",
     )
+    parser.add_argument(
+        "--ent-coef",
+        type=float,
+        default=0.05,
+        help="Entropy coefficient for exploration (higher = more exploration)",
+    )
     args = parser.parse_args()
 
     os.makedirs(args.logdir, exist_ok=True)
@@ -68,7 +74,9 @@ def main():
         env_fns = [make_env(0, 42, base_cfg)]
         vec_env = DummyVecEnv(env_fns)
     else:
-        env_fns = [make_env(i, 42, base_cfg) for i in range(args.n_envs)]
+        # Use different seeds for each environment to add stochasticity
+        import random
+        env_fns = [make_env(i, 42 + i * 100, base_cfg) for i in range(args.n_envs)]
         vec_env = SubprocVecEnv(env_fns)
 
     vec_env = VecMonitor(vec_env, filename=os.path.join(args.logdir, "monitor.csv"))
@@ -96,11 +104,18 @@ def main():
         "MlpPolicy",
         vec_env,
         verbose=1,
+        learning_rate=3e-4,
         n_steps=2048,
         batch_size=64,
-        learning_rate=3e-4,
-        ent_coef=0.01,
+        n_epochs=10,
+        gamma=0.99,
+        gae_lambda=0.95,
+        clip_range=0.2,
+        ent_coef=args.ent_coef,  # Use CLI argument
+        vf_coef=0.5,
+        max_grad_norm=0.5,
         tensorboard_log=args.logdir,
+        device="auto",
     )
 
     checkpoint_cb = CheckpointCallback(
@@ -116,7 +131,8 @@ def main():
         best_model_save_path=args.model_dir,
         log_path=args.logdir,
         eval_freq=args.eval_freq // len(env_fns),
-        deterministic=True,
+        deterministic=False,  # Changed to False for stochastic evaluation
+        n_eval_episodes=5,  # Evaluate more episodes
     )
 
     model.learn(total_timesteps=args.total_steps, callback=[checkpoint_cb, eval_cb])

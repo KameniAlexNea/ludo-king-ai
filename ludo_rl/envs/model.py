@@ -8,34 +8,33 @@ from ludo.constants import Colors
 
 @dataclass
 class RewardConfig:
-    """Reward shaping configuration (scaled for stable RL training).
+    """Simple, effective reward configuration for stable RL training.
 
-    Magnitudes chosen to avoid sparse domination while preserving signal:
-        - Win / lose kept an order of magnitude above per-move signals (10 / -10)
-        - Progress shaping small dense signal encourages forward motion
-        - Capture / finish moderate bonuses; capture symmetrical with loss
-        - Illegal action mildly discouraged (mask should usually prevent it)
+    Clear signal differentiation with meaningful magnitudes:
+        - Event rewards (5-10) >> step rewards (0.05-0.5)
+        - No systematic bias against actions
+        - Fast learning through clear gradients
     """
 
-    # Primary events
-    capture: float = 2.0
-    got_captured: float = -2.5
-    finish_token: float = 5.0
-    win: float = 10.0
-    lose: float = -10.0
+    # Primary events - clear, meaningful signals
+    capture: float = 5.0          # Significant positive for captures
+    got_captured: float = -3.0    # Significant negative for getting captured
+    finish_token: float = 10.0    # Big positive for finishing tokens
+    win: float = 50.0             # Huge positive for winning
+    lose: float = -50.0           # Huge negative for losing
 
-    # Dense shaping (per total normalized progress delta across 4 tokens)
-    progress_scale: float = 0.5
+    # Dense shaping - scaled up to matter
+    progress_scale: float = 5.0   # 10x larger than before
 
-    # Miscellaneous
-    time_penalty: float = -0.001
-    illegal_action: float = -0.05
-    extra_turn: float = 0.3
-    blocking_bonus: float = 0.15
-    diversity_bonus: float = 0.2  # first time a token leaves home
+    # Remove training killers
+    time_penalty: float = 0.0     # REMOVE - was killing learning
+    illegal_action: float = -0.1  # Tiny penalty
+    extra_turn: float = 1.0       # Small bonus
+    blocking_bonus: float = 0.15  # Keep small
+    diversity_bonus: float = 2.0  # Moderate bonus for exploration
 
-    # Probabilistic reward scaling
-    use_probabilistic_rewards: bool = True  # Enable for more diverse reward signals
+    # Disable complex probabilistic system (was preventing learning)
+    use_probabilistic_rewards: bool = False  # Disable for clear signals
     risk_weight: float = 1.0
     opportunity_weight: float = 0.8
     horizon_turns: int = 3

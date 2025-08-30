@@ -232,8 +232,15 @@ class LudoGymEnv(gym.Env):
             illegal_action=illegal,
             reward_components=reward_components,
         )
+        reward_components.append(move_reward)
 
-        total_reward = move_reward
+        # Sum ALL reward components for total reward (including opponent penalties)
+        total_reward = sum(reward_components)
+
+        # Add small random noise to break determinism and encourage exploration
+        import random
+        noise = random.uniform(-0.5, 0.5)  # Increased from -0.1 to -0.5
+        total_reward += noise
 
         # Terminal checks
         opponents = [p for p in self.game.players if p.color.value != self.agent_color]
@@ -243,7 +250,6 @@ class LudoGymEnv(gym.Env):
 
         if terminal_reward != 0.0:
             # Terminal rewards should be absolute constants (no probabilistic modification)
-            reward_components.append(terminal_reward)
             terminated = True
             total_reward += terminal_reward
 

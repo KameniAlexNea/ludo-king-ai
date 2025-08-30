@@ -50,7 +50,12 @@ class OpponentSimulator:
                 ctx = self._make_strategy_context(
                     current_player, dice_value, valid_moves
                 )
-                token_choice = current_player.make_strategic_decision(ctx)
+                # Add randomness to opponent decisions for better training
+                import random
+                if random.random() < 0.1:  # 10% chance of random move
+                    token_choice = random.choice(valid_moves)["token_id"]
+                else:
+                    token_choice = current_player.make_strategic_decision(ctx)
             except Exception:
                 token_choice = valid_moves[0]["token_id"]
             move_res = self.game.execute_move(current_player, token_choice, dice_value)
