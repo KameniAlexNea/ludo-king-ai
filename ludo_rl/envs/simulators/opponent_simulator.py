@@ -52,6 +52,7 @@ class OpponentSimulator:
                 )
                 # Add randomness to opponent decisions for better training
                 import random
+
                 if random.random() < 0.1:  # 10% chance of random move
                     token_choice = random.choice(valid_moves)["token_id"]
                 else:

@@ -75,7 +75,7 @@ def main():
         vec_env = DummyVecEnv(env_fns)
     else:
         # Use different seeds for each environment to add stochasticity
-        import random
+
         env_fns = [make_env(i, 42 + i * 100, base_cfg) for i in range(args.n_envs)]
         vec_env = SubprocVecEnv(env_fns)
 

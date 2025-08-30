@@ -17,24 +17,25 @@ class RewardConfig:
     """
 
     # Primary events - clear, meaningful signals
-    capture: float = 5.0          # Significant positive for captures
-    got_captured: float = -3.0    # Significant negative for getting captured
-    finish_token: float = 10.0    # Big positive for finishing tokens
-    win: float = 50.0             # Huge positive for winning
-    lose: float = -50.0           # Huge negative for losing
+    capture: float = 5.0  # Significant positive for captures
+    got_captured: float = -3.0  # Significant negative for getting captured
+    finish_token: float = 10.0  # Big positive for finishing tokens
+    win: float = 50.0  # Huge positive for winning
+    lose: float = -50.0  # Huge negative for losing
 
     # Dense shaping - scaled up to matter
-    progress_scale: float = 5.0   # 10x larger than before
+    progress_scale: float = 5.0  # 10x larger than before
+
+    # Strategic rewards for smart positioning
+    home_approach_bonus: float = 3.0  # Reward approaching home entry
+    home_progress_bonus: float = 10.0  # Reward progress in home column
+    blocking_bonus: float = 5.0  # Reward for creating/maintaining blocks
+    safety_bonus: float = 8.0  # Reward for moving to safety when threatened
 
     # Remove training killers
-    time_penalty: float = 0.0     # REMOVE - was killing learning
-    illegal_action: float = -0.1  # Tiny penalty
-    extra_turn: float = 1.0       # Small bonus
-    blocking_bonus: float = 0.15  # Keep small
-    diversity_bonus: float = 2.0  # Moderate bonus for exploration
 
     # Disable complex probabilistic system (was preventing learning)
-    use_probabilistic_rewards: bool = False  # Disable for clear signals
+    use_probabilistic_rewards: bool = True  # Disable for clear signals
     risk_weight: float = 1.0
     opportunity_weight: float = 0.8
     horizon_turns: int = 3

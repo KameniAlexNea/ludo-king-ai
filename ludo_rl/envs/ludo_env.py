@@ -239,6 +239,7 @@ class LudoGymEnv(gym.Env):
 
         # Add small random noise to break determinism and encourage exploration
         import random
+
         noise = random.uniform(-0.5, 0.5)  # Increased from -0.1 to -0.5
         total_reward += noise
 
