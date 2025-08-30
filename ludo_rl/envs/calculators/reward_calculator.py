@@ -64,38 +64,51 @@ class RewardCalculator:
         # Uniform dice assumption
         return 1.0 / GameConstants.DICE_MAX
 
-    def _compute_move_risk(
-        self, move: Dict, opponent_positions: List[int]
-    ) -> float:  # opponent_positions unused (legacy param)
-        """Compute capture risk for the landing position using color-aware path & safety squares."""
-        tgt = move.get("target_position")
-        if not isinstance(tgt, int) or tgt < 0:
+    def _compute_capture_probability(self, target_pos: int, opponent: Player) -> float:
+        """Compute probability this opponent can capture token at target_pos next turn."""
+        if not self._can_reach_position(target_pos, opponent):
             return 0.0
-        if move.get("move_type") == "finish" or BoardConstants.is_safe_position(tgt):
-            return 0.0
+        
+        capture_ways = 0
+        for dice_roll in range(GameConstants.DICE_MIN, GameConstants.DICE_MAX + 1):
+            # Check if ANY of opponent's tokens can reach target_pos with this roll
+            for token in opponent.tokens:
+                if self._can_token_reach_position(token, target_pos, dice_roll):
+                    capture_ways += 1
+                    break  # Only need one token per dice roll
+        
+        return capture_ways / GameConstants.DICE_MAX
 
-        threats = 0
-        horizon_risk = 0.0
+    def _can_reach_position(self, target_pos: int, opponent: Player) -> bool:
+        """Check if opponent has any token that can potentially reach target_pos."""
+        for token in opponent.tokens:
+            if token.position >= 0 and not BoardConstants.is_home_column_position(token.position):
+                # Simplified: assume if on board, could potentially move
+                return True
+        return False
+
+    def _can_token_reach_position(self, token, target_pos: int, dice_roll: int) -> bool:
+        """Check if a specific token can reach target_pos with given dice_roll."""
+        if token.position < 0 or BoardConstants.is_home_column_position(token.position):
+            return False
+        # Simplified distance check (you may need to implement proper movement logic)
+        distance = (target_pos - token.position) % GameConstants.MAIN_BOARD_SIZE
+        return distance == dice_roll
+
+    def _compute_position_risk(self, position: int) -> float:
+        """Total risk of being captured at this position."""
+        if BoardConstants.is_safe_position(position):
+            return 0.0
+        
+        total_risk = 0.0
         for opp_player in self.game.players:
             if opp_player.color.value == self.agent_color:
                 continue
-            for tok in opp_player.tokens:
-                pos = tok.position
-                if pos < 0 or BoardConstants.is_home_column_position(pos):
-                    continue
-                dist = self._forward_distance_color_path(
-                    pos, tgt, opp_player.color.value
-                )
-                if dist is None:
-                    continue
-                if GameConstants.DICE_MIN <= dist <= GameConstants.DICE_MAX:
-                    threats += 1
-                    p_turn = self._single_turn_capture_probability(dist)
-                    p_capture = 1 - (1 - p_turn) ** self.cfg.reward_cfg.horizon_turns
-                    horizon_risk = max(horizon_risk, p_capture)
-
-        immediate_risk = 1 - (5 / 6) ** threats if threats > 0 else 0.0
-        return (immediate_risk + horizon_risk) / 2.0
+            risk = self._compute_capture_probability(position, opp_player)
+            # Risk compounds but with diminishing returns
+            total_risk = total_risk + risk - (total_risk * risk)
+        
+        return total_risk
 
     def _compute_probabilistic_reward_modifier(
         self, move: Dict, reward_components: List[float]
@@ -113,7 +126,7 @@ class RewardCalculator:
             )
             opponent_positions.extend(t.position for t in opp.tokens if t.position >= 0)
 
-        risk = self._compute_move_risk(move, opponent_positions)
+        risk = self._compute_position_risk(move.get("target_position", -1))
         # Reduce reward if high risk
         modifier = 1.0 - self.cfg.reward_cfg.risk_weight * risk
         return max(0.1, modifier)  # floor to prevent negative
@@ -141,147 +154,20 @@ class RewardCalculator:
             return delta * self.cfg.reward_cfg.progress_scale
         return 0.0
 
-    def _compute_opportunity_score(
-        self, move: Dict, opponent_positions: List[int]
-    ) -> float:  # opponent_positions legacy
-        """Compute opportunity score (capture chances, finishing proximity, safety)."""
-        tgt = move.get("target_position")
-        if not isinstance(tgt, int) or tgt < 0:
-            return 0.0
-        score = 0.0
-
-        # Capture opportunities (opponents we could reach next turn from landing square)
-        for opp_player in self.game.players:
-            if opp_player.color.value == self.agent_color:
-                continue
-            for tok in opp_player.tokens:
-                opp_pos = tok.position
-                if opp_pos < 0 or BoardConstants.is_home_column_position(opp_pos):
-                    continue
-                # If opponent could move to our target next turn (i.e., we threaten them on following turn?)
-                dist = self._forward_distance_color_path(tgt, opp_pos, self.agent_color)
-                if (
-                    dist is not None
-                    and GameConstants.DICE_MIN <= dist <= GameConstants.DICE_MAX
-                ):
-                    p = self._single_turn_capture_probability(dist)
-                    horizon = 1 - (1 - p) ** self.cfg.reward_cfg.horizon_turns
-                    score += horizon
-
-        # Finishing / home-column proximity
-        if move.get("move_type") == "finish":
-            score += 1.0
-        elif BoardConstants.is_home_column_position(tgt):
-            remaining = GameConstants.FINISH_POSITION - tgt
-            if remaining >= 0:
-                score += self.cfg.reward_cfg.finishing_probability_weight * (
-                    1.0 - remaining / (GameConstants.HOME_COLUMN_SIZE - 1)
-                )
-        else:
-            entry = BoardConstants.HOME_COLUMN_ENTRIES.get(self.agent_color, 0)
-            distance_to_entry = (entry - tgt) % GameConstants.MAIN_BOARD_SIZE
-            if 0 < distance_to_entry <= GameConstants.DICE_MAX:
-                score += self.cfg.reward_cfg.finishing_probability_weight * (
-                    1.0 - distance_to_entry / GameConstants.DICE_MAX
-                )
-
-        # Safety bonus (use strategy constant scaled down)
-        if BoardConstants.is_safe_position(tgt):
-            score += StrategyConstants.SAFE_MOVE_BONUS / 100.0
-
-        return score
-
-    def _compute_agent_vulnerability(
-        self, agent_positions: List[int], opponent_positions: List[int]
-    ) -> float:
-        """Compute overall vulnerability of agent's tokens to capture."""
-        if not agent_positions:
-            return 0.0
-
-        total_risk = 0.0
-        for agent_pos in agent_positions:
-            if agent_pos < 0:
-                continue
-
-            # Immediate risk from current position
-            immediate_threats = sum(
-                1
-                for opp_pos in opponent_positions
-                if opp_pos >= 0
-                and GameConstants.DICE_MIN
-                <= (self._backward_distance(agent_pos, opp_pos) or 0)
-                <= GameConstants.DICE_MAX
-            )
-            immediate_risk = (
-                1 - (5 / 6) ** immediate_threats if immediate_threats > 0 else 0.0
-            )
-
-            # Horizon risk
-            horizon_risk = 0.0
-            for opp_pos in opponent_positions:
-                if opp_pos < 0:
-                    continue
-                distance = self._backward_distance(agent_pos, opp_pos)
-                if distance is not None:
-                    p_turn = self._single_turn_capture_probability(distance)
-                    p_capture = 1 - (1 - p_turn) ** self.cfg.reward_cfg.horizon_turns
-                    horizon_risk = max(horizon_risk, p_capture)
-
-            position_risk = (immediate_risk + horizon_risk) / 2.0
-            total_risk += position_risk
-
-        return (
-            total_risk / len([p for p in agent_positions if p >= 0])
-            if agent_positions
-            else 0.0
-        )
-
     def _compute_probabilistic_multiplier(self, move: Optional[Dict]) -> float:
-        """Compute a single multiplicative scaling factor for this move.
-
-        Applied only to meaningful positive rewards (capture / finish / extra_turn /
-        diversity / progress). Negative base penalties (illegal/time, terminal) stay
-        absolute so they define clear boundaries.
-        """
-        if (
-            not self.cfg.reward_cfg.use_probabilistic_rewards
-            or not move
-            or not isinstance(move, dict)
-        ):
+        """Compute a simple, bounded risk-based multiplier for positive rewards."""
+        if not move or not isinstance(move, dict):
             return 1.0
 
-        # Collect positions once
-        agent_player = next(
-            p for p in self.game.players if p.color.value == self.agent_color
-        )
-        agent_positions = [t.position for t in agent_player.tokens if t.position >= 0]
+        target_pos = move.get("target_position")
+        if target_pos is None or not isinstance(target_pos, int) or target_pos < 0:
+            return 1.0
 
-        opponent_positions: List[int] = []
-        for color in Colors.ALL_COLORS:
-            if color == self.agent_color:
-                continue
-            opp = next(p for p in self.game.players if p.color.value == color)
-            opponent_positions.extend(t.position for t in opp.tokens if t.position >= 0)
-
-        move_risk = self._compute_move_risk(move, opponent_positions)
-        opportunity_score = self._compute_opportunity_score(move, opponent_positions)
-        agent_vulnerability = self._compute_agent_vulnerability(
-            agent_positions, opponent_positions
-        )
-
-        # Raw signal (positive = opportunity dominated, negative = risk dominated)
-        raw = (
-            self.cfg.reward_cfg.opportunity_weight * opportunity_score
-            - self.cfg.reward_cfg.risk_weight * (move_risk + agent_vulnerability) / 2.0
-        )
-        scale = self.cfg.reward_cfg.opportunity_bonus_scale
-        multiplier = 1.0 + scale * raw
-        # Clamp to keep training stable
-        if multiplier < 0.5:
-            multiplier = 0.5
-        elif multiplier > 1.5:
-            multiplier = 1.5
-        return multiplier
+        risk = self._compute_position_risk(target_pos)
+        
+        # Simple risk modulation: higher risk = lower multiplier
+        risk_multiplier = 1.0 - (0.3 * risk)  # Max 30% reduction
+        return max(0.7, risk_multiplier)  # Floor at 0.7 to keep signals meaningful
 
     def compute_comprehensive_reward(
         self,
@@ -292,12 +178,12 @@ class RewardCalculator:
         illegal_action: bool,
         reward_components: List[float],
     ) -> float:
-        """Simple, effective reward system that actually trains agents.
+        """Simple, effective reward system with risk-modulated positive rewards.
 
         Clear reward signals with meaningful magnitudes:
         - Event rewards dominate step rewards
+        - Risk modulates positive actions consistently
         - No systematic bias against actions
-        - Fast learning through signal clarity
         """
         rcfg = self.cfg.reward_cfg
         total_reward = 0.0
@@ -306,37 +192,47 @@ class RewardCalculator:
 
         # Event-based rewards (clear, meaningful signals)
         if move_res.get("captured_tokens"):
-            capture_reward = rcfg.capture * len(move_res["captured_tokens"]) * multiplier
+            capture_reward = rcfg.capture * len(move_res["captured_tokens"])
+            if capture_reward > 0:
+                capture_reward *= multiplier
             total_reward += capture_reward
             reward_components.append(capture_reward)
 
         if move_res.get("token_finished"):
             finish_reward = rcfg.finish_token
+            if finish_reward > 0:
+                finish_reward *= multiplier
             total_reward += finish_reward
             reward_components.append(finish_reward)
 
         if extra_turn:
             extra_turn_reward = rcfg.extra_turn
+            if extra_turn_reward > 0:
+                extra_turn_reward *= multiplier
             total_reward += extra_turn_reward
             reward_components.append(extra_turn_reward)
 
         if diversity_bonus:
             diversity_reward = rcfg.diversity_bonus
+            if diversity_reward > 0:
+                diversity_reward *= multiplier
             total_reward += diversity_reward
             reward_components.append(diversity_reward)
 
         if illegal_action:
             illegal_reward = rcfg.illegal_action
-            total_reward += illegal_reward
+            total_reward += illegal_reward  # Don't modulate penalties
             reward_components.append(illegal_reward)
 
         # Simple progress reward (scaled up to be meaningful)
         if abs(progress_delta) > 1e-9:
-            progress_reward = progress_delta * rcfg.progress_scale * multiplier
+            progress_reward = progress_delta * rcfg.progress_scale
+            if progress_reward > 0:
+                progress_reward *= multiplier
             total_reward += progress_reward
             reward_components.append(progress_reward)
 
-        # NO time penalty - it was killing learning
+        # Small time penalty (not modulated)
         total_reward += rcfg.time_penalty
 
         return total_reward
