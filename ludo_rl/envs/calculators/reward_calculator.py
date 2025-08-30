@@ -203,7 +203,7 @@ class RewardCalculator:
         """Check if token can legally move to target_pos with dice_roll."""
         if token.position < 0:
             # Token in home - can only exit with 6
-            player_color = token.player.color.value  # Fix attribute access
+            player_color = token.player_color  # Fix attribute access
             start_pos = BoardConstants.START_POSITIONS.get(player_color, 0)
             return dice_roll == 6 and target_pos == start_pos
 
@@ -217,7 +217,7 @@ class RewardCalculator:
 
         # Token on main board - calculate required roll
         required_roll = self._calculate_required_roll(
-            token.position, target_pos, token.player.color.value
+            token.position, target_pos, token.player_color
         )
         return required_roll == dice_roll
 

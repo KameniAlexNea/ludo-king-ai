@@ -8,40 +8,35 @@ from ludo.constants import Colors
 
 @dataclass
 class RewardConfig:
-    """Simple, effective reward configuration for stable RL training.
+    """Balanced reward configuration for strategic Ludo play."""
 
-    Clear signal differentiation with meaningful magnitudes:
-        - Event rewards (5-10) >> step rewards (0.05-0.5)
-        - No systematic bias against actions
-        - Fast learning through clear gradients
-    """
+    # Major events (highest priority - should dominate)
+    win: float = 50.0  # Game victory
+    lose: float = -50.0  # Game loss
+    finish_token: float = 15.0  # Finishing tokens (very important)
+    capture: float = 8.0  # Capturing opponents (important)
+    got_captured: float = -5.0  # Getting captured (bad but recoverable)
 
-    # Primary events - clear, meaningful signals
-    capture: float = 5.0  # Significant positive for captures
-    got_captured: float = -3.0  # Significant negative for getting captured
-    finish_token: float = 10.0  # Big positive for finishing tokens
-    win: float = 50.0  # Huge positive for winning
-    lose: float = -50.0  # Huge negative for losing
+    # Action rewards (moderate priority)
+    extra_turn: float = 3.0  # Rolling a 6 (useful)
 
-    # Dense shaping - scaled up to matter
-    progress_scale: float = 5.0  # 10x larger than before
+    # Strategic positioning (should encourage good play but not dominate)
+    home_progress_bonus: float = 4.0  # Progress in home stretch
+    blocking_bonus: float = 2.0  # Creating blocks
+    safety_bonus: float = 3.0  # Escaping danger
+    home_approach_bonus: float = 1.0  # Approaching home entry
 
-    # Strategic rewards for smart positioning
-    home_approach_bonus: float = 3.0  # Reward approaching home entry
-    home_progress_bonus: float = 10.0  # Reward progress in home column
-    blocking_bonus: float = 5.0  # Reward for creating/maintaining blocks
-    safety_bonus: float = 8.0  # Reward for moving to safety when threatened
+    # Small continuous signals (should barely register)
+    progress_scale: float = 0.5  # General progress (minimal)
+    diversity_bonus: float = 0.5  # Token diversity (minimal)
 
-    # Remove training killers
+    # Penalties (should be clear boundaries)
+    illegal_action: float = -10.0  # Invalid moves (strong negative)
+    time_penalty: float = -0.01  # Efficiency (tiny)
 
-    # Disable complex probabilistic system (was preventing learning)
-    use_probabilistic_rewards: bool = True  # Disable for clear signals
-    risk_weight: float = 1.0
-    opportunity_weight: float = 0.8
-    horizon_turns: int = 3
-    discount_lambda: float = 0.85
-    opportunity_bonus_scale: float = 0.3
-    finishing_probability_weight: float = 0.6
+    # Risk modulation (if you want it)
+    use_probabilistic_rewards: bool = False  # Start simple, add complexity later
+    risk_weight: float = 0.3  # Conservative if enabled
 
 
 @dataclass
