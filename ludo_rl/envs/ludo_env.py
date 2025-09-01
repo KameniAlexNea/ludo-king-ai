@@ -35,7 +35,11 @@ from ludo.player import PlayerColor
 from ludo.strategy import StrategyFactory
 
 from .builders.observation_builder import ObservationBuilder
-from .calculators.reward_calculator import RewardCalculator
+
+# from .calculators.reward_calculator import RewardCalculator
+from .calculators.simple_reward_calculator import (
+    SimpleRewardCalculator as RewardCalculator,
+)
 from .model import EnvConfig
 from .simulators.opponent_simulator import OpponentSimulator
 from .utils.move_utils import MoveUtils

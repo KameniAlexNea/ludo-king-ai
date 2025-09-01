@@ -26,7 +26,6 @@ class SimpleRewardConstants:
     HOME_COLUMN_MULTIPLIER = 2.0  # Bonus for home column progress
 
 
-
 @dataclass
 class RewardConfig:
     """Balanced reward configuration for strategic Ludo play."""

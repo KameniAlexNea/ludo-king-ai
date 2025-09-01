@@ -11,9 +11,8 @@ from ludo.game import LudoGame
 from ludo.player import Player
 from ludo.token import Token
 
-from ..model import SimpleRewardConstants as RewardConstants
 from ..model import EnvConfig
-
+from ..model import SimpleRewardConstants as RewardConstants
 
 
 class SimpleRewardCalculator:
@@ -24,7 +23,9 @@ class SimpleRewardCalculator:
         self.game = game
         self.agent_color = agent_color
 
-    def _get_token_progress(self, token: Token, position: Optional[int] = None) -> float:
+    def _get_token_progress(
+        self, token: Token, position: Optional[int] = None
+    ) -> float:
         """Calculate a token's normalized progress towards its finish line (0.0 to 1.0).
 
         Args:
@@ -39,7 +40,9 @@ class SimpleRewardCalculator:
             return 0.0
 
         # Total number of spaces a token must travel from home to finish
-        total_path_length = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+        total_path_length = (
+            GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+        )
 
         # Calculate steps from start to current position
         player_start_pos = BoardConstants.START_POSITIONS.get(token.player_color)
@@ -56,7 +59,9 @@ class SimpleRewardCalculator:
                 current_steps = (GameConstants.MAIN_BOARD_SIZE - player_start_pos) + pos
         else:
             # In home column
-            current_steps = (GameConstants.MAIN_BOARD_SIZE + (pos - GameConstants.HOME_COLUMN_START))
+            current_steps = GameConstants.MAIN_BOARD_SIZE + (
+                pos - GameConstants.HOME_COLUMN_START
+            )
 
         return min(current_steps / total_path_length, 1.0)
 
@@ -96,17 +101,28 @@ class SimpleRewardCalculator:
         captured_tokens = move_res.get("captured_tokens", [])
         return len(captured_tokens) * RewardConstants.CAPTURE_REWARD
 
-    def _compute_got_captured_penalty(self, move_res: Dict, token_positions_before: Optional[List[int]] = None) -> float:
+    def _compute_got_captured_penalty(
+        self, move_res: Dict, token_positions_before: Optional[List[int]] = None
+    ) -> float:
         """Simple capture penalty."""
         if token_positions_before is not None:
             # Count tokens that were captured
-            current_positions = [token.position for token in self.game.players[0].tokens]  # Simplified
-            captured_count = sum(1 for before, current in zip(token_positions_before, current_positions)
-                               if before >= 0 and current < 0)
+            current_positions = [
+                token.position for token in self.game.players[0].tokens
+            ]  # Simplified
+            captured_count = sum(
+                1
+                for before, current in zip(token_positions_before, current_positions)
+                if before >= 0 and current < 0
+            )
             return captured_count * RewardConstants.GOT_CAPTURED_PENALTY
         else:
             # Fallback
-            return RewardConstants.GOT_CAPTURED_PENALTY if move_res.get("was_captured") else 0.0
+            return (
+                RewardConstants.GOT_CAPTURED_PENALTY
+                if move_res.get("was_captured")
+                else 0.0
+            )
 
     def compute_comprehensive_reward(
         self,
@@ -126,7 +142,9 @@ class SimpleRewardCalculator:
         total_reward += capture_reward
         reward_components.append(capture_reward)
 
-        got_captured_penalty = self._compute_got_captured_penalty(move_res, token_positions_before)
+        got_captured_penalty = self._compute_got_captured_penalty(
+            move_res, token_positions_before
+        )
         total_reward += got_captured_penalty
         reward_components.append(got_captured_penalty)
 
@@ -158,7 +176,9 @@ class SimpleRewardCalculator:
 
         return total_reward
 
-    def get_terminal_reward(self, agent_player: Player, opponents: list[Player]) -> float:
+    def get_terminal_reward(
+        self, agent_player: Player, opponents: list[Player]
+    ) -> float:
         """Simple terminal rewards."""
         if agent_player.has_won():
             return RewardConstants.WIN_REWARD

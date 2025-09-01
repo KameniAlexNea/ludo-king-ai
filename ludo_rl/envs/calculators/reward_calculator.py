@@ -5,10 +5,8 @@ from typing import Dict, List, Optional
 from ludo.constants import BoardConstants, GameConstants
 from ludo.game import LudoGame
 from ludo.player import Player
-from ludo.token import Token
 
 from ..model import EnvConfig
-
 from .probabilistic_calculator import ProbabilisticCalculator
 
 
@@ -58,7 +56,9 @@ class RewardCalculator:
             and BoardConstants.is_safe_position(target_pos)
         ):
             source_risk = (
-                self.prob_calc._compute_position_risk(source_pos) if source_pos >= 0 else 0.0
+                self.prob_calc._compute_position_risk(source_pos)
+                if source_pos >= 0
+                else 0.0
             )
             if source_risk > 0.3:  # Only if there was significant risk
                 return self.cfg.reward_cfg.safety_bonus * source_risk
