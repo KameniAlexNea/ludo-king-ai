@@ -377,21 +377,6 @@ class SimpleRewardCalculator:
 
         return base_reward + progress_bonus
 
-    def compute_progress_reward(
-        self, progress_before: float, progress_after: float
-    ) -> float:
-        """Compute progress-based reward with non-linear scaling."""
-        delta = progress_after - progress_before
-        if abs(delta) < RewardConstants.PROGRESS_SIGNIFICANT_THRESHOLD:  # Only significant progress
-            return 0.0
-
-        # Non-linear scaling: more reward for larger progress steps
-        scaled_delta = delta * (RewardConstants.SAFETY_MULTIPLIER_BASE + abs(delta) * RewardConstants.PROGRESS_REWARD_QUADRATIC_SCALE)  # Quadratic scaling
-        reward = scaled_delta * self.cfg.reward_cfg.progress_scale
-
-        # Cap extreme values
-        return max(RewardConstants.PROGRESS_REWARD_CAP_MIN, min(RewardConstants.PROGRESS_REWARD_CAP_MAX, reward))
-
     def compute_comprehensive_reward(
         self,
         move_res: Dict,
@@ -472,12 +457,6 @@ class SimpleRewardCalculator:
         if illegal_action:
             total_reward += rcfg.illegal_action  # Don't modulate penalties
             reward_components.append(rcfg.illegal_action)  # illegal
-
-        # Progress reward
-        if abs(progress_delta) > RewardConstants.PROGRESS_SIGNIFICANT_THRESHOLD:
-            progress_reward = self.compute_progress_reward(0.0, progress_delta)
-            total_reward += progress_reward
-            reward_components.append(progress_reward)  # progress
 
         # Time penalty (very small, just to encourage efficiency)
         total_reward += rcfg.time_penalty
