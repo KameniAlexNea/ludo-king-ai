@@ -27,8 +27,8 @@ class RewardConfig:
     home_approach_bonus: float = 1.0  # Approaching home entry
 
     # Small continuous signals (should barely register)
-    progress_scale: float = 0.5  # General progress (minimal)
-    diversity_bonus: float = 0.5  # Token diversity (minimal)
+    progress_scale: float = 0.1  # General progress (minimal)
+    diversity_bonus: float = 0.3  # Token diversity (minimal)
 
     # Penalties (should be clear boundaries)
     illegal_action: float = -10.0  # Invalid moves (strong negative)
