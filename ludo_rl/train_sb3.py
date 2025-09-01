@@ -104,7 +104,7 @@ def main():
         "MlpPolicy",
         vec_env,
         verbose=1,
-        learning_rate=3e-4,
+        learning_rate=0.001,  # Increased from 0.0003 for faster learning
         n_steps=2048,
         batch_size=64,
         n_epochs=10,

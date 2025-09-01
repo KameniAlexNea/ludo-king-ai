@@ -197,6 +197,8 @@ class LudoGymEnv(gym.Env):
 
         if not no_moves_available:
             valid_token_ids = [m["token_id"] for m in valid_moves]
+            # Convert action to int in case it's a numpy array
+            action = int(action)
             if action not in valid_token_ids:
                 illegal = True
                 # choose fallback (first valid) for execution so environment state advances
@@ -240,12 +242,6 @@ class LudoGymEnv(gym.Env):
 
         # Sum ALL reward components for total reward (including opponent penalties)
         total_reward = sum(reward_components)
-
-        # Add small random noise to break determinism and encourage exploration
-        import random
-
-        noise = random.uniform(-0.5, 0.5)  # Increased from -0.1 to -0.5
-        total_reward += noise
 
         # Terminal checks
         opponents = [p for p in self.game.players if p.color.value != self.agent_color]

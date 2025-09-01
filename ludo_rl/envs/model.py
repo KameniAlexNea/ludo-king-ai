@@ -11,15 +11,15 @@ class SimpleRewardConstants:
     """Minimal constants for reward calculations - let the agent learn strategy."""
 
     # Core rewards (let agent learn when these matter)
-    TOKEN_PROGRESS_REWARD = 0.1  # Small reward per step forward
-    CAPTURE_REWARD = 5.0  # Fixed capture reward
-    GOT_CAPTURED_PENALTY = -3.0  # Fixed capture penalty
-    EXTRA_TURN_BONUS = 1.0  # Small bonus for rolling 6
-    SAFE_POSITION_BONUS = 0.5  # Small bonus for safe positions
+    TOKEN_PROGRESS_REWARD = 1.0  # Increased from 0.1 for stronger learning signal
+    CAPTURE_REWARD = 10.0  # Increased from 5.0
+    GOT_CAPTURED_PENALTY = -6.0  # Increased from -3.0
+    EXTRA_TURN_BONUS = 2.0  # Increased from 1.0
+    SAFE_POSITION_BONUS = 1.0  # Increased from 0.5
 
     # Terminal rewards
-    WIN_REWARD = 100.0
-    LOSS_PENALTY = -100.0
+    WIN_REWARD = 200.0  # Increased from 100.0
+    LOSS_PENALTY = -200.0  # Increased from -100.0
 
     # Minimal scaling (avoid over-engineering)
     PROGRESS_NONLINEARITY = 1.2  # Slight non-linearity for progress
