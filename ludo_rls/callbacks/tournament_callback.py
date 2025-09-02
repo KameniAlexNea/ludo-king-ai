@@ -130,7 +130,7 @@ class SelfPlayTournamentCallback(BaseCallback):
             for _ in range(games_per_seat):
                 env = self.make_env_fn([b for b in self.baselines if b])
                 obs, _ = env.reset()
-                done = False
+                # done = False
                 turns = 0
                 # Force PPO seat color if env supports agent_color attribute
                 if hasattr(env, "agent_color"):
@@ -147,7 +147,9 @@ class SelfPlayTournamentCallback(BaseCallback):
                         action = _soft_action_select(policy, obs, mask)
                     else:
                         # Let scripted strategy handle its own move (baseline env)
-                        action = env.game.get_current_player().strategy.select_action(None)  # type: ignore
+                        action = env.game.get_current_player().strategy.select_action(
+                            None
+                        )  # type: ignore
                     obs, reward, terminated, truncated, info = env.step(action)
                     turns += 1
                     if info.get("step_breakdown"):
