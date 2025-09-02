@@ -16,7 +16,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
 from .envs.ludo_env import EnvConfig, LudoGymEnv

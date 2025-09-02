@@ -1,29 +1,19 @@
-"""Gymnasium environment wrapping core Ludo engine.
+"""Self-play Ludo environment (shared single policy controlling all 4 players).
 
-Design goals:
-- Thin adapter over existing game logic (`ludo.game.LudoGame`, strategies)
-- Clean observation builder with extensible features
-- Configurable reward shaping (modular components)
-- Deterministic seeding & reproducibility
-- Support vectorization (Stable-Baselines3 / RLlib)
-- Compatible with Gymnasium API (reset(seed=...), step returning (obs, reward, terminated, truncated, info))
+Semantics Option A (sequential turns):
+Each env.step() represents exactly one player decision (possibly followed by extra chained decisions via repeated steps if six rolled, etc.).
+The acting player's color is stored in `agent_color` and changes automatically when turn advances.
+All four players share one policy (PPO) and are exposed to the learner uniformly in board order (R -> G -> Y -> B -> ...).
 
-Self-play implementation:
-- All 4 players are controlled by the same PPO model
-- Agent position is randomized each episode to learn all perspectives
-- Self-play simulator handles other players' turns using the same model
-- No external strategies used - pure self-play
+Observation (per current player perspective) includes:
+    - Current player's 4 token normalized positions
+    - Other 3 players' token positions (12)
+    - Finished token fractions per player (4)
+    - Finish-possible flag, normalized dice value, progress stats etc. (remaining scalars)
 
-Observation vector (default v0 schema):
-    [ agent_token_positions(4), agent_token_states(4 one-hot aggregated -> active/home/home_column/finished counts),
-      opponents_token_positions(3*4), finished_tokens_per_player(4), dice_value/6, can_any_finish, progress_fraction_agent,
-      opponent_mean_progress, turn_relative_position_indicator ]
+Action space: Discrete(4) selecting which of the current player's tokens to move; invalid choices incur penalty and fallback to first valid.
 
-All numeric continuous features are scaled into [-1, 1] or [0,1] then shifted.
-
-Action space: Discrete(4) choose token index. Invalid selections resolved to NOOP with penalty.
-
-Future extensions: maskable action space, multi-agent self-play environment.
+Rewards: Shaped per move for current acting player only. Terminal reward granted when that player wins (or loses relative to others finishing first).
 """
 
 from __future__ import annotations
@@ -35,10 +25,9 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from ludo.constants import Colors, GameConstants
+from ludo.constants import GameConstants
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
-from ludo.strategy import StrategyFactory
 
 from .builders.observation_builder import ObservationBuilder
 
@@ -47,12 +36,11 @@ from .calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )
 from .model import EnvConfig
-from .simulators.self_play_simulator import SelfPlaySimulator
 from .utils.move_utils import MoveUtils
 
 
 class LudoGymEnv(gym.Env):
-    metadata = {"render_modes": ["human"], "name": "LudoGymEnv-v0"}
+    metadata = {"render_modes": ["human"], "name": "LudoSelfPlayEnv-v1"}
 
     def __init__(
         self, config: Optional[EnvConfig] = None, model: Optional[Any] = None
@@ -62,7 +50,7 @@ class LudoGymEnv(gym.Env):
         self.rng = random.Random(self.cfg.seed)
         self.model = model
 
-        # Build core game with fixed 4 players in canonical order (R,G,Y,B) if present
+        # Build core game with fixed 4 players in canonical order (R,G,Y,B)
         order = [
             PlayerColor.RED,
             PlayerColor.GREEN,
@@ -70,9 +58,8 @@ class LudoGymEnv(gym.Env):
             PlayerColor.BLUE,
         ]
         self.game = LudoGame(order)
-
-        # Attach opponent strategies (deferred to reset for proper seeding)
-        self.agent_color = self.cfg.agent_color
+        # Current acting player perspective (no randomness now)
+        self.agent_color = self.game.get_current_player().color.value
 
         # Spaces (will be properly set after objects are created)
         self.observation_space = spaces.Box(
@@ -101,14 +88,7 @@ class LudoGymEnv(gym.Env):
         self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
         self.reward_calc = RewardCalculator(self.cfg, self.game, self.agent_color)
-        self.self_play_simulator = SelfPlaySimulator(
-            self.cfg,
-            self.game,
-            self.agent_color,
-            self.move_utils._roll_dice,
-            self.move_utils._make_strategy_context,
-            self.model,
-        )
+        # No separate simulator – each env.step corresponds to exactly one player decision.
 
         # Now that all objects are created, set the proper observation space
         obs_dim = self.obs_builder._compute_observation_size()
@@ -124,9 +104,7 @@ class LudoGymEnv(gym.Env):
             self.cfg.seed = seed
             self.rng.seed(seed)
             random.seed(seed)
-        # Randomize agent color for self-play learning all positions
-        self.agent_color = self.rng.choice(list(Colors.ALL_COLORS))
-        # Recreate game for clean state
+        # Recreate game for clean state (fixed order)
         order = [
             PlayerColor.RED,
             PlayerColor.GREEN,
@@ -134,25 +112,14 @@ class LudoGymEnv(gym.Env):
             PlayerColor.BLUE,
         ]
         self.game = LudoGame(order)
-        # IMPORTANT: Rebuild helper objects so they reference the new game instance.
-        # Previously these held stale pointers to the game created during __init__, causing
-        # observations/rewards/opponent simulation to operate on an out-of-date game state
-        # after each reset. This manifested as features like can_finish never updating when
-        # tests mutated token positions post-reset (obs_builder still saw old tokens at home).
+        # Set current player perspective deterministically
+        self.agent_color = self.game.get_current_player().color.value
+        # Rebuild helper objects references
         self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
-        self.obs_builder.game = (
-            self.game
-        )  # safe to reuse builder instance but update pointer
+        self.obs_builder.game = self.game
+        self.obs_builder.agent_color = self.agent_color
         self.reward_calc.game = self.game
-        # Recreate self-play simulator because it closes over move_utils methods
-        self.self_play_simulator = SelfPlaySimulator(
-            self.cfg,
-            self.game,
-            self.agent_color,
-            self.move_utils._roll_dice,
-            self.move_utils._make_strategy_context,
-            self.model,
-        )
+        self.reward_calc.agent_color = self.agent_color
         self.turns = 0
         self.episode_steps = 0
         self.done = False
@@ -163,16 +130,13 @@ class LudoGymEnv(gym.Env):
         self._pending_valid_moves = []
         self._last_progress_sum = self.move_utils._compute_agent_progress_sum()
 
-        # Advance until it's agent's turn (initial current_player_index is 0 so usually unnecessary)
-        self.self_play_simulator._ensure_agent_turn()
-        # Roll initial dice for agent decision
+        # Roll initial dice for first player's decision
         self._pending_agent_dice, self._pending_valid_moves = (
             self.move_utils._roll_new_agent_dice()
         )
         obs = self.obs_builder._build_observation(self.turns, self._pending_agent_dice)
         self.last_obs = obs
-        info = {}
-        return obs, info
+        return obs, {}
 
     def step(self, action: int):  # type: ignore[override]
         """Advance environment by one agent decision (one dice roll).
@@ -234,11 +198,14 @@ class LudoGymEnv(gym.Env):
             # No valid moves: treat as skipped turn (no illegal penalty)
             extra_turn = False
 
-        # Opponent simulation if no extra turn and game not over
+        # Advance to next player if no extra turn
         if not extra_turn and not self.game.game_over:
-            # Advance turn for agent (dice consumed)
             self.game.next_turn()
-            self.self_play_simulator._simulate_other_players(reward_components)
+            self.agent_color = self.game.get_current_player().color.value
+            # Sync utility perspectives
+            self.move_utils.agent_color = self.agent_color
+            self.obs_builder.agent_color = self.agent_color
+            self.reward_calc.agent_color = self.agent_color
 
         # Progress shaping (after agent + opponents if any)
         progress_after = self.move_utils._compute_agent_progress_sum()
@@ -273,7 +240,7 @@ class LudoGymEnv(gym.Env):
         if self.turns >= self.cfg.max_turns and not terminated:
             truncated = True
 
-        # Prepare next agent dice if continuing (extra turn) and not done
+        # Prepare next dice for the (possibly same or next) player if continuing
         if not terminated and not truncated and not self.game.game_over:
             if extra_turn:
                 # Agent retained turn, just roll new dice
@@ -281,12 +248,9 @@ class LudoGymEnv(gym.Env):
                     self.move_utils._roll_new_agent_dice()
                 )
             else:
-                # Ensure pointer back to agent then roll
-                self.self_play_simulator._ensure_agent_turn()
-                if not self.game.game_over:
-                    self._pending_agent_dice, self._pending_valid_moves = (
-                        self.move_utils._roll_new_agent_dice()
-                    )
+                self._pending_agent_dice, self._pending_valid_moves = (
+                    self.move_utils._roll_new_agent_dice()
+                )
 
         obs = self.obs_builder._build_observation(self.turns, self._pending_agent_dice)
         self.last_obs = obs
@@ -306,9 +270,8 @@ class LudoGymEnv(gym.Env):
         print(f"Turn {self.turns} agent_color={self.agent_color}")
 
     def set_model(self, model: Any):
+        # Placeholder for compatibility; model usage external in training loop.
         self.model = model
-        # Update the self-play simulator with the new model
-        self.self_play_simulator.model = model
 
     def close(self):
         pass
