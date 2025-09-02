@@ -177,9 +177,12 @@ class LudoGymEnv(gym.Env):
             # Convert action to int in case it's a numpy array
             action = int(action)
             if action not in valid_token_ids:
-                illegal = True
-                # choose fallback (first valid) for execution so environment state advances
-                exec_token_id = valid_token_ids[0]
+                if self.cfg.use_action_mask:
+                    # Auto-correct silently (no illegal penalty) when mask enabled
+                    exec_token_id = valid_token_ids[0]
+                else:
+                    illegal = True
+                    exec_token_id = valid_token_ids[0]
             else:
                 exec_token_id = action
             # Capture start position for progress calculation inside reward_calc

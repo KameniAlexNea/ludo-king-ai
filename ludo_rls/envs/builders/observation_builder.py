@@ -26,6 +26,8 @@ class ObservationBuilder:
         base += 12
         # finished tokens per player (4)
         base += 4
+        # current player color one-hot (4)
+        base += 4
         # scalar flags / stats:
         # can_finish, dice_norm, agent_finished_fraction, opp_mean_finished_fraction, agent_mean_token_progress
         base += 5
@@ -72,6 +74,9 @@ class ObservationBuilder:
         for color in Colors.ALL_COLORS:
             pl = players_by_color[color]
             vec.append(pl.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER)
+        # player color one-hot in fixed order R,G,Y,B
+        for color in Colors.ALL_COLORS:
+            vec.append(1.0 if color == self.agent_color else 0.0)
         # can any finish (robust: simulate dice for each active/home-column token)
         can_finish = 0.0
         start_pos = BoardConstants.START_POSITIONS.get(self.agent_color)
