@@ -42,13 +42,8 @@ def main():
     parser.add_argument(
         "--max-turns",
         type=int,
-        default=1000,
+        default=500,
         help="Max turns per episode (reduce to increase variance)",
-    )
-    parser.add_argument(
-        "--no-reward-norm",
-        action="store_true",
-        help="Disable VecNormalize reward normalization for debugging",
     )
     parser.add_argument(
         "--no-probabilistic-rewards",
@@ -58,7 +53,7 @@ def main():
     parser.add_argument(
         "--ent-coef",
         type=float,
-        default=0.05,
+        default=0.01,
         help="Entropy coefficient for exploration (higher = more exploration)",
     )
     args = parser.parse_args()
@@ -82,9 +77,7 @@ def main():
     vec_env = VecMonitor(vec_env, filename=os.path.join(args.logdir, "monitor.csv"))
     vec_env = VecNormalize(
         vec_env,
-        norm_obs=True,
-        norm_reward=not args.no_reward_norm,
-        clip_obs=10.0,
+        norm_reward=False,
     )
 
     # Build evaluation env with identical wrapper stack (Monitor + VecNormalize) so
@@ -104,9 +97,9 @@ def main():
         "MlpPolicy",
         vec_env,
         verbose=1,
-        learning_rate=0.001,  # Increased from 0.0003 for faster learning
-        n_steps=2048,
-        batch_size=64,
+        learning_rate=3e-4,
+        n_steps=512,
+        batch_size=256,
         n_epochs=10,
         gamma=0.99,
         gae_lambda=0.95,
@@ -119,7 +112,7 @@ def main():
     )
 
     checkpoint_cb = CheckpointCallback(
-        save_freq=args.checkpoint_freq // len(env_fns),
+        save_freq=args.checkpoint_freq,
         save_path=args.model_dir,
         name_prefix="ppo_ludo",
         save_replay_buffer=True,
@@ -130,9 +123,9 @@ def main():
         eval_env,
         best_model_save_path=args.model_dir,
         log_path=args.logdir,
-        eval_freq=args.eval_freq // len(env_fns),
-        deterministic=False,  # Changed to False for stochastic evaluation
-        n_eval_episodes=5,  # Evaluate more episodes
+        eval_freq=args.eval_freq,
+        deterministic=False,  # Use stochastic evaluation
+        n_eval_episodes=20,  # More evaluation episodes
     )
 
     model.learn(total_timesteps=args.total_steps, callback=[checkpoint_cb, eval_cb])

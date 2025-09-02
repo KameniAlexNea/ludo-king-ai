@@ -78,9 +78,9 @@ class OpponentsConfig:
             "defensive",
             "random",
             "cautious",
-            "probabilistic",
-            "probabilistic_v2",
-            "probabilistic_v3",
+            # "probabilistic",
+            # "probabilistic_v2",
+            # "probabilistic_v3",
         ]
     )
 
