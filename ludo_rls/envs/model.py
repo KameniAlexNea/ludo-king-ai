@@ -57,6 +57,9 @@ class RewardConfig:
     # Risk modulation (if you want it)
     use_probabilistic_rewards: bool = False  # Start simple, add complexity later
     risk_weight: float = 0.3  # Conservative if enabled
+    penalize_loss: bool = (
+        False  # If False, non-acting losers get no extra negative terminal reward
+    )
 
 
 @dataclass

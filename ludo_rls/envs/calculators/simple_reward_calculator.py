@@ -148,7 +148,10 @@ class SimpleRewardCalculator:
         if diversity_bonus:
             components["diversity"] = self.cfg.reward_cfg.diversity_bonus
         if illegal_action:
+            # If action masking auto-corrected, this flag will be False; otherwise penalize
             components["illegal"] = self.cfg.reward_cfg.illegal_action
+        # Tiny living reward to encourage game completion pace and differentiate stagnation
+        components["time"] = self.cfg.reward_cfg.time_penalty
         # Optionally include progress_delta shaping (currently off)
         if progress_delta != 0.0:
             # small shaping term (can tune or disable)
@@ -163,5 +166,7 @@ class SimpleRewardCalculator:
         if agent_player.has_won():
             return RewardConstants.WIN_REWARD
         elif any(opp.has_won() for opp in opponents):
-            return RewardConstants.LOSS_PENALTY
+            if self.cfg.reward_cfg.penalize_loss:
+                return RewardConstants.LOSS_PENALTY
+            return 0.0
         return 0.0

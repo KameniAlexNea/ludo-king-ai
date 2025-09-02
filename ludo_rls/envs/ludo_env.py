@@ -75,8 +75,10 @@ class LudoGymEnv(gym.Env):
         self.episode_steps = 0
         self.done = False
         self.last_obs: Optional[np.ndarray] = None
+        # Per-player token activation diversity flags: {color: {token_id: bool}}
         self._token_activation_flags = {
-            i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
+            p.color.value: {i: False for i in range(GameConstants.TOKENS_PER_PLAYER)}
+            for p in self.game.players
         }
 
         # Initialize state variables that reset() expects
@@ -124,7 +126,8 @@ class LudoGymEnv(gym.Env):
         self.episode_steps = 0
         self.done = False
         self._token_activation_flags = {
-            i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
+            p.color.value: {i: False for i in range(GameConstants.TOKENS_PER_PLAYER)}
+            for p in self.game.players
         }
         self._pending_agent_dice = None
         self._pending_valid_moves = []
@@ -192,9 +195,10 @@ class LudoGymEnv(gym.Env):
 
             # Check diversity bonus
             tok = agent_player.tokens[exec_token_id]
-            if tok.position >= 0 and not self._token_activation_flags[exec_token_id]:
+            flags_for_player = self._token_activation_flags[agent_player.color.value]
+            if tok.position >= 0 and not flags_for_player[exec_token_id]:
                 diversity_bonus_triggered = True
-                self._token_activation_flags[exec_token_id] = True
+                flags_for_player[exec_token_id] = True
 
             extra_turn = move_res.get("extra_turn", False)
         else:
