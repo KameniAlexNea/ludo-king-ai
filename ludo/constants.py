@@ -79,9 +79,9 @@ class BoardConstants:
         return all_safe
 
     # Home column positions (100 to 105)
-    HOME_COLUMN_START = 100
-    HOME_COLUMN_END = 105
-    FINISH_POSITION = 105  # Final position in home column
+    HOME_COLUMN_START = GameConstants.HOME_COLUMN_START
+    HOME_COLUMN_END = GameConstants.FINISH_POSITION
+    FINISH_POSITION = GameConstants.FINISH_POSITION
 
     @classmethod
     def is_home_column_position(cls, position: int) -> bool:

@@ -155,10 +155,10 @@ class BoardTestCase(unittest.TestCase):
     def test_board_initialization(self):
         """Test board initialization."""
         # Check that board has correct number of positions
-        self.assertEqual(len(self.board.positions), 52)
+        self.assertEqual(len(self.board.positions), 58)
 
         # Check known safe positions (star and colored squares)
-        safe_positions = [1, 9, 14, 22, 27, 35, 40, 48]
+        safe_positions = [1, 8, 14, 21, 27, 34, 40, 47]
         for pos in safe_positions:
             if pos < len(self.board.positions):
                 position = self.board.positions[pos]
@@ -172,9 +172,9 @@ class BoardTestCase(unittest.TestCase):
             self.assertFalse(pos_10.is_safe)
 
         # Test safe position (star position)
-        if len(self.board.positions) > 9:
-            pos_9 = self.board.positions[9]
-            self.assertTrue(pos_9.is_safe)
+        if len(self.board.positions) > 8:
+            pos_8 = self.board.positions[8]
+            self.assertTrue(pos_8.is_safe)
 
 
 class GameLogicTestCase(unittest.TestCase):

@@ -6,42 +6,57 @@ from typing import List, Optional
 from ludo.constants import Colors
 
 
+# Reward calculation constants
+class SimpleRewardConstants:
+    """Minimal constants for reward calculations - let the agent learn strategy."""
+
+    # Core rewards (let agent learn when these matter)
+    TOKEN_PROGRESS_REWARD = 1.0  # Increased from 0.1 for stronger learning signal
+    CAPTURE_REWARD = 10.0  # Increased from 5.0
+    GOT_CAPTURED_PENALTY = -6.0  # Increased from -3.0
+    EXTRA_TURN_BONUS = 2.0  # Increased from 1.0
+    SAFE_POSITION_BONUS = 1.0  # Increased from 0.5
+
+    # Terminal rewards
+    WIN_REWARD = 200.0  # Increased from 100.0
+    LOSS_PENALTY = -200.0  # Increased from -100.0
+
+    # Minimal scaling (avoid over-engineering)
+    PROGRESS_NONLINEARITY = 1.2  # Slight non-linearity for progress
+    HOME_COLUMN_MULTIPLIER = 2.0  # Bonus for home column progress
+
+
 @dataclass
 class RewardConfig:
-    """Reward shaping configuration (scaled for stable RL training).
+    """Balanced reward configuration for strategic Ludo play."""
 
-    Magnitudes chosen to avoid sparse domination while preserving signal:
-        - Win / lose kept an order of magnitude above per-move signals (10 / -10)
-        - Progress shaping small dense signal encourages forward motion
-        - Capture / finish moderate bonuses; capture symmetrical with loss
-        - Illegal action mildly discouraged (mask should usually prevent it)
-    """
+    # Major events (highest priority - should dominate)
+    win: float = 50.0  # Game victory
+    lose: float = -50.0  # Game loss
+    finish_token: float = 15.0  # Finishing tokens (very important)
+    capture: float = 8.0  # Capturing opponents (important)
+    got_captured: float = -5.0  # Getting captured (bad but recoverable)
 
-    # Primary events
-    capture: float = 2.0
-    got_captured: float = -2.5
-    finish_token: float = 5.0
-    win: float = 10.0
-    lose: float = -10.0
+    # Action rewards (moderate priority)
+    extra_turn: float = 3.0  # Rolling a 6 (useful)
 
-    # Dense shaping (per total normalized progress delta across 4 tokens)
-    progress_scale: float = 0.5
+    # Strategic positioning (should encourage good play but not dominate)
+    home_progress_bonus: float = 4.0  # Progress in home stretch
+    blocking_bonus: float = 2.0  # Creating blocks
+    safety_bonus: float = 3.0  # Escaping danger
+    home_approach_bonus: float = 1.0  # Approaching home entry
 
-    # Miscellaneous
-    time_penalty: float = -0.001
-    illegal_action: float = -0.05
-    extra_turn: float = 0.3
-    blocking_bonus: float = 0.15
-    diversity_bonus: float = 0.2  # first time a token leaves home
+    # Small continuous signals (should barely register)
+    progress_scale: float = 0.1  # General progress (minimal)
+    diversity_bonus: float = 0.3  # Token diversity (minimal)
 
-    # Probabilistic reward scaling
-    use_probabilistic_rewards: bool = False
-    risk_weight: float = 1.0
-    opportunity_weight: float = 0.8
-    horizon_turns: int = 3
-    discount_lambda: float = 0.85
-    opportunity_bonus_scale: float = 0.3
-    finishing_probability_weight: float = 0.6
+    # Penalties (should be clear boundaries)
+    illegal_action: float = -10.0  # Invalid moves (strong negative)
+    time_penalty: float = -0.01  # Efficiency (tiny)
+
+    # Risk modulation (if you want it)
+    use_probabilistic_rewards: bool = False  # Start simple, add complexity later
+    risk_weight: float = 0.3  # Conservative if enabled
 
 
 @dataclass
@@ -63,9 +78,9 @@ class OpponentsConfig:
             "defensive",
             "random",
             "cautious",
-            "probabilistic",
-            "probabilistic_v2",
-            "probabilistic_v3",
+            # "probabilistic",
+            # "probabilistic_v2",
+            # "probabilistic_v3",
         ]
     )
 

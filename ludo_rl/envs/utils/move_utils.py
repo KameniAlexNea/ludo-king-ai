@@ -42,17 +42,16 @@ class MoveUtils:
             if t.position == -1:
                 continue
             if 0 <= t.position < GameConstants.MAIN_BOARD_SIZE:
+                # Main board progress: 0-51 normalized to 0-0.5
                 total += t.position / float(
                     GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
                 )
             elif t.position >= BoardConstants.HOME_COLUMN_START:
-                # Home column progress: 52..58 mapped
-                offset = (
-                    t.position - BoardConstants.HOME_COLUMN_START
-                ) + GameConstants.MAIN_BOARD_SIZE
-                total += offset / float(
-                    GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+                # Home column progress: 100-105 mapped to 0.5-1.0 range
+                home_progress = (t.position - BoardConstants.HOME_COLUMN_START) / float(
+                    GameConstants.HOME_COLUMN_SIZE - 1
                 )
+                total += 0.5 + (home_progress * 0.5)  # Map to 0.5-1.0 range
         return total
 
     def action_masks(self, pending_valid_moves: List[Dict]) -> np.ndarray:
@@ -63,10 +62,6 @@ class MoveUtils:
                 if i in valid_ids:
                     mask[i] = 1
         return mask
-
-    def _roll_dice(self) -> int:
-        # Use core game mechanics (seeding done via global random seed)
-        return self.game.roll_dice()
 
     def _make_strategy_context(
         self, player: Player, dice_value: int, valid_moves: List[Dict]

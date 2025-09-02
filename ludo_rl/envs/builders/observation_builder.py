@@ -26,8 +26,9 @@ class ObservationBuilder:
         base += 12
         # finished tokens per player (4)
         base += 4
-        # flags: can_finish, dice_value, progress stats, turn index
-        base += 4  # can_finish, dice_norm, agent_progress, opp_mean_progress
+        # scalar flags / stats:
+        # can_finish, dice_norm, agent_finished_fraction, opp_mean_finished_fraction, agent_mean_token_progress
+        base += 5
         if self.cfg.obs_cfg.include_turn_index:
             base += 1
         if self.cfg.obs_cfg.include_blocking_count:
@@ -52,9 +53,10 @@ class ObservationBuilder:
     def _build_observation(
         self, turns: int, pending_agent_dice: int = None
     ) -> np.ndarray:
-        agent_player = next(
-            p for p in self.game.players if p.color.value == self.agent_color
-        )
+        # Cache map for faster lookups
+        players_by_color = {p.color.value: p for p in self.game.players}
+        agent_player = players_by_color[self.agent_color]
+
         vec: List[float] = []
         # agent tokens
         for t in agent_player.tokens:
@@ -63,30 +65,75 @@ class ObservationBuilder:
         for color in Colors.ALL_COLORS:
             if color == self.agent_color:
                 continue
-            opp = next(p for p in self.game.players if p.color.value == color)
+            opp = players_by_color[color]
             for t in opp.tokens:
                 vec.append(self._normalize_position(t.position))
         # finished counts
         for color in Colors.ALL_COLORS:
-            pl = next(p for p in self.game.players if p.color.value == color)
+            pl = players_by_color[color]
             vec.append(pl.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER)
-        # can any finish
+        # can any finish (robust: simulate dice for each active/home-column token)
         can_finish = 0.0
+        start_pos = BoardConstants.START_POSITIONS.get(self.agent_color)
         for t in agent_player.tokens:
-            if 0 <= t.position < BoardConstants.HOME_COLUMN_START:
-                remaining = GameConstants.FINISH_POSITION - t.position
-                if remaining <= GameConstants.DICE_MAX:
-                    can_finish = 1.0
+            if t.position < 0:  # still at home
+                continue
+            # Quick remaining distance heuristic first
+            remaining = GameConstants.FINISH_POSITION - t.position
+            if remaining <= 0:
+                continue
+            if remaining <= GameConstants.DICE_MAX:
+                # Validate by checking if any dice produces exact finish using token movement rules
+                # We clone minimal attributes to avoid mutating original token.
+                for dice_val in range(
+                    GameConstants.DICE_MIN, GameConstants.DICE_MAX + 1
+                ):
+                    # Minimal reproduction of target calculation; reuse logic similar to Token.get_target_position
+                    # If token is in home column (>= HOME_COLUMN_START)
+                    if t.position >= BoardConstants.HOME_COLUMN_START:
+                        target = t.position + dice_val
+                        if target == GameConstants.FINISH_POSITION:
+                            can_finish = 1.0
+                            break
+                    else:
+                        # Main board path
+                        if t.position == GameConstants.HOME_POSITION:
+                            continue
+                        home_entry = BoardConstants.HOME_COLUMN_ENTRIES[
+                            self.agent_color
+                        ]
+                        new_pos = t.position + dice_val
+                        if t.position <= home_entry < new_pos:
+                            overflow = new_pos - home_entry - 1
+                            target = BoardConstants.HOME_COLUMN_START + overflow
+                        elif (
+                            new_pos > GameConstants.MAIN_BOARD_SIZE - 1
+                            and self.agent_color == Colors.RED
+                        ):
+                            overflow = new_pos - GameConstants.MAIN_BOARD_SIZE
+                            target = BoardConstants.HOME_COLUMN_START + overflow
+                        else:
+                            target = (
+                                new_pos
+                                if new_pos <= GameConstants.MAIN_BOARD_SIZE - 1
+                                else new_pos - GameConstants.MAIN_BOARD_SIZE
+                            )
+                        if target == GameConstants.FINISH_POSITION:
+                            can_finish = 1.0
+                            break
+                if can_finish == 1.0:
                     break
         vec.append(can_finish)
         # dice norm (pending dice for current decision)
         if pending_agent_dice is None:
             vec.append(0.0)
         else:
-            vec.append(
-                (pending_agent_dice - GameConstants.DICE_NORMALIZATION_MEAN)
-                / GameConstants.DICE_NORMALIZATION_MEAN
-            )
+            dice_scale = (GameConstants.DICE_MAX - GameConstants.DICE_MIN) / 2.0
+            dice_norm = (
+                pending_agent_dice - GameConstants.DICE_NORMALIZATION_MEAN
+            ) / dice_scale
+            dice_norm = float(max(-1.0, min(1.0, dice_norm)))
+            vec.append(dice_norm)
         # progress stats
         agent_progress = (
             agent_player.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER
@@ -95,7 +142,7 @@ class ObservationBuilder:
         for color in Colors.ALL_COLORS:
             if color == self.agent_color:
                 continue
-            pl = next(p for p in self.game.players if p.color.value == color)
+            pl = players_by_color[color]
             opp_progresses.append(
                 pl.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER
             )
@@ -104,6 +151,31 @@ class ObservationBuilder:
         )
         vec.append(agent_progress)
         vec.append(opp_mean)
+        # agent mean token progress (path coverage)
+        total_path = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+        start_pos = BoardConstants.START_POSITIONS.get(self.agent_color)
+        token_progress_vals = []
+        for t in agent_player.tokens:
+            pos = t.position
+            if pos < 0:
+                token_progress_vals.append(0.0)
+                continue
+            if pos >= BoardConstants.HOME_COLUMN_START:
+                steps = GameConstants.MAIN_BOARD_SIZE + (
+                    pos - BoardConstants.HOME_COLUMN_START
+                )
+            else:
+                if start_pos is None:
+                    steps = 0
+                elif pos >= start_pos:
+                    steps = pos - start_pos
+                else:
+                    steps = (GameConstants.MAIN_BOARD_SIZE - start_pos) + pos
+            token_progress_vals.append(min(1.0, steps / total_path))
+        mean_token_progress = sum(token_progress_vals) / max(
+            1, len(token_progress_vals)
+        )
+        vec.append(mean_token_progress)
         # turn index scaled
         if self.cfg.obs_cfg.include_turn_index:
             vec.append(
@@ -121,4 +193,10 @@ class ObservationBuilder:
                     / GameConstants.BLOCKING_COUNT_NORMALIZATION,
                 )
             )  # normalize roughly
-        return np.asarray(vec, dtype=np.float32)
+        obs = np.asarray(vec, dtype=np.float32)
+        expected = self._compute_observation_size()
+        if obs.shape[0] != expected:
+            raise ValueError(
+                f"Observation length mismatch: got {obs.shape[0]} expected {expected}"
+            )
+        return obs

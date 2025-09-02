@@ -35,7 +35,11 @@ from ludo.player import PlayerColor
 from ludo.strategy import StrategyFactory
 
 from .builders.observation_builder import ObservationBuilder
-from .calculators.reward_calculator import RewardCalculator
+
+# from .calculators.reward_calculator import RewardCalculator
+from .calculators.simple_reward_calculator import (
+    SimpleRewardCalculator as RewardCalculator,
+)
 from .model import EnvConfig
 from .simulators.opponent_simulator import OpponentSimulator
 from .utils.move_utils import MoveUtils
@@ -111,12 +115,11 @@ class LudoGymEnv(gym.Env):
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
     ):  # type: ignore[override]
+        # Only reseed when explicit seed provided. This preserves stochasticity across episodes.
         if seed is not None:
             self.cfg.seed = seed
-        if self.cfg.seed is not None:
-            self.rng.seed(self.cfg.seed)
-            # Seed global random so core game (which uses random module) is reproducible
-            random.seed(self.cfg.seed)
+            self.rng.seed(seed)
+            random.seed(seed)
         # Sample new opponent strategies for this episode
         self.opponent_strategies = self.rng.sample(self.cfg.opponents.candidates, 3)
         # Recreate game for clean state
@@ -127,19 +130,33 @@ class LudoGymEnv(gym.Env):
             PlayerColor.BLUE,
         ]
         self.game = LudoGame(order)
-        # Reattach strategies
-        for p in self.game.players:
-            if p.color.value != self.agent_color:
-                idx = [c for c in Colors.ALL_COLORS if c != self.agent_color].index(
-                    p.color.value
-                )
-                strat_name = self.opponent_strategies[
-                    idx % len(self.opponent_strategies)
-                ]
-                try:
-                    p.set_strategy(StrategyFactory.create_strategy(strat_name))
-                except Exception:
-                    pass
+        # IMPORTANT: Rebuild helper objects so they reference the new game instance.
+        # Previously these held stale pointers to the game created during __init__, causing
+        # observations/rewards/opponent simulation to operate on an out-of-date game state
+        # after each reset. This manifested as features like can_finish never updating when
+        # tests mutated token positions post-reset (obs_builder still saw old tokens at home).
+        self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
+        self.obs_builder.game = (
+            self.game
+        )  # safe to reuse builder instance but update pointer
+        self.reward_calc.game = self.game
+        # Recreate opponent simulator because it closes over move_utils methods
+        self.opp_simulator = OpponentSimulator(
+            self.cfg,
+            self.game,
+            self.agent_color,
+            self.move_utils._roll_dice,
+            self.move_utils._make_strategy_context,
+        )
+        # Reattach strategies - ensure different strategies for each opponent
+        non_agent_colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
+        for i, color in enumerate(non_agent_colors):
+            player = next(p for p in self.game.players if p.color.value == color)
+            strat_name = self.opponent_strategies[i]
+            try:
+                player.set_strategy(StrategyFactory.create_strategy(strat_name))
+            except Exception:
+                pass
         self.turns = 0
         self.episode_steps = 0
         self.done = False
@@ -197,14 +214,18 @@ class LudoGymEnv(gym.Env):
 
         if not no_moves_available:
             valid_token_ids = [m["token_id"] for m in valid_moves]
+            # Convert action to int in case it's a numpy array
+            action = int(action)
             if action not in valid_token_ids:
                 illegal = True
                 # choose fallback (first valid) for execution so environment state advances
                 exec_token_id = valid_token_ids[0]
             else:
                 exec_token_id = action
-
+            # Capture start position for progress calculation inside reward_calc
+            start_pos = agent_player.tokens[exec_token_id].position
             move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
+            move_res["start_position"] = start_pos
 
             # Check diversity bonus
             tok = agent_player.tokens[exec_token_id]
@@ -228,16 +249,18 @@ class LudoGymEnv(gym.Env):
         progress_delta = progress_after - progress_before
 
         # Use comprehensive reward calculation
-        move_reward = self.reward_calc.compute_comprehensive_reward(
+        step_components = self.reward_calc.compute_comprehensive_reward(
             move_res=move_res,
             progress_delta=progress_delta,
             extra_turn=extra_turn,
             diversity_bonus=diversity_bonus_triggered,
             illegal_action=illegal,
-            reward_components=reward_components,
         )
-
-        total_reward = move_reward
+        # Opponent components already accumulated in reward_components; capture their sum
+        opponent_total = sum(reward_components)
+        # Append atomic step components for logging only
+        reward_components.extend(step_components.values())
+        total_reward = opponent_total + sum(step_components.values())
 
         # Terminal checks
         opponents = [p for p in self.game.players if p.color.value != self.agent_color]
@@ -246,8 +269,6 @@ class LudoGymEnv(gym.Env):
         truncated = False
 
         if terminal_reward != 0.0:
-            # Terminal rewards should be absolute constants (no probabilistic modification)
-            reward_components.append(terminal_reward)
             terminated = True
             total_reward += terminal_reward
 
@@ -259,11 +280,13 @@ class LudoGymEnv(gym.Env):
         # Prepare next agent dice if continuing (extra turn) and not done
         if not terminated and not truncated and not self.game.game_over:
             if extra_turn:
+                # Agent retained turn, just roll new dice
                 self._pending_agent_dice, self._pending_valid_moves = (
                     self.move_utils._roll_new_agent_dice()
-                )  # agent retains turn
+                )
             else:
-                self.opp_simulator._ensure_agent_turn()  # move through opponents done above
+                # Ensure pointer back to agent then roll
+                self.opp_simulator._ensure_agent_turn()
                 if not self.game.game_over:
                     self._pending_agent_dice, self._pending_valid_moves = (
                         self.move_utils._roll_new_agent_dice()
@@ -274,10 +297,12 @@ class LudoGymEnv(gym.Env):
         self.done = terminated or truncated
         info = {
             "reward_components": reward_components,
+            "step_breakdown": step_components,
             "dice": self._pending_agent_dice,
             "illegal_action": illegal,
             "action_mask": self.move_utils.action_masks(self._pending_valid_moves),
             "had_extra_turn": extra_turn,
+            "progress_delta": progress_delta,
         }
         return obs, total_reward, terminated, truncated, info
 
