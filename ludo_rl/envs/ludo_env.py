@@ -136,7 +136,9 @@ class LudoGymEnv(gym.Env):
         # after each reset. This manifested as features like can_finish never updating when
         # tests mutated token positions post-reset (obs_builder still saw old tokens at home).
         self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
-        self.obs_builder.game = self.game  # safe to reuse builder instance but update pointer
+        self.obs_builder.game = (
+            self.game
+        )  # safe to reuse builder instance but update pointer
         self.reward_calc.game = self.game
         # Recreate opponent simulator because it closes over move_utils methods
         self.opp_simulator = OpponentSimulator(

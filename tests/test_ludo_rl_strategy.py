@@ -1,9 +1,10 @@
 import unittest
-import torch
 from pathlib import Path
 
-from ludo_rl.ppo_strategy import PPOStrategy, EnvConfig, LudoGymEnv
+import torch
+
 from ludo.constants import Colors, GameConstants
+from ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
 
 
 class DummyPolicy:
@@ -44,12 +45,32 @@ class TestPPOStrategy(unittest.TestCase):
         strat = PPOStrategy(str(model_path), "dummy", cfg)
         ctx = {
             "players": [
-                {"color": Colors.RED, "tokens": [{"position": -1} for _ in range(4)], "finished_tokens": 0},
-                {"color": Colors.GREEN, "tokens": [{"position": -1} for _ in range(4)], "finished_tokens": 0},
-                {"color": Colors.YELLOW, "tokens": [{"position": -1} for _ in range(4)], "finished_tokens": 0},
-                {"color": Colors.BLUE, "tokens": [{"position": -1} for _ in range(4)], "finished_tokens": 0},
+                {
+                    "color": Colors.RED,
+                    "tokens": [{"position": -1} for _ in range(4)],
+                    "finished_tokens": 0,
+                },
+                {
+                    "color": Colors.GREEN,
+                    "tokens": [{"position": -1} for _ in range(4)],
+                    "finished_tokens": 0,
+                },
+                {
+                    "color": Colors.YELLOW,
+                    "tokens": [{"position": -1} for _ in range(4)],
+                    "finished_tokens": 0,
+                },
+                {
+                    "color": Colors.BLUE,
+                    "tokens": [{"position": -1} for _ in range(4)],
+                    "finished_tokens": 0,
+                },
             ],
-            "game_info": {"current_player": Colors.RED, "dice_value": 3, "turn_count": 0},
+            "game_info": {
+                "current_player": Colors.RED,
+                "dice_value": 3,
+                "turn_count": 0,
+            },
             "valid_moves": [{"token_id": 0}],
         }
         action = strat.decide(ctx)
@@ -65,4 +86,3 @@ class TestPPOStrategy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

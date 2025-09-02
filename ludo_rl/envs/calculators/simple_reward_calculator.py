@@ -103,8 +103,11 @@ class SimpleRewardCalculator:
         """Simple capture penalty."""
         if token_positions_before is not None:
             # Count tokens that were captured
+            agent_player = next(
+                p for p in self.game.players if p.color.value == self.agent_color
+            )
             current_positions = [
-                token.position for token in self.game.players[0].tokens
+                token.position for token in agent_player.tokens
             ]  # Simplified
             captured_count = sum(
                 1

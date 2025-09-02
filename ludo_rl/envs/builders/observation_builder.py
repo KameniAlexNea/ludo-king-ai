@@ -85,7 +85,9 @@ class ObservationBuilder:
             if remaining <= GameConstants.DICE_MAX:
                 # Validate by checking if any dice produces exact finish using token movement rules
                 # We clone minimal attributes to avoid mutating original token.
-                for dice_val in range(GameConstants.DICE_MIN, GameConstants.DICE_MAX + 1):
+                for dice_val in range(
+                    GameConstants.DICE_MIN, GameConstants.DICE_MAX + 1
+                ):
                     # Minimal reproduction of target calculation; reuse logic similar to Token.get_target_position
                     # If token is in home column (>= HOME_COLUMN_START)
                     if t.position >= BoardConstants.HOME_COLUMN_START:
@@ -97,16 +99,25 @@ class ObservationBuilder:
                         # Main board path
                         if t.position == GameConstants.HOME_POSITION:
                             continue
-                        home_entry = BoardConstants.HOME_COLUMN_ENTRIES[self.agent_color]
+                        home_entry = BoardConstants.HOME_COLUMN_ENTRIES[
+                            self.agent_color
+                        ]
                         new_pos = t.position + dice_val
                         if t.position <= home_entry < new_pos:
                             overflow = new_pos - home_entry - 1
                             target = BoardConstants.HOME_COLUMN_START + overflow
-                        elif new_pos > GameConstants.MAIN_BOARD_SIZE - 1 and self.agent_color == Colors.RED:
+                        elif (
+                            new_pos > GameConstants.MAIN_BOARD_SIZE - 1
+                            and self.agent_color == Colors.RED
+                        ):
                             overflow = new_pos - GameConstants.MAIN_BOARD_SIZE
                             target = BoardConstants.HOME_COLUMN_START + overflow
                         else:
-                            target = new_pos if new_pos <= GameConstants.MAIN_BOARD_SIZE - 1 else new_pos - GameConstants.MAIN_BOARD_SIZE
+                            target = (
+                                new_pos
+                                if new_pos <= GameConstants.MAIN_BOARD_SIZE - 1
+                                else new_pos - GameConstants.MAIN_BOARD_SIZE
+                            )
                         if target == GameConstants.FINISH_POSITION:
                             can_finish = 1.0
                             break
@@ -118,7 +129,9 @@ class ObservationBuilder:
             vec.append(0.0)
         else:
             dice_scale = (GameConstants.DICE_MAX - GameConstants.DICE_MIN) / 2.0
-            dice_norm = (pending_agent_dice - GameConstants.DICE_NORMALIZATION_MEAN) / dice_scale
+            dice_norm = (
+                pending_agent_dice - GameConstants.DICE_NORMALIZATION_MEAN
+            ) / dice_scale
             dice_norm = float(max(-1.0, min(1.0, dice_norm)))
             vec.append(dice_norm)
         # progress stats
@@ -148,7 +161,9 @@ class ObservationBuilder:
                 token_progress_vals.append(0.0)
                 continue
             if pos >= BoardConstants.HOME_COLUMN_START:
-                steps = GameConstants.MAIN_BOARD_SIZE + (pos - BoardConstants.HOME_COLUMN_START)
+                steps = GameConstants.MAIN_BOARD_SIZE + (
+                    pos - BoardConstants.HOME_COLUMN_START
+                )
             else:
                 if start_pos is None:
                     steps = 0
@@ -157,7 +172,9 @@ class ObservationBuilder:
                 else:
                     steps = (GameConstants.MAIN_BOARD_SIZE - start_pos) + pos
             token_progress_vals.append(min(1.0, steps / total_path))
-        mean_token_progress = sum(token_progress_vals) / max(1, len(token_progress_vals))
+        mean_token_progress = sum(token_progress_vals) / max(
+            1, len(token_progress_vals)
+        )
         vec.append(mean_token_progress)
         # turn index scaled
         if self.cfg.obs_cfg.include_turn_index:

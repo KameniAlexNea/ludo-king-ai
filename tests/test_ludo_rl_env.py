@@ -1,9 +1,10 @@
 import unittest
+
 import numpy as np
 
-from ludo_rl.envs.ludo_env import LudoGymEnv, EnvConfig
 from ludo.constants import Colors, GameConstants
 from ludo.token import TokenState
+from ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
 
 
 def _make_env(seed=123):
@@ -74,7 +75,9 @@ class TestLudoRLEnv(unittest.TestCase):
         _, reward, _, _, info = env.step(0)
         self.assertIsInstance(reward, float)
         self.assertGreaterEqual(len(info["reward_components"]), 1)
-        self.assertGreaterEqual(len(info["reward_components"]), len(info["step_breakdown"]))
+        self.assertGreaterEqual(
+            len(info["reward_components"]), len(info["step_breakdown"])
+        )
 
     def test_observation_length_matches_builder(self):
         env = _make_env()
@@ -85,4 +88,3 @@ class TestLudoRLEnv(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

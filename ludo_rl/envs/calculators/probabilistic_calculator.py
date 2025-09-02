@@ -45,9 +45,9 @@ class ProbabilisticCalculator:
             return None
         entry = BoardConstants.HOME_COLUMN_ENTRIES.get(opp_color, 0)
         # Steps until opponent reaches its home entry
-        steps_to_entry = self._backward_distance(entry, opp_pos)
+        steps_to_entry = self._backward_distance(opp_pos, entry)
         # Steps to target along circular path
-        steps_to_target = self._backward_distance(target_pos, opp_pos)
+        steps_to_target = self._backward_distance(opp_pos, target_pos)
         if steps_to_target == 0:
             return None  # same square now, not a forward capture distance
         # If target requires moving beyond home entry, not capturable on this lap
