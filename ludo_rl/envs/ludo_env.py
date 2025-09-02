@@ -238,12 +238,11 @@ class LudoGymEnv(gym.Env):
             diversity_bonus=diversity_bonus_triggered,
             illegal_action=illegal,
         )
-        # Extend reward_components with atomic breakdown for debugging/analysis
+        # Opponent components already accumulated in reward_components; capture their sum
+        opponent_total = sum(reward_components)
+        # Append atomic step components for logging only
         reward_components.extend(step_components.values())
-        total_reward = sum(step_components.values()) + sum(
-            c for c in reward_components if c not in step_components.values()
-        )
-        # NOTE: Opponent simulation already appended its own components earlier; we don't double-count.
+        total_reward = opponent_total + sum(step_components.values())
 
         # Terminal checks
         opponents = [p for p in self.game.players if p.color.value != self.agent_color]
