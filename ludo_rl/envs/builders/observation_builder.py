@@ -72,13 +72,45 @@ class ObservationBuilder:
         for color in Colors.ALL_COLORS:
             pl = players_by_color[color]
             vec.append(pl.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER)
-        # can any finish (include home column tokens)
+        # can any finish (robust: simulate dice for each active/home-column token)
         can_finish = 0.0
+        start_pos = BoardConstants.START_POSITIONS.get(self.agent_color)
         for t in agent_player.tokens:
-            if t.position >= 0:
-                remaining = GameConstants.FINISH_POSITION - t.position
-                if 0 < remaining <= GameConstants.DICE_MAX:
-                    can_finish = 1.0
+            if t.position < 0:  # still at home
+                continue
+            # Quick remaining distance heuristic first
+            remaining = GameConstants.FINISH_POSITION - t.position
+            if remaining <= 0:
+                continue
+            if remaining <= GameConstants.DICE_MAX:
+                # Validate by checking if any dice produces exact finish using token movement rules
+                # We clone minimal attributes to avoid mutating original token.
+                for dice_val in range(GameConstants.DICE_MIN, GameConstants.DICE_MAX + 1):
+                    # Minimal reproduction of target calculation; reuse logic similar to Token.get_target_position
+                    # If token is in home column (>= HOME_COLUMN_START)
+                    if t.position >= BoardConstants.HOME_COLUMN_START:
+                        target = t.position + dice_val
+                        if target == GameConstants.FINISH_POSITION:
+                            can_finish = 1.0
+                            break
+                    else:
+                        # Main board path
+                        if t.position == GameConstants.HOME_POSITION:
+                            continue
+                        home_entry = BoardConstants.HOME_COLUMN_ENTRIES[self.agent_color]
+                        new_pos = t.position + dice_val
+                        if t.position <= home_entry < new_pos:
+                            overflow = new_pos - home_entry - 1
+                            target = BoardConstants.HOME_COLUMN_START + overflow
+                        elif new_pos > GameConstants.MAIN_BOARD_SIZE - 1 and self.agent_color == Colors.RED:
+                            overflow = new_pos - GameConstants.MAIN_BOARD_SIZE
+                            target = BoardConstants.HOME_COLUMN_START + overflow
+                        else:
+                            target = new_pos if new_pos <= GameConstants.MAIN_BOARD_SIZE - 1 else new_pos - GameConstants.MAIN_BOARD_SIZE
+                        if target == GameConstants.FINISH_POSITION:
+                            can_finish = 1.0
+                            break
+                if can_finish == 1.0:
                     break
         vec.append(can_finish)
         # dice norm (pending dice for current decision)

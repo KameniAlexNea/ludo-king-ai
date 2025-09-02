@@ -130,6 +130,22 @@ class LudoGymEnv(gym.Env):
             PlayerColor.BLUE,
         ]
         self.game = LudoGame(order)
+        # IMPORTANT: Rebuild helper objects so they reference the new game instance.
+        # Previously these held stale pointers to the game created during __init__, causing
+        # observations/rewards/opponent simulation to operate on an out-of-date game state
+        # after each reset. This manifested as features like can_finish never updating when
+        # tests mutated token positions post-reset (obs_builder still saw old tokens at home).
+        self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
+        self.obs_builder.game = self.game  # safe to reuse builder instance but update pointer
+        self.reward_calc.game = self.game
+        # Recreate opponent simulator because it closes over move_utils methods
+        self.opp_simulator = OpponentSimulator(
+            self.cfg,
+            self.game,
+            self.agent_color,
+            self.move_utils._roll_dice,
+            self.move_utils._make_strategy_context,
+        )
         # Reattach strategies - ensure different strategies for each opponent
         non_agent_colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
         for i, color in enumerate(non_agent_colors):

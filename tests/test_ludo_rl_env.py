@@ -3,6 +3,7 @@ import numpy as np
 
 from ludo_rl.envs.ludo_env import LudoGymEnv, EnvConfig
 from ludo.constants import Colors, GameConstants
+from ludo.token import TokenState
 
 
 def _make_env(seed=123):
@@ -47,14 +48,17 @@ class TestLudoRLEnv(unittest.TestCase):
         token = player.tokens[0]
         # Place token such that remaining distance <= dice max (strongest case = 1)
         token.position = GameConstants.FINISH_POSITION - 1
+        # Ensure state reflects home column for consistency
+        token.state = TokenState.HOME_COLUMN
         obs = env.obs_builder._build_observation(env.turns, env._pending_agent_dice)
         # Dynamically compute index: agent(4)+opp(12)+finished(4)=20 -> can_finish at 20
         can_finish_idx = 4 + 12 + 4
-        self.assertEqual(
-            obs[can_finish_idx],
-            1.0,
-            msg=f"can_finish flag not set (index {can_finish_idx}) with token at {token.position}, remaining {GameConstants.FINISH_POSITION - token.position}",
-        )
+        if obs[can_finish_idx] != 1.0:
+            # Fallback scan: first scalar section after finished counts; expect exactly one position to flip when moving token
+            scalar_section = obs[4 + 12 + 4 : 4 + 12 + 4 + 6]
+            raise AssertionError(
+                f"can_finish flag not 1 at expected index {can_finish_idx}. Segment={scalar_section.tolist()} token_pos={token.position} remaining={GameConstants.FINISH_POSITION - token.position}"
+            )
 
     def test_observation_can_finish_flag_negative(self):
         env = _make_env()

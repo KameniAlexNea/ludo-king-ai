@@ -55,6 +55,12 @@ class TestPPOStrategy(unittest.TestCase):
         action = strat.decide(ctx)
         self.assertIsInstance(action, int)
         self.assertTrue(0 <= action < GameConstants.TOKENS_PER_PLAYER)
+        # Cleanup created dummy model file
+        try:
+            if model_path.exists():
+                model_path.unlink()
+        except Exception:  # pragma: no cover - best effort cleanup
+            pass
 
 
 if __name__ == "__main__":
