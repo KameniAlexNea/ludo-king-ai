@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Optional
 
 from ludo.constants import Colors
 
@@ -68,28 +68,9 @@ class ObservationConfig:
 
 
 @dataclass
-class OpponentsConfig:
-    candidates: List[str] = field(
-        default_factory=lambda: [
-            "killer",
-            "winner",
-            "optimist",
-            "balanced",
-            "defensive",
-            "random",
-            "cautious",
-            # "probabilistic",
-            # "probabilistic_v2",
-            # "probabilistic_v3",
-        ]
-    )
-
-
-@dataclass
 class EnvConfig:
     agent_color: str = Colors.RED
     max_turns: int = 1000
     reward_cfg: RewardConfig = field(default_factory=RewardConfig)
     obs_cfg: ObservationConfig = field(default_factory=ObservationConfig)
-    opponents: OpponentsConfig = field(default_factory=OpponentsConfig)
     seed: Optional[int] = None
