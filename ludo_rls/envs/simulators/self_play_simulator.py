@@ -1,5 +1,6 @@
 """Opponent simulation utilities for LudoGymEnv."""
 
+import random
 from typing import Any, List, Optional
 
 from ludo.constants import GameConstants
@@ -9,7 +10,7 @@ from ..builders.observation_builder import ObservationBuilder
 from ..model import EnvConfig
 
 
-class OpponentSimulator:
+class SelfPlaySimulator:
     """Handles simulation of opponent turns."""
 
     def __init__(
@@ -19,7 +20,7 @@ class OpponentSimulator:
         agent_color: str,
         roll_dice_func,
         make_strategy_context_func,
-        model: Optional[Any] = None,
+        model: Any,
     ):
         self.cfg = cfg
         self.game = game
@@ -28,13 +29,12 @@ class OpponentSimulator:
         self._make_strategy_context = make_strategy_context_func
         self.model = model
 
-    def _simulate_single_opponent_turn(
+    def _simulate_single_player_turn(
         self, reward_components: Optional[List[float]] = None
     ):
-        """Simulate exactly one opponent player sequence including any extra turns.
+        """Simulate exactly one player turn including any extra turns.
 
-        Converted from recursive form to iterative to avoid deep recursion in
-        pathological chains (captures + sixes). Safety-capped.
+        All players use the same model for self-play.
         If reward_components provided, apply capture penalties immediately.
         """
         current_player = self.game.get_current_player()
@@ -50,27 +50,15 @@ class OpponentSimulator:
                 self.game.next_turn()
                 return
             try:
-                if self.model is not None:
-                    # Use model for self-play
-                    opp_obs_builder = ObservationBuilder(self.cfg, self.game, current_player.color.value)
-                    obs = opp_obs_builder._build_observation(0, dice_value)
-                    action, _ = self.model.predict(obs, deterministic=False)
-                    valid_token_ids = [m["token_id"] for m in valid_moves]
-                    if action in valid_token_ids:
-                        token_choice = action
-                    else:
-                        token_choice = random.choice(valid_moves)["token_id"]
+                # All players use the same model for self-play
+                opp_obs_builder = ObservationBuilder(self.cfg, self.game, current_player.color.value)
+                obs = opp_obs_builder._build_observation(0, dice_value)
+                action, _ = self.model.predict(obs, deterministic=False)
+                valid_token_ids = [m["token_id"] for m in valid_moves]
+                if action in valid_token_ids:
+                    token_choice = action
                 else:
-                    ctx = self._make_strategy_context(
-                        current_player, dice_value, valid_moves
-                    )
-                    # Add randomness to opponent decisions for better training
-                    import random
-
-                    if random.random() < 0.1:  # 10% chance of random move
-                        token_choice = random.choice(valid_moves)["token_id"]
-                    else:
-                        token_choice = current_player.make_strategic_decision(ctx)
+                    token_choice = random.choice(valid_moves)["token_id"]
             except Exception:
                 token_choice = valid_moves[0]["token_id"]
             move_res = self.game.execute_move(current_player, token_choice, dice_value)
@@ -88,19 +76,19 @@ class OpponentSimulator:
         if not self.game.game_over and self.game.get_current_player() is current_player:
             self.game.next_turn()
 
-    def _simulate_opponents(self, reward_components: List[float]):
-        # Simulate opponents in order until agent's turn or game over.
-        # Capture penalties are handled inside _simulate_single_opponent_turn now.
+    def _simulate_other_players(self, reward_components: List[float]):
+        # Simulate other players in order until agent's turn or game over.
+        # Capture penalties are handled inside _simulate_single_player_turn now.
         while (
             not self.game.game_over
             and self.game.get_current_player().color.value != self.agent_color
         ):
-            self._simulate_single_opponent_turn(reward_components)
+            self._simulate_single_player_turn(reward_components)
 
     def _ensure_agent_turn(self):
-        # Simulate opponents until agent color is current player or game over
+        # Simulate other players until agent color is current player or game over
         while (
             not self.game.game_over
             and self.game.get_current_player().color.value != self.agent_color
         ):
-            self._simulate_single_opponent_turn()
+            self._simulate_single_player_turn()

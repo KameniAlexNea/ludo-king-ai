@@ -8,6 +8,12 @@ Design goals:
 - Support vectorization (Stable-Baselines3 / RLlib)
 - Compatible with Gymnasium API (reset(seed=...), step returning (obs, reward, terminated, truncated, info))
 
+Self-play implementation:
+- All 4 players are controlled by the same PPO model
+- Agent position is randomized each episode to learn all perspectives
+- Self-play simulator handles other players' turns using the same model
+- No external strategies used - pure self-play
+
 Observation vector (default v0 schema):
     [ agent_token_positions(4), agent_token_states(4 one-hot aggregated -> active/home/home_column/finished counts),
       opponents_token_positions(3*4), finished_tokens_per_player(4), dice_value/6, can_any_finish, progress_fraction_agent,
@@ -41,7 +47,7 @@ from .calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )
 from .model import EnvConfig
-from .simulators.opponent_simulator import OpponentSimulator
+from .simulators.self_play_simulator import SelfPlaySimulator
 from .utils.move_utils import MoveUtils
 
 
@@ -95,7 +101,7 @@ class LudoGymEnv(gym.Env):
         self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
         self.reward_calc = RewardCalculator(self.cfg, self.game, self.agent_color)
-        self.opp_simulator = OpponentSimulator(
+        self.self_play_simulator = SelfPlaySimulator(
             self.cfg,
             self.game,
             self.agent_color,
@@ -138,8 +144,8 @@ class LudoGymEnv(gym.Env):
             self.game
         )  # safe to reuse builder instance but update pointer
         self.reward_calc.game = self.game
-        # Recreate opponent simulator because it closes over move_utils methods
-        self.opp_simulator = OpponentSimulator(
+        # Recreate self-play simulator because it closes over move_utils methods
+        self.self_play_simulator = SelfPlaySimulator(
             self.cfg,
             self.game,
             self.agent_color,
@@ -158,7 +164,7 @@ class LudoGymEnv(gym.Env):
         self._last_progress_sum = self.move_utils._compute_agent_progress_sum()
 
         # Advance until it's agent's turn (initial current_player_index is 0 so usually unnecessary)
-        self.opp_simulator._ensure_agent_turn()
+        self.self_play_simulator._ensure_agent_turn()
         # Roll initial dice for agent decision
         self._pending_agent_dice, self._pending_valid_moves = (
             self.move_utils._roll_new_agent_dice()
@@ -232,7 +238,7 @@ class LudoGymEnv(gym.Env):
         if not extra_turn and not self.game.game_over:
             # Advance turn for agent (dice consumed)
             self.game.next_turn()
-            self.opp_simulator._simulate_opponents(reward_components)
+            self.self_play_simulator._simulate_other_players(reward_components)
 
         # Progress shaping (after agent + opponents if any)
         progress_after = self.move_utils._compute_agent_progress_sum()
@@ -276,7 +282,7 @@ class LudoGymEnv(gym.Env):
                 )
             else:
                 # Ensure pointer back to agent then roll
-                self.opp_simulator._ensure_agent_turn()
+                self.self_play_simulator._ensure_agent_turn()
                 if not self.game.game_over:
                     self._pending_agent_dice, self._pending_valid_moves = (
                         self.move_utils._roll_new_agent_dice()
@@ -301,8 +307,8 @@ class LudoGymEnv(gym.Env):
 
     def set_model(self, model: Any):
         self.model = model
-        # Update the opponent simulator with the new model
-        self.opp_simulator.model = model
+        # Update the self-play simulator with the new model
+        self.self_play_simulator.model = model
 
     def close(self):
         pass
