@@ -20,6 +20,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
 from .envs.ludo_env import EnvConfig, LudoGymEnv
+from .callbacks.tournament_callback import SelfPlayTournamentCallback
 
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig):
@@ -57,6 +58,24 @@ def main():
         type=float,
         default=0.01,
         help="Entropy coefficient for exploration (higher = more exploration)",
+    )
+    parser.add_argument(
+        "--tournament-freq",
+        type=int,
+        default=100_000,
+        help="Run tournament evaluation every N environment timesteps",
+    )
+    parser.add_argument(
+        "--tournament-games",
+        type=int,
+        default=240,
+        help="Total tournament games per evaluation (evenly split across 4 seats)",
+    )
+    parser.add_argument(
+        "--tournament-baselines",
+        type=str,
+        default="random,cautious,killer,probabilistic",
+        help="Comma separated baseline strategy names (as supported by baseline env)",
     )
     args = parser.parse_args()
 
@@ -131,7 +150,30 @@ def main():
         n_eval_episodes=20,  # More evaluation episodes
     )
 
-    model.learn(total_timesteps=args.total_steps, callback=[checkpoint_cb, eval_cb])
+    # Tournament baseline env factory (reuses baseline environment from ludo_rl, imported lazily to avoid circulars)
+    from ludo_rl.envs.ludo_env import LudoGymEnv as BaselineEnv  # type: ignore
+
+    baseline_names = [s.strip() for s in args.tournament_baselines.split(',') if s.strip()]
+
+    def make_baseline_env(selected: list[str]):
+        # Use baseline env with sampled opponents each reset; we set agent_color dynamically inside callback.
+        # EnvConfig from ludo_rl may differ; we rely on defaults.
+        return BaselineEnv()
+
+    tournament_cb = SelfPlayTournamentCallback(
+        make_baseline_env_fn=make_baseline_env,
+        baselines=baseline_names,
+        n_games=args.tournament_games,
+        eval_freq=args.tournament_freq,
+        log_prefix="tournament/",
+        verbose=1,
+    )
+
+    # Learn with three callbacks:
+    # - checkpoint_cb: periodic checkpointing
+    # - eval_cb: self-play eval / normalized reward tracking
+    # - tournament_cb: external baseline tournament metrics logged under prefix tournament/
+    model.learn(total_timesteps=args.total_steps, callback=[checkpoint_cb, eval_cb, tournament_cb])
     model.save(os.path.join(args.model_dir, "ppo_ludo_final"))
 
 
