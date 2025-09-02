@@ -66,34 +66,30 @@ class SimpleRewardCalculator:
         return min(current_steps / total_path_length, 1.0)
 
     def _compute_movement_reward(self, move_res: Dict) -> float:
-        """Unified movement reward combining progress and safety incentives."""
+        """Unified movement reward combining progress and safety incentives.
+
+        Uses the start_position captured before executing the move to avoid zero deltas.
+        """
         token: Optional[Token] = move_res.get("token")
         if token is None or not isinstance(token, Token):
             return 0.0
 
         target_pos = move_res.get("target_position")
-        if target_pos is None:
+        start_pos = move_res.get("start_position")
+        if target_pos is None or start_pos is None:
             return 0.0
 
-        # Calculate progress increase
-        initial_progress = self._get_token_progress(token)
+        initial_progress = self._get_token_progress(token, start_pos)
         final_progress = self._get_token_progress(token, target_pos)
         progress_delta = final_progress - initial_progress
-
         if progress_delta <= 0:
             return 0.0
 
-        # Base progress reward
         reward = progress_delta * RewardConstants.TOKEN_PROGRESS_REWARD
-
-        # Bonus for home column progress
         if BoardConstants.is_home_column_position(target_pos):
             reward *= RewardConstants.HOME_COLUMN_MULTIPLIER
-
-        # Bonus for safe positions
         if BoardConstants.is_safe_position(target_pos):
             reward += RewardConstants.SAFE_POSITION_BONUS
-
         return reward
 
     def _compute_capture_reward(self, move_res: Dict) -> float:
@@ -127,54 +123,35 @@ class SimpleRewardCalculator:
     def compute_comprehensive_reward(
         self,
         move_res: Dict,
-        progress_delta: float,
+        progress_delta: float,  # overall board progress (agent-wide) if needed
         extra_turn: bool,
         diversity_bonus: bool,
         illegal_action: bool,
-        reward_components: List[float],
         token_positions_before: Optional[List[int]] = None,
-    ) -> float:
-        """Simple reward calculation - let the agent learn strategy."""
-        total_reward = 0.0
+    ) -> Dict[str, float]:
+        """Return a dict of atomic reward components (no side-effects)."""
+        components: Dict[str, float] = {}
 
-        # Core rewards
-        capture_reward = self._compute_capture_reward(move_res)
-        total_reward += capture_reward
-        reward_components.append(capture_reward)
-
-        got_captured_penalty = self._compute_got_captured_penalty(
+        components["capture"] = self._compute_capture_reward(move_res)
+        components["got_captured"] = self._compute_got_captured_penalty(
             move_res, token_positions_before
         )
-        total_reward += got_captured_penalty
-        reward_components.append(got_captured_penalty)
+        components["movement"] = self._compute_movement_reward(move_res)
 
-        # Unified movement reward (progress + safety)
-        movement_reward = self._compute_movement_reward(move_res)
-        total_reward += movement_reward
-        reward_components.append(movement_reward)
-
-        # Token finished bonus (simple)
         if move_res.get("token_finished"):
-            total_reward += RewardConstants.TOKEN_PROGRESS_REWARD * 10  # Small bonus
-            reward_components.append(RewardConstants.TOKEN_PROGRESS_REWARD * 10)
-
-        # Extra turn bonus
+            components["token_finished"] = RewardConstants.TOKEN_PROGRESS_REWARD * 10
         if extra_turn:
-            total_reward += RewardConstants.EXTRA_TURN_BONUS
-            reward_components.append(RewardConstants.EXTRA_TURN_BONUS)
-
-        # Diversity bonus (keep as is)
+            components["extra_turn"] = RewardConstants.EXTRA_TURN_BONUS
         if diversity_bonus:
-            diversity_reward = self.cfg.reward_cfg.diversity_bonus
-            total_reward += diversity_reward
-            reward_components.append(diversity_reward)
-
-        # Illegal action penalty
+            components["diversity"] = self.cfg.reward_cfg.diversity_bonus
         if illegal_action:
-            total_reward += self.cfg.reward_cfg.illegal_action
-            reward_components.append(self.cfg.reward_cfg.illegal_action)
+            components["illegal"] = self.cfg.reward_cfg.illegal_action
+        # Optionally include progress_delta shaping (currently off)
+        if progress_delta != 0.0:
+            # small shaping term (can tune or disable)
+            components["progress_delta"] = progress_delta * 0.0  # disabled
 
-        return total_reward
+        return components
 
     def get_terminal_reward(
         self, agent_player: Player, opponents: list[Player]

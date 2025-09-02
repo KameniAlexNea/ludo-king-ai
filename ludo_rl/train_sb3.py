@@ -9,6 +9,7 @@ Produces models/, logs/ and tensorboard metrics.
 from __future__ import annotations
 
 import argparse
+import copy
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -23,7 +24,8 @@ from .envs.ludo_env import EnvConfig, LudoGymEnv
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig):
     def _init():
-        cfg = EnvConfig(**{**base_cfg.__dict__})
+        # Deep copy to avoid shared nested dataclass instances (reward_cfg, obs_cfg, opponents)
+        cfg = copy.deepcopy(base_cfg)
         cfg.seed = seed + rank
         env = LudoGymEnv(cfg)
         return env
@@ -96,7 +98,7 @@ def main():
     model = PPO(
         "MlpPolicy",
         vec_env,
-        verbose=1,
+        verbose=0,
         learning_rate=3e-4,
         n_steps=512,
         batch_size=256,

@@ -115,12 +115,11 @@ class LudoGymEnv(gym.Env):
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
     ):  # type: ignore[override]
+        # Only reseed when explicit seed provided. This preserves stochasticity across episodes.
         if seed is not None:
             self.cfg.seed = seed
-        if self.cfg.seed is not None:
-            self.rng.seed(self.cfg.seed)
-            # Seed global random so core game (which uses random module) is reproducible
-            random.seed(self.cfg.seed)
+            self.rng.seed(seed)
+            random.seed(seed)
         # Sample new opponent strategies for this episode
         self.opponent_strategies = self.rng.sample(self.cfg.opponents.candidates, 3)
         # Recreate game for clean state
@@ -205,8 +204,10 @@ class LudoGymEnv(gym.Env):
                 exec_token_id = valid_token_ids[0]
             else:
                 exec_token_id = action
-
+            # Capture start position for progress calculation inside reward_calc
+            start_pos = agent_player.tokens[exec_token_id].position
             move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
+            move_res["start_position"] = start_pos
 
             # Check diversity bonus
             tok = agent_player.tokens[exec_token_id]
@@ -230,18 +231,19 @@ class LudoGymEnv(gym.Env):
         progress_delta = progress_after - progress_before
 
         # Use comprehensive reward calculation
-        move_reward = self.reward_calc.compute_comprehensive_reward(
+        step_components = self.reward_calc.compute_comprehensive_reward(
             move_res=move_res,
             progress_delta=progress_delta,
             extra_turn=extra_turn,
             diversity_bonus=diversity_bonus_triggered,
             illegal_action=illegal,
-            reward_components=reward_components,
         )
-        reward_components.append(move_reward)
-
-        # Sum ALL reward components for total reward (including opponent penalties)
-        total_reward = sum(reward_components)
+        # Extend reward_components with atomic breakdown for debugging/analysis
+        reward_components.extend(step_components.values())
+        total_reward = sum(step_components.values()) + sum(
+            c for c in reward_components if c not in step_components.values()
+        )
+        # NOTE: Opponent simulation already appended its own components earlier; we don't double-count.
 
         # Terminal checks
         opponents = [p for p in self.game.players if p.color.value != self.agent_color]
@@ -250,7 +252,6 @@ class LudoGymEnv(gym.Env):
         truncated = False
 
         if terminal_reward != 0.0:
-            # Terminal rewards should be absolute constants (no probabilistic modification)
             terminated = True
             total_reward += terminal_reward
 
@@ -262,11 +263,13 @@ class LudoGymEnv(gym.Env):
         # Prepare next agent dice if continuing (extra turn) and not done
         if not terminated and not truncated and not self.game.game_over:
             if extra_turn:
+                # Agent retained turn, just roll new dice
                 self._pending_agent_dice, self._pending_valid_moves = (
                     self.move_utils._roll_new_agent_dice()
-                )  # agent retains turn
+                )
             else:
-                self.opp_simulator._ensure_agent_turn()  # move through opponents done above
+                # Ensure pointer back to agent then roll
+                self.opp_simulator._ensure_agent_turn()
                 if not self.game.game_over:
                     self._pending_agent_dice, self._pending_valid_moves = (
                         self.move_utils._roll_new_agent_dice()
@@ -277,10 +280,12 @@ class LudoGymEnv(gym.Env):
         self.done = terminated or truncated
         info = {
             "reward_components": reward_components,
+            "step_breakdown": step_components,
             "dice": self._pending_agent_dice,
             "illegal_action": illegal,
             "action_mask": self.move_utils.action_masks(self._pending_valid_moves),
             "had_extra_turn": extra_turn,
+            "progress_delta": progress_delta,
         }
         return obs, total_reward, terminated, truncated, info
 
