@@ -19,8 +19,8 @@ from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
-from .envs.ludo_env import EnvConfig, LudoGymEnv
 from .callbacks.tournament_callback import SelfPlayTournamentCallback
+from .envs.ludo_env import EnvConfig, LudoGymEnv
 
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig):
@@ -74,7 +74,7 @@ def main():
     parser.add_argument(
         "--tournament-baselines",
         type=str,
-        default="random,cautious,killer,probabilistic",
+        default="optimist,balanced,probabilistic_v3,cautious,killer,probabilistic",
         help="Comma separated baseline strategy names (as supported by baseline env)",
     )
     args = parser.parse_args()
@@ -153,7 +153,9 @@ def main():
     # Tournament baseline env factory (reuses baseline environment from ludo_rl, imported lazily to avoid circulars)
     from ludo_rl.envs.ludo_env import LudoGymEnv as BaselineEnv  # type: ignore
 
-    baseline_names = [s.strip() for s in args.tournament_baselines.split(',') if s.strip()]
+    baseline_names = [
+        s.strip() for s in args.tournament_baselines.split(",") if s.strip()
+    ]
 
     def make_baseline_env(selected: list[str]):
         # Use baseline env with sampled opponents each reset; we set agent_color dynamically inside callback.
@@ -173,7 +175,10 @@ def main():
     # - checkpoint_cb: periodic checkpointing
     # - eval_cb: self-play eval / normalized reward tracking
     # - tournament_cb: external baseline tournament metrics logged under prefix tournament/
-    model.learn(total_timesteps=args.total_steps, callback=[checkpoint_cb, eval_cb, tournament_cb])
+    model.learn(
+        total_timesteps=args.total_steps,
+        callback=[checkpoint_cb, eval_cb, tournament_cb],
+    )
     model.save(os.path.join(args.model_dir, "ppo_ludo_final"))
 
 

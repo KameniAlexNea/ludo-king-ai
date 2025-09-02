@@ -22,22 +22,24 @@ Usage:
 Note: This callback directly uses the model's policy to select actions for each acting seat sequentially.
 We temporarily disable gradient tracking for speed.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Sequence
+
 import numpy as np
-
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.vec_env import VecEnv
 
-from ludo.constants import Colors, GameConstants
+from ludo.constants import Colors
 
 # Type alias for environment factory returning a fresh baseline (non self-play) env
 BaselineEnvFactory = Callable[[str], object]
 
 
-def _soft_action_select(policy, obs: np.ndarray, action_mask: np.ndarray | None = None) -> int:
+def _soft_action_select(
+    policy, obs: np.ndarray, action_mask: np.ndarray | None = None
+) -> int:
     """Select action via model policy given raw (non-batched) observation.
 
     We build a single-batch and call policy.predict with deterministic=False to retain exploration signal.
@@ -135,7 +137,9 @@ class SelfPlayTournamentCallback(BaseCallback):
                     env.agent_color = seat_color  # type: ignore
                 while True:
                     # Determine current acting player color (env API differences between baseline & self-play)
-                    current_color = getattr(env.game.get_current_player(), "color").value
+                    current_color = getattr(
+                        env.game.get_current_player(), "color"
+                    ).value
                     if current_color == seat_color:
                         mask = None
                         if hasattr(env, "move_utils"):
@@ -157,15 +161,23 @@ class SelfPlayTournamentCallback(BaseCallback):
                     if terminated or truncated:
                         # Determine rank / winner
                         # Simple approach: if agent won allocate win
-                        agent_player = next(p for p in env.game.players if p.color.value == seat_color)
+                        agent_player = next(
+                            p for p in env.game.players if p.color.value == seat_color
+                        )
                         if agent_player.has_won():
                             metrics.wins += 1
                             metrics.ranks.append(1)
                         else:
                             # Rough rank proxy: order by finished token count descending (ties average rank)
-                            finished = [(p.get_finished_tokens_count(), p) for p in env.game.players]
+                            finished = [
+                                (p.get_finished_tokens_count(), p)
+                                for p in env.game.players
+                            ]
                             finished.sort(reverse=True, key=lambda x: x[0])
-                            rank_positions = {pl.color.value: i + 1 for i, (cnt, pl) in enumerate(finished)}
+                            rank_positions = {
+                                pl.color.value: i + 1
+                                for i, (cnt, pl) in enumerate(finished)
+                            }
                             metrics.ranks.append(rank_positions[seat_color])
                             metrics.losses += 1
                         metrics.turns.append(turns)
@@ -175,7 +187,9 @@ class SelfPlayTournamentCallback(BaseCallback):
         for k, v in agg.items():
             self.logger.record(self.log_prefix + k, v)
         if self.verbose:
-            print(f"[Tournament] Steps={self.num_timesteps} games={total_games_target} metrics={agg}")
+            print(
+                f"[Tournament] Steps={self.num_timesteps} games={total_games_target} metrics={agg}"
+            )
 
         # Ensure TensorBoard flush
         if hasattr(self.logger, "writer") and self.logger.writer:
@@ -186,4 +200,3 @@ class SelfPlayTournamentCallback(BaseCallback):
     def _on_training_end(self) -> None:
         # Final tournament at end
         self._run_tournament()
-        
