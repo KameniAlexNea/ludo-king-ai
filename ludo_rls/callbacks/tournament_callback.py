@@ -26,16 +26,20 @@ We temporarily disable gradient tracking for speed.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Sequence
+from itertools import combinations
+from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 
-from ludo.constants import Colors
+from ludo.constants import Colors, GameConstants
+from ludo.game import LudoGame
+from ludo.player import PlayerColor
 from ludo.strategy import StrategyFactory
 
-# Type alias for environment factory returning a fresh baseline (non self-play) env
-BaselineEnvFactory = Callable[[str], object]
+from ..envs.builders.observation_builder import ObservationBuilder
+from ..envs.model import EnvConfig
+from ..envs.utils.move_utils import MoveUtils
 
 
 def _soft_action_select(
@@ -127,21 +131,36 @@ class TournamentMetrics:
 
 
 class SelfPlayTournamentCallback(BaseCallback):
+    """Run PPO vs (3) scripted strategies tournaments periodically.
+
+    Design:
+      - PPO always occupies RED seat (matching training perspective)
+      - Opponents: all unique 3-combinations drawn from provided baselines list
+      - Distribute total n_games approximately evenly across combinations
+      - No random fallback strategies; only provided names are used
+      - Metrics aggregated over all simulated games
+    """
+
     def __init__(
         self,
-        make_baseline_env_fn: Callable[[List[str]], object],
         baselines: Sequence[str],
-        n_games: int = 200,
+        n_games: int = 120,
         eval_freq: int = 100_000,
+        max_turns: int = 1000,
         log_prefix: str = "tournament/",
         verbose: int = 0,
     ):
         super().__init__(verbose)
-        self.make_env_fn = make_baseline_env_fn
-        self.baselines = list(baselines)
+        self.baselines = list(dict.fromkeys(baselines))  # de-dup
         self.n_games = n_games
         self.eval_freq = eval_freq
+        self.max_turns = max_turns
         self.log_prefix = log_prefix
+        # Precompute combinations of 3 strategies
+        self.combos: List[Tuple[str, str, str]] = []
+        if len(self.baselines) >= 3:
+            self.combos = list(combinations(self.baselines, 3))
+        # If fewer than 3 provided, we cannot form proper tournament opponents; fallback empty combos
 
     def _on_step(self) -> bool:
         if self.num_timesteps == 0:
@@ -153,116 +172,118 @@ class SelfPlayTournamentCallback(BaseCallback):
 
     def _run_tournament(self):
         policy = self.model.policy  # type: ignore
-        # Provide policy reference to helper for obs length adaptation
-        try:
-            _ensure_color_feature.policy_ref = policy  # type: ignore
-        except Exception:
-            pass
         metrics = TournamentMetrics()
-        # We cycle through agent seating positions uniformly
-        seats = list(Colors.ALL_COLORS)
-        games_per_seat = max(1, self.n_games // len(seats))
-        total_games_target = games_per_seat * len(seats)
-        for seat_color in seats:
-            for _ in range(games_per_seat):
-                env = self.make_env_fn([b for b in self.baselines if b])
-                obs, _ = env.reset()
-                # done = False
-                turns = 0
-                # Force PPO seat color if env supports agent_color attribute
-                if hasattr(env, "agent_color"):
-                    env.agent_color = seat_color  # type: ignore
-                # Ensure all non-seat players have a concrete baseline strategy
-                try:
-                    fallback_names = self.baselines if self.baselines else ["random"]
-                    for p in env.game.players:
-                        if p.color.value == seat_color:
-                            continue
-                        if not getattr(p, "strategy", None):
-                            # pick first available strategy name
-                            name = fallback_names[0]
-                            try:
-                                p.set_strategy(StrategyFactory.create_strategy(name))
-                            except Exception:
-                                # last resort random
-                                try:
-                                    p.set_strategy(StrategyFactory.create_strategy("random"))
-                                except Exception:
-                                    pass
-                except Exception:
-                    pass
-                while True:
-                    # Determine current acting player color (env API differences between baseline & self-play)
-                    current_color = getattr(
-                        env.game.get_current_player(), "color"
-                    ).value
-                    # Adapt observation to include color one-hot if baseline env shorter
-                    obs = _ensure_color_feature(obs, current_color)
-                    if current_color == seat_color:
-                        mask = None
-                        if hasattr(env, "move_utils"):
-                            mask = env.move_utils.action_masks(env._pending_valid_moves)  # type: ignore
+        if not self.combos:
+            if self.verbose:
+                print("[Tournament] Not enough baseline strategies (need >=3). Skipping.")
+            return metrics.aggregate()
+
+        # Distribute games across combinations
+        games_per_combo = max(1, self.n_games // len(self.combos))
+        total_games_target = games_per_combo * len(self.combos)
+
+        env_cfg = EnvConfig(max_turns=self.max_turns)
+        turn_counter = 0
+
+        for combo in self.combos:
+            for _ in range(games_per_combo):
+                # Fresh game
+                game = LudoGame([
+                    PlayerColor.RED,
+                    PlayerColor.GREEN,
+                    PlayerColor.YELLOW,
+                    PlayerColor.BLUE,
+                ])
+                # Assign PPO to RED; assign combo strategies to remaining colors in fixed order skipping RED
+                opponent_colors = [c for c in [PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]]
+                for idx, color in enumerate(opponent_colors):
+                    strat_name = combo[idx]
+                    strat = StrategyFactory.create_strategy(strat_name)
+                    player = next(p for p in game.players if p.color is color)
+                    player.set_strategy(strat)
+                    player.strategy_name = strat_name
+                # PPO strategy via policy (handled here, not through game strategy object)
+                ppo_player = next(p for p in game.players if p.color is PlayerColor.RED)
+                ppo_player.strategy_name = "ppo"
+
+                # Helpers for observation & masking
+                obs_builder = ObservationBuilder(env_cfg, game, PlayerColor.RED.value)
+                move_utils = MoveUtils(env_cfg, game, PlayerColor.RED.value)
+                turns_in_game = 0
+                token_finish_counts = {p.color.value: 0 for p in game.players}
+
+                while not game.game_over and turns_in_game < self.max_turns:
+                    current_player = game.get_current_player()
+                    dice = game.roll_dice()
+                    valid_moves = game.get_valid_moves(current_player, dice)
+                    if current_player is ppo_player:
+                        # Build obs from PPO perspective
+                        obs = obs_builder._build_observation(turn_counter, dice)
+                        # Build action mask
+                        mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
+                        if valid_moves:
+                            for m in valid_moves:
+                                mask[m["token_id"]] = 1
                         action = _soft_action_select(policy, obs, mask)
+                        if valid_moves:
+                            valid_ids = [m["token_id"] for m in valid_moves]
+                            if action not in valid_ids:
+                                action = valid_ids[0]
+                            move_res = game.execute_move(current_player, action, dice)
+                            if move_res.get("token_finished"):
+                                token_finish_counts[current_player.color.value] += 1
+                            if move_res.get("game_won"):
+                                metrics.wins += 1
+                                metrics.ranks.append(1)
+                                break
+                            if not move_res.get("extra_turn"):
+                                game.next_turn()
+                        else:
+                            game.next_turn()
+                        turn_counter += 1
                     else:
-                        # Opponent scripted move with robust fallback
-                        opponent = env.game.get_current_player()
-                        strat = getattr(opponent, "strategy", None)
-                        if strat is None:
-                            # Attempt assign random strategy
-                            try:
-                                opponent.set_strategy(StrategyFactory.create_strategy("random"))
-                                strat = opponent.strategy
-                            except Exception:
-                                strat = None
-                        if strat is not None:
-                            try:
-                                action = strat.select_action(None)  # type: ignore
-                            except Exception:
-                                action = 0
-                        else:
-                            action = 0  # fallback neutral token index
-                    obs, reward, terminated, truncated, info = env.step(action)
-                    turns += 1
-                    if info.get("step_breakdown"):
-                        comp = info["step_breakdown"]
-                        if "capture" in comp and comp["capture"] > 0:
-                            metrics.captures_for += 1
-                        if "got_captured" in comp and comp["got_captured"] < 0:
-                            metrics.captures_against += 1
-                        if info.get("illegal_action"):
-                            metrics.illegal_actions += 1
-                    if terminated or truncated:
-                        # Determine rank / winner
-                        # Simple approach: if agent won allocate win
-                        agent_player = next(
-                            p for p in env.game.players if p.color.value == seat_color
-                        )
-                        if agent_player.has_won():
-                            metrics.wins += 1
-                            metrics.ranks.append(1)
-                        else:
-                            # Rough rank proxy: order by finished token count descending (ties average rank)
-                            finished = [
-                                (p.get_finished_tokens_count(), p)
-                                for p in env.game.players
-                            ]
-                            finished.sort(reverse=True, key=lambda x: x[0])
-                            rank_positions = {
-                                pl.color.value: i + 1
-                                for i, (cnt, pl) in enumerate(finished)
-                            }
-                            metrics.ranks.append(rank_positions[seat_color])
-                            metrics.losses += 1
-                        metrics.turns.append(turns)
-                        break
+                        # Opponent scripted decision using its strategy; build minimal context
+                        try:
+                            context = game.get_game_state_for_ai()
+                            context["dice_value"] = dice
+                            if valid_moves:
+                                token_id = current_player.make_strategic_decision(context)
+                                move_res = game.execute_move(current_player, token_id, dice)
+                                if move_res.get("token_finished"):
+                                    token_finish_counts[current_player.color.value] += 1
+                                if move_res.get("game_won"):
+                                    # PPO did not win; assign rank later
+                                    break
+                                if not move_res.get("extra_turn"):
+                                    game.next_turn()
+                            else:
+                                game.next_turn()
+                        except Exception:
+                            # On any failure just skip turn
+                            game.next_turn()
+                    turns_in_game += 1
+                # If game ended without PPO win, compute PPO rank by finished tokens
+                if not game.game_over:
+                    # time limit; approximate rank
+                    pass
+                if not any(p.has_won() and p is ppo_player for p in game.players):
+                    # Rank calculation: sort by finished tokens desc
+                    finished = [(p.get_finished_tokens_count(), p) for p in game.players]
+                    finished.sort(reverse=True, key=lambda x: x[0])
+                    rank_positions = {pl.color.value: i + 1 for i, (cnt, pl) in enumerate(finished)}
+                    ppo_rank = rank_positions[ppo_player.color.value]
+                    if ppo_rank == 1:
+                        metrics.wins += 1
+                    else:
+                        metrics.losses += 1
+                    metrics.ranks.append(ppo_rank)
+                metrics.turns.append(turns_in_game)
         # Aggregate & log
         agg = metrics.aggregate()
         for k, v in agg.items():
             self.logger.record(self.log_prefix + k, v)
         if self.verbose:
-            print(
-                f"[Tournament] Steps={self.num_timesteps} games={total_games_target} metrics={agg}"
-            )
+            print(f"[Tournament] Steps={self.num_timesteps} games={total_games_target} metrics={agg}")
 
         # Ensure TensorBoard flush
         if hasattr(self.logger, "writer") and self.logger.writer:

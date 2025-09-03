@@ -150,23 +150,12 @@ def main():
         n_eval_episodes=20,  # More evaluation episodes
     )
 
-    # Tournament baseline env factory (reuses baseline environment from ludo_rl, imported lazily to avoid circulars)
-    from ludo_rl.envs.ludo_env import LudoGymEnv as BaselineEnv  # type: ignore
-
-    baseline_names = [
-        s.strip() for s in args.tournament_baselines.split(",") if s.strip()
-    ]
-
-    def make_baseline_env(selected: list[str]):
-        # Use baseline env with sampled opponents each reset; we set agent_color dynamically inside callback.
-        # EnvConfig from ludo_rl may differ; we rely on defaults.
-        return BaselineEnv()
-
+    baseline_names = [s.strip() for s in args.tournament_baselines.split(",") if s.strip()]
     tournament_cb = SelfPlayTournamentCallback(
-        make_baseline_env_fn=make_baseline_env,
         baselines=baseline_names,
         n_games=args.tournament_games,
         eval_freq=args.tournament_freq,
+        max_turns=args.max_turns,
         log_prefix="tournament/",
         verbose=1,
     )
