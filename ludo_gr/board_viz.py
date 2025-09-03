@@ -15,7 +15,7 @@ COLOR_MAP = {
 BG_COLOR = (245, 245, 245)
 GRID_LINE = (210, 210, 210)
 PATH_COLOR = (255, 255, 255)
-STAR_COLOR = (255, 255, 200)
+STAR_COLOR = (190, 190, 190)  # safe/star
 HOME_SHADE = (235, 235, 235)
 CENTER_COLOR = (255, 255, 255)
 
@@ -103,11 +103,10 @@ def _cell_bbox(col: int, row: int):
 
 
 def _draw_home_quadrants(d: ImageDraw.ImageDraw):
+    # Fill entire quadrant with player color (no inner white), as requested
     for color, ((c0, c1), (r0, r1)) in HOME_QUADRANTS.items():
         box = (c0 * CELL, r0 * CELL, (c1 + 1) * CELL, (r1 + 1) * CELL)
-        d.rectangle(box, fill=tuple(int(c * 0.9) for c in COLOR_MAP[color]))
-        inner = ((c0 + 1) * CELL, (r0 + 1) * CELL, c1 * CELL, r1 * CELL)
-        d.rectangle(inner, fill=HOME_SHADE)
+        d.rectangle(box, fill=COLOR_MAP[color])
 
 
 def _token_home_grid_position(color: str, token_id: int) -> Tuple[int, int]:
@@ -120,17 +119,23 @@ def _token_home_grid_position(color: str, token_id: int) -> Tuple[int, int]:
 
 
 def _home_column_positions_for_color(color: str) -> Dict[int, Tuple[int, int]]:
-    # Map logical home column indices (100..105) to coordinates along middle lane toward center (7,7)
+    """
+    Map home column indices (100..104) to board coordinates; 105 is final finish.
+
+    GameConstants.HOME_COLUMN_SIZE = 6 covers 100..105 inclusive, but per spec 105 is
+    not a drawable lane square—tokens reaching 105 are considered finished and moved
+    to the center aggregation. We therefore only allocate 5 visual squares (100-104).
+    """
     mapping: Dict[int, Tuple[int, int]] = {}
     center = (7, 7)
     entry_index = BoardConstants.HOME_COLUMN_ENTRIES[color]
     entry_coord = PATH_INDEX_TO_COORD[entry_index]
     ex, ey = entry_coord
-    # Determine axis of approach: same col or same row progression towards center
     dx = 0 if ex == center[0] else (1 if center[0] > ex else -1)
     dy = 0 if ey == center[1] else (1 if center[1] > ey else -1)
     cx, cy = ex + dx, ey + dy
-    for offset in range(GameConstants.HOME_COLUMN_SIZE):
+    # Only create squares for 100..104 (size - 1)
+    for offset in range(GameConstants.HOME_COLUMN_SIZE - 1):  # exclude final 105
         mapping[HOME_COLUMN_START + offset] = (cx, cy)
         cx += dx
         cy += dy
@@ -149,18 +154,34 @@ def draw_board(tokens: Dict[str, List[Dict]], show_ids: bool = True) -> Image.Im
     # Quadrants
     _draw_home_quadrants(d)
 
-    # Main path cells
+    # Precompute special colored squares: start positions & home entry positions
+    start_positions = BoardConstants.START_POSITIONS  # color -> index
+    home_entries = BoardConstants.HOME_COLUMN_ENTRIES  # color -> index
+    start_index_to_color = {idx: clr for clr, idx in start_positions.items()}
+    entry_index_to_color = {idx: clr for clr, idx in home_entries.items()}
+
+    # Main path cells with coloring rules
     for idx, (c, r) in PATH_INDEX_TO_COORD.items():
         bbox = _cell_bbox(c, r)
-        fill = STAR_COLOR if idx in BoardConstants.STAR_SQUARES else PATH_COLOR
-        d.rectangle(bbox, fill=fill, outline=GRID_LINE)
+        outline = GRID_LINE
+        if idx in start_index_to_color:  # starting squares are safe
+            fill = COLOR_MAP[start_index_to_color[idx]]
+        elif idx in entry_index_to_color:  # entry squares NOT safe; show normal path w/ colored outline
+            fill = PATH_COLOR
+            outline = COLOR_MAP[entry_index_to_color[idx]]
+        elif idx in BoardConstants.STAR_SQUARES:  # global safe/star
+            fill = STAR_COLOR
+        else:
+            fill = PATH_COLOR
+        d.rectangle(bbox, fill=fill, outline=outline)
 
-    # Home columns
+    # Home columns (tinted player color)
     for color, pos_map in HOME_COLUMN_COORDS.items():
         col_rgb = COLOR_MAP[color]
+        tint = tuple(min(255, int(v * 1.15)) for v in col_rgb)  # light tint
         for pos, (c, r) in pos_map.items():
             bbox = _cell_bbox(c, r)
-            d.rectangle(bbox, fill=PATH_COLOR, outline=col_rgb)
+            d.rectangle(bbox, fill=tint, outline=col_rgb)
 
     # Center finish region
     center_bbox = _cell_bbox(7, 7)
