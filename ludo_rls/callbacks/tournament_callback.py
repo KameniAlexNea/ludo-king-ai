@@ -39,7 +39,6 @@ from ludo.strategy import StrategyFactory
 
 from ..envs.builders.observation_builder import ObservationBuilder
 from ..envs.model import EnvConfig
-from ..envs.utils.move_utils import MoveUtils
 
 
 def _soft_action_select(
@@ -78,7 +77,11 @@ def _ensure_color_feature(obs: np.ndarray, current_color: str) -> np.ndarray:
     """
     # current policy obs size might include one-hot
     try:
-        target_len = int(getattr(getattr(_ensure_color_feature, "policy_ref", None), "observation_space").shape[0])  # type: ignore
+        target_len = int(
+            getattr(
+                getattr(_ensure_color_feature, "policy_ref", None), "observation_space"
+            ).shape[0]
+        )  # type: ignore
     except Exception:
         target_len = None
     if target_len is not None and obs.shape[0] == target_len:
@@ -214,7 +217,7 @@ class SelfPlayTournamentCallback(BaseCallback):
 
                 # Helpers for observation & masking
                 obs_builder = ObservationBuilder(env_cfg, game, PlayerColor.RED.value)
-                move_utils = MoveUtils(env_cfg, game, PlayerColor.RED.value)
+                # move_utils = MoveUtils(env_cfg, game, PlayerColor.RED.value)
                 turns_in_game = 0
                 token_finish_counts = {p.color.value: 0 for p in game.players}
 

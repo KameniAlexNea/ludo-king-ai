@@ -76,6 +76,4 @@ class EnvConfig:
     reward_cfg: RewardConfig = field(default_factory=RewardConfig)
     obs_cfg: ObservationConfig = field(default_factory=ObservationConfig)
     seed: Optional[int] = None
-    use_action_mask: bool = (
-        True  # When True, invalid chosen actions are auto-corrected without large penalty
-    )
+    use_action_mask: bool = True  # When True, invalid chosen actions are auto-corrected without large penalty
