@@ -32,6 +32,7 @@ ludo_stats/                # Game state saving & analysis utilities
 models/                    # Saved PPO model artifacts
 logs/                      # TensorBoard & evaluation logs
 tests/                     # Unit & integration tests
+ludo_gr/                   # Gradio AI-vs-AI visualization interface
 ```
 
 ## Choosing an Environment
@@ -75,6 +76,11 @@ tensorboard --logdir=logs_self
 Run a heuristic tournament (multi-strategy):
 ```bash
 python four_player_tournament.py
+```
+
+Visualize an AI vs AI game (interactive board):
+```bash
+python -m ludo_gr.app
 ```
 
 Single-seat periodic evaluation is integrated via `--tournament-freq` / `--tournament-games` flags (see `ludo_rls/README.md`). Metrics include win rate, mean rank, capture stats (offensive/defensive), capture ratio, PPO & overall illegal rates, average turns.
