@@ -1,7 +1,7 @@
 """RLlib training entry point.
 Register env via gymnasium interface.
 Run:
-    python -m ludo_rl.train_rllib --stop-timesteps 2000000
+    python -m ludo_rls.train_rllib --stop-timesteps 2000000
 """
 
 from __future__ import annotations

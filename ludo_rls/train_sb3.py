@@ -1,7 +1,7 @@
 """Stable-Baselines3 training script for Ludo.
 
 Usage (after installing requirements):
-    python -m ludo_rl.train_sb3 --total-steps 2000000 --n-envs 8
+    python -m ludo_rls.train_sb3 --total-steps 2000000 --n-envs 8
 
 Produces models/, logs/ and tensorboard metrics.
 """

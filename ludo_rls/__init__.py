@@ -7,7 +7,7 @@ Provides:
 - Training helpers for Stable-Baselines3 and RLlib
 
 Entry points:
-    from ludo_rl.envs import LudoGymEnv
+    from ludo_rls.envs import LudoGymEnv
 """
 
 from .envs.ludo_env import LudoGymEnv  # noqa: F401

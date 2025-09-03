@@ -308,18 +308,6 @@ class FourPlayerPPOTournament:
                             game.players[i].set_strategy(strategy)
                         game.players[i].strategy_name = player_name
 
-                # Single-seat path: prepare observation builder
-                if self.env_kind == "single-seat":
-                    pass
-                    # from ludo_rls.envs.builders.observation_builder import (
-                    #     ObservationBuilder as _ObsBuilder,
-                    # )
-
-                    # env_cfg = self.EnvConfigClass(
-                    #     max_turns=self.max_turns_per_game, agent_color="red"
-                    # )
-                    # obs_builder = _ObsBuilder(env_cfg, game, PlayerColor.RED.value)
-
                 # Play the game
                 results = self._play_four_player_game(
                     game, f"{combo_idx}.{game_num + 1}"
