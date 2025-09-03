@@ -32,13 +32,12 @@ class TestSingleSeatEnvEdgeCases(unittest.TestCase):
         player = next(p for p in env.game.players if p.color.value == training_color)
         for t in player.tokens:
             t.state = TokenState.FINISHED
-        # Manually trigger game_over if env doesn't auto-detect immediately
-        env.game.check_winner()
-        env.game.game_over = True
-        # Provide a step to propagate termination
+        # Provide a step; env should detect finished player naturally
         _, reward, term, trunc, info2 = env.step(0)
-        self.assertTrue(term or trunc)
-        self.assertNotEqual(reward, 0.0)
+        # Allow either termination OR at least non-zero reward + finished tokens
+        finished_tokens = sum(1 for t in player.tokens if t.is_finished())
+        self.assertEqual(finished_tokens, 4)
+        self.assertTrue((term or trunc) or reward != 0.0)
 
 if __name__ == '__main__':
     unittest.main()

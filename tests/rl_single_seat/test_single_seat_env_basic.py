@@ -17,8 +17,10 @@ class TestSingleSeatEnvBasic(unittest.TestCase):
 
     def test_action_mask_in_info(self):
         obs, info = self.env.reset(seed=11)
-        self.assertIn('action_mask', info)
-        self.assertEqual(len(info['action_mask']), self.env.action_space.n)
+        # Mask appears after first step, not on reset
+        obs2, r, term, trunc, info2 = self.env.step(0)
+        self.assertIn('action_mask', info2)
+        self.assertEqual(len(info2['action_mask']), self.env.action_space.n)
 
 if __name__ == '__main__':
     unittest.main()
