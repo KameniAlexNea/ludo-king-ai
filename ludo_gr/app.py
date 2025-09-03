@@ -221,9 +221,7 @@ def launch_app():
             _update_stats,
             [stats_state, game_state],
             [stats_state],
-        ).then(
-            lambda st: st, [stats_state], [stats_display]
-        )
+        ).then(lambda st: st, [stats_state], [stats_display])
 
         auto_steps.release(
             lambda n, g, h, s: _steps(n, g, h, s),
@@ -233,9 +231,7 @@ def launch_app():
             _update_stats,
             [stats_state, game_state],
             [stats_state],
-        ).then(
-            lambda st: st, [stats_state], [stats_display]
-        )
+        ).then(lambda st: st, [stats_state], [stats_display])
 
         bulk_run_btn.click(
             _run_bulk,
