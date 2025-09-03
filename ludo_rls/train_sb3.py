@@ -38,8 +38,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--total-steps", type=int, default=2_000_000)
     parser.add_argument("--n-envs", type=int, default=8)
-    parser.add_argument("--logdir", type=str, default="./logs")
-    parser.add_argument("--model-dir", type=str, default="./models")
+    parser.add_argument("--logdir", type=str, default="./logs_self")
+    parser.add_argument("--model-dir", type=str, default="./models_self")
     parser.add_argument("--eval-freq", type=int, default=50_000)
     parser.add_argument("--checkpoint-freq", type=int, default=100_000)
     parser.add_argument(

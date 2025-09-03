@@ -32,6 +32,7 @@ import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 
 from ludo.constants import Colors
+from ludo.strategy import StrategyFactory
 
 # Type alias for environment factory returning a fresh baseline (non self-play) env
 BaselineEnvFactory = Callable[[str], object]
@@ -60,6 +61,37 @@ def _soft_action_select(
         legal_indices = np.nonzero(action_mask)[0]
         return int(legal_indices[0])
     return act
+
+
+def _ensure_color_feature(obs: np.ndarray, current_color: str) -> np.ndarray:
+    """If observation vector is missing color one-hot (detected by length), append it.
+
+    Training self-play env includes 4 extra slots. Baseline env likely shorter.
+    We detect by comparing length mod 4 of last features heuristically.
+    Simpler: if len(obs) % 4 != 0 and len(obs) <= 40 assume missing and append.
+    More robust: check against a known self-play length via policy observation_space if available.
+    Here we'll append one-hot if length differs from model.observation_space.shape[0].
+    """
+    # current policy obs size might include one-hot
+    try:
+        target_len = int(getattr(getattr(_ensure_color_feature, 'policy_ref', None), 'observation_space').shape[0])  # type: ignore
+    except Exception:
+        target_len = None
+    if target_len is not None and obs.shape[0] == target_len:
+        return obs
+    # If target len known and we're shorter by exactly 4, append
+    if target_len is not None and target_len - obs.shape[0] == 4:
+        pass
+    elif target_len is None:
+        # Heuristic: if not multiple of 4 after removing last 5 scalars assume missing
+        pass
+    # Build one-hot
+    one_hot = np.zeros(4, dtype=obs.dtype)
+    for i, c in enumerate(Colors.ALL_COLORS):
+        if c == current_color:
+            one_hot[i] = 1.0
+            break
+    return np.concatenate([obs, one_hot], axis=0)
 
 
 @dataclass
@@ -121,6 +153,11 @@ class SelfPlayTournamentCallback(BaseCallback):
 
     def _run_tournament(self):
         policy = self.model.policy  # type: ignore
+        # Provide policy reference to helper for obs length adaptation
+        try:
+            _ensure_color_feature.policy_ref = policy  # type: ignore
+        except Exception:
+            pass
         metrics = TournamentMetrics()
         # We cycle through agent seating positions uniformly
         seats = list(Colors.ALL_COLORS)
@@ -135,21 +172,55 @@ class SelfPlayTournamentCallback(BaseCallback):
                 # Force PPO seat color if env supports agent_color attribute
                 if hasattr(env, "agent_color"):
                     env.agent_color = seat_color  # type: ignore
+                # Ensure all non-seat players have a concrete baseline strategy
+                try:
+                    fallback_names = self.baselines if self.baselines else ["random"]
+                    for p in env.game.players:
+                        if p.color.value == seat_color:
+                            continue
+                        if not getattr(p, "strategy", None):
+                            # pick first available strategy name
+                            name = fallback_names[0]
+                            try:
+                                p.set_strategy(StrategyFactory.create_strategy(name))
+                            except Exception:
+                                # last resort random
+                                try:
+                                    p.set_strategy(StrategyFactory.create_strategy("random"))
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
                 while True:
                     # Determine current acting player color (env API differences between baseline & self-play)
                     current_color = getattr(
                         env.game.get_current_player(), "color"
                     ).value
+                    # Adapt observation to include color one-hot if baseline env shorter
+                    obs = _ensure_color_feature(obs, current_color)
                     if current_color == seat_color:
                         mask = None
                         if hasattr(env, "move_utils"):
                             mask = env.move_utils.action_masks(env._pending_valid_moves)  # type: ignore
                         action = _soft_action_select(policy, obs, mask)
                     else:
-                        # Let scripted strategy handle its own move (baseline env)
-                        action = env.game.get_current_player().strategy.select_action(
-                            None
-                        )  # type: ignore
+                        # Opponent scripted move with robust fallback
+                        opponent = env.game.get_current_player()
+                        strat = getattr(opponent, "strategy", None)
+                        if strat is None:
+                            # Attempt assign random strategy
+                            try:
+                                opponent.set_strategy(StrategyFactory.create_strategy("random"))
+                                strat = opponent.strategy
+                            except Exception:
+                                strat = None
+                        if strat is not None:
+                            try:
+                                action = strat.select_action(None)  # type: ignore
+                            except Exception:
+                                action = 0
+                        else:
+                            action = 0  # fallback neutral token index
                     obs, reward, terminated, truncated, info = env.step(action)
                     turns += 1
                     if info.get("step_breakdown"):
