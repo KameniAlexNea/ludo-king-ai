@@ -237,8 +237,14 @@ class SelfPlayTournamentCallback(BaseCallback):
                         if valid_moves:
                             valid_ids = [m["token_id"] for m in valid_moves]
                             if action not in valid_ids:
+                                # Count as illegal selection
+                                metrics.illegal_actions += 1
                                 action = valid_ids[0]
                             move_res = game.execute_move(current_player, action, dice)
+                            # Capture accounting
+                            captured = move_res.get("captured_tokens", [])
+                            if captured:
+                                metrics.captures_for += len(captured)
                             if move_res.get("token_finished"):
                                 token_finish_counts[current_player.color.value] += 1
                             if move_res.get("game_won"):
@@ -262,6 +268,12 @@ class SelfPlayTournamentCallback(BaseCallback):
                                 move_res = game.execute_move(
                                     current_player, token_id, dice
                                 )
+                                # Capture accounting against PPO
+                                if move_res.get("captured_tokens"):
+                                    # Any captured token belonging to PPO player?
+                                    for ct in move_res["captured_tokens"]:
+                                        if ct["player_color"] == ppo_player.color.value:
+                                            metrics.captures_against += 1
                                 if move_res.get("token_finished"):
                                     token_finish_counts[current_player.color.value] += 1
                                 if move_res.get("game_won"):
