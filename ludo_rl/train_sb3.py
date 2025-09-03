@@ -151,7 +151,9 @@ def main():
     # Tournament callback (optional baselines evaluation) - imported lazily to avoid overhead if unused
     from .callbacks.tournament_callback import ClassicTournamentCallback
 
-    baseline_names = [s.strip() for s in args.tournament_baselines.split(",") if s.strip()]
+    baseline_names = [
+        s.strip() for s in args.tournament_baselines.split(",") if s.strip()
+    ]
     tournament_cb = ClassicTournamentCallback(
         baselines=baseline_names,
         n_games=args.tournament_games,
@@ -161,7 +163,10 @@ def main():
         verbose=1,
     )
 
-    model.learn(total_timesteps=args.total_steps, callback=[checkpoint_cb, eval_cb, tournament_cb])
+    model.learn(
+        total_timesteps=args.total_steps,
+        callback=[checkpoint_cb, eval_cb, tournament_cb],
+    )
     model.save(os.path.join(args.model_dir, "ppo_ludo_final"))
 
 

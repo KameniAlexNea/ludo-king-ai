@@ -13,19 +13,20 @@
 
 | Rank | Model            | Wins | Games | Win Rate % | Avg Turns | Medal |
 |------|------------------|------|-------|-----------:|----------:|:------|
-| 1    | OPTIMIST         | 62   | 200   | 31.0       | 127.3     | 🥇 |
-| 2    | BALANCED         | 61   | 200   | 30.5       | 129.0     | 🥈 |
-| 3    | PPO_LUDO_FINAL   | 55   | 200   | 27.5       | 127.6     | 🥉 |
-| 4    | PROBABILISTIC_V3 | 22   | 200   | 11.0       | 128.0     |  |
+| 1    | OPTIMIST         | 63   | 200   | 31.5       | 130.2     | 🥇 |
+| 2    | PPO_LUDO_FINAL   | 60   | 200   | 30.0       | 129.5     | 🥈 |
+| 3    | BALANCED         | 52   | 200   | 26.0       | 130.3     | 🥉 |
+| 4    | PROBABILISTIC_V3 | 25   | 200   | 12.5       | 131.0     |  |
 
 ### Observations
-* Heuristic strategies (Balanced / Optimist) still outperform current PPO snapshot.
-* PPO maintains competitive average turns (slightly fewer turns when not winning – possibly earlier eliminations / lower finishing performance).
-* Probabilistic_V3 underperforms relative to others; may offer exploitable patterns for PPO curriculum.
+* PPO now leads the mixed baseline tournament (Section 1), surpassing all scripted heuristics after normalization parity.
+* In the self‑improvement setting PPO is a close second (–1.5 pp from top), indicating the gap to strongest heuristics has narrowed substantially.
+* PPO achieves slightly lower average turns than top heuristics in its wins, suggesting improved conversion efficiency.
+* Probabilistic_V3 remains a weak baseline and is still a good curriculum starter opponent.
 
 ### Next Improvement Ideas
-1. Curriculum: start with weaker opponents (Probabilistic_V3 + Random) then introduce Balanced/Optimist.
-2. Snapshot Lag: freeze opponent PPO every N updates to stabilize target distribution.
-3. Reward Tuning: modest boost to capture/finish shaping or slight reduction of terminal magnitude gap.
-4. Action Mask Entropy: encourage exploration among legal moves by renormalizing masked policy logits.
-5. Evaluation Split: Track separate metrics for early-game (<=50 turns) vs late-game to locate weakness.
+1. Curriculum refinement: phase out Probabilistic_V3 earlier; introduce harder mixes once PPO >32% win rate.
+2. Snapshot Lag: periodic frozen self opponent to reduce non‑stationarity spikes.
+3. Late‑game shaping: small bonus for finishing final token sooner to reduce stall turns.
+4. Masked sampling temperature (eval option) to probe robustness vs greedy policy overfit.
+5. Phase metrics: break down win rate & capture ratio for early (≤50 turns) vs late (>50) segments.

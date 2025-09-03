@@ -28,6 +28,7 @@ Notes:
 - Action selection uses soft sampling (stochastic) with simple rejection sampling
   against action mask.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,7 +38,6 @@ from typing import Dict, List, Sequence, Tuple
 import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 
-from ludo.constants import Colors, GameConstants
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
 from ludo.strategy import StrategyFactory
@@ -140,7 +140,9 @@ class ClassicTournamentCallback(BaseCallback):
         metrics = TournamentMetrics()
         if not self.combos:
             if self.verbose:
-                print("[ClassicTournament] Not enough baseline strategies (need >=3). Skipping.")
+                print(
+                    "[ClassicTournament] Not enough baseline strategies (need >=3). Skipping."
+                )
             return metrics.aggregate()
 
         games_per_combo = max(1, self.n_games // len(self.combos))
@@ -150,13 +152,19 @@ class ClassicTournamentCallback(BaseCallback):
 
         for combo in self.combos:
             for _ in range(games_per_combo):
-                game = LudoGame([
-                    PlayerColor.RED,
+                game = LudoGame(
+                    [
+                        PlayerColor.RED,
+                        PlayerColor.GREEN,
+                        PlayerColor.YELLOW,
+                        PlayerColor.BLUE,
+                    ]
+                )
+                opponent_colors = [
                     PlayerColor.GREEN,
                     PlayerColor.YELLOW,
                     PlayerColor.BLUE,
-                ])
-                opponent_colors = [PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
+                ]
                 for idx, color in enumerate(opponent_colors):
                     strat_name = combo[idx]
                     strat = StrategyFactory.create_strategy(strat_name)
@@ -207,8 +215,12 @@ class ClassicTournamentCallback(BaseCallback):
                             context = game.get_game_state_for_ai()
                             context["dice_value"] = dice
                             if valid_moves:
-                                token_id = current_player.make_strategic_decision(context)
-                                move_res = game.execute_move(current_player, token_id, dice)
+                                token_id = current_player.make_strategic_decision(
+                                    context
+                                )
+                                move_res = game.execute_move(
+                                    current_player, token_id, dice
+                                )
                                 if move_res.get("captured_tokens"):
                                     for ct in move_res["captured_tokens"]:
                                         if ct["player_color"] == ppo_player.color.value:
@@ -226,9 +238,13 @@ class ClassicTournamentCallback(BaseCallback):
                             game.next_turn()
                     turns_in_game += 1
                 if not any(p.has_won() and p is ppo_player for p in game.players):
-                    finished = [(p.get_finished_tokens_count(), p) for p in game.players]
+                    finished = [
+                        (p.get_finished_tokens_count(), p) for p in game.players
+                    ]
                     finished.sort(reverse=True, key=lambda x: x[0])
-                    rank_positions = {pl.color.value: i + 1 for i, (cnt, pl) in enumerate(finished)}
+                    rank_positions = {
+                        pl.color.value: i + 1 for i, (cnt, pl) in enumerate(finished)
+                    }
                     ppo_rank = rank_positions[ppo_player.color.value]
                     if ppo_rank == 1:
                         metrics.wins += 1
@@ -240,7 +256,9 @@ class ClassicTournamentCallback(BaseCallback):
         for k, v in agg.items():
             self.logger.record(self.log_prefix + k, v)
         if self.verbose:
-            print(f"[ClassicTournament] Steps={self.num_timesteps} games={total_games_target} metrics={agg}")
+            print(
+                f"[ClassicTournament] Steps={self.num_timesteps} games={total_games_target} metrics={agg}"
+            )
         if hasattr(self.logger, "writer") and self.logger.writer:
             self.logger.writer.flush()
         return agg

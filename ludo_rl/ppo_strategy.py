@@ -1,14 +1,15 @@
-import os
 import glob
+import os
 import pickle
+
 import numpy as np
 import torch
 from stable_baselines3 import PPO
 
 from ludo.constants import Colors, GameConstants
 
-from .envs.ludo_env import EnvConfig, LudoGymEnv
 from .envs.builders.observation_builder import ObservationBuilder
+from .envs.ludo_env import EnvConfig, LudoGymEnv
 
 
 class PPOStrategy:
@@ -132,4 +133,3 @@ class PPOStrategy:
             return int(np.argmax(masked))
         masked /= masked.sum()
         return int(np.random.choice(len(masked), p=masked))
-
