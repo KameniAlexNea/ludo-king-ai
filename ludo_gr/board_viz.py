@@ -166,7 +166,9 @@ def draw_board(tokens: Dict[str, List[Dict]], show_ids: bool = True) -> Image.Im
         outline = GRID_LINE
         if idx in start_index_to_color:  # starting squares (safe)
             fill = COLOR_MAP[start_index_to_color[idx]]
-        elif idx in entry_index_to_color:  # home entry squares (NOT safe) keep path color, colored outline
+        elif (
+            idx in entry_index_to_color
+        ):  # home entry squares (NOT safe) keep path color, colored outline
             fill = PATH_COLOR
             outline = COLOR_MAP[entry_index_to_color[idx]]
         elif idx in BoardConstants.STAR_SQUARES:  # global safe/star
@@ -189,10 +191,16 @@ def draw_board(tokens: Dict[str, List[Dict]], show_ids: bool = True) -> Image.Im
     midy = (cy0 + cy1) // 2
     d.rectangle((cx0, cy0, cx1, cy1), fill=CENTER_COLOR, outline=(80, 80, 80), width=3)
     # Triangles: top(red), right(green), bottom(yellow), left(blue) typical clockwise
-    d.polygon([(cx0, cy0), (cx1, cy0), (midx, midy)], fill=COLOR_MAP[Colors.RED])      # top
-    d.polygon([(cx1, cy0), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.GREEN])    # right
-    d.polygon([(cx0, cy1), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.YELLOW])   # bottom
-    d.polygon([(cx0, cy0), (cx0, cy1), (midx, midy)], fill=COLOR_MAP[Colors.BLUE])     # left
+    d.polygon([(cx0, cy0), (cx1, cy0), (midx, midy)], fill=COLOR_MAP[Colors.RED])  # top
+    d.polygon(
+        [(cx1, cy0), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.GREEN]
+    )  # right
+    d.polygon(
+        [(cx0, cy1), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.YELLOW]
+    )  # bottom
+    d.polygon(
+        [(cx0, cy0), (cx0, cy1), (midx, midy)], fill=COLOR_MAP[Colors.BLUE]
+    )  # left
 
     # Finish anchors per color inside their triangle (stack tokens exactly here)
     finish_anchor = {

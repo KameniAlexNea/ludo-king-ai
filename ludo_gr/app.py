@@ -4,7 +4,10 @@ from typing import Dict, List
 # Ensure Gradio uses a user-writable temp/cache directory to avoid permission errors under restricted /tmp
 _GRADIO_BASE = os.path.join(os.getcwd(), "gradio_runtime")
 os.environ.setdefault("GRADIO_TEMP_DIR", _GRADIO_BASE)
-os.environ.setdefault("GRADIO_CACHE_DIR", os.path.join(_GRADIO_BASE, "cache"))
+os.environ.setdefault(
+    "GRADIO_CACHE_DIR",
+    os.path.join(_GRADIO_BASE, "cache"),
+)
 for _p in (
     os.environ["GRADIO_TEMP_DIR"],
     os.environ["GRADIO_CACHE_DIR"],
