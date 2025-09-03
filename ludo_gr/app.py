@@ -128,66 +128,86 @@ def _play_step(game):
 
 def launch_app():
     with gr.Blocks(title="Ludo AI Visualizer") as demo:
-        gr.Markdown("# Ludo AI Visualizer\nAI vs AI token movement visualization")
-        with gr.Row():
-            strategy_inputs = []
-            for color in DEFAULT_PLAYERS:
-                dd = gr.Dropdown(
-                    choices=AI_STRATEGIES,
-                    value=AI_STRATEGIES[0],
-                    label=f"{color.value} strategy",
-                )
-                strategy_inputs.append(dd)
-
-        with gr.Row():
-            init_btn = gr.Button("Start New Game")
-            step_btn = gr.Button("Play Step")
-            auto_steps = gr.Slider(1, 200, value=1, step=1, label="Auto Steps")
-            bulk_games = gr.Slider(10, 1000, value=100, step=10, label="Bulk Games")
-            bulk_run_btn = gr.Button("Run Bulk Games")
-
-        with gr.Row():
-            show_ids = gr.Checkbox(label="Show Token IDs", value=True)
-            export_btn = gr.Button("Export Game State")
-            move_history_btn = gr.Button("Show Move History (last 50)")
-
-        # Replace Image with HTML to avoid filesystem writes per render
-        board_plot = gr.HTML(label="Board")
-        log = gr.Textbox(label="Last Action", interactive=False)
-        history_box = gr.Textbox(label="Move History", lines=10)
-        bulk_results = gr.Textbox(label="Bulk Results")
-        export_box = gr.Textbox(label="Game State JSON", lines=6)
-        stats_display = gr.JSON(label="Strategy Performance")
-
-        # States
+        gr.Markdown("# Ludo AI Visualizer")
+        with gr.Tabs():
+            with gr.TabItem("Play Game"):
+                with gr.Row():
+                    strategy_inputs = []
+                    for color in DEFAULT_PLAYERS:
+                        strategy_inputs.append(
+                            gr.Dropdown(
+                                choices=AI_STRATEGIES,
+                                value=AI_STRATEGIES[0],
+                                label=f"{color.value} strategy",
+                            )
+                        )
+                with gr.Row():
+                    init_btn = gr.Button("Start New Game")
+                    step_btn = gr.Button("Play Step")
+                    auto_steps_n = gr.Number(value=1, label="Steps")
+                    auto_delay = gr.Number(value=0.2, label="Delay (s)")
+                    run_auto_btn = gr.Button("Run Auto Steps")
+                with gr.Row():
+                    show_ids = gr.Checkbox(label="Show Token IDs", value=True)
+                    export_btn = gr.Button("Export Game State")
+                    move_history_btn = gr.Button("Show Move History (last 50)")
+                board_plot = gr.HTML(label="Board")
+                log = gr.Textbox(label="Last Action", interactive=False)
+                history_box = gr.Textbox(label="Move History", lines=10)
+                stats_display = gr.JSON(label="Performance", value={"games":0,"wins":{c.value:0 for c in DEFAULT_PLAYERS}})
+            with gr.TabItem("Simulate Multiple Games"):
+                sim_strat_inputs = []
+                for color in DEFAULT_PLAYERS:
+                    sim_strat_inputs.append(
+                        gr.Dropdown(
+                            choices=AI_STRATEGIES,
+                            value=AI_STRATEGIES[0],
+                            label=f"{color.value} strategy",
+                        )
+                    )
+                with gr.Row():
+                    bulk_games = gr.Slider(10, 2000, value=200, step=10, label="Number of Games")
+                    bulk_run_btn = gr.Button("Run Simulation")
+                bulk_results = gr.Textbox(label="Simulation Results")
+        export_box = gr.Textbox(label="Game State JSON", lines=6, visible=False)
         game_state = gr.State()
         move_history = gr.State([])
-        stats_state = gr.State(
-            {"games": 0, "wins": {c.value: 0 for c in DEFAULT_PLAYERS}}
-        )
+        stats_state = gr.State({"games":0, "wins": {c.value:0 for c in DEFAULT_PLAYERS}})
 
         def _init(*strats):
             game = _init_game(list(strats))
             pil_img = draw_board(_game_state_tokens(game), show_ids=True)
             html = _img_to_data_uri(pil_img)
-            return game, html, "Game initialized", []
+            return game, html, "Game initialized", [], {"games":0, "wins": {c.value:0 for c in DEFAULT_PLAYERS}}
 
-        def _steps(n, game, history, show):
+        def _steps(game, history, show):
+            game, desc, tokens = _play_step(game)
+            history.append(desc)
+            if len(history) > 50:
+                history = history[-50:]
+            pil_img = draw_board(tokens, show_ids=show)
+            html = _img_to_data_uri(pil_img)
+            return game, html, desc, history
+
+        import time
+        def _run_auto(n, delay, game, history, show):
             if game is None:
                 return None, None, "No game", history
-            desc = ""
             tokens = _game_state_tokens(game)
-            for _ in range(n):
+            desc = "";
+            for _ in range(int(n)):
                 game, step_desc, tokens = _play_step(game)
                 desc = step_desc
                 history.append(step_desc)
                 if len(history) > 50:
                     history = history[-50:]
+                pil_img = draw_board(tokens, show_ids=show)
+                html = _img_to_data_uri(pil_img)
+                yield game, html, desc, history
                 if game.game_over:
                     break
-            pil_img = draw_board(tokens, show_ids=show)
-            html = _img_to_data_uri(pil_img)
-            return game, html, desc, history
+                if delay and delay > 0:
+                    time.sleep(float(delay))
 
         def _export(game):
             if not game:
@@ -208,55 +228,22 @@ def launch_app():
                     g, _, _ = _play_step(g)
                 win_counts[g.winner.color.value] += 1
             total = sum(win_counts.values()) or 1
-            summary = {
-                k: {"wins": v, "win_rate": round(v / total, 3)}
-                for k, v in win_counts.items()
-            }
+            summary = {k: {"wins": v, "win_rate": round(v/total,3)} for k,v in win_counts.items()}
             return json.dumps(summary, indent=2)
 
         def _update_stats(stats, game):
             if game and game.game_over and game.winner:
-                stats = deepcopy(stats)
+                stats = dict(stats)
                 stats["games"] += 1
                 stats["wins"][game.winner.color.value] += 1
             return stats
 
-        # Wiring
-        init_btn.click(
-            _init,
-            strategy_inputs,
-            [game_state, board_plot, log, move_history],
-        )
-        step_btn.click(
-            lambda g, h, s: _steps(1, g, h, s),
-            [game_state, move_history, show_ids],
-            [game_state, board_plot, log, move_history],
-        ).then(
-            _update_stats,
-            [stats_state, game_state],
-            [stats_state],
-        ).then(lambda st: st, [stats_state], [stats_display])
-
-        auto_steps.release(
-            lambda n, g, h, s: _steps(n, g, h, s),
-            [auto_steps, game_state, move_history, show_ids],
-            [game_state, board_plot, log, move_history],
-        ).then(
-            _update_stats,
-            [stats_state, game_state],
-            [stats_state],
-        ).then(lambda st: st, [stats_state], [stats_display])
-
-        bulk_run_btn.click(
-            _run_bulk,
-            [bulk_games] + strategy_inputs,
-            [bulk_results],
-        )
-
+        init_btn.click(_init, strategy_inputs, [game_state, board_plot, log, move_history, stats_state])
+        step_btn.click(_steps, [game_state, move_history, show_ids], [game_state, board_plot, log, move_history]).then(_update_stats, [stats_state, game_state], [stats_state]).then(lambda s: s, [stats_state], [stats_display])
+        run_auto_btn.click(_run_auto, [auto_steps_n, auto_delay, game_state, move_history, show_ids], [game_state, board_plot, log, move_history]).then(_update_stats, [stats_state, game_state], [stats_state]).then(lambda s: s, [stats_state], [stats_display])
+        move_history_btn.click(lambda h: "\n".join(h[-50:]), [move_history], [history_box])
         export_btn.click(_export, [game_state], [export_box])
-        move_history_btn.click(
-            lambda h: "\n".join(h[-50:]), [move_history], [history_box]
-        )
+        bulk_run_btn.click(_run_bulk, [bulk_games] + sim_strat_inputs, [bulk_results])
 
     return demo
 
