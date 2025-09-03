@@ -14,6 +14,9 @@ class TestCapturesAndWins(unittest.TestCase):
         token = self.game.players[player_idx].tokens[token_idx]
         token.state = TokenState.ACTIVE
         token.position = board_index
+        # Register on board so capture detection works
+        if board_index >= 0:
+            self.game.board.add_token(token, board_index)
         return token
 
     def test_capture(self):

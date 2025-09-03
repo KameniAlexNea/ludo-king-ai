@@ -30,7 +30,12 @@ class PPOStrategy:
         deterministic: bool = True,
     ):
         self.model_name = model_name
-        self.model = PPO.load(model_path)
+        self.model = PPO.load(model_path, device="cpu")
+        # Ensure policy on CPU for deterministic test environment
+        try:
+            self.model.policy.to("cpu")
+        except Exception:
+            pass
         self.env_cfg = env_config or EnvConfig()
         # Enforce fixed training seat (important for meaning of observation ordering)
         if self.env_cfg.agent_color != Colors.RED:
