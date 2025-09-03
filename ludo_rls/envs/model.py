@@ -31,8 +31,9 @@ class RewardConfig:
     """Balanced reward configuration for strategic Ludo play (self-play tuned)."""
 
     # Major events (highest priority)
-    win: float = 30.0  # Game victory
-    lose: float = 0.0  # (unused in win-only mode)
+    # Win reward boosted: with single-seat Option B we need stronger sparse signal
+    win: float = 60.0  # Game victory (boosted from 30.0)
+    lose: float = -60.0  # Negative terminal when agent loses (symmetric to win)
     finish_token: float = 8.0  # Finishing tokens
     capture: float = 6.0  # Capturing opponents
     got_captured: float = -6.0  # Own token captured
@@ -58,8 +59,8 @@ class RewardConfig:
     # Risk modulation (unused currently)
     use_probabilistic_rewards: bool = False
     risk_weight: float = 0.3
-    penalize_loss: bool = False  # Disable multi-seat negative stacking
-    draw_penalty: float = -0.5  # Applied if game truncates without a winner
+    # Slightly stronger discouragement of long unresolved games
+    draw_penalty: float = -2.0  # Applied if game truncates without a winner (was -0.5)
 
 
 @dataclass
@@ -78,5 +79,7 @@ class EnvConfig:
     obs_cfg: ObservationConfig = field(default_factory=ObservationConfig)
     seed: Optional[int] = None
     use_action_mask: bool = True  # When True, invalid chosen actions are auto-corrected without large penalty
-    single_seat_training: bool = True  # Train only one randomly chosen seat per episode
+    # Deprecated: environment now always operates in single-seat Option B mode.
+    # Retained for backward compatibility with older configs; has no effect.
+    single_seat_training: bool = True
     randomize_training_color: bool = True  # Re-sample training seat each reset

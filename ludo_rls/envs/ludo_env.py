@@ -120,8 +120,8 @@ class LudoGymEnv(gym.Env):
             PlayerColor.BLUE,
         ]
         self.game = LudoGame(order)
-        # (Re)select training color
-        if self.cfg.single_seat_training and self.cfg.randomize_training_color:
+        # (Re)select training color (Option B always single-seat); randomize if enabled
+        if self.cfg.randomize_training_color:
             self.training_color = self.rng.choice(
                 [
                     PlayerColor.RED.value,
@@ -345,7 +345,10 @@ class LudoGymEnv(gym.Env):
         opponents = [
             p for p in self.game.players if p.color.value != self.training_color
         ]
-        terminal_reward = self.reward_calc.get_terminal_reward(agent_player, opponents)
+        # We'll compute truncated later and may re-request terminal reward including draw if needed
+        terminal_reward = self.reward_calc.get_terminal_reward(
+            agent_player, opponents, truncated=False
+        )
         terminated = False
         truncated = False
 
@@ -357,9 +360,10 @@ class LudoGymEnv(gym.Env):
         self.episode_steps += 1
         if self.turns >= self.cfg.max_turns and not terminated:
             truncated = True
-            # Apply draw penalty only if no winner
-            if not any(p.has_won() for p in self.game.players):
-                total_reward += self.cfg.reward_cfg.draw_penalty
+            draw_reward = self.reward_calc.get_terminal_reward(
+                agent_player, opponents, truncated=True
+            )
+            total_reward += draw_reward
 
         # Prepare next dice for the (possibly same or next) player if continuing
         if not terminated and not truncated and not self.game.game_over:

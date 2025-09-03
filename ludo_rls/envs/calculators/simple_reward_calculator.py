@@ -168,10 +168,24 @@ class SimpleRewardCalculator:
         return components
 
     def get_terminal_reward(
-        self, agent_player: Player, opponents: list[Player]
+        self,
+        agent_player: Player,
+        opponents: list[Player],
+        truncated: bool = False,
     ) -> float:
-        """Win-only terminal reward (self-play shared policy)."""
-        if agent_player.has_won():
-            return self.cfg.reward_cfg.win
-        # No negative for losses (other seats are the same network)
+        """Return terminal reward.
+
+        Priority:
+          1. If true game_over: win -> win reward, else lose reward.
+          2. Else if episode truncated (timeout) with no winner: apply draw penalty.
+          3. Otherwise: 0.
+        """
+        if self.game.game_over:
+            if agent_player.has_won():
+                return self.cfg.reward_cfg.win
+            return self.cfg.reward_cfg.lose
+        if truncated:
+            # Only treat as draw if nobody actually won
+            if not any(p.has_won() for p in self.game.players):
+                return self.cfg.reward_cfg.draw_penalty
         return 0.0
