@@ -46,19 +46,15 @@ from ..envs.builders.observation_builder import ObservationBuilder
 from ..envs.model import EnvConfig
 
 
-def _soft_action_select(policy, obs: np.ndarray, action_mask: np.ndarray | None = None) -> int:
-    obs_batch = obs[None, :]
-    action, _ = policy.predict(obs_batch, deterministic=False)
-    act = int(action)
-    if action_mask is not None and action_mask.sum() > 0 and action_mask[act] == 0:
-        for _ in range(4):
-            action, _ = policy.predict(obs_batch, deterministic=False)
-            act = int(action)
-            if action_mask[act] == 1:
-                return act
-        legal_indices = np.nonzero(action_mask)[0]
-        return int(legal_indices[0])
-    return act
+def _policy_select(policy, obs: np.ndarray) -> int:
+    """Single forward pass action selection (stochastic) mirroring env training path.
+
+    Env training does NOT perform rejection sampling against masks; illegal selections
+    incur penalty and are mapped to a fallback valid move internally. We emulate that
+    here for parity so tournament metrics reflect true policy distribution quality.
+    """
+    action, _ = policy.predict(obs[None, :], deterministic=False)
+    return int(action)
 
 
 @dataclass
@@ -179,15 +175,13 @@ class ClassicTournamentCallback(BaseCallback):
                     dice = game.roll_dice()
                     valid_moves = game.get_valid_moves(current_player, dice)
                     if current_player is ppo_player:
+                        # Build observation exactly like training env (turn count = PPO decision turns so far)
                         obs = obs_builder._build_observation(turn_counter, dice)
-                        mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
-                        if valid_moves:
-                            for m in valid_moves:
-                                mask[m["token_id"]] = 1
-                        action = _soft_action_select(policy, obs, mask)
+                        action = _policy_select(policy, obs)
                         if valid_moves:
                             valid_ids = [m["token_id"] for m in valid_moves]
                             if action not in valid_ids:
+                                # Mirror env: mark illegal then fallback to first valid
                                 metrics.illegal_actions += 1
                                 action = valid_ids[0]
                             move_res = game.execute_move(current_player, action, dice)
@@ -204,6 +198,7 @@ class ClassicTournamentCallback(BaseCallback):
                             if not move_res.get("extra_turn"):
                                 game.next_turn()
                         else:
+                            # No valid moves: env would not flag illegal; advance turn
                             game.next_turn()
                         turn_counter += 1
                         metrics.ppo_turns += 1

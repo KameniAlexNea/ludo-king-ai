@@ -4,19 +4,19 @@
 
 | Rank | Model            | Wins | Games | Win Rate % | Avg Turns | Medal |
 |------|------------------|------|-------|-----------:|----------:|:------|
-| 1    | BALANCED         | 65   | 200   | 32.5       | 130.1     | 🥇 |
-| 2    | OPTIMIST         | 57   | 200   | 28.5       | 128.8     | 🥈 |
-| 3    | PPO_LUDO_FINAL   | 51   | 200   | 25.5       | 128.3     | 🥉 |
-| 4    | PROBABILISTIC_V3 | 27   | 200   | 13.5       | 129.0     |  |
+| 1    | PPO_LUDO_FINAL   | 72   | 200   | 36.0       | 127.5     | 🥇 |
+| 2    | BALANCED         | 52   | 200   | 26.0       | 127.8     | 🥈 |
+| 3    | OPTIMIST         | 51   | 200   | 25.5       | 128.3     | 🥉 |
+| 4    | PROBABILISTIC_V3 | 25   | 200   | 12.5       | 128.2     |  |
 
 ### 2. PPO Self-Improvement (PPO vs Frozen PPO)
 
 | Rank | Model            | Wins | Games | Win Rate % | Avg Turns | Medal |
 |------|------------------|------|-------|-----------:|----------:|:------|
-| 1    | BALANCED         | 63   | 200   | 31.5       | 128.8     | 🥇 |
-| 2    | OPTIMIST         | 62   | 200   | 31.0       | 128.0     | 🥈 |
-| 3    | PPO_LUDO_FINAL   | 42   | 200   | 21.0       | 126.7     | 🥉 |
-| 4    | PROBABILISTIC_V3 | 33   | 200   | 16.5       | 128.1     |  |
+| 1    | OPTIMIST         | 62   | 200   | 31.0       | 127.3     | 🥇 |
+| 2    | BALANCED         | 61   | 200   | 30.5       | 129.0     | 🥈 |
+| 3    | PPO_LUDO_FINAL   | 55   | 200   | 27.5       | 127.6     | 🥉 |
+| 4    | PROBABILISTIC_V3 | 22   | 200   | 11.0       | 128.0     |  |
 
 ### Observations
 * Heuristic strategies (Balanced / Optimist) still outperform current PPO snapshot.

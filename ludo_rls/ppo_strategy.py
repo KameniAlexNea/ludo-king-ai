@@ -8,10 +8,27 @@ from .envs.ludo_env import EnvConfig, LudoGymEnv
 
 
 class PPOStrategy:
-    """Wrapper to use PPO model as a Ludo strategy."""
+    """Wrapper to use PPO model as a Ludo strategy.
+
+    Parameters
+    ----------
+    model_path : str
+        Path to saved PPO model.
+    model_name : str
+        Label for reporting.
+    env_config : EnvConfig | None
+        Environment configuration (agent_color etc.).
+    deterministic : bool (default True)
+        If True, use greedy argmax over masked probs (evaluation mode).
+        If False, sample stochastically (training-like behavior).
+    """
 
     def __init__(
-        self, model_path: str, model_name: str, env_config: EnvConfig | None = None
+        self,
+        model_path: str,
+        model_name: str,
+        env_config: EnvConfig | None = None,
+        deterministic: bool = True,
     ):
         self.model_name = model_name
         self.model = PPO.load(model_path)
@@ -28,11 +45,11 @@ class PPOStrategy:
         dummy_obs, _ = self.dummy_env.reset(seed=self.env_cfg.seed)
         self.obs_dim = dummy_obs.shape[0]
         self.description = f"PPO Model: {model_name} (obs_dim={self.obs_dim})"
-        # Enforce consistent training agent color (critical for observation semantics)
         if self.env_cfg.agent_color != Colors.RED:
             raise ValueError(
                 f"PPOStrategy agent_color mismatch: expected 'red' (training seat), got '{self.env_cfg.agent_color}'"
             )
+        self.deterministic = deterministic
 
     @staticmethod
     def _normalize_position_static(pos: int) -> float:
@@ -65,10 +82,9 @@ class PPOStrategy:
     def decide(self, game_context: dict) -> int:
         obs = self._build_observation_from_context(game_context)
         if obs.shape[0] != self.obs_dim:
-            if obs.shape[0] < self.obs_dim:
-                obs = np.pad(obs, (0, self.obs_dim - obs.shape[0]))
-            else:
-                obs = obs[: self.obs_dim]
+            raise ValueError(
+                f"Observation size mismatch in PPOStrategy decide: got {obs.shape[0]} expected {self.obs_dim}"
+            )
         valid_moves = game_context.get("valid_moves", [])
         if not valid_moves:
             return 0
@@ -82,8 +98,15 @@ class PPOStrategy:
                 probs = dist.distribution.logits.softmax(-1).squeeze(0).cpu().numpy()
         masked = probs * mask
         if masked.sum() <= 0:
-            return int(np.argmax(mask))
-        return int(np.argmax(masked))
+            # Fallback: first legal (consistent with env illegal fallback)
+            for i, v in enumerate(mask):
+                if v == 1:
+                    return int(i)
+            return 0
+        if self.deterministic:
+            return int(np.argmax(masked))
+        masked /= masked.sum()
+        return int(np.random.choice(len(masked), p=masked))
 
     def _build_observation_from_context(self, context: dict) -> np.ndarray:
         if "players" in context:
