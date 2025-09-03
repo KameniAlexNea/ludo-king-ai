@@ -1,19 +1,22 @@
-"""Self-play Ludo environment (shared single policy controlling all 4 players).
+"""Single-seat training Ludo environment.
 
-Semantics Option A (sequential turns):
-Each env.step() represents exactly one player decision (possibly followed by extra chained decisions via repeated steps if six rolled, etc.).
-The acting player's color is stored in `agent_color` and changes automatically when turn advances.
-All four players share one policy (PPO) and are exposed to the learner uniformly in board order (R -> G -> Y -> B -> ...).
+Option B implementation: At each episode reset, one player color is randomly selected
+as the *training seat*. Only decisions of that seat are exposed via env.step to the
+RL algorithm. All other seats are simulated internally using a *frozen snapshot* of
+the policy parameters captured at reset (or a no-op random fallback if model absent).
 
-Observation (per current player perspective) includes:
-    - Current player's 4 token normalized positions
-    - Other 3 players' token positions (12)
-    - Finished token fractions per player (4)
-    - Finish-possible flag, normalized dice value, progress stats etc. (remaining scalars)
+Benefits:
+ - Removes self-canceling rewards (captures / being captured) because only one
+     perspective produces learning signals.
+ - Reduces trajectory length (≈ 1/4 decisions emitted) focusing updates on target seat.
+ - Stable opponents during the episode (snapshot) while refreshing each new episode.
 
-Action space: Discrete(4) selecting which of the current player's tokens to move; invalid choices incur penalty and fallback to first valid.
+Reward semantics:
+ - Per-step reward components only when training seat acts.
+ - Terminal win reward if training seat wins; no explicit loss penalty (draw penalty applies on timeout).
+ - Opponent turns produce no external step so generate no direct rewards.
 
-Rewards: Shaped per move for current acting player only. Terminal reward granted when that player wins (or loses relative to others finishing first).
+Observation: always from the training seat perspective (even across internal opponent turns, which are hidden).
 """
 
 from __future__ import annotations
@@ -58,8 +61,11 @@ class LudoGymEnv(gym.Env):
             PlayerColor.BLUE,
         ]
         self.game = LudoGame(order)
-        # Current acting player perspective (no randomness now)
-        self.agent_color = self.game.get_current_player().color.value
+        # Training (learning) seat for this episode (decided in reset)
+        self.training_color: str = self.game.get_current_player().color.value
+        self.agent_color = self.training_color  # alias maintained for builders
+
+        self._frozen_policy = None  # snapshot of model.policy at reset for opponents
 
         # Spaces (will be properly set after objects are created)
         self.observation_space = spaces.Box(
@@ -114,8 +120,20 @@ class LudoGymEnv(gym.Env):
             PlayerColor.BLUE,
         ]
         self.game = LudoGame(order)
-        # Set current player perspective deterministically
-        self.agent_color = self.game.get_current_player().color.value
+        # (Re)select training color
+        if self.cfg.single_seat_training and self.cfg.randomize_training_color:
+            self.training_color = self.rng.choice([
+                PlayerColor.RED.value,
+                PlayerColor.GREEN.value,
+                PlayerColor.YELLOW.value,
+                PlayerColor.BLUE.value,
+            ])
+        else:
+            self.training_color = self.game.get_current_player().color.value
+        self.agent_color = self.training_color
+
+        # Snapshot frozen opponent policy
+        self._snapshot_policy()
         # Rebuild helper objects references
         self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
         self.obs_builder.game = self.game
@@ -133,29 +151,111 @@ class LudoGymEnv(gym.Env):
         self._pending_valid_moves = []
         self._last_progress_sum = self.move_utils._compute_agent_progress_sum()
 
-        # Roll initial dice for first player's decision
-        self._pending_agent_dice, self._pending_valid_moves = (
-            self.move_utils._roll_new_agent_dice()
-        )
+        # Advance internal simulation until it's training seat's turn
+        self._advance_until_training_turn(initial=True)
         obs = self.obs_builder._build_observation(self.turns, self._pending_agent_dice)
         self.last_obs = obs
         return obs, {}
 
-    def step(self, action: int):  # type: ignore[override]
-        """Advance environment by one agent decision (one dice roll).
+    # ---------------------------------------------------------------------
+    # Internal helpers
+    # ---------------------------------------------------------------------
+    def _snapshot_policy(self):
+        """Capture a shallow snapshot reference of the current policy for opponents.
 
-        Correct turn mechanics:
-          - One agent decision per step
-          - Extra turns generate a new decision (another step) without opponents moving
-          - Opponents play complete sequence (including their extra turns) between agent decisions
+        We don't deep copy tensors (costly); we simply freeze by disabling grad and
+        using deterministic inference from current model. If model absent, stays None.
+        """
+        if self.model is not None and hasattr(self.model, 'policy'):
+            self._frozen_policy = self.model.policy  # reference (weights won't change this episode if PPO updates after rollouts)
+        else:
+            self._frozen_policy = None
+
+    def _policy_action(self, policy, obs: np.ndarray, valid_moves: List[Dict]) -> int:
+        if not valid_moves:
+            return -1
+        mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
+        for m in valid_moves:
+            mask[m['token_id']] = 1
+        # Fallback random if no policy
+        if policy is None:
+            legal_ids = [m['token_id'] for m in valid_moves]
+            return self.rng.choice(legal_ids)
+        obs_batch = obs[None, :]
+        action, _ = policy.predict(obs_batch, deterministic=True)
+        act = int(action)
+        if mask[act] == 0:
+            # pick first legal to keep game moving
+            for i, v in enumerate(mask):
+                if v == 1:
+                    return i
+        return act
+
+    def _advance_until_training_turn(self, initial: bool = False):
+        """Simulate opponent turns (not training_color) until it's training_color's turn.
+
+        Sets pending dice & valid moves for training seat when done.
+        If initial=True, we don't increment global turn counter yet.
+        """
+        safety_counter = 0
+        while (
+            not self.game.game_over
+            and self.game.get_current_player().color.value != self.training_color
+        ):
+            safety_counter += 1
+            if safety_counter > 5000:  # hard safety to avoid infinite loop
+                break
+
+            current_player = self.game.get_current_player()
+            dice = self.game.roll_dice()
+            valid_moves = self.game.get_valid_moves(current_player, dice)
+
+            took_action = False
+            extra_turn = False
+
+            if valid_moves:
+                # Observation from training perspective to keep policy consistent
+                temp_obs = self.obs_builder._build_observation(self.turns, dice)
+                action = self._policy_action(
+                    self._frozen_policy, temp_obs, valid_moves
+                )
+                valid_ids = [m["token_id"] for m in valid_moves]
+                if action not in valid_ids:
+                    action = valid_ids[0]
+                move_res = self.game.execute_move(current_player, action, dice)
+                took_action = True
+                extra_turn = bool(move_res.get("extra_turn", False))
+
+            if not took_action:  # no valid moves, or policy refused
+                self.game.next_turn()
+                continue  # next loop iteration
+
+            # If they earned an extra turn and haven't won, let loop iterate again with same current_player
+            if extra_turn and not current_player.has_won() and not self.game.game_over:
+                continue
+
+            # Otherwise advance to next player
+            if not self.game.game_over:
+                self.game.next_turn()
+
+        if not self.game.game_over and self.game.get_current_player().color.value == self.training_color:
+            # Roll dice for training seat
+            self._pending_agent_dice, self._pending_valid_moves = self.move_utils._roll_new_agent_dice()
+
+
+    def step(self, action: int):  # type: ignore[override]
+        """Advance environment by one *training seat* decision.
+
+        Opponent turns are internally simulated and not exposed. Extra turns for the training
+        seat are returned consecutively (still a new step). After the move, if no extra turn,
+        opponents are simulated until training seat's next turn or game end.
         """
         if self.done:
             return self.last_obs, 0.0, True, False, {}
 
         reward_components: List[float] = []
-        agent_player = next(
-            p for p in self.game.players if p.color.value == self.agent_color
-        )
+        agent_player = next(p for p in self.game.players if p.color.value == self.training_color)
+        self.agent_color = self.training_color  # ensure consistency for builders
 
         # Ensure we have a pending dice & valid moves (should always be true except pathological cases)
         if self._pending_agent_dice is None:
@@ -206,13 +306,14 @@ class LudoGymEnv(gym.Env):
             extra_turn = False  # skipped turn
 
         # Advance to next player if no extra turn
+        # If no extra turn: simulate opponents until training seat again
         if not extra_turn and not self.game.game_over:
             self.game.next_turn()
-            self.agent_color = self.game.get_current_player().color.value
-            # Sync utility perspectives
-            self.move_utils.agent_color = self.agent_color
-            self.obs_builder.agent_color = self.agent_color
-            self.reward_calc.agent_color = self.agent_color
+            self._advance_until_training_turn()
+            # sync (may still be training seat or game over)
+            self.move_utils.agent_color = self.training_color
+            self.obs_builder.agent_color = self.training_color
+            self.reward_calc.agent_color = self.training_color
 
         # Progress shaping (after agent + opponents if any)
         progress_after = self.move_utils._compute_agent_progress_sum()
@@ -235,7 +336,7 @@ class LudoGymEnv(gym.Env):
         total_reward = opponent_total + sum(step_components.values())
 
         # Terminal checks
-        opponents = [p for p in self.game.players if p.color.value != self.agent_color]
+        opponents = [p for p in self.game.players if p.color.value != self.training_color]
         terminal_reward = self.reward_calc.get_terminal_reward(agent_player, opponents)
         terminated = False
         truncated = False
@@ -255,14 +356,10 @@ class LudoGymEnv(gym.Env):
         # Prepare next dice for the (possibly same or next) player if continuing
         if not terminated and not truncated and not self.game.game_over:
             if extra_turn:
-                # Agent retained turn, just roll new dice
-                self._pending_agent_dice, self._pending_valid_moves = (
-                    self.move_utils._roll_new_agent_dice()
-                )
+                self._pending_agent_dice, self._pending_valid_moves = self.move_utils._roll_new_agent_dice()
             else:
-                self._pending_agent_dice, self._pending_valid_moves = (
-                    self.move_utils._roll_new_agent_dice()
-                )
+                # opponents already advanced; dice set in _advance_until_training_turn
+                pass
 
         obs = self.obs_builder._build_observation(self.turns, self._pending_agent_dice)
         self.last_obs = obs

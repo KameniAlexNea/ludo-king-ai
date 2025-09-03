@@ -78,3 +78,5 @@ class EnvConfig:
     obs_cfg: ObservationConfig = field(default_factory=ObservationConfig)
     seed: Optional[int] = None
     use_action_mask: bool = True  # When True, invalid chosen actions are auto-corrected without large penalty
+    single_seat_training: bool = True  # Train only one randomly chosen seat per episode
+    randomize_training_color: bool = True  # Re-sample training seat each reset
