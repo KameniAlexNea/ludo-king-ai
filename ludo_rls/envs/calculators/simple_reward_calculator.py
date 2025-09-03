@@ -170,11 +170,8 @@ class SimpleRewardCalculator:
     def get_terminal_reward(
         self, agent_player: Player, opponents: list[Player]
     ) -> float:
-        """Simple terminal rewards."""
+        """Win-only terminal reward (self-play shared policy)."""
         if agent_player.has_won():
-            return RewardConstants.WIN_REWARD
-        elif any(opp.has_won() for opp in opponents):
-            if self.cfg.reward_cfg.penalize_loss:
-                return RewardConstants.LOSS_PENALTY
-            return 0.0
+            return self.cfg.reward_cfg.win
+        # No negative for losses (other seats are the same network)
         return 0.0

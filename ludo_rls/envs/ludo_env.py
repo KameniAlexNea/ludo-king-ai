@@ -248,6 +248,9 @@ class LudoGymEnv(gym.Env):
         self.episode_steps += 1
         if self.turns >= self.cfg.max_turns and not terminated:
             truncated = True
+            # Apply draw penalty only if no winner
+            if not any(p.has_won() for p in self.game.players):
+                total_reward += self.cfg.reward_cfg.draw_penalty
 
         # Prepare next dice for the (possibly same or next) player if continuing
         if not terminated and not truncated and not self.game.game_over:

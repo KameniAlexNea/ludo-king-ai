@@ -32,7 +32,7 @@ class RewardConfig:
 
     # Major events (highest priority)
     win: float = 30.0  # Game victory
-    lose: float = -30.0  # Game loss
+    lose: float = 0.0   # (unused in win-only mode)
     finish_token: float = 8.0  # Finishing tokens
     capture: float = 6.0  # Capturing opponents
     got_captured: float = -6.0  # Own token captured
@@ -58,7 +58,8 @@ class RewardConfig:
     # Risk modulation (unused currently)
     use_probabilistic_rewards: bool = False
     risk_weight: float = 0.3
-    penalize_loss: bool = True
+    penalize_loss: bool = False  # Disable multi-seat negative stacking
+    draw_penalty: float = -0.5   # Applied if game truncates without a winner
 
 
 @dataclass
