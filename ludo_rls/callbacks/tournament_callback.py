@@ -78,7 +78,7 @@ def _ensure_color_feature(obs: np.ndarray, current_color: str) -> np.ndarray:
     """
     # current policy obs size might include one-hot
     try:
-        target_len = int(getattr(getattr(_ensure_color_feature, 'policy_ref', None), 'observation_space').shape[0])  # type: ignore
+        target_len = int(getattr(getattr(_ensure_color_feature, "policy_ref", None), "observation_space").shape[0])  # type: ignore
     except Exception:
         target_len = None
     if target_len is not None and obs.shape[0] == target_len:
@@ -175,7 +175,9 @@ class SelfPlayTournamentCallback(BaseCallback):
         metrics = TournamentMetrics()
         if not self.combos:
             if self.verbose:
-                print("[Tournament] Not enough baseline strategies (need >=3). Skipping.")
+                print(
+                    "[Tournament] Not enough baseline strategies (need >=3). Skipping."
+                )
             return metrics.aggregate()
 
         # Distribute games across combinations
@@ -188,14 +190,18 @@ class SelfPlayTournamentCallback(BaseCallback):
         for combo in self.combos:
             for _ in range(games_per_combo):
                 # Fresh game
-                game = LudoGame([
-                    PlayerColor.RED,
-                    PlayerColor.GREEN,
-                    PlayerColor.YELLOW,
-                    PlayerColor.BLUE,
-                ])
+                game = LudoGame(
+                    [
+                        PlayerColor.RED,
+                        PlayerColor.GREEN,
+                        PlayerColor.YELLOW,
+                        PlayerColor.BLUE,
+                    ]
+                )
                 # Assign PPO to RED; assign combo strategies to remaining colors in fixed order skipping RED
-                opponent_colors = [c for c in [PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]]
+                opponent_colors = [
+                    c for c in [PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
+                ]
                 for idx, color in enumerate(opponent_colors):
                     strat_name = combo[idx]
                     strat = StrategyFactory.create_strategy(strat_name)
@@ -247,8 +253,12 @@ class SelfPlayTournamentCallback(BaseCallback):
                             context = game.get_game_state_for_ai()
                             context["dice_value"] = dice
                             if valid_moves:
-                                token_id = current_player.make_strategic_decision(context)
-                                move_res = game.execute_move(current_player, token_id, dice)
+                                token_id = current_player.make_strategic_decision(
+                                    context
+                                )
+                                move_res = game.execute_move(
+                                    current_player, token_id, dice
+                                )
                                 if move_res.get("token_finished"):
                                     token_finish_counts[current_player.color.value] += 1
                                 if move_res.get("game_won"):
@@ -268,9 +278,13 @@ class SelfPlayTournamentCallback(BaseCallback):
                     pass
                 if not any(p.has_won() and p is ppo_player for p in game.players):
                     # Rank calculation: sort by finished tokens desc
-                    finished = [(p.get_finished_tokens_count(), p) for p in game.players]
+                    finished = [
+                        (p.get_finished_tokens_count(), p) for p in game.players
+                    ]
                     finished.sort(reverse=True, key=lambda x: x[0])
-                    rank_positions = {pl.color.value: i + 1 for i, (cnt, pl) in enumerate(finished)}
+                    rank_positions = {
+                        pl.color.value: i + 1 for i, (cnt, pl) in enumerate(finished)
+                    }
                     ppo_rank = rank_positions[ppo_player.color.value]
                     if ppo_rank == 1:
                         metrics.wins += 1
@@ -283,7 +297,9 @@ class SelfPlayTournamentCallback(BaseCallback):
         for k, v in agg.items():
             self.logger.record(self.log_prefix + k, v)
         if self.verbose:
-            print(f"[Tournament] Steps={self.num_timesteps} games={total_games_target} metrics={agg}")
+            print(
+                f"[Tournament] Steps={self.num_timesteps} games={total_games_target} metrics={agg}"
+            )
 
         # Ensure TensorBoard flush
         if hasattr(self.logger, "writer") and self.logger.writer:

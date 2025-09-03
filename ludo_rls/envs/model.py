@@ -28,38 +28,37 @@ class SimpleRewardConstants:
 
 @dataclass
 class RewardConfig:
-    """Balanced reward configuration for strategic Ludo play."""
+    """Balanced reward configuration for strategic Ludo play (self-play tuned)."""
 
-    # Major events (highest priority - should dominate)
-    win: float = 50.0  # Game victory
-    lose: float = -50.0  # Game loss
-    finish_token: float = 15.0  # Finishing tokens (very important)
-    capture: float = 8.0  # Capturing opponents (important)
-    got_captured: float = -5.0  # Getting captured (bad but recoverable)
+    # Major events (highest priority)
+    win: float = 30.0  # Game victory
+    lose: float = -30.0  # Game loss
+    finish_token: float = 8.0  # Finishing tokens
+    capture: float = 6.0  # Capturing opponents
+    got_captured: float = -6.0  # Own token captured
 
-    # Action rewards (moderate priority)
-    extra_turn: float = 3.0  # Rolling a 6 (useful)
+    # Action rewards (moderate)
+    extra_turn: float = 2.0  # Rolling a 6 (useful but not dominant)
 
-    # Strategic positioning (should encourage good play but not dominate)
-    home_progress_bonus: float = 4.0  # Progress in home stretch
-    blocking_bonus: float = 2.0  # Creating blocks
-    safety_bonus: float = 3.0  # Escaping danger
-    home_approach_bonus: float = 1.0  # Approaching home entry
+    # Strategic positioning (light shaping)
+    home_progress_bonus: float = 3.0
+    blocking_bonus: float = 2.0
+    safety_bonus: float = 2.0
+    home_approach_bonus: float = 0.5
 
-    # Small continuous signals (should barely register)
-    progress_scale: float = 0.1  # General progress (minimal)
-    diversity_bonus: float = 0.3  # Token diversity (minimal)
+    # Small continuous signals
+    progress_scale: float = 0.05
+    diversity_bonus: float = 0.25
 
-    # Penalties (should be clear boundaries)
-    illegal_action: float = -10.0  # Invalid moves (strong negative)
-    time_penalty: float = -0.01  # Efficiency (tiny)
+    # Penalties / pacing
+    illegal_action: float = -8.0
+    illegal_masked_scale: float = 0.25  # Scale when mask auto-corrects
+    time_penalty: float = -0.01
 
-    # Risk modulation (if you want it)
-    use_probabilistic_rewards: bool = False  # Start simple, add complexity later
-    risk_weight: float = 0.3  # Conservative if enabled
-    penalize_loss: bool = (
-        False  # If False, non-acting losers get no extra negative terminal reward
-    )
+    # Risk modulation (unused currently)
+    use_probabilistic_rewards: bool = False
+    risk_weight: float = 0.3
+    penalize_loss: bool = True
 
 
 @dataclass
@@ -77,4 +76,6 @@ class EnvConfig:
     reward_cfg: RewardConfig = field(default_factory=RewardConfig)
     obs_cfg: ObservationConfig = field(default_factory=ObservationConfig)
     seed: Optional[int] = None
-    use_action_mask: bool = True  # When True, invalid chosen actions are auto-corrected without large penalty
+    use_action_mask: bool = (
+        True  # When True, invalid chosen actions are auto-corrected without large penalty
+    )

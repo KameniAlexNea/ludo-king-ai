@@ -150,7 +150,9 @@ def main():
         n_eval_episodes=20,  # More evaluation episodes
     )
 
-    baseline_names = [s.strip() for s in args.tournament_baselines.split(",") if s.strip()]
+    baseline_names = [
+        s.strip() for s in args.tournament_baselines.split(",") if s.strip()
+    ]
     tournament_cb = SelfPlayTournamentCallback(
         baselines=baseline_names,
         n_games=args.tournament_games,

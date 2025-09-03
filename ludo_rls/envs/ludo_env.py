@@ -172,28 +172,29 @@ class LudoGymEnv(gym.Env):
         # Handle no-move situation
         no_moves_available = len(valid_moves) == 0
         illegal = False
-        move_res = {}
+        move_res: Dict[str, Any] = {}
         diversity_bonus_triggered = False
+        token_positions_before: Optional[List[int]] = None
+        masked_autocorrect = False
 
         if not no_moves_available:
             valid_token_ids = [m["token_id"] for m in valid_moves]
-            # Convert action to int in case it's a numpy array
-            action = int(action)
+            action = int(action)  # ensure plain int
+            token_positions_before = [t.position for t in agent_player.tokens]
             if action not in valid_token_ids:
                 if self.cfg.use_action_mask:
-                    # Auto-correct silently (no illegal penalty) when mask enabled
                     exec_token_id = valid_token_ids[0]
+                    masked_autocorrect = True
                 else:
                     illegal = True
                     exec_token_id = valid_token_ids[0]
             else:
                 exec_token_id = action
-            # Capture start position for progress calculation inside reward_calc
+
             start_pos = agent_player.tokens[exec_token_id].position
             move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
             move_res["start_position"] = start_pos
 
-            # Check diversity bonus
             tok = agent_player.tokens[exec_token_id]
             flags_for_player = self._token_activation_flags[agent_player.color.value]
             if tok.position >= 0 and not flags_for_player[exec_token_id]:
@@ -202,8 +203,7 @@ class LudoGymEnv(gym.Env):
 
             extra_turn = move_res.get("extra_turn", False)
         else:
-            # No valid moves: treat as skipped turn (no illegal penalty)
-            extra_turn = False
+            extra_turn = False  # skipped turn
 
         # Advance to next player if no extra turn
         if not extra_turn and not self.game.game_over:
@@ -225,6 +225,8 @@ class LudoGymEnv(gym.Env):
             extra_turn=extra_turn,
             diversity_bonus=diversity_bonus_triggered,
             illegal_action=illegal,
+            token_positions_before=token_positions_before,
+            masked_autocorrect=masked_autocorrect,
         )
         # Opponent components already accumulated in reward_components; capture their sum
         opponent_total = sum(reward_components)

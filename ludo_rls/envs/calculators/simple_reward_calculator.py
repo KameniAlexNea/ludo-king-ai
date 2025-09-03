@@ -126,37 +126,45 @@ class SimpleRewardCalculator:
     def compute_comprehensive_reward(
         self,
         move_res: Dict,
-        progress_delta: float,  # overall board progress (agent-wide) if needed
+        progress_delta: float,
         extra_turn: bool,
         diversity_bonus: bool,
         illegal_action: bool,
         token_positions_before: Optional[List[int]] = None,
+        masked_autocorrect: bool = False,
     ) -> Dict[str, float]:
-        """Return a dict of atomic reward components (no side-effects)."""
+        """Return a dict of atomic reward components (no side-effects).
+
+        masked_autocorrect: indicates the chosen action was invalid but auto-corrected due to masking (apply scaled penalty)
+        """
         components: Dict[str, float] = {}
 
-        components["capture"] = self._compute_capture_reward(move_res)
-        components["got_captured"] = self._compute_got_captured_penalty(
-            move_res, token_positions_before
-        )
-        components["movement"] = self._compute_movement_reward(move_res)
+        cap = self._compute_capture_reward(move_res)
+        if cap != 0:
+            components["capture"] = cap
+        got_cap = self._compute_got_captured_penalty(move_res, token_positions_before)
+        if got_cap != 0:
+            components["got_captured"] = got_cap
+        move_r = self._compute_movement_reward(move_res)
+        if move_r != 0:
+            components["movement"] = move_r
 
         if move_res.get("token_finished"):
-            components["token_finished"] = RewardConstants.TOKEN_PROGRESS_REWARD * 10
+            components["token_finished"] = self.cfg.reward_cfg.finish_token
         if extra_turn:
-            components["extra_turn"] = RewardConstants.EXTRA_TURN_BONUS
+            components["extra_turn"] = self.cfg.reward_cfg.extra_turn
         if diversity_bonus:
             components["diversity"] = self.cfg.reward_cfg.diversity_bonus
         if illegal_action:
-            # If action masking auto-corrected, this flag will be False; otherwise penalize
-            components["illegal"] = self.cfg.reward_cfg.illegal_action
-        # Tiny living reward to encourage game completion pace and differentiate stagnation
+            penalty = self.cfg.reward_cfg.illegal_action
+            if masked_autocorrect:
+                penalty *= self.cfg.reward_cfg.illegal_masked_scale
+            components["illegal"] = penalty
+        # per-step small time penalty
         components["time"] = self.cfg.reward_cfg.time_penalty
-        # Optionally include progress_delta shaping (currently off)
         if progress_delta != 0.0:
-            # small shaping term (can tune or disable)
-            components["progress_delta"] = progress_delta * 0.0  # disabled
-
+            # minimal shaping
+            components["progress"] = progress_delta * self.cfg.reward_cfg.progress_scale
         return components
 
     def get_terminal_reward(
