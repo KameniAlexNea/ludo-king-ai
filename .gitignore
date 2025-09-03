@@ -217,3 +217,5 @@ training_progress.png
 models/
 *.out
 logs
+logs_self
+models_self

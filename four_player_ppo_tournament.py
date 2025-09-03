@@ -4,6 +4,7 @@ PPO vs Strategies Tournament System
 Tournament pitting the best PPO model against all available Ludo strategies.
 """
 
+import argparse
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -17,11 +18,67 @@ import numpy as np
 from dotenv import load_dotenv
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
-from ludo_rl.envs.model import EnvConfig
-from ludo_rl.ppo_strategy import PPOStrategy
+
+# Dynamic PPO strategy & EnvConfig import handled after CLI args (see FourPlayerPPOTournament._load_ppo_wrapper)
 from ludo_stats.game_state_saver import GameStateSaver
 
 load_dotenv()
+
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="PPO vs Strategies Tournament System",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=int(os.getenv("MAX_TURNS_PER_GAME", 1000)),
+        help="Maximum turns per game before declaring draw",
+    )
+
+    parser.add_argument(
+        "--games-per-matchup",
+        type=int,
+        default=int(os.getenv("GAMES_PER_MATCHUP", 10)),
+        help="Number of games to play per strategy combination",
+    )
+
+    parser.add_argument("--seed", type=int, default=42, help="Tournament random seed")
+
+    parser.add_argument(
+        "--models-dir",
+        type=str,
+        default="./models",
+        help="Directory containing PPO model files",
+    )
+
+    parser.add_argument(
+        "--strategies",
+        type=str,
+        nargs="*",
+        help="Specific strategies to include (default: all available)",
+    )
+
+    parser.add_argument("--quiet", action="store_true", help="Reduce verbose output")
+
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="saved_states/ppo_vs_strategies",
+        help="Directory to save game states and results",
+    )
+
+    parser.add_argument(
+        "--env",
+        choices=["single-seat", "classic"],
+        default="single-seat",
+        help="Which PPO environment/wrapper to use: single-seat (ludo_rls) or classic multi-seat (ludo_rl).",
+    )
+
+    return parser.parse_args()
 
 
 def run_game_with_seed(seed):
@@ -32,31 +89,39 @@ def run_game_with_seed(seed):
 class FourPlayerPPOTournament:
     """Tournament system pitting PPO model against Ludo strategies."""
 
-    def get_strategies(self):
-        if os.getenv("SELECTED_STRATEGIES"):
-            return list(os.getenv("SELECTED_STRATEGIES").split(","))
-        return StrategyFactory.get_available_strategies()
+    def __init__(self, args):
+        # Core configuration
+        self.max_turns_per_game = args.max_turns
+        self.games_per_matchup = args.games_per_matchup
+        self.tournament_seed = args.seed
+        self.models_dir = args.models_dir
+        self.verbose_output = not args.quiet
+        self.output_dir = args.output_dir
+        self.selected_strategies = args.strategies
+        self.env_kind = args.env  # 'single-seat' or 'classic'
 
-    def __init__(self):
-        # Configuration
-        self.max_turns_per_game = int(os.getenv("MAX_TURNS_PER_GAME", 1000))
-        self.games_per_matchup = int(os.getenv("GAMES_PER_MATCHUP", 10))
-        self.tournament_seed = 42
-        self.verbose_output = True
+        # Dynamic PPO wrapper classes (for classic mode) / policy loading
+        self._load_ppo_wrapper()
 
         # Initialize state saver
-        self.state_saver = GameStateSaver("saved_states/ppo_vs_strategies")
+        self.state_saver = GameStateSaver(self.output_dir)
 
-        # Select the best PPO model (use FINAL or the one with most steps)
+        # Resolve model name & path
         self.ppo_model = self._select_best_ppo_model()
+        self.ppo_model_path = os.path.join(self.models_dir, f"{self.ppo_model}.zip")
 
-        # Get all available strategies
-        self.all_strategies = self.get_strategies()
+        # Load PPO policy directly (used for single-seat path)
+        from stable_baselines3 import PPO as _PPO
 
-        # Generate combinations: PPO + 3 different strategies
+        self.policy = _PPO.load(self.ppo_model_path)
+
+        # Get strategies universe
+        self.all_strategies = self._get_strategies()
+
+        # Compute opponent combinations (3 strategies vs PPO)
         self.strategy_combinations = list(combinations(self.all_strategies, 3))
 
-        # Tournament tracking
+        # Tracking structures
         self.results = defaultdict(lambda: defaultdict(int))
         self.detailed_stats = defaultdict(
             lambda: {
@@ -77,19 +142,44 @@ class FourPlayerPPOTournament:
             print(f"   • Strategy combinations: {len(self.strategy_combinations)}")
             print(f"   • Games per matchup: {self.games_per_matchup}")
             print(f"   • Max turns per game: {self.max_turns_per_game}")
+            print(f"   • Models directory: {self.models_dir}")
+            print(f"   • Output directory: {self.output_dir}")
+            print(f"   • Environment mode: {self.env_kind}")
             print(
                 f"   • Total games to play: {len(self.strategy_combinations) * self.games_per_matchup}"
             )
 
+    def _load_ppo_wrapper(self):
+        """Dynamically import the correct EnvConfig and PPOStrategy based on env_kind."""
+        if self.env_kind == "classic":
+            from ludo_rl.envs.model import EnvConfig as ClassicEnvConfig
+            from ludo_rl.ppo_strategy import PPOStrategy as ClassicPPOStrategy
+
+            self.EnvConfigClass = ClassicEnvConfig
+            self.PPOStrategyClass = ClassicPPOStrategy
+        else:  # single-seat
+            from ludo_rls.envs.model import EnvConfig as SingleEnvConfig
+            from ludo_rls.ppo_strategy import PPOStrategy as SinglePPOStrategy
+
+            self.EnvConfigClass = SingleEnvConfig
+            self.PPOStrategyClass = SinglePPOStrategy
+
+    def _get_strategies(self):
+        """Get strategies to use in tournament."""
+        if self.selected_strategies:
+            return self.selected_strategies
+        if os.getenv("SELECTED_STRATEGIES"):
+            return list(os.getenv("SELECTED_STRATEGIES").split(","))
+        return StrategyFactory.get_available_strategies()
+
     def _select_best_ppo_model(self):
         """Select the best PPO model (prefer FINAL, then highest step count)."""
-        models_dir = "./models"
-        if not os.path.exists(models_dir):
-            raise FileNotFoundError(f"Models directory {models_dir} not found")
+        if not os.path.exists(self.models_dir):
+            raise FileNotFoundError(f"Models directory {self.models_dir} not found")
 
-        model_files = [f for f in os.listdir(models_dir) if f.endswith(".zip")]
+        model_files = [f for f in os.listdir(self.models_dir) if f.endswith(".zip")]
         if not model_files:
-            raise FileNotFoundError("No PPO model files found in ./models/")
+            raise FileNotFoundError(f"No PPO model files found in {self.models_dir}/")
 
         # Prefer FINAL model, then highest step count
         final_model = next((f for f in model_files if "final" in f.lower()), None)
@@ -197,17 +287,26 @@ class FourPlayerPPOTournament:
                             game_players[ppo_idx],
                             game_players[0],
                         )
-                for i, player_name in enumerate(game_players):
-                    if player_name == self.ppo_model:
-                        model_path = f"./models/{player_name}.zip"
-                        # Force agent_color red to match training seat
-                        strategy = PPOStrategy(
-                            model_path, player_name, EnvConfig(agent_color="red")
-                        )
-                    else:
-                        strategy = StrategyFactory.create_strategy(player_name)
-                    game.players[i].set_strategy(strategy)
-                    game.players[i].strategy_name = player_name
+                # Assign strategies. For classic env we use strategy wrapper; for single-seat we will act directly via policy.
+                if self.env_kind == "classic":
+                    for i, player_name in enumerate(game_players):
+                        if player_name == self.ppo_model:
+                            model_path = f"{self.models_dir}/{player_name}.zip"
+                            strategy = self.PPOStrategyClass(
+                                model_path,
+                                player_name,
+                                self.EnvConfigClass(agent_color="red"),
+                            )
+                        else:
+                            strategy = StrategyFactory.create_strategy(player_name)
+                        game.players[i].set_strategy(strategy)
+                        game.players[i].strategy_name = player_name
+                else:
+                    for i, player_name in enumerate(game_players):
+                        if player_name != self.ppo_model:
+                            strategy = StrategyFactory.create_strategy(player_name)
+                            game.players[i].set_strategy(strategy)
+                        game.players[i].strategy_name = player_name
 
                 # Play the game
                 results = self._play_four_player_game(
@@ -256,61 +355,113 @@ class FourPlayerPPOTournament:
                 "moves_made": 0,
                 "turns_taken": 0,
             }
+        # Single-seat observation builder if needed
+        obs_builder = None
+        if self.env_kind == "single-seat":
+            from ludo_rls.envs.builders.observation_builder import (
+                ObservationBuilder as _ObsBuilder,
+            )
+
+            env_cfg = self.EnvConfigClass(
+                max_turns=self.max_turns_per_game, agent_color="red"
+            )
+            obs_builder = _ObsBuilder(env_cfg, game, PlayerColor.RED.value)
 
         while not game.game_over and turn_count < self.max_turns_per_game:
             current_player = game.get_current_player()
             strategy_name = current_player.strategy_name
             dice_value = game.roll_dice()
 
-            # Get AI decision context
-            context = game.get_game_state_for_ai()
-            context["dice_value"] = dice_value  # Add dice value to context
-
-            if context["valid_moves"]:
-                # PPO makes strategic decision
-                selected_token = current_player.make_strategic_decision(context)
-
-                # Execute the move
-                move_result = game.execute_move(
-                    current_player, selected_token, dice_value
+            if (
+                self.env_kind == "single-seat"
+                and current_player.color is PlayerColor.RED
+            ):
+                valid_moves = game.get_valid_moves(current_player, dice_value)
+                obs = (
+                    obs_builder._build_observation(turn_count, dice_value)
+                    if obs_builder
+                    else np.zeros(1)
                 )
-
-                # Save the decision and outcome
-                self.state_saver.save_decision(
-                    strategy_name, context, selected_token, move_result
-                )
-
-                # Track stats
-                game_results["player_stats"][strategy_name]["moves_made"] += 1
-
-                if move_result.get("captured_tokens"):
-                    captures = len(move_result["captured_tokens"])
-                    game_results["player_stats"][strategy_name]["tokens_captured"] += (
-                        captures
-                    )
-                    game_results["game_events"].append(
-                        f"Turn {turn_count}: {strategy_name} captured {captures} token(s)"
-                    )
-
-                if move_result.get("token_finished"):
-                    game_results["player_stats"][strategy_name]["tokens_finished"] += 1
-                    game_results["game_events"].append(
-                        f"Turn {turn_count}: {strategy_name} finished a token"
-                    )
-
-                # Check for game end
-                if move_result.get("game_won"):
-                    game_results["winner"] = current_player
-                    game_results["turns_played"] = turn_count
-                    print(
-                        f"  Game {game_number}: {strategy_name.upper()} WINS! ({turn_count} turns)"
-                    )
-                    break
-
-                if not move_result.get("extra_turn", False):
+                mask = np.zeros(4, dtype=np.int8)
+                if valid_moves:
+                    for m in valid_moves:
+                        mask[m["token_id"]] = 1
+                act, _ = self.policy.predict(obs[None, :], deterministic=False)
+                action = int(act)
+                if mask.sum() > 0 and mask[action] == 0:
+                    legal = np.nonzero(mask)[0]
+                    action = int(legal[0])
+                if valid_moves:
+                    move_result = game.execute_move(current_player, action, dice_value)
+                    if move_result.get("captured_tokens"):
+                        captures = len(move_result["captured_tokens"])
+                        game_results["player_stats"].setdefault(strategy_name, {})
+                        game_results["player_stats"][strategy_name][
+                            "tokens_captured"
+                        ] = (
+                            game_results["player_stats"][strategy_name].get(
+                                "tokens_captured", 0
+                            )
+                            + captures
+                        )
+                    if move_result.get("token_finished"):
+                        game_results["player_stats"][strategy_name][
+                            "tokens_finished"
+                        ] = (
+                            game_results["player_stats"][strategy_name].get(
+                                "tokens_finished", 0
+                            )
+                            + 1
+                        )
+                    if move_result.get("game_won"):
+                        game_results["winner"] = current_player
+                        game_results["turns_played"] = turn_count
+                        print(
+                            f"  Game {game_number}: {strategy_name.upper()} WINS! ({turn_count} turns)"
+                        )
+                        break
+                    if not move_result.get("extra_turn"):
+                        game.next_turn()
+                else:
                     game.next_turn()
             else:
-                game.next_turn()
+                context = game.get_game_state_for_ai()
+                context["dice_value"] = dice_value
+                if context["valid_moves"]:
+                    selected_token = current_player.make_strategic_decision(context)
+                    move_result = game.execute_move(
+                        current_player, selected_token, dice_value
+                    )
+                    self.state_saver.save_decision(
+                        strategy_name, context, selected_token, move_result
+                    )
+                    game_results["player_stats"][strategy_name]["moves_made"] += 1
+                    if move_result.get("captured_tokens"):
+                        captures = len(move_result["captured_tokens"])
+                        game_results["player_stats"][strategy_name][
+                            "tokens_captured"
+                        ] += captures
+                        game_results["game_events"].append(
+                            f"Turn {turn_count}: {strategy_name} captured {captures} token(s)"
+                        )
+                    if move_result.get("token_finished"):
+                        game_results["player_stats"][strategy_name][
+                            "tokens_finished"
+                        ] += 1
+                        game_results["game_events"].append(
+                            f"Turn {turn_count}: {strategy_name} finished a token"
+                        )
+                    if move_result.get("game_won"):
+                        game_results["winner"] = current_player
+                        game_results["turns_played"] = turn_count
+                        print(
+                            f"  Game {game_number}: {strategy_name.upper()} WINS! ({turn_count} turns)"
+                        )
+                        break
+                    if not move_result.get("extra_turn", False):
+                        game.next_turn()
+                else:
+                    game.next_turn()
 
             turn_count += 1
             game_results["player_stats"][strategy_name]["turns_taken"] += 1
@@ -542,15 +693,18 @@ class FourPlayerPPOTournament:
 
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    args = parse_arguments()
+
     # Set random seed
-    run_game_with_seed(42)
+    run_game_with_seed(args.seed)
 
     print("🎯 LUDO PPO vs STRATEGIES TOURNAMENT 🎯")
     print("=" * 70)
     print("Starting comprehensive PPO vs Strategies tournament...")
 
     # Run main tournament
-    tournament = FourPlayerPPOTournament()
+    tournament = FourPlayerPPOTournament(args)
     summary = tournament.run_tournament()
 
     # Final summary
