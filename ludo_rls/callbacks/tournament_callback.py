@@ -110,6 +110,9 @@ class TournamentMetrics:
     captures_against: int = 0
     illegal_actions: int = 0
     turns: List[int] = None
+    ppo_turns: int = 0  # number of PPO decision turns
+    offensive_captures: int = 0  # synonym for captures_for (clarity)
+    defensive_captures: int = 0  # captures_against
 
     def __post_init__(self):
         if self.ranks is None:
@@ -122,14 +125,23 @@ class TournamentMetrics:
         win_rate = self.wins / total_games
         mean_rank = float(np.mean(self.ranks)) if self.ranks else 0.0
         avg_turns = float(np.mean(self.turns)) if self.turns else 0.0
-        illegal_rate = self.illegal_actions / max(1, self.turns and sum(self.turns))
+        total_turns = max(1, self.turns and sum(self.turns))
+        illegal_rate = self.illegal_actions / total_turns
+        illegal_rate_ppo = self.illegal_actions / max(1, self.ppo_turns)
         capture_diff = (self.captures_for - self.captures_against) / max(1, total_games)
+        offensive_per_game = self.captures_for / max(1, total_games)
+        defensive_per_game = self.captures_against / max(1, total_games)
+        capture_ratio = self.captures_for / max(1, self.captures_against) if self.captures_against else float('inf') if self.captures_for > 0 else 0.0
         return {
             "win_rate": win_rate,
             "mean_rank": mean_rank,
             "capture_diff": capture_diff,
             "avg_turns": avg_turns,
             "illegal_rate": illegal_rate,
+            "illegal_rate_ppo": illegal_rate_ppo,
+            "offensive_captures_per_game": offensive_per_game,
+            "defensive_captures_per_game": defensive_per_game,
+            "capture_ratio": capture_ratio,
         }
 
 
@@ -237,14 +249,13 @@ class SelfPlayTournamentCallback(BaseCallback):
                         if valid_moves:
                             valid_ids = [m["token_id"] for m in valid_moves]
                             if action not in valid_ids:
-                                # Count as illegal selection
                                 metrics.illegal_actions += 1
                                 action = valid_ids[0]
                             move_res = game.execute_move(current_player, action, dice)
-                            # Capture accounting
                             captured = move_res.get("captured_tokens", [])
                             if captured:
                                 metrics.captures_for += len(captured)
+                                metrics.offensive_captures += len(captured)
                             if move_res.get("token_finished"):
                                 token_finish_counts[current_player.color.value] += 1
                             if move_res.get("game_won"):
@@ -256,6 +267,7 @@ class SelfPlayTournamentCallback(BaseCallback):
                         else:
                             game.next_turn()
                         turn_counter += 1
+                        metrics.ppo_turns += 1
                     else:
                         # Opponent scripted decision using its strategy; build minimal context
                         try:
@@ -270,10 +282,10 @@ class SelfPlayTournamentCallback(BaseCallback):
                                 )
                                 # Capture accounting against PPO
                                 if move_res.get("captured_tokens"):
-                                    # Any captured token belonging to PPO player?
                                     for ct in move_res["captured_tokens"]:
                                         if ct["player_color"] == ppo_player.color.value:
                                             metrics.captures_against += 1
+                                            metrics.defensive_captures += 1
                                 if move_res.get("token_finished"):
                                     token_finish_counts[current_player.color.value] += 1
                                 if move_res.get("game_won"):
