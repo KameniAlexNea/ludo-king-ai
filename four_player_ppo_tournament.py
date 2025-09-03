@@ -5,6 +5,7 @@ Tournament pitting the best PPO model against all available Ludo strategies.
 """
 
 import os
+import argparse
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -18,10 +19,68 @@ from dotenv import load_dotenv
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
 from ludo_rl.envs.model import EnvConfig
-from ludo_rl.ppo_strategy import PPOStrategy
+from ludo_rls.ppo_strategy import PPOStrategy
 from ludo_stats.game_state_saver import GameStateSaver
 
 load_dotenv()
+
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="PPO vs Strategies Tournament System",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=int(os.getenv("MAX_TURNS_PER_GAME", 1000)),
+        help="Maximum turns per game before declaring draw"
+    )
+
+    parser.add_argument(
+        "--games-per-matchup",
+        type=int,
+        default=int(os.getenv("GAMES_PER_MATCHUP", 10)),
+        help="Number of games to play per strategy combination"
+    )
+
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Tournament random seed"
+    )
+
+    parser.add_argument(
+        "--models-dir",
+        type=str,
+        default="./models",
+        help="Directory containing PPO model files"
+    )
+
+    parser.add_argument(
+        "--strategies",
+        type=str,
+        nargs="*",
+        help="Specific strategies to include (default: all available)"
+    )
+
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Reduce verbose output"
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="saved_states/ppo_vs_strategies",
+        help="Directory to save game states and results"
+    )
+
+    return parser.parse_args()
 
 
 def run_game_with_seed(seed):
@@ -32,26 +91,24 @@ def run_game_with_seed(seed):
 class FourPlayerPPOTournament:
     """Tournament system pitting PPO model against Ludo strategies."""
 
-    def get_strategies(self):
-        if os.getenv("SELECTED_STRATEGIES"):
-            return list(os.getenv("SELECTED_STRATEGIES").split(","))
-        return StrategyFactory.get_available_strategies()
-
-    def __init__(self):
-        # Configuration
-        self.max_turns_per_game = int(os.getenv("MAX_TURNS_PER_GAME", 1000))
-        self.games_per_matchup = int(os.getenv("GAMES_PER_MATCHUP", 10))
-        self.tournament_seed = 42
-        self.verbose_output = True
+    def __init__(self, args):
+        # Configuration from arguments
+        self.max_turns_per_game = args.max_turns
+        self.games_per_matchup = args.games_per_matchup
+        self.tournament_seed = args.seed
+        self.models_dir = args.models_dir
+        self.verbose_output = not args.quiet
+        self.output_dir = args.output_dir
+        self.selected_strategies = args.strategies
 
         # Initialize state saver
-        self.state_saver = GameStateSaver("saved_states/ppo_vs_strategies")
+        self.state_saver = GameStateSaver(self.output_dir)
 
         # Select the best PPO model (use FINAL or the one with most steps)
         self.ppo_model = self._select_best_ppo_model()
 
-        # Get all available strategies
-        self.all_strategies = self.get_strategies()
+        # Get available strategies
+        self.all_strategies = self._get_strategies()
 
         # Generate combinations: PPO + 3 different strategies
         self.strategy_combinations = list(combinations(self.all_strategies, 3))
@@ -77,19 +134,28 @@ class FourPlayerPPOTournament:
             print(f"   • Strategy combinations: {len(self.strategy_combinations)}")
             print(f"   • Games per matchup: {self.games_per_matchup}")
             print(f"   • Max turns per game: {self.max_turns_per_game}")
+            print(f"   • Models directory: {self.models_dir}")
+            print(f"   • Output directory: {self.output_dir}")
             print(
                 f"   • Total games to play: {len(self.strategy_combinations) * self.games_per_matchup}"
             )
 
+    def _get_strategies(self):
+        """Get strategies to use in tournament."""
+        if self.selected_strategies:
+            return self.selected_strategies
+        if os.getenv("SELECTED_STRATEGIES"):
+            return list(os.getenv("SELECTED_STRATEGIES").split(","))
+        return StrategyFactory.get_available_strategies()
+
     def _select_best_ppo_model(self):
         """Select the best PPO model (prefer FINAL, then highest step count)."""
-        models_dir = "./models"
-        if not os.path.exists(models_dir):
-            raise FileNotFoundError(f"Models directory {models_dir} not found")
+        if not os.path.exists(self.models_dir):
+            raise FileNotFoundError(f"Models directory {self.models_dir} not found")
 
-        model_files = [f for f in os.listdir(models_dir) if f.endswith(".zip")]
+        model_files = [f for f in os.listdir(self.models_dir) if f.endswith(".zip")]
         if not model_files:
-            raise FileNotFoundError("No PPO model files found in ./models/")
+            raise FileNotFoundError(f"No PPO model files found in {self.models_dir}/")
 
         # Prefer FINAL model, then highest step count
         final_model = next((f for f in model_files if "final" in f.lower()), None)
@@ -199,7 +265,7 @@ class FourPlayerPPOTournament:
                         )
                 for i, player_name in enumerate(game_players):
                     if player_name == self.ppo_model:
-                        model_path = f"./models/{player_name}.zip"
+                        model_path = f"{self.models_dir}/{player_name}.zip"
                         # Force agent_color red to match training seat
                         strategy = PPOStrategy(
                             model_path, player_name, EnvConfig(agent_color="red")
@@ -542,15 +608,18 @@ class FourPlayerPPOTournament:
 
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    args = parse_arguments()
+
     # Set random seed
-    run_game_with_seed(42)
+    run_game_with_seed(args.seed)
 
     print("🎯 LUDO PPO vs STRATEGIES TOURNAMENT 🎯")
     print("=" * 70)
     print("Starting comprehensive PPO vs Strategies tournament...")
 
     # Run main tournament
-    tournament = FourPlayerPPOTournament()
+    tournament = FourPlayerPPOTournament(args)
     summary = tournament.run_tournament()
 
     # Final summary
