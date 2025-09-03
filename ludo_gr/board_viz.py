@@ -187,13 +187,20 @@ def draw_board(tokens: Dict[str, List[Dict]], show_ids: bool = True) -> Image.Im
     cx0, cy0, cx1, cy1 = _cell_bbox(7, 7)
     midx = (cx0 + cx1) // 2
     midy = (cy0 + cy1) // 2
-    # white background base
     d.rectangle((cx0, cy0, cx1, cy1), fill=CENTER_COLOR, outline=(80, 80, 80), width=3)
-    # Triangles: top(red), left(green), bottom(yellow), right(blue)
-    d.polygon([(cx0, cy0), (cx1, cy0), (midx, midy)], fill=COLOR_MAP[Colors.RED])
-    d.polygon([(cx0, cy0), (cx0, cy1), (midx, midy)], fill=COLOR_MAP[Colors.GREEN])
-    d.polygon([(cx0, cy1), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.YELLOW])
-    d.polygon([(cx1, cy0), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.BLUE])
+    # Triangles: top(red), right(green), bottom(yellow), left(blue) typical clockwise
+    d.polygon([(cx0, cy0), (cx1, cy0), (midx, midy)], fill=COLOR_MAP[Colors.RED])      # top
+    d.polygon([(cx1, cy0), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.GREEN])    # right
+    d.polygon([(cx0, cy1), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.YELLOW])   # bottom
+    d.polygon([(cx0, cy0), (cx0, cy1), (midx, midy)], fill=COLOR_MAP[Colors.BLUE])     # left
+
+    # Finish anchors per color inside their triangle (stack tokens exactly here)
+    finish_anchor = {
+        Colors.RED: (midx, cy0 + (midy - cy0) // 2),
+        Colors.GREEN: (cx1 - (cx1 - midx) // 2, midy),
+        Colors.YELLOW: (midx, cy1 - (cy1 - midy) // 2),
+        Colors.BLUE: (cx0 + (midx - cx0) // 2, midy),
+    }
 
     # Grid overlay (subtle)
     for i in range(GRID + 1):
@@ -218,11 +225,17 @@ def draw_board(tokens: Dict[str, List[Dict]], show_ids: bool = True) -> Image.Im
                     continue
                 c, r = coord_map[pos]
             elif state == TokenState.FINISHED.value:
-                # finished tokens stack inside center (2x2)
-                offsets = [(0, 0), (1, 0), (0, 1), (1, 1)]
-                oc, orow = offsets[tid % 4]
-                c = 7 + oc - 1
-                r = 7 + orow - 1
+                ax, ay = finish_anchor[color]
+                # Draw stacked (superposed) circle; tokens overlap fully
+                r_pix = CELL // 2 - 4
+                x0 = ax - r_pix
+                y0 = ay - r_pix
+                x1 = ax + r_pix
+                y1 = ay + r_pix
+                d.ellipse((x0, y0, x1, y1), fill=base_color, outline=(0, 0, 0))
+                if show_ids and FONT:
+                    d.text((ax - 5, ay - 8), str(tid), fill=(0, 0, 0), font=FONT)
+                continue
             else:  # active on main path
                 if 0 <= pos < len(PATH_INDEX_TO_COORD):
                     c, r = PATH_INDEX_TO_COORD[pos]
