@@ -6,7 +6,7 @@ from PIL import Image, ImageDraw, ImageFont
 from ludo.constants import BoardConstants, Colors, GameConstants
 from ludo.token import TokenState
 
-# Color styling
+# Styling
 COLOR_MAP = {
     Colors.RED: (230, 60, 60),
     Colors.GREEN: (60, 170, 90),
@@ -14,132 +14,184 @@ COLOR_MAP = {
     Colors.BLUE: (65, 100, 210),
 }
 BG_COLOR = (245, 245, 245)
-GRID_LINE = (200, 200, 200)
+GRID_LINE = (210, 210, 210)
 PATH_COLOR = (255, 255, 255)
 STAR_COLOR = (255, 255, 200)
 HOME_SHADE = (235, 235, 235)
 CENTER_COLOR = (255, 255, 255)
 
 FONT = None
-try:  # Best-effort font
+try:  # optional font
     FONT = ImageFont.truetype("DejaVuSans.ttf", 14)
 except Exception:
     pass
 
+# Basic geometric layout (15x15 grid for classic style)
 CELL = 32
-GRID = 15  # 15x15 classic style grid
+GRID = 15
 BOARD_SIZE = GRID * CELL
 
-# Path mapping (index -> (col,row)) approximating classic Ludo layout
-PATH_GRID = {
-    0: (6, 0), 1: (6, 1), 2: (6, 2), 3: (6, 3), 4: (6, 4), 5: (6, 5),
-    6: (5, 6), 7: (4, 6), 8: (3, 6), 9: (2, 6), 10: (1, 6), 11: (0, 6),
-    12: (0, 7), 13: (0, 8), 14: (1, 8), 15: (2, 8), 16: (3, 8), 17: (4, 8), 18: (5, 8),
-    19: (6, 9), 20: (6, 10), 21: (6, 11), 22: (6, 12), 23: (6, 13), 24: (6, 14),
-    25: (7, 14), 26: (8, 14), 27: (8, 13), 28: (8, 12), 29: (8, 11), 30: (8, 10), 31: (8, 9),
-    32: (9, 8), 33: (10, 8), 34: (11, 8), 35: (12, 8), 36: (13, 8), 37: (14, 8),
-    38: (14, 7), 39: (14, 6), 40: (13, 6), 41: (12, 6), 42: (11, 6), 43: (10, 6), 44: (9, 6),
-    45: (8, 5), 46: (8, 4), 47: (8, 3), 48: (8, 2), 49: (8, 1), 50: (8, 0), 51: (7, 0),
-}
+# Derived constants
+MAIN_SIZE = BoardConstants.STAR_SQUARES.__class__  # just to silence linter if unused
+HOME_COLUMN_START = GameConstants.HOME_COLUMN_START
+HOME_COLUMN_END = GameConstants.FINISH_POSITION
+HOME_COLUMN_SIZE = GameConstants.HOME_COLUMN_SIZE
 
-# Home column (100-105) mapping for each color moving toward center (7,7)
-HOME_COLUMN_MAP = {
-    'red':   {100: (7,1), 101: (7,2), 102: (7,3), 103: (7,4), 104: (7,5), 105: (7,6)},
-    'green': {100: (1,7), 101: (2,7), 102: (3,7), 103: (4,7), 104: (5,7), 105: (6,7)},
-    'yellow':{100: (7,13),101: (7,12),102: (7,11),103: (7,10),104: (7,9),105: (7,8)},
-    'blue':  {100: (13,7),101: (12,7),102: (11,7),103: (10,7),104: (9,7),105: (8,7)},
-}
+# We derive path coordinates procedurally using a canonical 52-step outer path.
+# Layout: Imagine a cross with a 3-wide corridor. We'll build a ring path list of (col,row).
 
-STAR_INDICES = BoardConstants.STAR_SQUARES
+def _build_path_grid() -> List[Tuple[int, int]]:
+    # Manual procedural trace of standard 52 cells referencing a 15x15 layout.
+    # Start from (6,0) and move clockwise replicating earlier static mapping but generated.
+    seq = []
+    # Up column from (6,0)->(6,5)
+    for r in range(0, 6):
+        seq.append((6, r))
+    # Left row (5,6)->(0,6)
+    for c in range(5, -1, -1):
+        seq.append((c, 6))
+    # Down column (0,7)->(0,8)
+    for r in range(7, 9):
+        seq.append((0, r))
+    # Right row (1,8)->(5,8)
+    for c in range(1, 6):
+        seq.append((c, 8))
+    # Down column (6,9)->(6,14)
+    for r in range(9, 15):
+        seq.append((6, r))
+    # Right row (7,14)->(8,14)
+    for c in range(7, 9):
+        seq.append((c, 14))
+    # Up column (8,13)->(8,9)
+    for r in range(13, 8, -1):
+        seq.append((8, r))
+    # Right row (9,8)->(14,8)
+    for c in range(9, 15):
+        seq.append((c, 8))
+    # Up column (14,7)->(14,6)
+    for r in range(7, 5, -1):
+        seq.append((14, r))
+    # Left row (13,6)->(9,6)
+    for c in range(13, 8, -1):
+        seq.append((c, 6))
+    # Up column (8,5)->(8,0)
+    for r in range(5, -1, -1):
+        seq.append((8, r))
+    # Left row (7,0)
+    seq.append((7, 0))
+    # Ensure length 52
+    return seq
 
-# Home quadrants (col range, row range, color)
+PATH_LIST = _build_path_grid()
+PATH_INDEX_TO_COORD = {i: coord for i, coord in enumerate(PATH_LIST)}
+
+# Home quadrants bounding boxes (col range inclusive)
 HOME_QUADRANTS = {
-    'red':   ((0,5),(0,5)),
-    'green': ((9,14),(0,5)),
-    'yellow':((0,5),(9,14)),
-    'blue':  ((9,14),(9,14)),
+    Colors.RED: ((0, 5), (0, 5)),
+    Colors.GREEN: ((9, 14), (0, 5)),
+    Colors.YELLOW: ((0, 5), (9, 14)),
+    Colors.BLUE: ((9, 14), (9, 14)),
 }
 
-def _cell_bbox(col:int,row:int):
-    x0 = col*CELL; y0 = row*CELL
-    return (x0, y0, x0+CELL, y0+CELL)
+def _cell_bbox(col: int, row: int):
+    x0 = col * CELL
+    y0 = row * CELL
+    return (x0, y0, x0 + CELL, y0 + CELL)
 
-def _draw_home_quadrants(d:ImageDraw.ImageDraw):
-    for color,(cols,rows) in HOME_QUADRANTS.items():
-        (c0,c1),(r0,r1) = cols, rows
-        box = (c0*CELL, r0*CELL, (c1+1)*CELL, (r1+1)*CELL)
-        d.rectangle(box, fill=tuple(int(c*0.9) for c in COLOR_MAP[getattr(Colors,color.upper())]))
-        # inner white square for token staging
-        inner = ( (c0+1)*CELL, (r0+1)*CELL, (c1)*CELL, (r1)*CELL )
+def _draw_home_quadrants(d: ImageDraw.ImageDraw):
+    for color, ((c0, c1), (r0, r1)) in HOME_QUADRANTS.items():
+        box = (c0 * CELL, r0 * CELL, (c1 + 1) * CELL, (r1 + 1) * CELL)
+        d.rectangle(box, fill=tuple(int(c * 0.9) for c in COLOR_MAP[color]))
+        inner = ((c0 + 1) * CELL, (r0 + 1) * CELL, c1 * CELL, r1 * CELL)
         d.rectangle(inner, fill=HOME_SHADE)
 
-def _token_home_position(color:str, token_id:int):
-    # Place tokens in 2x2 grid inside quadrant inner area
-    (cols,rows) = HOME_QUADRANTS[color]
-    c0,c1 = cols; r0,r1 = rows
-    # inner grid coords
-    grid_cols = [c0+1, c0+3]
-    grid_rows = [r0+1, r0+3]
-    gc = grid_cols[token_id % 2]
-    gr = grid_rows[token_id // 2]
-    return gc, gr
+def _token_home_grid_position(color: str, token_id: int) -> Tuple[int, int]:
+    (c0, c1), (r0, r1) = HOME_QUADRANTS[color]
+    cols = [c0 + 1, c0 + 3]
+    rows = [r0 + 1, r0 + 3]
+    col = cols[token_id % 2]
+    row = rows[token_id // 2]
+    return col, row
+
+def _home_column_positions_for_color(color: str) -> Dict[int, Tuple[int, int]]:
+    # Map logical home column indices (100..105) to coordinates along middle lane toward center (7,7)
+    mapping: Dict[int, Tuple[int, int]] = {}
+    center = (7, 7)
+    entry_index = BoardConstants.HOME_COLUMN_ENTRIES[color]
+    entry_coord = PATH_INDEX_TO_COORD[entry_index]
+    ex, ey = entry_coord
+    # Determine axis of approach: same col or same row progression towards center
+    dx = 0 if ex == center[0] else (1 if center[0] > ex else -1)
+    dy = 0 if ey == center[1] else (1 if center[1] > ey else -1)
+    cx, cy = ex + dx, ey + dy
+    for offset in range(GameConstants.HOME_COLUMN_SIZE):
+        mapping[HOME_COLUMN_START + offset] = (cx, cy)
+        cx += dx
+        cy += dy
+    return mapping
+
+HOME_COLUMN_COORDS = {color: _home_column_positions_for_color(color) for color in Colors.ALL_COLORS}
 
 def draw_board(tokens: Dict[str, List[Dict]]) -> Image.Image:
     img = Image.new("RGB", (BOARD_SIZE, BOARD_SIZE), BG_COLOR)
     d = ImageDraw.Draw(img)
 
-    # Draw home quadrants
+    # Quadrants
     _draw_home_quadrants(d)
 
-    # Draw path squares
-    for idx,(c,r) in PATH_GRID.items():
-        bbox = _cell_bbox(c,r)
-        fill = PATH_COLOR
-        if idx in STAR_INDICES:
-            fill = STAR_COLOR
+    # Main path cells
+    for idx, (c, r) in PATH_INDEX_TO_COORD.items():
+        bbox = _cell_bbox(c, r)
+        fill = STAR_COLOR if idx in BoardConstants.STAR_SQUARES else PATH_COLOR
         d.rectangle(bbox, fill=fill, outline=GRID_LINE)
 
-    # Draw home columns
-    for color,map_ in HOME_COLUMN_MAP.items():
-        col_rgb = COLOR_MAP[getattr(Colors,color.upper())]
-        for pos,(c,r) in map_.items():
-            bbox = _cell_bbox(c,r)
+    # Home columns
+    for color, pos_map in HOME_COLUMN_COORDS.items():
+        col_rgb = COLOR_MAP[color]
+        for pos, (c, r) in pos_map.items():
+            bbox = _cell_bbox(c, r)
             d.rectangle(bbox, fill=PATH_COLOR, outline=col_rgb)
 
-    # Center finishing square
-    center_bbox = _cell_bbox(7,7)
-    d.rectangle(center_bbox, fill=CENTER_COLOR, outline=(80,80,80), width=3)
+    # Center finish region
+    center_bbox = _cell_bbox(7, 7)
+    d.rectangle(center_bbox, fill=CENTER_COLOR, outline=(80, 80, 80), width=3)
 
-    # Draw grid lines (optional subtle)
-    for i in range(GRID+1):
-        d.line((0,i*CELL, BOARD_SIZE, i*CELL), fill=(230,230,230))
-        d.line((i*CELL,0, i*CELL, BOARD_SIZE), fill=(230,230,230))
+    # Grid overlay (subtle)
+    for i in range(GRID + 1):
+        d.line((0, i * CELL, BOARD_SIZE, i * CELL), fill=(230, 230, 230))
+        d.line((i * CELL, 0, i * CELL, BOARD_SIZE), fill=(230, 230, 230))
 
-    # Draw tokens
+    # Tokens
     for color, tlist in tokens.items():
-        base_color = COLOR_MAP[getattr(Colors,color.upper())]
+        base_color = COLOR_MAP[color]
         for tk in tlist:
-            state = tk['state']; pos = tk['position']; tid = tk['token_id']
+            state = tk['state']
+            pos = tk['position']
+            tid = tk['token_id']
             if state == TokenState.HOME.value:
-                c,r = _token_home_position(color, tid)
+                c, r = _token_home_grid_position(color, tid)
+            elif state == TokenState.HOME_COLUMN.value and HOME_COLUMN_START <= pos <= HOME_COLUMN_END:
+                coord_map = HOME_COLUMN_COORDS[color]
+                if pos not in coord_map:
+                    continue
+                c, r = coord_map[pos]
             elif state == TokenState.FINISHED.value:
-                # place in center arranged 2x2
-                offsets = [(0,0),(1,0),(0,1),(1,1)]
-                offc,offr = offsets[tid]
-                c = 7 + offc - 1
-                r = 7 + offr - 1
-            elif state == TokenState.HOME_COLUMN.value and pos in HOME_COLUMN_MAP[color]:
-                c,r = HOME_COLUMN_MAP[color][pos]
-            elif 0 <= pos < 52 and pos in PATH_GRID:
-                c,r = PATH_GRID[pos]
-            else:
-                continue
-            bbox = _cell_bbox(c,r)
-            x0,y0,x1,y1 = bbox
+                # finished tokens stack inside center (2x2)
+                offsets = [(0, 0), (1, 0), (0, 1), (1, 1)]
+                oc, orow = offsets[tid % 4]
+                c = 7 + oc - 1
+                r = 7 + orow - 1
+            else:  # active on main path
+                if 0 <= pos < len(PATH_INDEX_TO_COORD):
+                    c, r = PATH_INDEX_TO_COORD[pos]
+                else:
+                    continue
+            bbox = _cell_bbox(c, r)
+            x0, y0, x1, y1 = bbox
             inset = 4
-            token_box = (x0+inset,y0+inset,x1-inset,y1-inset)
-            d.ellipse(token_box, fill=base_color, outline=(0,0,0))
+            token_box = (x0 + inset, y0 + inset, x1 - inset, y1 - inset)
+            d.ellipse(token_box, fill=base_color, outline=(0, 0, 0))
             if FONT:
-                d.text((x0+CELL//2-5,y0+CELL//2-8), str(tid), fill=(0,0,0), font=FONT)
+                d.text((x0 + CELL // 2 - 5, y0 + CELL // 2 - 8), str(tid), fill=(0, 0, 0), font=FONT)
 
     return img
