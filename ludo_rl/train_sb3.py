@@ -58,6 +58,24 @@ def main():
         default=0.01,
         help="Entropy coefficient for exploration (higher = more exploration)",
     )
+    parser.add_argument(
+        "--tournament-freq",
+        type=int,
+        default=100_000,
+        help="Run tournament evaluation every N environment timesteps",
+    )
+    parser.add_argument(
+        "--tournament-games",
+        type=int,
+        default=240,
+        help="Total tournament games per evaluation (evenly split across 4 seats)",
+    )
+    parser.add_argument(
+        "--tournament-baselines",
+        type=str,
+        default="optimist,balanced,cautious,killer,defensive,random",
+        help="Comma separated baseline strategy names (must be valid StrategyFactory names)",
+    )
     args = parser.parse_args()
 
     os.makedirs(args.logdir, exist_ok=True)
@@ -130,7 +148,25 @@ def main():
         n_eval_episodes=20,  # More evaluation episodes
     )
 
-    model.learn(total_timesteps=args.total_steps, callback=[checkpoint_cb, eval_cb])
+    # Tournament callback (optional baselines evaluation) - imported lazily to avoid overhead if unused
+    from .callbacks.tournament_callback import ClassicTournamentCallback
+
+    baseline_names = [
+        s.strip() for s in args.tournament_baselines.split(",") if s.strip()
+    ]
+    tournament_cb = ClassicTournamentCallback(
+        baselines=baseline_names,
+        n_games=args.tournament_games,
+        eval_freq=args.tournament_freq,
+        max_turns=args.max_turns,
+        log_prefix="tournament/",
+        verbose=1,
+    )
+
+    model.learn(
+        total_timesteps=args.total_steps,
+        callback=[checkpoint_cb, eval_cb, tournament_cb],
+    )
     model.save(os.path.join(args.model_dir, "ppo_ludo_final"))
 
 

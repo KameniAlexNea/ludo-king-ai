@@ -38,7 +38,11 @@ class TestPPOStrategy(unittest.TestCase):
         # Monkeypatch PPO.load inside module
         import ludo_rl.ppo_strategy as ppo_module
 
-        ppo_module.PPO.load = DummyModel.load  # type: ignore
+        # Provide a wrapper that tolerates extra kwargs like device
+        def _dummy_load(path, **kwargs):  # pragma: no cover - simple adapter
+            return DummyModel.load(path)
+
+        ppo_module.PPO.load = _dummy_load  # type: ignore
         cfg = EnvConfig(agent_color=Colors.RED, max_turns=10)
         model_path = Path("dummy_model.zip")
         model_path.write_bytes(b"")
