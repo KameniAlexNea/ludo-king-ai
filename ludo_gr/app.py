@@ -1,4 +1,15 @@
 from typing import Dict, List
+import os
+
+# Ensure Gradio uses a user-writable temp/cache directory to avoid permission errors under restricted /tmp
+_GRADIO_BASE = os.path.join(os.getcwd(), "gradio_runtime")
+os.environ.setdefault("GRADIO_TEMP_DIR", _GRADIO_BASE)
+os.environ.setdefault("GRADIO_CACHE_DIR", os.path.join(_GRADIO_BASE, "cache"))
+for _p in (os.environ["GRADIO_TEMP_DIR"], os.environ["GRADIO_CACHE_DIR"], os.path.join(_GRADIO_BASE, "vibe_edit_history")):
+    try:
+        os.makedirs(_p, exist_ok=True)
+    except Exception:
+        pass
 
 import gradio as gr
 
