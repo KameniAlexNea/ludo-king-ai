@@ -164,9 +164,9 @@ def draw_board(tokens: Dict[str, List[Dict]], show_ids: bool = True) -> Image.Im
     for idx, (c, r) in PATH_INDEX_TO_COORD.items():
         bbox = _cell_bbox(c, r)
         outline = GRID_LINE
-        if idx in start_index_to_color:  # starting squares are safe
+        if idx in start_index_to_color:  # starting squares (safe)
             fill = COLOR_MAP[start_index_to_color[idx]]
-        elif idx in entry_index_to_color:  # entry squares NOT safe; show normal path w/ colored outline
+        elif idx in entry_index_to_color:  # home entry squares (NOT safe) keep path color, colored outline
             fill = PATH_COLOR
             outline = COLOR_MAP[entry_index_to_color[idx]]
         elif idx in BoardConstants.STAR_SQUARES:  # global safe/star
@@ -183,9 +183,17 @@ def draw_board(tokens: Dict[str, List[Dict]], show_ids: bool = True) -> Image.Im
             bbox = _cell_bbox(c, r)
             d.rectangle(bbox, fill=tint, outline=col_rgb)
 
-    # Center finish region
-    center_bbox = _cell_bbox(7, 7)
-    d.rectangle(center_bbox, fill=CENTER_COLOR, outline=(80, 80, 80), width=3)
+    # Center finish region (position 105) draw four color triangles
+    cx0, cy0, cx1, cy1 = _cell_bbox(7, 7)
+    midx = (cx0 + cx1) // 2
+    midy = (cy0 + cy1) // 2
+    # white background base
+    d.rectangle((cx0, cy0, cx1, cy1), fill=CENTER_COLOR, outline=(80, 80, 80), width=3)
+    # Triangles: top(red), left(green), bottom(yellow), right(blue)
+    d.polygon([(cx0, cy0), (cx1, cy0), (midx, midy)], fill=COLOR_MAP[Colors.RED])
+    d.polygon([(cx0, cy0), (cx0, cy1), (midx, midy)], fill=COLOR_MAP[Colors.GREEN])
+    d.polygon([(cx0, cy1), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.YELLOW])
+    d.polygon([(cx1, cy0), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.BLUE])
 
     # Grid overlay (subtle)
     for i in range(GRID + 1):
