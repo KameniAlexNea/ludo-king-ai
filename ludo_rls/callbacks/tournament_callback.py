@@ -131,7 +131,13 @@ class TournamentMetrics:
         capture_diff = (self.captures_for - self.captures_against) / max(1, total_games)
         offensive_per_game = self.captures_for / max(1, total_games)
         defensive_per_game = self.captures_against / max(1, total_games)
-        capture_ratio = self.captures_for / max(1, self.captures_against) if self.captures_against else float('inf') if self.captures_for > 0 else 0.0
+        capture_ratio = (
+            self.captures_for / max(1, self.captures_against)
+            if self.captures_against
+            else float("inf")
+            if self.captures_for > 0
+            else 0.0
+        )
         return {
             "win_rate": win_rate,
             "mean_rank": mean_rank,

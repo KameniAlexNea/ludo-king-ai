@@ -122,12 +122,14 @@ class LudoGymEnv(gym.Env):
         self.game = LudoGame(order)
         # (Re)select training color
         if self.cfg.single_seat_training and self.cfg.randomize_training_color:
-            self.training_color = self.rng.choice([
-                PlayerColor.RED.value,
-                PlayerColor.GREEN.value,
-                PlayerColor.YELLOW.value,
-                PlayerColor.BLUE.value,
-            ])
+            self.training_color = self.rng.choice(
+                [
+                    PlayerColor.RED.value,
+                    PlayerColor.GREEN.value,
+                    PlayerColor.YELLOW.value,
+                    PlayerColor.BLUE.value,
+                ]
+            )
         else:
             self.training_color = self.game.get_current_player().color.value
         self.agent_color = self.training_color
@@ -166,7 +168,7 @@ class LudoGymEnv(gym.Env):
         We don't deep copy tensors (costly); we simply freeze by disabling grad and
         using deterministic inference from current model. If model absent, stays None.
         """
-        if self.model is not None and hasattr(self.model, 'policy'):
+        if self.model is not None and hasattr(self.model, "policy"):
             self._frozen_policy = self.model.policy  # reference (weights won't change this episode if PPO updates after rollouts)
         else:
             self._frozen_policy = None
@@ -176,10 +178,10 @@ class LudoGymEnv(gym.Env):
             return -1
         mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
         for m in valid_moves:
-            mask[m['token_id']] = 1
+            mask[m["token_id"]] = 1
         # Fallback random if no policy
         if policy is None:
-            legal_ids = [m['token_id'] for m in valid_moves]
+            legal_ids = [m["token_id"] for m in valid_moves]
             return self.rng.choice(legal_ids)
         obs_batch = obs[None, :]
         action, _ = policy.predict(obs_batch, deterministic=True)
@@ -216,9 +218,7 @@ class LudoGymEnv(gym.Env):
             if valid_moves:
                 # Observation from training perspective to keep policy consistent
                 temp_obs = self.obs_builder._build_observation(self.turns, dice)
-                action = self._policy_action(
-                    self._frozen_policy, temp_obs, valid_moves
-                )
+                action = self._policy_action(self._frozen_policy, temp_obs, valid_moves)
                 valid_ids = [m["token_id"] for m in valid_moves]
                 if action not in valid_ids:
                     action = valid_ids[0]
@@ -238,10 +238,14 @@ class LudoGymEnv(gym.Env):
             if not self.game.game_over:
                 self.game.next_turn()
 
-        if not self.game.game_over and self.game.get_current_player().color.value == self.training_color:
+        if (
+            not self.game.game_over
+            and self.game.get_current_player().color.value == self.training_color
+        ):
             # Roll dice for training seat
-            self._pending_agent_dice, self._pending_valid_moves = self.move_utils._roll_new_agent_dice()
-
+            self._pending_agent_dice, self._pending_valid_moves = (
+                self.move_utils._roll_new_agent_dice()
+            )
 
     def step(self, action: int):  # type: ignore[override]
         """Advance environment by one *training seat* decision.
@@ -254,7 +258,9 @@ class LudoGymEnv(gym.Env):
             return self.last_obs, 0.0, True, False, {}
 
         reward_components: List[float] = []
-        agent_player = next(p for p in self.game.players if p.color.value == self.training_color)
+        agent_player = next(
+            p for p in self.game.players if p.color.value == self.training_color
+        )
         self.agent_color = self.training_color  # ensure consistency for builders
 
         # Ensure we have a pending dice & valid moves (should always be true except pathological cases)
@@ -336,7 +342,9 @@ class LudoGymEnv(gym.Env):
         total_reward = opponent_total + sum(step_components.values())
 
         # Terminal checks
-        opponents = [p for p in self.game.players if p.color.value != self.training_color]
+        opponents = [
+            p for p in self.game.players if p.color.value != self.training_color
+        ]
         terminal_reward = self.reward_calc.get_terminal_reward(agent_player, opponents)
         terminated = False
         truncated = False
@@ -356,7 +364,9 @@ class LudoGymEnv(gym.Env):
         # Prepare next dice for the (possibly same or next) player if continuing
         if not terminated and not truncated and not self.game.game_over:
             if extra_turn:
-                self._pending_agent_dice, self._pending_valid_moves = self.move_utils._roll_new_agent_dice()
+                self._pending_agent_dice, self._pending_valid_moves = (
+                    self.move_utils._roll_new_agent_dice()
+                )
             else:
                 # opponents already advanced; dice set in _advance_until_training_turn
                 pass
