@@ -1,7 +1,6 @@
 import os
 from typing import Dict, List
 
-# Ensure Gradio uses a user-writable temp/cache directory to avoid permission errors under restricted /tmp
 _GRADIO_BASE = os.path.join(os.getcwd(), "gradio_runtime")
 os.environ.setdefault("GRADIO_TEMP_DIR", _GRADIO_BASE)
 os.environ.setdefault(
@@ -20,6 +19,7 @@ for _p in (
 
 import json
 from copy import deepcopy
+import io, base64
 
 import gradio as gr
 
@@ -35,6 +35,14 @@ DEFAULT_PLAYERS = [
     PlayerColor.YELLOW,
     PlayerColor.BLUE,
 ]
+
+
+def _img_to_data_uri(pil_img):
+    """Return an inline data URI for the PIL image to avoid Gradio temp file folders."""
+    buf = io.BytesIO()
+    pil_img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return f"<img src='data:image/png;base64,{b64}' style='image-rendering:pixelated;width:100%;max-width:640px;' />"
 
 
 def _init_game(strategies: List[str]):
@@ -143,7 +151,8 @@ def launch_app():
             export_btn = gr.Button("Export Game State")
             move_history_btn = gr.Button("Show Move History (last 50)")
 
-        board_plot = gr.Image(label="Board", type="numpy")
+        # Replace Image with HTML to avoid filesystem writes per render
+        board_plot = gr.HTML(label="Board")
         log = gr.Textbox(label="Last Action", interactive=False)
         history_box = gr.Textbox(label="Move History", lines=10)
         bulk_results = gr.Textbox(label="Bulk Results")
@@ -159,8 +168,9 @@ def launch_app():
 
         def _init(*strats):
             game = _init_game(list(strats))
-            img = draw_board(_game_state_tokens(game), show_ids=True)
-            return game, img, "Game initialized", []
+            pil_img = draw_board(_game_state_tokens(game), show_ids=True)
+            html = _img_to_data_uri(pil_img)
+            return game, html, "Game initialized", []
 
         def _steps(n, game, history, show):
             if game is None:
@@ -175,8 +185,9 @@ def launch_app():
                     history = history[-50:]
                 if game.game_over:
                     break
-            img = draw_board(tokens, show_ids=show)
-            return game, img, desc, history
+            pil_img = draw_board(tokens, show_ids=show)
+            html = _img_to_data_uri(pil_img)
+            return game, html, desc, history
 
         def _export(game):
             if not game:
