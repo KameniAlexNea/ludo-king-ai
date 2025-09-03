@@ -563,7 +563,11 @@ class FourPlayerPPOTournament:
             medal = (
                 "🥇"
                 if rank == 1
-                else "🥈" if rank == 2 else "🥉" if rank == 3 else "  "
+                else "🥈"
+                if rank == 2
+                else "🥉"
+                if rank == 3
+                else "  "
             )
             print(
                 f"{rank:<4} {entry['model'].upper():<20} {entry['wins']:<6} {entry['games']:<7} "

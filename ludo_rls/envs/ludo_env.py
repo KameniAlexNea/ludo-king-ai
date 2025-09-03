@@ -169,9 +169,7 @@ class LudoGymEnv(gym.Env):
         using deterministic inference from current model. If model absent, stays None.
         """
         if self.model is not None and hasattr(self.model, "policy"):
-            self._frozen_policy = (
-                self.model.policy
-            )  # reference (weights won't change this episode if PPO updates after rollouts)
+            self._frozen_policy = self.model.policy  # reference (weights won't change this episode if PPO updates after rollouts)
         else:
             self._frozen_policy = None
 

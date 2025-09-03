@@ -21,7 +21,7 @@ class TestHomeColumnAndSixes(unittest.TestCase):
         token.state = TokenState.HOME_COLUMN
         token.position = 103
         dice = 3  # overshoots (would reach 106)
-        can_move = token.can_move(dice, None)
+        # can_move = token.can_move(dice, None)
         # In our simplified logic, can_move just checks <=105 via get_target_position logic in move(); emulate by get_target_position
         target = token.get_target_position(dice, player.start_position)
         self.assertGreater(target, 105)  # overshoot raw target

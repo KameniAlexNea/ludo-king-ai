@@ -29,7 +29,6 @@ class TestClassicEnvExtended(unittest.TestCase):
 
     def test_extra_turn_chain(self):
         obs, info = self.env.reset(seed=777)
-        turns_before = self.env.turns
         # Try many steps; ensure at least one extra turn occurs over several decisions
         had_extra = False
         for _ in range(30):
