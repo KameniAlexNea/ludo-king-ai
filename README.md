@@ -140,6 +140,27 @@ Planned / Potential:
 * League / population training utilities
 * Reward normalization experiments
 
+## Recent Tournament Results
+Excerpt of latest 200-game evaluations (see `ludo_experiments/results.md` for full tables):
+
+### PPO vs Other Strategies
+| Rank | Model | Win % | Avg Turns |
+|------|-------|------:|----------:|
+| 1 | BALANCED | 32.5 | 130.1 |
+| 2 | OPTIMIST | 28.5 | 128.8 |
+| 3 | PPO_LUDO_FINAL | 25.5 | 128.3 |
+| 4 | PROBABILISTIC_V3 | 13.5 | 129.0 |
+
+### PPO Self-Improvement (vs Frozen PPO)
+| Rank | Model | Win % | Avg Turns |
+|------|-------|------:|----------:|
+| 1 | BALANCED | 31.5 | 128.8 |
+| 2 | OPTIMIST | 31.0 | 128.0 |
+| 3 | PPO_LUDO_FINAL | 21.0 | 126.7 |
+| 4 | PROBABILISTIC_V3 | 16.5 | 128.1 |
+
+PPO trails top heuristics; focus areas: curriculum opponents, snapshot lag, masked action entropy, and targeted late-game reward shaping.
+
 ## License
 See root `LICENSE`.
 

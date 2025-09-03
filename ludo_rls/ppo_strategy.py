@@ -20,7 +20,9 @@ class PPOStrategy:
         if not hasattr(self.env_cfg, "randomize_training_color"):
             setattr(self.env_cfg, "randomize_training_color", False)
         # Ensure agent_color exists (classic EnvConfig might use agent_color or training_color)
-        if not hasattr(self.env_cfg, "agent_color") and hasattr(self.env_cfg, "training_color"):
+        if not hasattr(self.env_cfg, "agent_color") and hasattr(
+            self.env_cfg, "training_color"
+        ):
             self.env_cfg.agent_color = self.env_cfg.training_color  # type: ignore
         self.dummy_env = LudoGymEnv(self.env_cfg)
         dummy_obs, _ = self.dummy_env.reset(seed=self.env_cfg.seed)
