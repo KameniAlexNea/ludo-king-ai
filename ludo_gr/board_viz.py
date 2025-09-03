@@ -87,10 +87,11 @@ PATH_INDEX_TO_COORD = {i: coord for i, coord in enumerate(PATH_LIST)}
 
 # Home quadrants bounding boxes (col range inclusive)
 HOME_QUADRANTS = {
-    Colors.RED: ((0, 5), (0, 5)),
-    Colors.GREEN: ((9, 14), (0, 5)),
-    Colors.YELLOW: ((0, 5), (9, 14)),
-    Colors.BLUE: ((9, 14), (9, 14)),
+    # Reordered to follow counter-clockwise Red -> Green -> Yellow -> Blue
+    Colors.RED: ((0, 5), (0, 5)),        # top-left
+    Colors.GREEN: ((0, 5), (9, 14)),     # bottom-left
+    Colors.YELLOW: ((9, 14), (9, 14)),   # bottom-right
+    Colors.BLUE: ((9, 14), (0, 5)),      # top-right
 }
 
 def _cell_bbox(col: int, row: int):
