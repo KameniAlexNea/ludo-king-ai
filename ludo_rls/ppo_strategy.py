@@ -16,6 +16,12 @@ class PPOStrategy:
         self.model_name = model_name
         self.model = PPO.load(model_path)
         self.env_cfg = env_config or EnvConfig()
+        # Backward compatibility: older EnvConfig (from classic env) may lack attributes
+        if not hasattr(self.env_cfg, "randomize_training_color"):
+            setattr(self.env_cfg, "randomize_training_color", False)
+        # Ensure agent_color exists (classic EnvConfig might use agent_color or training_color)
+        if not hasattr(self.env_cfg, "agent_color") and hasattr(self.env_cfg, "training_color"):
+            self.env_cfg.agent_color = self.env_cfg.training_color  # type: ignore
         self.dummy_env = LudoGymEnv(self.env_cfg)
         dummy_obs, _ = self.dummy_env.reset(seed=self.env_cfg.seed)
         self.obs_dim = dummy_obs.shape[0]

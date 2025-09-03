@@ -18,8 +18,7 @@ import numpy as np
 from dotenv import load_dotenv
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
-from ludo_rl.envs.model import EnvConfig
-from ludo_rls.ppo_strategy import PPOStrategy
+# Dynamic PPO strategy & EnvConfig import handled after CLI args (see FourPlayerPPOTournament._load_ppo_wrapper)
 from ludo_stats.game_state_saver import GameStateSaver
 
 load_dotenv()
@@ -80,6 +79,13 @@ def parse_arguments():
         help="Directory to save game states and results"
     )
 
+    parser.add_argument(
+        "--env",
+        choices=["single-seat", "classic"],
+        default="single-seat",
+        help="Which PPO environment/wrapper to use: single-seat (ludo_rls) or classic multi-seat (ludo_rl)."
+    )
+
     return parser.parse_args()
 
 
@@ -100,6 +106,10 @@ class FourPlayerPPOTournament:
         self.verbose_output = not args.quiet
         self.output_dir = args.output_dir
         self.selected_strategies = args.strategies
+        self.env_kind = args.env  # 'single-seat' or 'classic'
+
+        # Load appropriate PPO wrapper & EnvConfig dynamically
+        self._load_ppo_wrapper()
 
         # Initialize state saver
         self.state_saver = GameStateSaver(self.output_dir)
@@ -136,9 +146,25 @@ class FourPlayerPPOTournament:
             print(f"   • Max turns per game: {self.max_turns_per_game}")
             print(f"   • Models directory: {self.models_dir}")
             print(f"   • Output directory: {self.output_dir}")
+            print(f"   • Environment mode: {self.env_kind}")
             print(
                 f"   • Total games to play: {len(self.strategy_combinations) * self.games_per_matchup}"
             )
+
+    def _load_ppo_wrapper(self):
+        """Dynamically import the correct EnvConfig and PPOStrategy based on env_kind."""
+        if self.env_kind == "classic":
+            from ludo_rl.envs.model import EnvConfig as ClassicEnvConfig
+            from ludo_rl.ppo_strategy import PPOStrategy as ClassicPPOStrategy
+
+            self.EnvConfigClass = ClassicEnvConfig
+            self.PPOStrategyClass = ClassicPPOStrategy
+        else:  # single-seat
+            from ludo_rls.envs.model import EnvConfig as SingleEnvConfig
+            from ludo_rls.ppo_strategy import PPOStrategy as SinglePPOStrategy
+
+            self.EnvConfigClass = SingleEnvConfig
+            self.PPOStrategyClass = SinglePPOStrategy
 
     def _get_strategies(self):
         """Get strategies to use in tournament."""
@@ -266,9 +292,9 @@ class FourPlayerPPOTournament:
                 for i, player_name in enumerate(game_players):
                     if player_name == self.ppo_model:
                         model_path = f"{self.models_dir}/{player_name}.zip"
-                        # Force agent_color red to match training seat
-                        strategy = PPOStrategy(
-                            model_path, player_name, EnvConfig(agent_color="red")
+                        # Force agent_color red to match training seat (common assumption)
+                        strategy = self.PPOStrategyClass(
+                            model_path, player_name, self.EnvConfigClass(agent_color="red")
                         )
                     else:
                         strategy = StrategyFactory.create_strategy(player_name)
