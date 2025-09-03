@@ -1,12 +1,14 @@
 import unittest
-from ludo_rl.envs.ludo_env import LudoGymEnv, EnvConfig
+
+from ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
+
 
 class TestClassicEnvEdgeCases(unittest.TestCase):
     def test_post_done_step(self):
         env = LudoGymEnv(EnvConfig(max_turns=1))
         obs, info = env.reset(seed=42)
-        mask = info.get('action_mask',[1,1,1,1])
-        action = next((i for i,v in enumerate(mask) if v==1),0)
+        mask = info.get("action_mask", [1, 1, 1, 1])
+        action = next((i for i, v in enumerate(mask) if v == 1), 0)
         obs2, r, term, trunc, info2 = env.step(action)
         self.assertTrue(term or trunc)
         # Second step should return done immediately without changing obs
@@ -20,8 +22,9 @@ class TestClassicEnvEdgeCases(unittest.TestCase):
         turns_before = env.turns
         _, _, _, _, info2 = env.step(999)  # definitely illegal
         # Some paths may silently fallback; assert key present rather than forcing True
-        self.assertIn('illegal_action', info2)
+        self.assertIn("illegal_action", info2)
         self.assertGreaterEqual(env.turns, turns_before + 1)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

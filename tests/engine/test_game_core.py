@@ -1,10 +1,14 @@
 import unittest
+
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
 
+
 class TestGameCore(unittest.TestCase):
     def setUp(self):
-        self.game = LudoGame([PlayerColor.RED, PlayerColor.BLUE, PlayerColor.GREEN, PlayerColor.YELLOW])
+        self.game = LudoGame(
+            [PlayerColor.RED, PlayerColor.BLUE, PlayerColor.GREEN, PlayerColor.YELLOW]
+        )
 
     def test_initial_state(self):
         self.assertEqual(len(self.game.players), 4)
@@ -29,7 +33,8 @@ class TestGameCore(unittest.TestCase):
     def test_execute_invalid_token(self):
         player = self.game.get_current_player()
         res = self.game.execute_move(player, 99, 3)
-        self.assertFalse(res['success'])
+        self.assertFalse(res["success"])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -90,9 +90,7 @@ class TournamentMetrics:
         capture_ratio = (
             self.captures_for / max(1, self.captures_against)
             if self.captures_against
-            else float("inf")
-            if self.captures_for > 0
-            else 0.0
+            else float("inf") if self.captures_for > 0 else 0.0
         )
         return {
             "win_rate": win_rate,

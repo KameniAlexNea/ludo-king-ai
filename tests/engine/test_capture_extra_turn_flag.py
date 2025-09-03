@@ -1,4 +1,5 @@
 import unittest
+
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
 from ludo.token import TokenState
@@ -19,12 +20,12 @@ class TestCaptureExtraTurnFlag(unittest.TestCase):
         game.board.add_token(g_tok, 5)
         dice = 3
         moves = game.get_valid_moves(red, dice)
-        self.assertTrue(any(m['token_id'] == 0 for m in moves))
+        self.assertTrue(any(m["token_id"] == 0 for m in moves))
         res = game.execute_move(red, 0, dice)
-        self.assertTrue(res['success'])
-        self.assertTrue(res['captured_tokens'])
-        self.assertTrue(res['extra_turn'])
+        self.assertTrue(res["success"])
+        self.assertTrue(res["captured_tokens"])
+        self.assertTrue(res["extra_turn"])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

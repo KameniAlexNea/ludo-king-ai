@@ -1,14 +1,18 @@
 import unittest
+
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
 from ludo.token import TokenState
 
+
 class TestCapturesAndWins(unittest.TestCase):
     def setUp(self):
-        self.game = LudoGame([
-            PlayerColor.RED,
-            PlayerColor.GREEN,
-        ])
+        self.game = LudoGame(
+            [
+                PlayerColor.RED,
+                PlayerColor.GREEN,
+            ]
+        )
 
     def force_position(self, player_idx, token_idx, board_index):
         token = self.game.players[player_idx].tokens[token_idx]
@@ -27,10 +31,10 @@ class TestCapturesAndWins(unittest.TestCase):
         player = self.game.players[0]
         # Validate move exists
         moves = self.game.get_valid_moves(player, dice)
-        target_moves = [m for m in moves if m['token_id'] == our_token.token_id]
+        target_moves = [m for m in moves if m["token_id"] == our_token.token_id]
         self.assertTrue(target_moves)
         res = self.game.execute_move(player, our_token.token_id, dice)
-        self.assertTrue(res['success'])
+        self.assertTrue(res["success"])
         # Captured token should be sent home
         self.assertTrue(opponent_token.is_in_home())
 
@@ -40,5 +44,6 @@ class TestCapturesAndWins(unittest.TestCase):
             t.state = TokenState.FINISHED
         self.assertTrue(player.has_won())
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

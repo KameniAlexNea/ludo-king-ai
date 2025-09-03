@@ -1,5 +1,7 @@
 import unittest
-from ludo_rl.envs.ludo_env import LudoGymEnv, EnvConfig
+
+from ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
+
 
 class TestClassicEnvBasic(unittest.TestCase):
     def setUp(self):
@@ -15,7 +17,8 @@ class TestClassicEnvBasic(unittest.TestCase):
         action = 0
         nobs, reward, terminated, truncated, info = self.env.step(action)
         self.assertEqual(nobs.shape, obs.shape)
-        self.assertIn('illegal_action', info)
+        self.assertIn("illegal_action", info)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -1,19 +1,23 @@
 import unittest
-from ludo.strategies.random_strategy import RandomStrategy
-from ludo.strategies.cautious import CautiousStrategy
-from ludo.strategies.killer import KillerStrategy
+
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
+from ludo.strategies.cautious import CautiousStrategy
+from ludo.strategies.killer import KillerStrategy
+from ludo.strategies.random_strategy import RandomStrategy
+
 
 class TestHeuristicStrategies(unittest.TestCase):
     def setUp(self):
         # Create game with 4 canonical colors
-        self.game = LudoGame([
-            PlayerColor.RED,
-            PlayerColor.GREEN,
-            PlayerColor.YELLOW,
-            PlayerColor.BLUE,
-        ])
+        self.game = LudoGame(
+            [
+                PlayerColor.RED,
+                PlayerColor.GREEN,
+                PlayerColor.YELLOW,
+                PlayerColor.BLUE,
+            ]
+        )
         self.strategies = [RandomStrategy(), CautiousStrategy(), KillerStrategy()]
 
     def test_choose_move_returns_valid(self):
@@ -30,5 +34,6 @@ class TestHeuristicStrategies(unittest.TestCase):
                 # When no moves strategies default to 0; accept 0 only if there truly are no moves
                 self.assertEqual(token_id, 0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
