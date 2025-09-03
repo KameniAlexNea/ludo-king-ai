@@ -226,9 +226,9 @@ class FourPlayerTournament:
 
                 if move_result.get("captured_tokens"):
                     captures = len(move_result["captured_tokens"])
-                    game_results["player_stats"][strategy_name]["tokens_captured"] += (
-                        captures
-                    )
+                    game_results["player_stats"][strategy_name][
+                        "tokens_captured"
+                    ] += captures
                     game_results["game_events"].append(
                         f"Turn {turn_count}: {strategy_name} captured {captures} token(s)"
                     )
@@ -334,11 +334,7 @@ class FourPlayerTournament:
             medal = (
                 "🥇"
                 if rank == 1
-                else "🥈"
-                if rank == 2
-                else "🥉"
-                if rank == 3
-                else "  "
+                else "🥈" if rank == 2 else "🥉" if rank == 3 else "  "
             )
             print(
                 f"{rank:<4} {entry['strategy'].upper():<12} {entry['wins']:<6} {entry['games']:<7} "

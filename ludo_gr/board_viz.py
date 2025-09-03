@@ -1,4 +1,3 @@
-import math
 from typing import Dict, List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
@@ -39,6 +38,7 @@ HOME_COLUMN_SIZE = GameConstants.HOME_COLUMN_SIZE
 
 # We derive path coordinates procedurally using a canonical 52-step outer path.
 # Layout: Imagine a cross with a 3-wide corridor. We'll build a ring path list of (col,row).
+
 
 def _build_path_grid() -> List[Tuple[int, int]]:
     # Manual procedural trace of standard 52 cells referencing a 15x15 layout.
@@ -82,22 +82,25 @@ def _build_path_grid() -> List[Tuple[int, int]]:
     # Ensure length 52
     return seq
 
+
 PATH_LIST = _build_path_grid()
 PATH_INDEX_TO_COORD = {i: coord for i, coord in enumerate(PATH_LIST)}
 
 # Home quadrants bounding boxes (col range inclusive)
 HOME_QUADRANTS = {
     # Reordered to follow counter-clockwise Red -> Green -> Yellow -> Blue
-    Colors.RED: ((0, 5), (0, 5)),        # top-left
-    Colors.GREEN: ((0, 5), (9, 14)),     # bottom-left
-    Colors.YELLOW: ((9, 14), (9, 14)),   # bottom-right
-    Colors.BLUE: ((9, 14), (0, 5)),      # top-right
+    Colors.RED: ((0, 5), (0, 5)),  # top-left
+    Colors.GREEN: ((0, 5), (9, 14)),  # bottom-left
+    Colors.YELLOW: ((9, 14), (9, 14)),  # bottom-right
+    Colors.BLUE: ((9, 14), (0, 5)),  # top-right
 }
+
 
 def _cell_bbox(col: int, row: int):
     x0 = col * CELL
     y0 = row * CELL
     return (x0, y0, x0 + CELL, y0 + CELL)
+
 
 def _draw_home_quadrants(d: ImageDraw.ImageDraw):
     for color, ((c0, c1), (r0, r1)) in HOME_QUADRANTS.items():
@@ -106,6 +109,7 @@ def _draw_home_quadrants(d: ImageDraw.ImageDraw):
         inner = ((c0 + 1) * CELL, (r0 + 1) * CELL, c1 * CELL, r1 * CELL)
         d.rectangle(inner, fill=HOME_SHADE)
 
+
 def _token_home_grid_position(color: str, token_id: int) -> Tuple[int, int]:
     (c0, c1), (r0, r1) = HOME_QUADRANTS[color]
     cols = [c0 + 1, c0 + 3]
@@ -113,6 +117,7 @@ def _token_home_grid_position(color: str, token_id: int) -> Tuple[int, int]:
     col = cols[token_id % 2]
     row = rows[token_id // 2]
     return col, row
+
 
 def _home_column_positions_for_color(color: str) -> Dict[int, Tuple[int, int]]:
     # Map logical home column indices (100..105) to coordinates along middle lane toward center (7,7)
@@ -131,9 +136,13 @@ def _home_column_positions_for_color(color: str) -> Dict[int, Tuple[int, int]]:
         cy += dy
     return mapping
 
-HOME_COLUMN_COORDS = {color: _home_column_positions_for_color(color) for color in Colors.ALL_COLORS}
 
-def draw_board(tokens: Dict[str, List[Dict]]) -> Image.Image:
+HOME_COLUMN_COORDS = {
+    color: _home_column_positions_for_color(color) for color in Colors.ALL_COLORS
+}
+
+
+def draw_board(tokens: Dict[str, List[Dict]], show_ids: bool = True) -> Image.Image:
     img = Image.new("RGB", (BOARD_SIZE, BOARD_SIZE), BG_COLOR)
     d = ImageDraw.Draw(img)
 
@@ -166,12 +175,15 @@ def draw_board(tokens: Dict[str, List[Dict]]) -> Image.Image:
     for color, tlist in tokens.items():
         base_color = COLOR_MAP[color]
         for tk in tlist:
-            state = tk['state']
-            pos = tk['position']
-            tid = tk['token_id']
+            state = tk["state"]
+            pos = tk["position"]
+            tid = tk["token_id"]
             if state == TokenState.HOME.value:
                 c, r = _token_home_grid_position(color, tid)
-            elif state == TokenState.HOME_COLUMN.value and HOME_COLUMN_START <= pos <= HOME_COLUMN_END:
+            elif (
+                state == TokenState.HOME_COLUMN.value
+                and HOME_COLUMN_START <= pos <= HOME_COLUMN_END
+            ):
                 coord_map = HOME_COLUMN_COORDS[color]
                 if pos not in coord_map:
                     continue
@@ -192,7 +204,12 @@ def draw_board(tokens: Dict[str, List[Dict]]) -> Image.Image:
             inset = 4
             token_box = (x0 + inset, y0 + inset, x1 - inset, y1 - inset)
             d.ellipse(token_box, fill=base_color, outline=(0, 0, 0))
-            if FONT:
-                d.text((x0 + CELL // 2 - 5, y0 + CELL // 2 - 8), str(tid), fill=(0, 0, 0), font=FONT)
+            if show_ids and FONT:
+                d.text(
+                    (x0 + CELL // 2 - 5, y0 + CELL // 2 - 8),
+                    str(tid),
+                    fill=(0, 0, 0),
+                    font=FONT,
+                )
 
     return img
