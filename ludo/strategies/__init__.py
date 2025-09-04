@@ -12,6 +12,7 @@ from .optimist import OptimistStrategy
 from .probabilistic import ProbabilisticStrategy
 from .probabilistic_v2 import ProbabilisticV2Strategy
 from .probabilistic_v3 import ProbabilisticV3Strategy, V3Config
+from .hybrid_prob import HybridProbStrategy, HybridConfig
 from .random_strategy import RandomStrategy
 from .winner import WinnerStrategy
 
@@ -25,6 +26,7 @@ STRATEGIES: dict[str, Strategy] = {
     "probabilistic": ProbabilisticStrategy,
     "probabilistic_v3": ProbabilisticV3Strategy,
     "probabilistic_v2": ProbabilisticV2Strategy,
+    "hybrid_prob": HybridProbStrategy,
     "random": RandomStrategy,
     "cautious": CautiousStrategy,
     "llm": LLMStrategy,
@@ -39,9 +41,11 @@ __all__ = [
     "BalancedStrategy",
     "ProbabilisticStrategy",
     "ProbabilisticV2Strategy",
+    "HybridProbStrategy",
     "RandomStrategy",
     "CautiousStrategy",
     "LLMStrategy",
     "STRATEGIES",
     "V3Config",
+    "HybridConfig",
 ]
