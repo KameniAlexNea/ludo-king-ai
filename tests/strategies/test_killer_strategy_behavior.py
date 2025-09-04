@@ -1,7 +1,6 @@
 import unittest
 
 from ludo.strategies.killer import KillerStrategy
-from ludo.constants import BoardConstants, GameConstants
 
 
 def base_players(current_color: str, opponent_pos: int):
@@ -55,7 +54,11 @@ class TestKillerStrategyBehavior(unittest.TestCase):
         }
         ctx = {
             "valid_moves": [capture_move, quiet_move],
-            "player_state": {"finished_tokens": 0, "active_tokens": 2, "color": current_color},
+            "player_state": {
+                "finished_tokens": 0,
+                "active_tokens": 2,
+                "color": current_color,
+            },
             "current_situation": {"player_color": current_color},
             "players": base_players(current_color, 8),
             "opponents": [
@@ -70,7 +73,11 @@ class TestKillerStrategyBehavior(unittest.TestCase):
             },
         }
         choice = self.strategy.decide(ctx)
-        self.assertEqual(choice, 0, "KillerStrategy should prioritize safe capture even if strategic_value lower")
+        self.assertEqual(
+            choice,
+            0,
+            "KillerStrategy should prioritize safe capture even if strategic_value lower",
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

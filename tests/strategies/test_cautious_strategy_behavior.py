@@ -1,7 +1,6 @@
 import unittest
 
 from ludo.strategies.cautious import CautiousStrategy
-from ludo.constants import GameConstants
 
 
 def players_for_threat(current_color: str, threatening_pos: int):
@@ -53,8 +52,19 @@ class TestCautiousStrategyBehavior(unittest.TestCase):
             "player_state": {"finished_tokens": 0, "active_tokens": 2, "color": "red"},
             "current_situation": {"player_color": "red"},
             "players": [
-                {"color": "red", "finished_tokens": 0, "tokens": [{"token_id": 0, "position": 100}, {"token_id": 1, "position": 102}]},
-                {"color": "blue", "finished_tokens": 0, "tokens": [{"token_id": 0, "position": 20}]},
+                {
+                    "color": "red",
+                    "finished_tokens": 0,
+                    "tokens": [
+                        {"token_id": 0, "position": 100},
+                        {"token_id": 1, "position": 102},
+                    ],
+                },
+                {
+                    "color": "blue",
+                    "finished_tokens": 0,
+                    "tokens": [{"token_id": 0, "position": 20}],
+                },
             ],
             "opponents": [{"color": "blue", "tokens_finished": 0}],
         }

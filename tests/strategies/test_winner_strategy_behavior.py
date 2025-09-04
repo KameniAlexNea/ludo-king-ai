@@ -43,11 +43,17 @@ class TestWinnerStrategyBehavior(unittest.TestCase):
             "player_state": {"finished_tokens": 0, "active_tokens": 3, "color": "red"},
             "current_situation": {"player_color": "red"},
             "players": [
-                {"color": "red", "finished_tokens": 0, "tokens": [{"token_id": 0, "position": 101}, {"token_id": 1, "position": 100}, {"token_id": 2, "position": 104}]}
+                {
+                    "color": "red",
+                    "finished_tokens": 0,
+                    "tokens": [
+                        {"token_id": 0, "position": 101},
+                        {"token_id": 1, "position": 100},
+                        {"token_id": 2, "position": 104},
+                    ],
+                }
             ],
-            "opponents": [
-                {"color": "green", "tokens_finished": 0}
-            ],
+            "opponents": [{"color": "green", "tokens_finished": 0}],
         }
         self.assertEqual(self.strategy.decide(ctx), 2)
 

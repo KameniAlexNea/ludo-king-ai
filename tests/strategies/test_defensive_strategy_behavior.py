@@ -32,9 +32,14 @@ class TestDefensiveStrategyBehavior(unittest.TestCase):
             "valid_moves": [finish_mv, safe_mv],
             "player_state": {"finished_tokens": 0, "active_tokens": 2, "color": "red"},
             "current_situation": {"player_color": "red"},
-            "current_situation": {"player_color": "red"},
             "players": [
-                {"color": "red", "tokens": [{"token_id": 0, "position": 104}, {"token_id": 1, "position": 10}]},
+                {
+                    "color": "red",
+                    "tokens": [
+                        {"token_id": 0, "position": 104},
+                        {"token_id": 1, "position": 10},
+                    ],
+                },
                 {"color": "green", "tokens": [{"token_id": 0, "position": 20}]},
             ],
             "opponents": [{"color": "green", "tokens_finished": 0}],
