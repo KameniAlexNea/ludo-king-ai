@@ -32,7 +32,12 @@ def _img_to_data_uri(pil_img):
     buf = io.BytesIO()
     pil_img.save(buf, format="PNG")
     b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-    return f"<img src='data:image/png;base64,{b64}' style='image-rendering:pixelated;width:100%;max-width:640px;' />"
+    return (
+        "<div style='display:flex;justify-content:center;'>"
+        f"<img src='data:image/png;base64,{b64}' "
+        "style='image-rendering:pixelated;max-width:640px;width:100%;height:auto;' />"
+        "</div>"
+    )
 
 
 def _init_game(strategies: List[str]):
@@ -135,7 +140,7 @@ def launch_app():
                     show_ids = gr.Checkbox(label="Show Token IDs", value=True)
                     export_btn = gr.Button("Export Game State")
                     move_history_btn = gr.Button("Show Move History (last 50)")
-                with gr.Row():
+                with gr.Row(equal_height=True):
                     with gr.Column(scale=3):
                         board_plot = gr.HTML(label="Board")
                     with gr.Column(scale=1):
@@ -180,7 +185,7 @@ def launch_app():
                 {"games": 0, "wins": {c.value: 0 for c in DEFAULT_PLAYERS}},
             )
 
-        def _steps(game, history, show):
+        def _steps(game, history: list[str], show):
             game, desc, tokens = _play_step(game)
             history.append(desc)
             if len(history) > 50:
@@ -191,7 +196,7 @@ def launch_app():
 
         import time
 
-        def _run_auto(n, delay, game, history, show):
+        def _run_auto(n, delay, game: LudoGame, history: list[str], show: bool):
             if game is None:
                 return None, None, "No game", history
             tokens = _game_state_tokens(game)
@@ -210,7 +215,7 @@ def launch_app():
                 if delay and delay > 0:
                     time.sleep(float(delay))
 
-        def _export(game):
+        def _export(game: LudoGame):
             if not game:
                 return "No game"
             state_dict = {
@@ -235,7 +240,7 @@ def launch_app():
             }
             return json.dumps(summary, indent=2)
 
-        def _update_stats(stats, game):
+        def _update_stats(stats, game: LudoGame):
             if game and game.game_over and game.winner:
                 stats = dict(stats)
                 stats["games"] += 1
