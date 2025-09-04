@@ -156,6 +156,14 @@ class StrategyConstants:
     CAUTIOUS_LATE_GAME_ALLOWED_THREAT = 1  # relax slightly when behind late game
     CAUTIOUS_MIN_ACTIVE_TOKENS = 2  # ensure some board presence
 
+    # Optimist strategy weights
+    OPTIMIST_HIGH_RISK_THRESHOLD = 10.0  # strategic value threshold to treat risky as high-value
+    OPTIMIST_RISK_REWARD_BONUS = 4.0
+    OPTIMIST_CAPTURE_PROGRESS_WEIGHT = 1.2
+    OPTIMIST_FUTURE_CAPTURE_WEIGHT = 2.0
+    OPTIMIST_EXIT_EARLY_ACTIVE_TARGET = 3  # aim to have many tokens active
+    OPTIMIST_STACK_BONUS = 2.5
+
 
 class Colors:
     """Player color constants."""
