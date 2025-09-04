@@ -13,10 +13,10 @@
 
 | Rank | Model            | Wins | Games | Win Rate % | Avg Turns | Medal |
 |------|------------------|------|-------|-----------:|----------:|:------|
-| 1    | OPTIMIST         | 63   | 200   | 31.5       | 130.2     | 🥇 |
-| 2    | PPO_LUDO_FINAL   | 60   | 200   | 30.0       | 129.5     | 🥈 |
-| 3    | BALANCED         | 52   | 200   | 26.0       | 130.3     | 🥉 |
-| 4    | PROBABILISTIC_V3 | 25   | 200   | 12.5       | 131.0     |  |
+| 1    | PPO_LUDO_FINAL   | 77   | 200   | 38.5       | 131.3     | 🥇 |
+| 2    | BALANCED         | 53   | 200   | 26.5       | 131.3     | 🥈 |
+| 3    | OPTIMIST         | 44   | 200   | 22.0       | 131.9     | 🥉 |
+| 4    | PROBABILISTIC_V3 | 26   | 200   | 13.0       | 131.9     |  |
 
 ### Observations
 * PPO now leads the mixed baseline tournament (Section 1), surpassing all scripted heuristics after normalization parity.

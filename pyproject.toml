@@ -1,0 +1,21 @@
+[project]
+name = "ludo-king-ai"
+version = "1.0.0"
+description = "Modern Ludo engine + reinforcement learning environments + evaluation tooling."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "gradio>=4.0.0",
+    "gymnasium>=0.29.0",
+    "langchain-groq>=0.0.1",
+    "langchain-ollama>=0.0.1",
+    "ollama>=0.1.0",
+    "pillow>=11.3.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.1.1",
+    "ray[rllib]>=2.10.0",
+    "ruamel-yaml>=0.17.0",
+    "stable-baselines3>=2.3.0",
+    "tensorboard>=2.20.0",
+    "tox>=4.29.0",
+]

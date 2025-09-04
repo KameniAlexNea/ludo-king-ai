@@ -73,7 +73,7 @@ def main():
     parser.add_argument(
         "--tournament-baselines",
         type=str,
-        default="optimist,balanced,cautious,killer,defensive,random",
+        default="optimist,balanced,probabilistic_v3,cautious,killer,probabilistic",
         help="Comma separated baseline strategy names (must be valid StrategyFactory names)",
     )
     args = parser.parse_args()

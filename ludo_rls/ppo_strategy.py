@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from stable_baselines3 import PPO
 
-from ludo.constants import Colors, GameConstants
+from ludo.constants import GameConstants
 
 from .envs.builders.observation_builder import ObservationBuilder
 from .envs.ludo_env import EnvConfig, LudoGymEnv
@@ -34,10 +34,10 @@ class PPOStrategy:
         except Exception:
             pass
         self.env_cfg = env_config or EnvConfig()
-        if self.env_cfg.agent_color != Colors.RED:
-            raise ValueError(
-                f"PPOStrategy expects agent_color RED (training seat); got {self.env_cfg.agent_color}"
-            )
+        # if self.env_cfg.agent_color != Colors.RED:
+        #     raise ValueError(
+        #         f"PPOStrategy expects agent_color RED (training seat); got {self.env_cfg.agent_color}"
+        #     )
         self.dummy_env = LudoGymEnv(self.env_cfg)
         obs, _ = self.dummy_env.reset(seed=self.env_cfg.seed)
         self.obs_dim = obs.shape[0]
