@@ -1,25 +1,15 @@
 import os
 from typing import Dict, List
 
-_GRADIO_BASE = os.path.join(os.getcwd(), "gradio_runtime")
-os.environ.setdefault("GRADIO_TEMP_DIR", _GRADIO_BASE)
+os.environ.setdefault("GRADIO_TEMP_DIR", os.path.join(os.getcwd(), "gradio_runtime"))
 os.environ.setdefault(
     "GRADIO_CACHE_DIR",
-    os.path.join(_GRADIO_BASE, "cache"),
+    os.path.join(os.getcwd(), "gradio_runtime", "cache"),
 )
-for _p in (
-    os.environ["GRADIO_TEMP_DIR"],
-    os.environ["GRADIO_CACHE_DIR"],
-    os.path.join(_GRADIO_BASE, "vibe_edit_history"),
-):
-    try:
-        os.makedirs(_p, exist_ok=True)
-    except Exception:
-        pass
 
+import base64
+import io
 import json
-from copy import deepcopy
-import io, base64
 
 import gradio as gr
 
@@ -154,7 +144,10 @@ def launch_app():
                 board_plot = gr.HTML(label="Board")
                 log = gr.Textbox(label="Last Action", interactive=False)
                 history_box = gr.Textbox(label="Move History", lines=10)
-                stats_display = gr.JSON(label="Performance", value={"games":0,"wins":{c.value:0 for c in DEFAULT_PLAYERS}})
+                stats_display = gr.JSON(
+                    label="Performance",
+                    value={"games": 0, "wins": {c.value: 0 for c in DEFAULT_PLAYERS}},
+                )
             with gr.TabItem("Simulate Multiple Games"):
                 sim_strat_inputs = []
                 for color in DEFAULT_PLAYERS:
@@ -166,19 +159,29 @@ def launch_app():
                         )
                     )
                 with gr.Row():
-                    bulk_games = gr.Slider(10, 2000, value=200, step=10, label="Number of Games")
+                    bulk_games = gr.Slider(
+                        10, 2000, value=200, step=10, label="Number of Games"
+                    )
                     bulk_run_btn = gr.Button("Run Simulation")
                 bulk_results = gr.Textbox(label="Simulation Results")
         export_box = gr.Textbox(label="Game State JSON", lines=6, visible=False)
         game_state = gr.State()
         move_history = gr.State([])
-        stats_state = gr.State({"games":0, "wins": {c.value:0 for c in DEFAULT_PLAYERS}})
+        stats_state = gr.State(
+            {"games": 0, "wins": {c.value: 0 for c in DEFAULT_PLAYERS}}
+        )
 
         def _init(*strats):
             game = _init_game(list(strats))
             pil_img = draw_board(_game_state_tokens(game), show_ids=True)
             html = _img_to_data_uri(pil_img)
-            return game, html, "Game initialized", [], {"games":0, "wins": {c.value:0 for c in DEFAULT_PLAYERS}}
+            return (
+                game,
+                html,
+                "Game initialized",
+                [],
+                {"games": 0, "wins": {c.value: 0 for c in DEFAULT_PLAYERS}},
+            )
 
         def _steps(game, history, show):
             game, desc, tokens = _play_step(game)
@@ -190,11 +193,12 @@ def launch_app():
             return game, html, desc, history
 
         import time
+
         def _run_auto(n, delay, game, history, show):
             if game is None:
                 return None, None, "No game", history
             tokens = _game_state_tokens(game)
-            desc = "";
+            desc = ""
             for _ in range(int(n)):
                 game, step_desc, tokens = _play_step(game)
                 desc = step_desc
@@ -228,7 +232,10 @@ def launch_app():
                     g, _, _ = _play_step(g)
                 win_counts[g.winner.color.value] += 1
             total = sum(win_counts.values()) or 1
-            summary = {k: {"wins": v, "win_rate": round(v/total,3)} for k,v in win_counts.items()}
+            summary = {
+                k: {"wins": v, "win_rate": round(v / total, 3)}
+                for k, v in win_counts.items()
+            }
             return json.dumps(summary, indent=2)
 
         def _update_stats(stats, game):
@@ -238,10 +245,28 @@ def launch_app():
                 stats["wins"][game.winner.color.value] += 1
             return stats
 
-        init_btn.click(_init, strategy_inputs, [game_state, board_plot, log, move_history, stats_state])
-        step_btn.click(_steps, [game_state, move_history, show_ids], [game_state, board_plot, log, move_history]).then(_update_stats, [stats_state, game_state], [stats_state]).then(lambda s: s, [stats_state], [stats_display])
-        run_auto_btn.click(_run_auto, [auto_steps_n, auto_delay, game_state, move_history, show_ids], [game_state, board_plot, log, move_history]).then(_update_stats, [stats_state, game_state], [stats_state]).then(lambda s: s, [stats_state], [stats_display])
-        move_history_btn.click(lambda h: "\n".join(h[-50:]), [move_history], [history_box])
+        init_btn.click(
+            _init,
+            strategy_inputs,
+            [game_state, board_plot, log, move_history, stats_state],
+        )
+        step_btn.click(
+            _steps,
+            [game_state, move_history, show_ids],
+            [game_state, board_plot, log, move_history],
+        ).then(_update_stats, [stats_state, game_state], [stats_state]).then(
+            lambda s: s, [stats_state], [stats_display]
+        )
+        run_auto_btn.click(
+            _run_auto,
+            [auto_steps_n, auto_delay, game_state, move_history, show_ids],
+            [game_state, board_plot, log, move_history],
+        ).then(_update_stats, [stats_state, game_state], [stats_state]).then(
+            lambda s: s, [stats_state], [stats_display]
+        )
+        move_history_btn.click(
+            lambda h: "\n".join(h[-50:]), [move_history], [history_box]
+        )
         export_btn.click(_export, [game_state], [export_box])
         bulk_run_btn.click(_run_bulk, [bulk_games] + sim_strat_inputs, [bulk_results])
 

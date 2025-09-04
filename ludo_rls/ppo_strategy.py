@@ -34,10 +34,10 @@ class PPOStrategy:
         except Exception:
             pass
         self.env_cfg = env_config or EnvConfig()
-        if self.env_cfg.agent_color != Colors.RED:
-            raise ValueError(
-                f"PPOStrategy expects agent_color RED (training seat); got {self.env_cfg.agent_color}"
-            )
+        # if self.env_cfg.agent_color != Colors.RED:
+        #     raise ValueError(
+        #         f"PPOStrategy expects agent_color RED (training seat); got {self.env_cfg.agent_color}"
+        #     )
         self.dummy_env = LudoGymEnv(self.env_cfg)
         obs, _ = self.dummy_env.reset(seed=self.env_cfg.seed)
         self.obs_dim = obs.shape[0]
