@@ -151,6 +151,11 @@ class StrategyConstants:
     KILLER_WEAK_PREY_PENALTY = 5.0  # skip low-progress prey if risky
     KILLER_FUTURE_CAPTURE_WEIGHT = 3.0  # weight per potential future capture target in range after move
 
+    # Cautious strategy specific thresholds
+    CAUTIOUS_MAX_ALLOWED_THREAT = 0  # normal mode: avoid any threatened landing
+    CAUTIOUS_LATE_GAME_ALLOWED_THREAT = 1  # relax slightly when behind late game
+    CAUTIOUS_MIN_ACTIVE_TOKENS = 2  # ensure some board presence
+
 
 class Colors:
     """Player color constants."""
