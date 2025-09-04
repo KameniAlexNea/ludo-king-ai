@@ -171,15 +171,16 @@ class Player:
 
     def _get_move_type(self, token: Token, dice_value: int) -> str:
         """Determine the type of move being made."""
-        if token.is_in_home() and dice_value == 6:
+        from .constants import GameConstants  # local import to avoid cycles
+
+        if token.is_in_home() and dice_value == GameConstants.EXIT_HOME_ROLL:
             return "exit_home"
-        elif token.is_in_home_column():
+        if token.is_in_home_column():
             target = token.get_target_position(dice_value, self.start_position)
-            if target == 57:
+            if target == GameConstants.FINISH_POSITION:
                 return "finish"
             return "advance_home_column"
-        else:
-            return "advance_main_board"
+        return "advance_main_board"
 
     def _is_safe_move(self, token: Token, target_position: int) -> bool:
         """Check if the target position is a safe square."""
@@ -193,19 +194,17 @@ class Player:
         value = 0.0
 
         # Finishing a token is very valuable
+        from .constants import GameConstants
+
         if token.is_in_home_column():
             target = token.get_target_position(dice_value, self.start_position)
-            if target == 105:  # Updated finish position
-                value += (
-                    StrategyConstants.FINISH_TOKEN_VALUE
-                )  # Finishing is highest priority
+            if target == GameConstants.FINISH_POSITION:
+                value += StrategyConstants.FINISH_TOKEN_VALUE
             else:
-                value += (
-                    StrategyConstants.HOME_COLUMN_ADVANCE_VALUE
-                )  # Moving in home column is good
+                value += StrategyConstants.HOME_COLUMN_ADVANCE_VALUE
 
-        # Exiting home is valuable when you roll a 6
-        elif token.is_in_home() and dice_value == 6:
+        # Exiting home is valuable when you roll the exit value
+        elif token.is_in_home() and dice_value == GameConstants.EXIT_HOME_ROLL:
             value += StrategyConstants.EXIT_HOME_VALUE
 
         # Moving active tokens forward

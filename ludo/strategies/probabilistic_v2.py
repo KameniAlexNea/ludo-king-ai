@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Optional
 
-from ..constants import GameConstants
+from ..constants import GameConstants, BoardConstants
 from .base import Strategy
 
 # Utility type hint for a move dict
@@ -298,7 +298,7 @@ class ProbabilisticV2Strategy(Strategy):
                     else (GameConstants.MAIN_BOARD_SIZE - cur + tgt)
                 )
                 progress_delta = raw / float(GameConstants.MAIN_BOARD_SIZE)
-            elif tgt >= 100:
+            elif tgt >= BoardConstants.HOME_COLUMN_START:
                 progress_delta = 0.25
         # non linear boost to favor larger advances
         opportunity += (progress_delta**1.4) * 3.0
