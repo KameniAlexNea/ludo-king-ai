@@ -141,6 +141,16 @@ class StrategyConstants:
     VULNERABILITY_PENALTY_WEIGHT = 8.0  # penalty if landing square likely capturable
     HOME_COLUMN_DEPTH_MULTIPLIER = 1.0  # scales depth-based home column value
 
+    # Killer strategy specific weights
+    KILLER_PROGRESS_WEIGHT = 2.0  # value of removing a progressed enemy token
+    KILLER_THREAT_WEIGHT = 1.5  # weight for targeting leading opponent
+    KILLER_CHAIN_BONUS = 10.0  # extra turn follow-up potential bonus
+    KILLER_SAFE_LAND_BONUS = 4.0  # landing safely after capture
+    KILLER_BLOCK_BONUS = 6.0  # forming/keeping a two-token block after move
+    KILLER_RECAPTURE_PENALTY = 12.0  # risk if easily recaptured
+    KILLER_WEAK_PREY_PENALTY = 5.0  # skip low-progress prey if risky
+    KILLER_FUTURE_CAPTURE_WEIGHT = 3.0  # weight per potential future capture target in range after move
+
 
 class Colors:
     """Player color constants."""
