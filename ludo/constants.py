@@ -108,9 +108,8 @@ class BoardConstants:
         if position in cls.STAR_SQUARES:
             return True
 
-        # Starting positions are safe for everyone (not just the owner)
-        all_starting_positions = {1, 14, 27, 40}
-        if position in all_starting_positions:
+        # Starting positions (from START_POSITIONS) are safe for everyone
+        if position in cls.START_POSITIONS.values():
             return True
 
         return False
@@ -134,6 +133,13 @@ class StrategyConstants:
     # Player progress thresholds
     SIGNIFICANTLY_BEHIND_THRESHOLD = 0.25
     SIGNIFICANTLY_AHEAD_THRESHOLD = 0.25
+
+    # Weights for enhanced heuristic components
+    FORWARD_PROGRESS_WEIGHT = 1.0
+    ACCELERATION_WEIGHT = 0.1  # bonus per reduced remaining step (heuristic)
+    SAFETY_BONUS = SAFE_MOVE_BONUS  # reuse base safe bonus, alias for clarity
+    VULNERABILITY_PENALTY_WEIGHT = 8.0  # penalty if landing square likely capturable
+    HOME_COLUMN_DEPTH_MULTIPLIER = 1.0  # scales depth-based home column value
 
 
 class Colors:
