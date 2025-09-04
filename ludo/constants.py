@@ -164,6 +164,11 @@ class StrategyConstants:
     OPTIMIST_EXIT_EARLY_ACTIVE_TARGET = 3  # aim to have many tokens active
     OPTIMIST_STACK_BONUS = 2.5
 
+    # Winner strategy weights
+    WINNER_HOME_DEPTH_WEIGHT = 1.0
+    WINNER_SAFE_CAPTURE_PROGRESS_WEIGHT = 1.0
+    WINNER_EXIT_MIN_ACTIVE = 1  # ensure at least one token active before deprioritizing exits
+
 
 class Colors:
     """Player color constants."""
