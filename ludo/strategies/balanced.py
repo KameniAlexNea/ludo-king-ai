@@ -77,10 +77,14 @@ class BalancedStrategy(Strategy):
             )
             return best_home["token_id"]
 
-        # Priority 3: High-quality safe capture (progress + safety) esp. when behind
+        # Priority 3: High-quality safe capture (progress + safety) esp. when behind.
+        # When clearly ahead, require the capture landing square to be safe.
         capture_choice = self._choose_capture(moves, threat_map, aggressive=behind)
         if capture_choice is not None:
-            return capture_choice
+            cap_move = next((m for m in moves if m["token_id"] == capture_choice), None)
+            if cap_move is not None:
+                if not (ahead and not cap_move.get("is_safe_move")):
+                    return capture_choice
 
         # Priority 4: Maintain/create protective blocks while progressing
         block_moves = self._block_positive_moves(moves, block_positions)
