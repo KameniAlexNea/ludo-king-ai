@@ -160,12 +160,12 @@ Excerpt of latest 200-game evaluations (see `ludo_experiments/results.md` for fu
 ### PPO Self-Improvement (vs Frozen PPO)
 | Rank | Model | Win % | Avg Turns |
 |------|-------|------:|----------:|
-| 1 | OPTIMIST | 31.5 | 130.2 |
-| 2 | PPO_LUDO_FINAL | 30.0 | 129.5 |
-| 3 | BALANCED | 26.0 | 130.3 |
-| 4 | PROBABILISTIC_V3 | 12.5 | 131.0 |
+| 1 | PPO_LUDO_FINAL | 38.5 | 131.3 |
+| 2 | BALANCED | 26.5 | 131.3 |
+| 3 | OPTIMIST | 22.0 | 131.9 |
+| 4 | PROBABILISTIC_V3 | 13.0 | 131.9 |
 
-PPO now tops the mixed-strategy benchmark and is within 1.5 pp of the best heuristic in self-play; next focus: curriculum graduation scheduling, snapshot lag stabilization, and late-game efficiency shaping.
+PPO now leads both the mixed-strategy and frozen self-play benchmarks; next focus: curriculum graduation scheduling, snapshot lag stabilization, and late-game efficiency shaping.
 
 ## License
 See root `LICENSE`.
