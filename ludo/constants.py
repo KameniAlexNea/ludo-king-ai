@@ -180,6 +180,19 @@ class StrategyConstants:
     DEFENSIVE_REPOSITION_BONUS = 2.5  # small bonus for moving from threatened square to safer square
     DEFENSIVE_AVOID_BREAKING_BLOCK_PENALTY = 5.0  # penalty if move breaks own protective block without benefit
 
+    # Balanced strategy adaptive weights (blends offensive/defensive heuristics)
+    BALANCED_PROGRESS_WEIGHT = 1.1  # slight emphasis on steady advancement
+    BALANCED_HOME_PRIORITY = 0.95  # weight for home column depth (between defensive and winner)
+    BALANCED_SAFE_CAPTURE_WEIGHT = 1.3  # reward safe capture a bit more than pure progress
+    BALANCED_RISK_TOLERANCE_MARGIN = 0.15  # dynamic shift toward aggression when behind
+    BALANCED_MIN_ACTIVE_TARGET = 2  # maintain moderate board presence
+    BALANCED_BLOCK_VALUE = 4.0  # value for maintaining/creating protective blocks
+    BALANCED_FUTURE_CAPTURE_PROXIMITY = 5  # squares ahead scanned for future capture potential
+    BALANCED_FUTURE_CAPTURE_WEIGHT = 1.5
+    BALANCED_THREAT_SOFT_CAP = 2  # tolerate up to 2 potential attackers when equal/behind
+    BALANCED_AHEAD_THREAT_CAP = 1  # stricter when ahead
+    BALANCED_LATE_GAME_FINISH_PUSH = 2  # number of tokens finished by leader to trigger finish push
+
 
 class Colors:
     """Player color constants."""
