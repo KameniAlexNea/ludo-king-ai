@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from stable_baselines3 import PPO
 
-from ludo.constants import Colors, GameConstants
+from ludo.constants import GameConstants
 
 from .envs.builders.observation_builder import ObservationBuilder
 from .envs.ludo_env import EnvConfig, LudoGymEnv

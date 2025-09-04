@@ -110,10 +110,7 @@ class FourPlayerPPOTournament:
         self.ppo_model = self._select_best_ppo_model()
         self.ppo_model_path = os.path.join(self.models_dir, f"{self.ppo_model}.zip")
 
-        # Load PPO policy directly (used for single-seat path)
-        from stable_baselines3 import PPO as _PPO
-
-        self.policy = _PPO.load(self.ppo_model_path)
+        # PPO policy will be accessed via PPOStrategyClass wrapper uniformly.
 
         # Get strategies universe
         self.all_strategies = self._get_strategies()
@@ -287,26 +284,24 @@ class FourPlayerPPOTournament:
                             game_players[ppo_idx],
                             game_players[0],
                         )
-                # Assign strategies. For classic env we use strategy wrapper; for single-seat we will act directly via policy.
-                if self.env_kind == "classic":
-                    for i, player_name in enumerate(game_players):
-                        if player_name == self.ppo_model:
-                            model_path = f"{self.models_dir}/{player_name}.zip"
+                # Assign strategies. Always wrap PPO model in its strategy class for consistency across env modes.
+                for i, player_name in enumerate(game_players):
+                    if player_name == self.ppo_model:
+                        model_path = f"{self.models_dir}/{player_name}.zip"
+                        try:
                             strategy = self.PPOStrategyClass(
                                 model_path,
                                 player_name,
                                 self.EnvConfigClass(agent_color="red"),
                             )
-                        else:
-                            strategy = StrategyFactory.create_strategy(player_name)
-                        game.players[i].set_strategy(strategy)
-                        game.players[i].strategy_name = player_name
-                else:
-                    for i, player_name in enumerate(game_players):
-                        if player_name != self.ppo_model:
-                            strategy = StrategyFactory.create_strategy(player_name)
-                            game.players[i].set_strategy(strategy)
-                        game.players[i].strategy_name = player_name
+                        except Exception as e:
+                            raise RuntimeError(
+                                f"Failed to initialize PPO strategy for model '{player_name}': {e}"
+                            ) from e
+                    else:
+                        strategy = StrategyFactory.create_strategy(player_name)
+                    game.players[i].set_strategy(strategy)
+                    game.players[i].strategy_name = player_name
 
                 # Play the game
                 results = self._play_four_player_game(
@@ -355,113 +350,48 @@ class FourPlayerPPOTournament:
                 "moves_made": 0,
                 "turns_taken": 0,
             }
-        # Single-seat observation builder if needed
-        obs_builder = None
-        if self.env_kind == "single-seat":
-            from ludo_rls.envs.builders.observation_builder import (
-                ObservationBuilder as _ObsBuilder,
-            )
-
-            env_cfg = self.EnvConfigClass(
-                max_turns=self.max_turns_per_game, agent_color="red"
-            )
-            obs_builder = _ObsBuilder(env_cfg, game, PlayerColor.RED.value)
+        # Unified decision path: all players use their assigned strategy (PPO wrapped when applicable)
 
         while not game.game_over and turn_count < self.max_turns_per_game:
             current_player = game.get_current_player()
             strategy_name = current_player.strategy_name
             dice_value = game.roll_dice()
 
-            if (
-                self.env_kind == "single-seat"
-                and current_player.color is PlayerColor.RED
-            ):
-                valid_moves = game.get_valid_moves(current_player, dice_value)
-                obs = (
-                    obs_builder._build_observation(turn_count, dice_value)
-                    if obs_builder
-                    else np.zeros(1)
+            context = game.get_game_state_for_ai()
+            context["dice_value"] = dice_value
+            if context["valid_moves"]:
+                selected_token = current_player.make_strategic_decision(context)
+                move_result = game.execute_move(
+                    current_player, selected_token, dice_value
                 )
-                mask = np.zeros(4, dtype=np.int8)
-                if valid_moves:
-                    for m in valid_moves:
-                        mask[m["token_id"]] = 1
-                act, _ = self.policy.predict(obs[None, :], deterministic=False)
-                action = int(act)
-                if mask.sum() > 0 and mask[action] == 0:
-                    legal = np.nonzero(mask)[0]
-                    action = int(legal[0])
-                if valid_moves:
-                    move_result = game.execute_move(current_player, action, dice_value)
-                    if move_result.get("captured_tokens"):
-                        captures = len(move_result["captured_tokens"])
-                        game_results["player_stats"].setdefault(strategy_name, {})
-                        game_results["player_stats"][strategy_name][
-                            "tokens_captured"
-                        ] = (
-                            game_results["player_stats"][strategy_name].get(
-                                "tokens_captured", 0
-                            )
-                            + captures
-                        )
-                    if move_result.get("token_finished"):
-                        game_results["player_stats"][strategy_name][
-                            "tokens_finished"
-                        ] = (
-                            game_results["player_stats"][strategy_name].get(
-                                "tokens_finished", 0
-                            )
-                            + 1
-                        )
-                    if move_result.get("game_won"):
-                        game_results["winner"] = current_player
-                        game_results["turns_played"] = turn_count
-                        print(
-                            f"  Game {game_number}: {strategy_name.upper()} WINS! ({turn_count} turns)"
-                        )
-                        break
-                    if not move_result.get("extra_turn"):
-                        game.next_turn()
-                else:
+                self.state_saver.save_decision(
+                    strategy_name, context, selected_token, move_result
+                )
+                game_results["player_stats"][strategy_name]["moves_made"] += 1
+                if move_result.get("captured_tokens"):
+                    captures = len(move_result["captured_tokens"])
+                    game_results["player_stats"][strategy_name]["tokens_captured"] += (
+                        captures
+                    )
+                    game_results["game_events"].append(
+                        f"Turn {turn_count}: {strategy_name} captured {captures} token(s)"
+                    )
+                if move_result.get("token_finished"):
+                    game_results["player_stats"][strategy_name]["tokens_finished"] += 1
+                    game_results["game_events"].append(
+                        f"Turn {turn_count}: {strategy_name} finished a token"
+                    )
+                if move_result.get("game_won"):
+                    game_results["winner"] = current_player
+                    game_results["turns_played"] = turn_count
+                    print(
+                        f"  Game {game_number}: {strategy_name.upper()} WINS! ({turn_count} turns)"
+                    )
+                    break
+                if not move_result.get("extra_turn", False):
                     game.next_turn()
             else:
-                context = game.get_game_state_for_ai()
-                context["dice_value"] = dice_value
-                if context["valid_moves"]:
-                    selected_token = current_player.make_strategic_decision(context)
-                    move_result = game.execute_move(
-                        current_player, selected_token, dice_value
-                    )
-                    self.state_saver.save_decision(
-                        strategy_name, context, selected_token, move_result
-                    )
-                    game_results["player_stats"][strategy_name]["moves_made"] += 1
-                    if move_result.get("captured_tokens"):
-                        captures = len(move_result["captured_tokens"])
-                        game_results["player_stats"][strategy_name][
-                            "tokens_captured"
-                        ] += captures
-                        game_results["game_events"].append(
-                            f"Turn {turn_count}: {strategy_name} captured {captures} token(s)"
-                        )
-                    if move_result.get("token_finished"):
-                        game_results["player_stats"][strategy_name][
-                            "tokens_finished"
-                        ] += 1
-                        game_results["game_events"].append(
-                            f"Turn {turn_count}: {strategy_name} finished a token"
-                        )
-                    if move_result.get("game_won"):
-                        game_results["winner"] = current_player
-                        game_results["turns_played"] = turn_count
-                        print(
-                            f"  Game {game_number}: {strategy_name.upper()} WINS! ({turn_count} turns)"
-                        )
-                        break
-                    if not move_result.get("extra_turn", False):
-                        game.next_turn()
-                else:
-                    game.next_turn()
+                game.next_turn()
 
             turn_count += 1
             game_results["player_stats"][strategy_name]["turns_taken"] += 1
