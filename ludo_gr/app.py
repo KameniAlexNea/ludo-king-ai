@@ -72,7 +72,7 @@ def _serialize_move(move_result: Dict) -> str:
     return ", ".join(parts)
 
 
-def _play_step(game):
+def _play_step(game: LudoGame):
     if game.game_over:
         return game, "Game over", _game_state_tokens(game)
     current_player = game.get_current_player()
@@ -87,21 +87,15 @@ def _play_step(game):
         )
     # If player has strategy use it; else pick first
     chosen = None
-    if current_player.strategy:
-        try:
-            ctx = game.get_game_state_for_ai()
-            ctx["game_info"]["dice_value"] = dice
-            token_choice = current_player.strategy.decide(ctx)
-            # find move with that token_id
-            for mv in valid:
-                if mv["token_id"] == token_choice:
-                    chosen = mv
-                    break
-            if chosen is None:
-                chosen = valid[0]
-        except Exception:
-            chosen = valid[0]
-    else:
+    ctx = game.get_game_state_for_ai()
+    ctx["game_info"]["dice_value"] = dice
+    token_choice = current_player.make_strategic_decision(ctx)
+    # find move with that token_id
+    for mv in valid:
+        if mv["token_id"] == token_choice:
+            chosen = mv
+            break
+    if chosen is None:
         chosen = valid[0]
     move_res = game.execute_move(current_player, chosen["token_id"], dice)
     desc = f"{current_player.color.value} rolled {dice}: {_serialize_move(move_res)}"
@@ -141,9 +135,12 @@ def launch_app():
                     show_ids = gr.Checkbox(label="Show Token IDs", value=True)
                     export_btn = gr.Button("Export Game State")
                     move_history_btn = gr.Button("Show Move History (last 50)")
-                board_plot = gr.HTML(label="Board")
-                log = gr.Textbox(label="Last Action", interactive=False)
-                history_box = gr.Textbox(label="Move History", lines=10)
+                with gr.Row():
+                    with gr.Column(scale=3):
+                        board_plot = gr.HTML(label="Board")
+                    with gr.Column(scale=1):
+                        log = gr.Textbox(label="Last Action", interactive=False)
+                        history_box = gr.Textbox(label="Move History", lines=10)
                 stats_display = gr.JSON(
                     label="Performance",
                     value={"games": 0, "wins": {c.value: 0 for c in DEFAULT_PLAYERS}},
