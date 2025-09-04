@@ -92,8 +92,7 @@ def _play_step(game: LudoGame):
         )
     # If player has strategy use it; else pick first
     chosen = None
-    ctx = game.get_game_state_for_ai()
-    ctx["game_info"]["dice_value"] = dice
+    ctx = game.get_ai_decision_context(dice)
     token_choice = current_player.make_strategic_decision(ctx)
     # find move with that token_id
     for mv in valid:

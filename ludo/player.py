@@ -8,6 +8,7 @@ from typing import Dict, List
 
 from .constants import BoardConstants, GameConstants, StrategyConstants
 from .token import Token, TokenState
+from .strategies.base import Strategy
 
 
 class PlayerColor(Enum):
@@ -24,7 +25,7 @@ class Player:
     Represents a player in the Ludo game.
     """
 
-    def __init__(self, color: PlayerColor, player_id: int, strategy=None):
+    def __init__(self, color: PlayerColor, player_id: int, strategy: Strategy=None):
         """
         Initialize a player with their color and 4 tokens.
 
@@ -36,7 +37,7 @@ class Player:
         self.color = color
         self.player_id = player_id
         self.tokens: List[Token] = []
-        self.strategy = strategy
+        self.strategy: Strategy = strategy
 
         # Create 4 tokens for this player
         for i in range(4):
@@ -284,7 +285,7 @@ class Player:
             to_entry = (GameConstants.MAIN_BOARD_SIZE - position) + entry
         return to_entry + GameConstants.HOME_COLUMN_SIZE
 
-    def set_strategy(self, strategy):
+    def set_strategy(self, strategy: Strategy):
         """
         Set the strategy for this player.
 
