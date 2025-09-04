@@ -246,6 +246,20 @@ class StrategyConstants:
     HYBRID_LEAD_FACTOR_STRONG = 0.8
     HYBRID_BEHIND_FACTOR_STRONG = -0.8
 
+    # Weighted random strategy constants
+    WEIGHTED_RANDOM_TEMP_EARLY = 1.4
+    WEIGHTED_RANDOM_TEMP_MID = 1.0
+    WEIGHTED_RANDOM_TEMP_LATE = 0.7
+    WEIGHTED_RANDOM_PHASE_EARLY = 0.25
+    WEIGHTED_RANDOM_PHASE_LATE = 0.65
+    WEIGHTED_RANDOM_EPSILON = 0.05  # epsilon-uniform exploration
+    WEIGHTED_RANDOM_DIVERSITY_LAMBDA = 0.15  # penalize recently used token ids
+    WEIGHTED_RANDOM_CAPTURE_BONUS = 0.4
+    WEIGHTED_RANDOM_SAFE_BONUS = 0.2
+    WEIGHTED_RANDOM_RISK_THREAT_CAP = 3  # damp moves with many potential threats
+    WEIGHTED_RANDOM_RISK_PENALTY = 0.5
+    WEIGHTED_RANDOM_MIN_WEIGHT = 1e-4
+
 
 class Colors:
     """Player color constants."""

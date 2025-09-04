@@ -14,6 +14,7 @@ from .probabilistic import ProbabilisticStrategy
 from .probabilistic_v2 import ProbabilisticV2Strategy
 from .probabilistic_v3 import ProbabilisticV3Strategy, V3Config
 from .random_strategy import RandomStrategy
+from .weighted_random import WeightedRandomStrategy
 from .winner import WinnerStrategy
 
 # Strategy Mapping - Centralized mapping of strategy names to classes
@@ -28,6 +29,7 @@ STRATEGIES: dict[str, Strategy] = {
     "probabilistic_v2": ProbabilisticV2Strategy,
     "hybrid_prob": HybridProbStrategy,
     "random": RandomStrategy,
+    "weighted_random": WeightedRandomStrategy,
     "cautious": CautiousStrategy,
     "llm": LLMStrategy,
 }
@@ -43,6 +45,7 @@ __all__ = [
     "ProbabilisticV2Strategy",
     "HybridProbStrategy",
     "RandomStrategy",
+    "WeightedRandomStrategy",
     "CautiousStrategy",
     "LLMStrategy",
     "STRATEGIES",
