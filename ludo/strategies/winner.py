@@ -7,8 +7,8 @@ maintaining safety. Prefers finishing > deep home advancement > safe captures
 
 from typing import Dict, List, Tuple
 
+from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
-from ..constants import StrategyConstants, GameConstants, BoardConstants
 
 
 class WinnerStrategy(Strategy):
@@ -82,8 +82,14 @@ class WinnerStrategy(Strategy):
         for mv in safe_caps:
             progress_value = 0.0
             for ct in mv.get("captured_tokens", []):
-                remaining = self._distance_to_finish_proxy(mv["target_position"], entries[ct["player_color"]])
-                progress_value += (60 - remaining) * StrategyConstants.WINNER_SAFE_CAPTURE_PROGRESS_WEIGHT * 0.01
+                remaining = self._distance_to_finish_proxy(
+                    mv["target_position"], entries[ct["player_color"]]
+                )
+                progress_value += (
+                    (60 - remaining)
+                    * StrategyConstants.WINNER_SAFE_CAPTURE_PROGRESS_WEIGHT
+                    * 0.01
+                )
             scored.append((progress_value, mv))
         if not scored:
             return None

@@ -8,8 +8,8 @@ relative progress and late-game pressure.
 
 from typing import Dict, List, Tuple
 
+from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
-from ..constants import StrategyConstants, GameConstants, BoardConstants
 
 
 class BalancedStrategy(Strategy):
@@ -31,14 +31,28 @@ class BalancedStrategy(Strategy):
         finished = player_state.get("finished_tokens", 0)
         active = player_state.get("active_tokens", 0)
         opponents = game_context.get("opponents", [])
-        leading_finished = max((o.get("tokens_finished", 0) for o in opponents), default=0)
+        leading_finished = max(
+            (o.get("tokens_finished", 0) for o in opponents), default=0
+        )
 
         my_progress_ratio = finished / GameConstants.TOKENS_PER_PLAYER
-        opponent_max_ratio = leading_finished / GameConstants.TOKENS_PER_PLAYER if GameConstants.TOKENS_PER_PLAYER else 1
+        opponent_max_ratio = (
+            leading_finished / GameConstants.TOKENS_PER_PLAYER
+            if GameConstants.TOKENS_PER_PLAYER
+            else 1
+        )
 
-        behind = my_progress_ratio + StrategyConstants.BALANCED_RISK_TOLERANCE_MARGIN < opponent_max_ratio
-        ahead = my_progress_ratio > opponent_max_ratio + StrategyConstants.BALANCED_RISK_TOLERANCE_MARGIN
-        late_game_pressure = leading_finished >= StrategyConstants.BALANCED_LATE_GAME_FINISH_PUSH
+        behind = (
+            my_progress_ratio + StrategyConstants.BALANCED_RISK_TOLERANCE_MARGIN
+            < opponent_max_ratio
+        )
+        ahead = (
+            my_progress_ratio
+            > opponent_max_ratio + StrategyConstants.BALANCED_RISK_TOLERANCE_MARGIN
+        )
+        late_game_pressure = (
+            leading_finished >= StrategyConstants.BALANCED_LATE_GAME_FINISH_PUSH
+        )
 
         threat_map = self._compute_threats(moves, game_context)
         block_positions = self._own_block_positions(game_context)
@@ -51,8 +65,16 @@ class BalancedStrategy(Strategy):
         # Priority 2: Deep home column (weighted more under late-game pressure)
         home_moves = self._get_moves_by_type(moves, "advance_home_column")
         if home_moves:
-            home_weight = StrategyConstants.BALANCED_HOME_PRIORITY * (1.2 if late_game_pressure else 1.0)
-            best_home = max(home_moves, key=lambda m: (m["target_position"] * home_weight, m.get("strategic_value", 0)))
+            home_weight = StrategyConstants.BALANCED_HOME_PRIORITY * (
+                1.2 if late_game_pressure else 1.0
+            )
+            best_home = max(
+                home_moves,
+                key=lambda m: (
+                    m["target_position"] * home_weight,
+                    m.get("strategic_value", 0),
+                ),
+            )
             return best_home["token_id"]
 
         # Priority 3: High-quality safe capture (progress + safety) esp. when behind
@@ -90,13 +112,17 @@ class BalancedStrategy(Strategy):
         return best["token_id"] if best else 0
 
     # --- Threat Analysis (reuse concept from cautious/defensive) ---
-    def _compute_threats(self, moves: List[Dict], ctx: Dict) -> Dict[int, Tuple[int, int]]:
+    def _compute_threats(
+        self, moves: List[Dict], ctx: Dict
+    ) -> Dict[int, Tuple[int, int]]:
         color = ctx["current_situation"]["player_color"]
         opponent_positions = [
             t["position"]
-            for p in ctx.get("players", []) if p["color"] != color
+            for p in ctx.get("players", [])
+            if p["color"] != color
             for t in p["tokens"]
-            if t["position"] >= 0 and not BoardConstants.is_home_column_position(t["position"])
+            if t["position"] >= 0
+            and not BoardConstants.is_home_column_position(t["position"])
         ]
         res: Dict[int, Tuple[int, int]] = {}
         for mv in moves:
@@ -125,7 +151,11 @@ class BalancedStrategy(Strategy):
         for p in ctx.get("players", []):
             if p["color"] == color:
                 for t in p["tokens"]:
-                    if t["position"] >= 0 and not BoardConstants.is_home_column_position(t["position"]):
+                    if t[
+                        "position"
+                    ] >= 0 and not BoardConstants.is_home_column_position(
+                        t["position"]
+                    ):
                         occ[t["position"]] = occ.get(t["position"], 0) + 1
         return [pos for pos, c in occ.items() if c >= 2]
 
@@ -138,7 +168,12 @@ class BalancedStrategy(Strategy):
         return out
 
     # --- Capture Evaluation ---
-    def _choose_capture(self, moves: List[Dict], threat_map: Dict[int, Tuple[int, int]], aggressive: bool) -> int | None:
+    def _choose_capture(
+        self,
+        moves: List[Dict],
+        threat_map: Dict[int, Tuple[int, int]],
+        aggressive: bool,
+    ) -> int | None:
         captures = self._get_capture_moves(moves)
         if not captures:
             return None
@@ -147,7 +182,11 @@ class BalancedStrategy(Strategy):
             tid = mv["token_id"]
             threat = threat_map.get(tid, (99, 99))
             # when aggressive allow up to BALANCED_THREAT_SOFT_CAP else stricter
-            max_threat_allowed = StrategyConstants.BALANCED_THREAT_SOFT_CAP if aggressive else StrategyConstants.BALANCED_AHEAD_THREAT_CAP
+            max_threat_allowed = (
+                StrategyConstants.BALANCED_THREAT_SOFT_CAP
+                if aggressive
+                else StrategyConstants.BALANCED_AHEAD_THREAT_CAP
+            )
             if threat[0] > max_threat_allowed:
                 continue
             if threat[1] <= 2 and not aggressive:
@@ -158,7 +197,8 @@ class BalancedStrategy(Strategy):
                 remaining = self._distance_to_finish_proxy(mv["target_position"], entry)
                 progress_value += (60 - remaining) * 0.01
             score = (
-                StrategyConstants.BALANCED_SAFE_CAPTURE_WEIGHT * (1.25 if aggressive else 1.0)
+                StrategyConstants.BALANCED_SAFE_CAPTURE_WEIGHT
+                * (1.25 if aggressive else 1.0)
                 + progress_value * StrategyConstants.BALANCED_SAFE_CAPTURE_WEIGHT
             )
             scored.append((score, mv))
@@ -168,8 +208,12 @@ class BalancedStrategy(Strategy):
         return best["token_id"]
 
     # --- Future Capture Positioning ---
-    def _future_capture_positioning(self, moves: List[Dict], threat_map: Dict[int, Tuple[int, int]]) -> int | None:
-        candidates = [m for m in moves if m.get("is_safe_move") and not m.get("captures_opponent")]
+    def _future_capture_positioning(
+        self, moves: List[Dict], threat_map: Dict[int, Tuple[int, int]]
+    ) -> int | None:
+        candidates = [
+            m for m in moves if m.get("is_safe_move") and not m.get("captures_opponent")
+        ]
         if not candidates:
             return None
         scored: List[Tuple[float, Dict]] = []
@@ -179,10 +223,14 @@ class BalancedStrategy(Strategy):
             threat = threat_map.get(tid, (99, 99))
             if threat[0] > StrategyConstants.BALANCED_THREAT_SOFT_CAP:
                 continue
-            potential = self._estimate_future_capture_potential(mv["target_position"], scan_range)
+            potential = self._estimate_future_capture_potential(
+                mv["target_position"], scan_range
+            )
             if potential <= 0:
                 continue
-            scored.append((potential * StrategyConstants.BALANCED_FUTURE_CAPTURE_WEIGHT, mv))
+            scored.append(
+                (potential * StrategyConstants.BALANCED_FUTURE_CAPTURE_WEIGHT, mv)
+            )
         if not scored:
             return None
         best = max(scored, key=lambda x: x[0])[1]
@@ -203,7 +251,13 @@ class BalancedStrategy(Strategy):
         return best
 
     # --- Weighted Selection for progression/safety ---
-    def _select_weighted(self, moves: List[Dict], threat_map: Dict[int, Tuple[int, int]], ahead: bool, behind: bool = False) -> int | None:
+    def _select_weighted(
+        self,
+        moves: List[Dict],
+        threat_map: Dict[int, Tuple[int, int]],
+        ahead: bool,
+        behind: bool = False,
+    ) -> int | None:
         if not moves:
             return None
         scored: List[Tuple[float, Dict]] = []
@@ -213,10 +267,17 @@ class BalancedStrategy(Strategy):
             threat_penalty = threat[0] * (2.0 if ahead else 1.0)  # stricter when ahead
             depth_bonus = 0.0
             if BoardConstants.is_home_column_position(mv["target_position"]):
-                depth_bonus = (mv["target_position"] - GameConstants.HOME_COLUMN_START) * StrategyConstants.BALANCED_HOME_PRIORITY
-            progress_component = mv.get("strategic_value", 0) * StrategyConstants.BALANCED_PROGRESS_WEIGHT
+                depth_bonus = (
+                    mv["target_position"] - GameConstants.HOME_COLUMN_START
+                ) * StrategyConstants.BALANCED_HOME_PRIORITY
+            progress_component = (
+                mv.get("strategic_value", 0)
+                * StrategyConstants.BALANCED_PROGRESS_WEIGHT
+            )
             aggressiveness = 1.2 if behind else 1.0
-            composite = (progress_component + depth_bonus) * aggressiveness - threat_penalty
+            composite = (
+                progress_component + depth_bonus
+            ) * aggressiveness - threat_penalty
             scored.append((composite, mv))
         if not scored:
             return None

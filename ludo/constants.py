@@ -149,7 +149,9 @@ class StrategyConstants:
     KILLER_BLOCK_BONUS = 6.0  # forming/keeping a two-token block after move
     KILLER_RECAPTURE_PENALTY = 12.0  # risk if easily recaptured
     KILLER_WEAK_PREY_PENALTY = 5.0  # skip low-progress prey if risky
-    KILLER_FUTURE_CAPTURE_WEIGHT = 3.0  # weight per potential future capture target in range after move
+    KILLER_FUTURE_CAPTURE_WEIGHT = (
+        3.0  # weight per potential future capture target in range after move
+    )
 
     # Cautious strategy specific thresholds
     CAUTIOUS_MAX_ALLOWED_THREAT = 0  # normal mode: avoid any threatened landing
@@ -157,7 +159,9 @@ class StrategyConstants:
     CAUTIOUS_MIN_ACTIVE_TOKENS = 2  # ensure some board presence
 
     # Optimist strategy weights
-    OPTIMIST_HIGH_RISK_THRESHOLD = 10.0  # strategic value threshold to treat risky as high-value
+    OPTIMIST_HIGH_RISK_THRESHOLD = (
+        10.0  # strategic value threshold to treat risky as high-value
+    )
     OPTIMIST_RISK_REWARD_BONUS = 4.0
     OPTIMIST_CAPTURE_PROGRESS_WEIGHT = 1.2
     OPTIMIST_FUTURE_CAPTURE_WEIGHT = 2.0
@@ -167,31 +171,53 @@ class StrategyConstants:
     # Winner strategy weights
     WINNER_HOME_DEPTH_WEIGHT = 1.0
     WINNER_SAFE_CAPTURE_PROGRESS_WEIGHT = 1.0
-    WINNER_EXIT_MIN_ACTIVE = 1  # ensure at least one token active before deprioritizing exits
+    WINNER_EXIT_MIN_ACTIVE = (
+        1  # ensure at least one token active before deprioritizing exits
+    )
 
     # Defensive strategy weights (distinct from cautious: allows controlled presence & block formation)
     DEFENSIVE_MIN_ACTIVE_TOKENS = 2  # maintain at least this many tokens active
-    DEFENSIVE_BLOCK_FORMATION_BONUS = 6.0  # reward forming or staying in a block (stack immunity)
+    DEFENSIVE_BLOCK_FORMATION_BONUS = (
+        6.0  # reward forming or staying in a block (stack immunity)
+    )
     DEFENSIVE_SAFE_CAPTURE_BONUS = 12.0  # only modest capture reward if safe
     DEFENSIVE_HOME_DEPTH_WEIGHT = 0.9  # slightly lower than winner; still important
-    DEFENSIVE_EXIT_PRESSURE_THRESHOLD = 3  # if opponents have this many finished, increase urgency
+    DEFENSIVE_EXIT_PRESSURE_THRESHOLD = (
+        3  # if opponents have this many finished, increase urgency
+    )
     DEFENSIVE_ALLOW_THREAT_DISTANCE = 2  # acceptable minimal incoming distance (tighter than cautious late-game relaxation)
-    DEFENSIVE_MAX_THREAT_COUNT = 1  # tolerate at most one potential attacker when moving on main board
-    DEFENSIVE_REPOSITION_BONUS = 2.5  # small bonus for moving from threatened square to safer square
-    DEFENSIVE_AVOID_BREAKING_BLOCK_PENALTY = 5.0  # penalty if move breaks own protective block without benefit
+    DEFENSIVE_MAX_THREAT_COUNT = (
+        1  # tolerate at most one potential attacker when moving on main board
+    )
+    DEFENSIVE_REPOSITION_BONUS = (
+        2.5  # small bonus for moving from threatened square to safer square
+    )
+    DEFENSIVE_AVOID_BREAKING_BLOCK_PENALTY = (
+        5.0  # penalty if move breaks own protective block without benefit
+    )
 
     # Balanced strategy adaptive weights (blends offensive/defensive heuristics)
     BALANCED_PROGRESS_WEIGHT = 1.1  # slight emphasis on steady advancement
-    BALANCED_HOME_PRIORITY = 0.95  # weight for home column depth (between defensive and winner)
-    BALANCED_SAFE_CAPTURE_WEIGHT = 1.3  # reward safe capture a bit more than pure progress
+    BALANCED_HOME_PRIORITY = (
+        0.95  # weight for home column depth (between defensive and winner)
+    )
+    BALANCED_SAFE_CAPTURE_WEIGHT = (
+        1.3  # reward safe capture a bit more than pure progress
+    )
     BALANCED_RISK_TOLERANCE_MARGIN = 0.15  # dynamic shift toward aggression when behind
     BALANCED_MIN_ACTIVE_TARGET = 2  # maintain moderate board presence
     BALANCED_BLOCK_VALUE = 4.0  # value for maintaining/creating protective blocks
-    BALANCED_FUTURE_CAPTURE_PROXIMITY = 5  # squares ahead scanned for future capture potential
+    BALANCED_FUTURE_CAPTURE_PROXIMITY = (
+        5  # squares ahead scanned for future capture potential
+    )
     BALANCED_FUTURE_CAPTURE_WEIGHT = 1.5
-    BALANCED_THREAT_SOFT_CAP = 2  # tolerate up to 2 potential attackers when equal/behind
+    BALANCED_THREAT_SOFT_CAP = (
+        2  # tolerate up to 2 potential attackers when equal/behind
+    )
     BALANCED_AHEAD_THREAT_CAP = 1  # stricter when ahead
-    BALANCED_LATE_GAME_FINISH_PUSH = 2  # number of tokens finished by leader to trigger finish push
+    BALANCED_LATE_GAME_FINISH_PUSH = (
+        2  # number of tokens finished by leader to trigger finish push
+    )
 
     # Hybrid probabilistic strategy constants
     HYBRID_IMMEDIATE_RISK_WEIGHT = 0.55  # alpha for blending immediate vs horizon

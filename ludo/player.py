@@ -6,9 +6,9 @@ Each player has a color and controls 4 tokens.
 from enum import Enum
 from typing import Dict, List
 
-from .constants import BoardConstants, StrategyConstants
+from .constants import BoardConstants, GameConstants, StrategyConstants
 from .token import Token, TokenState
-from .constants import GameConstants
+
 
 class PlayerColor(Enum):
     """Available player colors in Ludo."""
@@ -227,9 +227,8 @@ class Player:
                 max_depth = GameConstants.HOME_COLUMN_SIZE - 1
                 depth_ratio = depth / max_depth if max_depth > 0 else 0
                 base = StrategyConstants.HOME_COLUMN_ADVANCE_VALUE
-                components["home_column_depth"] = (
-                    base
-                    * (1 + depth_ratio * StrategyConstants.HOME_COLUMN_DEPTH_MULTIPLIER)
+                components["home_column_depth"] = base * (
+                    1 + depth_ratio * StrategyConstants.HOME_COLUMN_DEPTH_MULTIPLIER
                 )
         elif token.is_in_home() and dice_value == GameConstants.EXIT_HOME_ROLL:
             # 1: Exit home
@@ -259,7 +258,9 @@ class Player:
             and not BoardConstants.is_home_column_position(target_position)
             and token.is_active()
         ):
-            components["vulnerability_penalty"] = -StrategyConstants.VULNERABILITY_PENALTY_WEIGHT
+            components[
+                "vulnerability_penalty"
+            ] = -StrategyConstants.VULNERABILITY_PENALTY_WEIGHT
 
         total = sum(components.values())
         return total, components

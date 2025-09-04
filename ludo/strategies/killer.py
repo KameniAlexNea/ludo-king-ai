@@ -7,8 +7,8 @@ immediate capture is available.
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
+from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
-from ..constants import StrategyConstants, GameConstants, BoardConstants
 
 
 def _distance_to_finish(position: int, entry: int) -> int:
@@ -21,6 +21,7 @@ def _distance_to_finish(position: int, entry: int) -> int:
     else:
         to_entry = (GameConstants.MAIN_BOARD_SIZE - position) + entry
     return to_entry + GameConstants.HOME_COLUMN_SIZE
+
 
 def _estimate_recap_risk(landing: int, opponent_tokens: List[int]) -> bool:
     """Return True if any opponent token is within 6 steps behind landing (simple heuristic)."""
@@ -97,13 +98,17 @@ class KillerStrategy(Strategy):
             return None
 
         current_color = ctx["current_situation"]["player_color"]
-        opponent_positions = self._collect_opponent_positions(ctx, exclude_color=current_color)
+        opponent_positions = self._collect_opponent_positions(
+            ctx, exclude_color=current_color
+        )
         finished_map, max_finished = self._opponent_finished_map(ctx, current_color)
         entries = BoardConstants.HOME_COLUMN_ENTRIES
 
         scored: List[_CaptureScore] = []
         for mv in capture_moves:
-            score, details = self._score_capture_move(mv, opponent_positions, finished_map, max_finished, entries)
+            score, details = self._score_capture_move(
+                mv, opponent_positions, finished_map, max_finished, entries
+            )
             mv["killer_score"] = score
             mv["killer_details"] = details
             scored.append(_CaptureScore(mv, score, details))
@@ -140,7 +145,9 @@ class KillerStrategy(Strategy):
         for ct in captured:
             opp_color = ct["player_color"]
             remaining = _distance_to_finish(mv["target_position"], entries[opp_color])
-            progress_component += (60 - remaining) * StrategyConstants.KILLER_PROGRESS_WEIGHT * 0.01
+            progress_component += (
+                (60 - remaining) * StrategyConstants.KILLER_PROGRESS_WEIGHT * 0.01
+            )
         details["progress"] = progress_component
         score += progress_component
 
@@ -191,7 +198,8 @@ class KillerStrategy(Strategy):
             for p in ctx.get("players", [])
             if p["color"] != current_color
             for t in p["tokens"]
-            if t["position"] >= 0 and not BoardConstants.is_home_column_position(t["position"])
+            if t["position"] >= 0
+            and not BoardConstants.is_home_column_position(t["position"])
         ]
 
         scored: List[Tuple[float, Dict]] = []
@@ -235,7 +243,9 @@ class KillerStrategy(Strategy):
         return positions
 
     @staticmethod
-    def _opponent_finished_map(ctx: Dict, exclude_color: str) -> Tuple[Dict[str, int], int]:
+    def _opponent_finished_map(
+        ctx: Dict, exclude_color: str
+    ) -> Tuple[Dict[str, int], int]:
         finished_map: Dict[str, int] = {}
         max_finished = 0
         for p in ctx.get("players", []):

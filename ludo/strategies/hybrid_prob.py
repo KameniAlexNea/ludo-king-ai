@@ -15,18 +15,15 @@ components (subset of planned v3) with a focus on:
 Structured for extensibility while keeping computation modest.
 Attaches rich diagnostics to each move for analysis / RL shaping.
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
 import math
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Sequence
 
+from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
-from ..constants import (
-    GameConstants,
-    BoardConstants,
-    StrategyConstants,
-)
 
 MoveDict = Dict[str, object]
 
@@ -66,11 +63,15 @@ class HybridProbStrategy(Strategy):
         finished = float(player_state.get("finished_tokens", 0))
         my_progress = finished / float(GameConstants.TOKENS_PER_PLAYER)
         opp_progresses = [
-            o.get("tokens_finished", 0) / float(GameConstants.TOKENS_PER_PLAYER) for o in opponents
+            o.get("tokens_finished", 0) / float(GameConstants.TOKENS_PER_PLAYER)
+            for o in opponents
         ]
-        opp_mean = sum(opp_progresses) / max(1, len(opp_progresses)) if opp_progresses else 0.0
+        opp_mean = (
+            sum(opp_progresses) / max(1, len(opp_progresses)) if opp_progresses else 0.0
+        )
         opp_var = (
-            sum((p - opp_mean) ** 2 for p in opp_progresses) / max(1, len(opp_progresses))
+            sum((p - opp_mean) ** 2 for p in opp_progresses)
+            / max(1, len(opp_progresses))
             if opp_progresses
             else 0.0
         )
@@ -88,7 +89,9 @@ class HybridProbStrategy(Strategy):
             risk_weight = 1.0
             horizon = self.cfg.horizon_turns
 
-        opponent_positions = self._collect_opponent_positions(game_context, current_color)
+        opponent_positions = self._collect_opponent_positions(
+            game_context, current_color
+        )
         opp_token_progress_map = self._collect_opponent_token_progress(game_context)
         baseline_active = player_state.get("active_tokens", 0)
 
@@ -106,10 +109,20 @@ class HybridProbStrategy(Strategy):
                 + (1 - StrategyConstants.HYBRID_IMMEDIATE_RISK_WEIGHT) * horizon_risk
             )
 
-            proximity_factor = self._proximity_factor(mv, opponent_positions) if self.cfg.use_proximity else 1.0
-            cluster_factor = self._cluster_factor(mv, opponent_positions) if self.cfg.use_cluster else 1.0
+            proximity_factor = (
+                self._proximity_factor(mv, opponent_positions)
+                if self.cfg.use_proximity
+                else 1.0
+            )
+            cluster_factor = (
+                self._cluster_factor(mv, opponent_positions)
+                if self.cfg.use_cluster
+                else 1.0
+            )
             impact_weight = self._impact_weight(mv)
-            risk_score = blended_risk * proximity_factor * cluster_factor * impact_weight
+            risk_score = (
+                blended_risk * proximity_factor * cluster_factor * impact_weight
+            )
 
             # Opportunity components
             opp_score = 0.0
@@ -134,7 +147,9 @@ class HybridProbStrategy(Strategy):
             elif avg_progress > 0.65:
                 opp_score *= StrategyConstants.HYBRID_LATE_GAME_PROGRESS_MULT
 
-            composite_raw = opp_score - risk_weight * (risk_score ** StrategyConstants.HYBRID_COMPOSITE_RISK_POWER)
+            composite_raw = opp_score - risk_weight * (
+                risk_score**StrategyConstants.HYBRID_COMPOSITE_RISK_POWER
+            )
 
             mv["hy_risk_immediate"] = immediate_risk
             mv["hy_risk_horizon"] = horizon_risk
@@ -175,7 +190,11 @@ class HybridProbStrategy(Strategy):
         tgt = move.get("target_position")
         if not isinstance(tgt, int):
             return 0.0
-        if move.get("is_safe_move") or move.get("move_type") in {"finish", "advance_home_column"} or tgt >= BoardConstants.HOME_COLUMN_START:
+        if (
+            move.get("is_safe_move")
+            or move.get("move_type") in {"finish", "advance_home_column"}
+            or tgt >= BoardConstants.HOME_COLUMN_START
+        ):
             return 0.0
         threats = 0
         for opp in opponent_positions:
@@ -186,11 +205,17 @@ class HybridProbStrategy(Strategy):
             return 0.0
         return 1 - (5 / 6) ** threats
 
-    def _horizon_risk(self, move: MoveDict, opponent_positions: List[int], turns: int) -> float:
+    def _horizon_risk(
+        self, move: MoveDict, opponent_positions: List[int], turns: int
+    ) -> float:
         tgt = move.get("target_position")
         if not isinstance(tgt, int):
             return 0.0
-        if move.get("is_safe_move") or move.get("move_type") in {"finish", "advance_home_column"} or tgt >= BoardConstants.HOME_COLUMN_START:
+        if (
+            move.get("is_safe_move")
+            or move.get("move_type") in {"finish", "advance_home_column"}
+            or tgt >= BoardConstants.HOME_COLUMN_START
+        ):
             return 0.0
         if not opponent_positions:
             return 0.0
@@ -241,10 +266,15 @@ class HybridProbStrategy(Strategy):
         if cur >= BoardConstants.HOME_COLUMN_START:
             return 1.0
         norm = cur / float(GameConstants.MAIN_BOARD_SIZE)
-        return StrategyConstants.HYBRID_IMPACT_BASE + (norm ** StrategyConstants.HYBRID_IMPACT_PROGRESS_POWER) * 1.3
+        return (
+            StrategyConstants.HYBRID_IMPACT_BASE
+            + (norm**StrategyConstants.HYBRID_IMPACT_PROGRESS_POWER) * 1.3
+        )
 
     # ---- Opportunity helpers ----
-    def _capture_value(self, move: MoveDict, opp_token_progress_map: Dict[str, float]) -> float:
+    def _capture_value(
+        self, move: MoveDict, opp_token_progress_map: Dict[str, float]
+    ) -> float:
         if not move.get("captures_opponent"):
             return 0.0
         captured = move.get("captured_tokens", [])
@@ -261,14 +291,23 @@ class HybridProbStrategy(Strategy):
         if not isinstance(cur, int) or not isinstance(tgt, int):
             return 0.0
         delta = 0.0
-        if 0 <= cur < GameConstants.MAIN_BOARD_SIZE and 0 <= tgt < GameConstants.MAIN_BOARD_SIZE:
-            raw = (tgt - cur) if tgt >= cur else (GameConstants.MAIN_BOARD_SIZE - cur + tgt)
+        if (
+            0 <= cur < GameConstants.MAIN_BOARD_SIZE
+            and 0 <= tgt < GameConstants.MAIN_BOARD_SIZE
+        ):
+            raw = (
+                (tgt - cur)
+                if tgt >= cur
+                else (GameConstants.MAIN_BOARD_SIZE - cur + tgt)
+            )
             delta = raw / float(GameConstants.MAIN_BOARD_SIZE)
         elif tgt >= BoardConstants.HOME_COLUMN_START:
             delta = 0.25
         if delta <= 0:
             return 0.0
-        return (delta ** StrategyConstants.HYBRID_PROGRESS_POWER) * StrategyConstants.HYBRID_PROGRESS_SCALE
+        return (
+            delta**StrategyConstants.HYBRID_PROGRESS_POWER
+        ) * StrategyConstants.HYBRID_PROGRESS_SCALE
 
     def _home_column_value(self, move: MoveDict) -> float:
         mt = move.get("move_type")
@@ -278,7 +317,10 @@ class HybridProbStrategy(Strategy):
             pos = move.get("target_position")
             if isinstance(pos, int):
                 depth = pos - GameConstants.HOME_COLUMN_START
-                return StrategyConstants.HYBRID_ADVANCE_HOME_BONUS + depth * StrategyConstants.HYBRID_HOME_DEPTH_FACTOR * 0.1
+                return (
+                    StrategyConstants.HYBRID_ADVANCE_HOME_BONUS
+                    + depth * StrategyConstants.HYBRID_HOME_DEPTH_FACTOR * 0.1
+                )
             return StrategyConstants.HYBRID_ADVANCE_HOME_BONUS
         if mt == "exit_home":
             return StrategyConstants.HYBRID_EXIT_HOME_BONUS
@@ -294,7 +336,9 @@ class HybridProbStrategy(Strategy):
             * StrategyConstants.HYBRID_EXTRA_TURN_COEFF
         )
 
-    def _risk_suppression_bonus(self, move: MoveDict, opponent_positions: List[int]) -> float:
+    def _risk_suppression_bonus(
+        self, move: MoveDict, opponent_positions: List[int]
+    ) -> float:
         if not move.get("captures_opponent"):
             return 0.0
         tgt = move.get("target_position")
@@ -310,7 +354,10 @@ class HybridProbStrategy(Strategy):
         return removed * StrategyConstants.HYBRID_RISK_SUPPRESSION_COEFF
 
     def _spread_bonus(self, move: MoveDict, baseline_active: int) -> float:
-        if move.get("move_type") == "exit_home" and baseline_active < StrategyConstants.HYBRID_SPREAD_ACTIVE_TARGET:
+        if (
+            move.get("move_type") == "exit_home"
+            and baseline_active < StrategyConstants.HYBRID_SPREAD_ACTIVE_TARGET
+        ):
             return StrategyConstants.HYBRID_SPREAD_BONUS
         return 0.0
 
@@ -359,7 +406,9 @@ class HybridProbStrategy(Strategy):
             m["hy_composite"] = (m.get("hy_composite_raw", 0.0) - mean) / std
 
     # ---- Generic helpers ----
-    def _collect_opponent_positions(self, game_context: Dict, current_color: str) -> List[int]:
+    def _collect_opponent_positions(
+        self, game_context: Dict, current_color: str
+    ) -> List[int]:
         board_state = game_context.get("board", {})
         bp = board_state.get("board_positions", {})
         res: List[int] = []
@@ -381,13 +430,18 @@ class HybridProbStrategy(Strategy):
             for t in opp.get("tokens", []):
                 tid = t.get("token_id")
                 finished = float(t.get("finished_steps", 0))
-                result[tid] = min(1.0, max(0.0, finished / float(GameConstants.FINISH_POSITION)))
+                result[tid] = min(
+                    1.0, max(0.0, finished / float(GameConstants.FINISH_POSITION))
+                )
         return result
 
     def _backward_distance(self, from_pos: int, opp_pos: int) -> Optional[int]:
         if not (isinstance(from_pos, int) and isinstance(opp_pos, int)):
             return None
-        if not (0 <= from_pos < GameConstants.MAIN_BOARD_SIZE and 0 <= opp_pos < GameConstants.MAIN_BOARD_SIZE):
+        if not (
+            0 <= from_pos < GameConstants.MAIN_BOARD_SIZE
+            and 0 <= opp_pos < GameConstants.MAIN_BOARD_SIZE
+        ):
             return None
         if opp_pos <= from_pos:
             return from_pos - opp_pos

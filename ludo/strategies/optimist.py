@@ -6,8 +6,8 @@ and future capture potential while still finishing when convenient.
 
 from typing import Dict, List, Tuple
 
+from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
-from ..constants import StrategyConstants, GameConstants, BoardConstants
 
 
 class OptimistStrategy(Strategy):
@@ -27,7 +27,7 @@ class OptimistStrategy(Strategy):
         # Extract state for aggressive heuristics
         player_state = game_context.get("player_state", {})
         active_tokens = player_state.get("active_tokens", 0)
-        finished_tokens = player_state.get("finished_tokens", 0)
+        # finished_tokens = player_state.get("finished_tokens", 0)
 
         # 1. High-value risky moves (above threshold)
         risky_moves = self._get_risky_moves(moves)
@@ -85,8 +85,14 @@ class OptimistStrategy(Strategy):
             base = StrategyConstants.CAPTURE_BONUS
             progress_bonus = 0.0
             for ct in mv.get("captured_tokens", []):
-                remaining = self._distance_to_finish_proxy(mv["target_position"], entries[ct["player_color"]])
-                progress_bonus += (60 - remaining) * StrategyConstants.OPTIMIST_CAPTURE_PROGRESS_WEIGHT * 0.01
+                remaining = self._distance_to_finish_proxy(
+                    mv["target_position"], entries[ct["player_color"]]
+                )
+                progress_bonus += (
+                    (60 - remaining)
+                    * StrategyConstants.OPTIMIST_CAPTURE_PROGRESS_WEIGHT
+                    * 0.01
+                )
             stack_bonus = (
                 StrategyConstants.OPTIMIST_STACK_BONUS
                 if (not mv.get("is_safe_move") and mv["strategic_value"] > 10)

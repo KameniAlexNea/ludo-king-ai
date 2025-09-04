@@ -6,13 +6,13 @@ from .balanced import BalancedStrategy
 from .base import Strategy
 from .cautious import CautiousStrategy
 from .defensive import DefensiveStrategy
+from .hybrid_prob import HybridConfig, HybridProbStrategy
 from .killer import KillerStrategy
 from .llm import LLMStrategy
 from .optimist import OptimistStrategy
 from .probabilistic import ProbabilisticStrategy
 from .probabilistic_v2 import ProbabilisticV2Strategy
 from .probabilistic_v3 import ProbabilisticV3Strategy, V3Config
-from .hybrid_prob import HybridProbStrategy, HybridConfig
 from .random_strategy import RandomStrategy
 from .winner import WinnerStrategy
 

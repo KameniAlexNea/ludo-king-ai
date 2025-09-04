@@ -7,8 +7,8 @@ behind late game.
 
 from typing import Dict, List, Tuple
 
+from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
-from ..constants import StrategyConstants, GameConstants, BoardConstants
 
 
 class CautiousStrategy(Strategy):
@@ -31,7 +31,9 @@ class CautiousStrategy(Strategy):
         active_tokens = player_state.get("active_tokens", 0)
 
         opponents = game_context.get("opponents", [])
-        leading_opponent_finished = max((o.get("tokens_finished", 0) for o in opponents), default=0)
+        leading_opponent_finished = max(
+            (o.get("tokens_finished", 0) for o in opponents), default=0
+        )
 
         late_game = leading_opponent_finished >= 3 and finished <= 1
 
@@ -51,7 +53,9 @@ class CautiousStrategy(Strategy):
 
         # 3. Fully safe main-board moves (no incoming threat allowed)
         allowed_threat = (
-            StrategyConstants.CAUTIOUS_LATE_GAME_ALLOWED_THREAT if late_game else StrategyConstants.CAUTIOUS_MAX_ALLOWED_THREAT
+            StrategyConstants.CAUTIOUS_LATE_GAME_ALLOWED_THREAT
+            if late_game
+            else StrategyConstants.CAUTIOUS_MAX_ALLOWED_THREAT
         )
         safe_moves = self._get_safe_moves(moves)
         zero_or_allowed_threat: List[Dict] = [
@@ -99,7 +103,9 @@ class CautiousStrategy(Strategy):
         return moves[0]["token_id"]
 
     # --- Threat Analysis ---
-    def _annotate_threats(self, moves: List[Dict], ctx: Dict) -> Dict[int, Tuple[int, int]]:
+    def _annotate_threats(
+        self, moves: List[Dict], ctx: Dict
+    ) -> Dict[int, Tuple[int, int]]:
         """Return mapping token_id -> (threat_count, min_forward_distance).
 
         threat_count: number of opponent tokens that could reach landing square in 1..6.
@@ -111,7 +117,8 @@ class CautiousStrategy(Strategy):
             for p in ctx.get("players", [])
             if p["color"] != current_color
             for t in p["tokens"]
-            if t["position"] >= 0 and not BoardConstants.is_home_column_position(t["position"])
+            if t["position"] >= 0
+            and not BoardConstants.is_home_column_position(t["position"])
         ]
         result: Dict[int, Tuple[int, int]] = {}
         for mv in moves:
