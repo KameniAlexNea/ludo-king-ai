@@ -30,3 +30,30 @@
 3. Late‑game shaping: small bonus for finishing final token sooner to reduce stall turns.
 4. Masked sampling temperature (eval option) to probe robustness vs greedy policy overfit.
 5. Phase metrics: break down win rate & capture ratio for early (≤50 turns) vs late (>50) segments.
+
+---
+
+### 3. Scripted AI Benchmark (No RL / PPO)
+
+Standalone heuristic strategies head‑to‑head (480 games total, mixed fours). Win Rate % = Wins / Games.
+
+| Rank | Strategy          | Wins | Games | Win Rate % | Avg Turns | Medal |
+|------|-------------------|------|-------|-----------:|----------:|:------|
+| 1    | BALANCED          | 176  | 480   | 36.7       | 124.5     | 🥇 |
+| 2    | PROBABILISTIC_V2  | 163  | 480   | 34.0       | 125.9     | 🥈 |
+| 3    | HYBRID_PROB       | 154  | 480   | 32.1       | 126.8     | 🥉 |
+| 4    | PROBABILISTIC_V3  | 152  | 480   | 31.7       | 126.6     |  |
+| 5    | PROBABILISTIC     | 151  | 480   | 31.5       | 128.0     |  |
+| 6    | DEFENSIVE         | 144  | 480   | 30.0       | 115.9     |  |
+| 7    | CAUTIOUS          | 138  | 480   | 28.7       | 116.9     |  |
+| 8    | WINNER            | 135  | 480   | 28.1       | 115.9     |  |
+| 9    | OPTIMIST          | 41   | 480   | 8.5        | 127.2     |  |
+| 10   | RANDOM            | 38   | 480   | 7.9        | 113.7     |  |
+| 11   | KILLER            | 24   | 480   | 5.0        | 131.7     |  |
+
+Key Notes:
+* Balanced leads—moderate risk handling beating more complex probabilistic variants.
+* Probabilistic_V2 outperforms other probabilistic versions; Hybrid needs tuning to surpass it.
+* Killer over-indexes on captures (very low finish conversion efficiency).
+* Defensive / Cautious cluster mid-table with faster average turns (earlier game resolutions, often not their wins).
+* Optimist aggression not translating to finishes; high average turns suggests stalled conversions.
