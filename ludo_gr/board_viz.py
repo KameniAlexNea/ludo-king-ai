@@ -205,21 +205,22 @@ def draw_board(tokens: Dict[str, List[Dict]], show_ids: bool = True) -> Image.Im
     # Triangles: top(red), right(green), bottom(yellow), left(blue) typical clockwise
     d.polygon([(cx0, cy0), (cx1, cy0), (midx, midy)], fill=COLOR_MAP[Colors.RED])  # top
     d.polygon(
-        [(cx1, cy0), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.GREEN]
-    )  # right
+        [(cx1, cy0), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.BLUE]
+    )  # right (swapped: was GREEN)
     d.polygon(
         [(cx0, cy1), (cx1, cy1), (midx, midy)], fill=COLOR_MAP[Colors.YELLOW]
     )  # bottom
     d.polygon(
-        [(cx0, cy0), (cx0, cy1), (midx, midy)], fill=COLOR_MAP[Colors.BLUE]
-    )  # left
+        [(cx0, cy0), (cx0, cy1), (midx, midy)], fill=COLOR_MAP[Colors.GREEN]
+    )  # left (swapped: was BLUE)
 
     # Finish anchors per color inside their triangle (stack tokens exactly here)
     finish_anchor = {
         Colors.RED: (midx, cy0 + (midy - cy0) // 2),
-        Colors.GREEN: (cx1 - (cx1 - midx) // 2, midy),
+        # Swapped BLUE and GREEN to align with triangle color swap
+        Colors.BLUE: (cx1 - (cx1 - midx) // 2, midy),  # right side now BLUE
         Colors.YELLOW: (midx, cy1 - (cy1 - midy) // 2),
-        Colors.BLUE: (cx0 + (midx - cx0) // 2, midy),
+        Colors.GREEN: (cx0 + (midx - cx0) // 2, midy),  # left side now GREEN
     }
 
     # Grid overlay (subtle)
