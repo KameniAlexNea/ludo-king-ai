@@ -169,6 +169,17 @@ class StrategyConstants:
     WINNER_SAFE_CAPTURE_PROGRESS_WEIGHT = 1.0
     WINNER_EXIT_MIN_ACTIVE = 1  # ensure at least one token active before deprioritizing exits
 
+    # Defensive strategy weights (distinct from cautious: allows controlled presence & block formation)
+    DEFENSIVE_MIN_ACTIVE_TOKENS = 2  # maintain at least this many tokens active
+    DEFENSIVE_BLOCK_FORMATION_BONUS = 6.0  # reward forming or staying in a block (stack immunity)
+    DEFENSIVE_SAFE_CAPTURE_BONUS = 12.0  # only modest capture reward if safe
+    DEFENSIVE_HOME_DEPTH_WEIGHT = 0.9  # slightly lower than winner; still important
+    DEFENSIVE_EXIT_PRESSURE_THRESHOLD = 3  # if opponents have this many finished, increase urgency
+    DEFENSIVE_ALLOW_THREAT_DISTANCE = 2  # acceptable minimal incoming distance (tighter than cautious late-game relaxation)
+    DEFENSIVE_MAX_THREAT_COUNT = 1  # tolerate at most one potential attacker when moving on main board
+    DEFENSIVE_REPOSITION_BONUS = 2.5  # small bonus for moving from threatened square to safer square
+    DEFENSIVE_AVOID_BREAKING_BLOCK_PENALTY = 5.0  # penalty if move breaks own protective block without benefit
+
 
 class Colors:
     """Player color constants."""
