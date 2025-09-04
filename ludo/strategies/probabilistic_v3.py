@@ -288,7 +288,11 @@ class ProbabilisticV3Strategy(Strategy):
         tgt = move.get("target_position")
         if not isinstance(tgt, int):
             return 0.0
-        if move.get("move_type") == "finish" or move.get("is_safe_move") or (isinstance(tgt, int) and tgt >= BoardConstants.HOME_COLUMN_START):
+        if (
+            move.get("move_type") == "finish"
+            or move.get("is_safe_move")
+            or (isinstance(tgt, int) and tgt >= BoardConstants.HOME_COLUMN_START)
+        ):
             return 0.0
         if not opponent_positions:
             return 0.0

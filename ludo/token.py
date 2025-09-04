@@ -128,9 +128,10 @@ class Token:
             else:
                 # We wrapped. Distance from current to last + 1 + entry to end portion
                 distance_to_end = board_last_index - current
-                steps_remaining_after_wrap = new_position - (board_last_index + 1)
                 steps_after_entry = (
-                    dice_value - (distance_to_end + 1) - (home_entry)
+                    dice_value
+                    - (distance_to_end + 1)
+                    - (home_entry)
                     + 1  # adjust for inclusive counts
                 )
                 # Simpler approach: reconstruct by iterating

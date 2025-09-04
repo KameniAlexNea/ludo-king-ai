@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Optional
 
-from ..constants import GameConstants, BoardConstants
+from ..constants import BoardConstants, GameConstants
 from .base import Strategy
 
 # Utility type hint for a move dict

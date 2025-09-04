@@ -142,7 +142,9 @@ class LudoGame:
             return {"success": False, "error": "Invalid target position"}
 
         # Validate board occupancy / capture
-        can_move, tokens_to_capture = self.board.can_move_to_position(token, target_position)
+        can_move, tokens_to_capture = self.board.can_move_to_position(
+            token, target_position
+        )
         if not can_move:
             return {"success": False, "error": "Invalid move - position blocked"}
 
