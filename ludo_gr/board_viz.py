@@ -103,10 +103,22 @@ def _cell_bbox(col: int, row: int):
 
 
 def _draw_home_quadrants(d: ImageDraw.ImageDraw):
-    # Fill entire quadrant with player color (no inner white), as requested
+    """Draw only a colored border for each player's home quadrant."""
+    border_width = 6
     for color, ((c0, c1), (r0, r1)) in HOME_QUADRANTS.items():
         box = (c0 * CELL, r0 * CELL, (c1 + 1) * CELL, (r1 + 1) * CELL)
-        d.rectangle(box, fill=COLOR_MAP[color])
+        # Draw base (background) to ensure any prior drawings are covered
+        d.rectangle(box, fill=BG_COLOR)
+        # Pillow's rectangle outline draws centered on the edge; for a thicker
+        # appearance we can draw multiple inset rectangles.
+        for w in range(border_width):
+            inset_box = (
+                box[0] + w,
+                box[1] + w,
+                box[2] - w,
+                box[3] - w,
+            )
+            d.rectangle(inset_box, outline=COLOR_MAP[color])
 
 
 def _token_home_grid_position(color: str, token_id: int) -> Tuple[int, int]:
