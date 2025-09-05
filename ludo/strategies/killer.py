@@ -1,7 +1,14 @@
 """Killer Strategy.
 
-Aggressive capture-focused strategy with predictive positioning when no
-immediate capture is available.
+Improved aggressive strategy that now:
+    * Prioritizes finishing before ordinary captures
+    * Integrates base positional (``strategic_value``) into capture scoring
+    * Uses a unified distance helper for opponent progress estimation
+    * Applies graded (not binary) recapture risk based on number of nearby threats
+    * Retains predictive positioning as a secondary heuristic
+
+This is an incremental refactor (not a full rewrite) keeping the external
+API and existing detail fields while correcting previous priority inversions.
 """
 
 from dataclasses import dataclass
@@ -11,31 +18,44 @@ from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
 
 
-def _distance_to_finish(position: int, entry: int) -> int:
-    """Approx rough distance to finish from a main-board or home-column position."""
+def _steps_to_finish(position: int, entry: int) -> int:
+    """Unified steps-to-finish estimator.
+
+    Args:
+        position: Absolute board/home-column position (>= -1)
+        entry: Player-specific last main-board square before home column
+
+    Returns:
+        Approx number of steps remaining (main ring + home column).
+    """
+    if position < 0:
+        # Still at home: rough full path length (ring + home column)
+        return GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
     if BoardConstants.is_home_column_position(position):
         return GameConstants.FINISH_POSITION - position
-    # distance to entry then home column size
-    if position <= entry:
-        to_entry = entry - position
-    else:
-        to_entry = (GameConstants.MAIN_BOARD_SIZE - position) + entry
-    return to_entry + GameConstants.HOME_COLUMN_SIZE
+    forward = (entry - position) % GameConstants.MAIN_BOARD_SIZE
+    return forward + GameConstants.HOME_COLUMN_SIZE
 
+def _count_recap_threats(landing: int, opponent_tokens: List[int]) -> int:
+    """Count opponent tokens that could recapture within 1..6 forward steps.
 
-def _estimate_recap_risk(landing: int, opponent_tokens: List[int]) -> bool:
-    """Return True if any opponent token is within 6 steps behind landing (simple heuristic)."""
+    Ignores opponents already in any home column. Returns the number of
+    potential attackers, enabling graded risk penalties instead of a
+    coarse boolean.
+    """
+    threats = 0
+    if BoardConstants.is_home_column_position(landing):
+        return 0
     for pos in opponent_tokens:
-        # Compute forward distance from opponent to landing through wrap
-        if BoardConstants.is_home_column_position(pos):
-            continue  # ignore tokens already safe
+        if BoardConstants.is_home_column_position(pos) or pos < 0:
+            continue
         if pos <= landing:
             forward = landing - pos
         else:
             forward = (GameConstants.MAIN_BOARD_SIZE - pos) + landing
-        if 1 <= forward <= 6:
-            return True
-    return False
+        if 1 <= forward <= GameConstants.DICE_MAX:
+            threats += 1
+    return threats
 
 
 @dataclass
@@ -56,38 +76,50 @@ class KillerStrategy(Strategy):
 
     # --- Public API ---
     def decide(self, game_context: Dict) -> int:
+        """Choose a token to move.
+
+        Revised priority:
+          1. Finish moves
+          2. High-value captures (scored with positional baseline)
+          3. Predictive aggression (future capture setup)
+          4. Exit home (board presence)
+          5. Risky advancement (if better than safest alternatives)
+          6. Highest remaining strategic value
+        """
         moves = self._get_valid_moves(game_context)
         if not moves:
             return 0
 
-        # 1. Immediate captures
+        # 1. Immediate finish (always take finishing over routine captures)
+        finish_moves = [m for m in moves if m["move_type"] == "finish"]
+        if finish_moves:
+            best_finish = max(finish_moves, key=lambda m: m["strategic_value"])
+            return best_finish["token_id"]
+
+        # 2. Capture (scored with integrated positional + tactical factors)
         capture_choice = self._choose_capture(moves, game_context)
         if capture_choice is not None:
             return capture_choice
 
-        # 2. Predictive aggression (position for future capture)
+        # 3. Predictive aggression (set up future captures)
         predictive_choice = self._choose_predictive(moves, game_context)
         if predictive_choice is not None:
             return predictive_choice
-
-        # 3. Finish if possible (still valuable)
-        finish_move = self._get_move_by_type(moves, "finish")
-        if finish_move:
-            return finish_move["token_id"]
 
         # 4. Exit home to increase board presence
         exit_move = self._get_move_by_type(moves, "exit_home")
         if exit_move:
             return exit_move["token_id"]
 
-        # 5. Risky aggressive advancement
+        # 5. Risky aggressive advancement (prefer the best risky move if it beats best safe by margin)
         risky_moves = self._get_risky_moves(moves)
-        if risky_moves:
-            best_risky = self._get_highest_value_move(risky_moves)
-            if best_risky:
-                return best_risky["token_id"]
+        safe_moves = self._get_safe_moves(moves)
+        best_risky = self._get_highest_value_move(risky_moves) if risky_moves else None
+        best_safe = self._get_highest_value_move(safe_moves) if safe_moves else None
+        if best_risky and (not best_safe or best_risky["strategic_value"] > best_safe["strategic_value"] + 5):
+            return best_risky["token_id"]
 
-        # 6. Fallback: highest strategic value overall
+        # 6. Fallback highest overall value
         best_move = self._get_highest_value_move(moves)
         return best_move["token_id"] if best_move else 0
 
@@ -124,13 +156,17 @@ class KillerStrategy(Strategy):
         max_finished: int,
         entries: Dict[str, int],
     ) -> Tuple[float, Dict[str, float]]:
-        base = StrategyConstants.CAPTURE_BONUS
+        # Start from the underlying positional value rather than discarding it.
+        base_positional = mv.get("strategic_value", 0.0)
+        base_capture = StrategyConstants.CAPTURE_BONUS
         captured = mv.get("captured_tokens", [])
         capture_count = len(captured)
-        score = base + 2 * capture_count  # slight multi-capture bump
+        multi_bonus = 2 * capture_count
+        score = base_positional + base_capture + multi_bonus
         details = {
-            "base": base,
-            "multi": 2 * capture_count,
+            "positional": base_positional,
+            "base_capture": base_capture,
+            "multi": multi_bonus,
             "progress": 0.0,
             "threat": 0.0,
             "chain": 0.0,
@@ -144,10 +180,11 @@ class KillerStrategy(Strategy):
         progress_component = 0.0
         for ct in captured:
             opp_color = ct["player_color"]
-            remaining = _distance_to_finish(mv["target_position"], entries[opp_color])
-            progress_component += (
-                (60 - remaining) * StrategyConstants.KILLER_PROGRESS_WEIGHT * 0.01
-            )
+            remaining = _steps_to_finish(mv["target_position"], entries[opp_color])
+            # Progress fraction (0..1 roughly) over ring+home length baseline
+            baseline_total = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+            progress_frac = max(0.0, 1.0 - (remaining / baseline_total))
+            progress_component += progress_frac * StrategyConstants.KILLER_PROGRESS_WEIGHT
         details["progress"] = progress_component
         score += progress_component
 
@@ -177,8 +214,11 @@ class KillerStrategy(Strategy):
             score += block_bonus
 
         # Recapture risk
-        if _estimate_recap_risk(mv["target_position"], opponent_positions):
-            penalty = StrategyConstants.KILLER_RECAPTURE_PENALTY
+        threat_count = _count_recap_threats(mv["target_position"], opponent_positions)
+        if threat_count:
+            # Scale penalty by number of threats, soft-capped.
+            scaled = min(threat_count, 3) / 3.0  # 0..1
+            penalty = StrategyConstants.KILLER_RECAPTURE_PENALTY * scaled
             details["risk_penalty"] = -penalty
             score -= penalty
 
