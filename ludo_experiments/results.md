@@ -33,27 +33,29 @@
 
 ---
 
-### 3. Scripted AI Benchmark (No RL / PPO)
+### 3. Scripted AI Benchmark (Updated)
 
-Standalone heuristic strategies head‑to‑head (480 games total, mixed fours). Win Rate % = Wins / Games.
+Final tournament standings after refactor (mixed fours; 660 games aggregate per strategy). Win Rate % = Wins / Games.
 
 | Rank | Strategy          | Wins | Games | Win Rate % | Avg Turns | Medal |
 |------|-------------------|------|-------|-----------:|----------:|:------|
-| 1    | BALANCED          | 176  | 480   | 36.7       | 124.5     | 🥇 |
-| 2    | PROBABILISTIC_V2  | 163  | 480   | 34.0       | 125.9     | 🥈 |
-| 3    | HYBRID_PROB       | 154  | 480   | 32.1       | 126.8     | 🥉 |
-| 4    | PROBABILISTIC_V3  | 152  | 480   | 31.7       | 126.6     |  |
-| 5    | PROBABILISTIC     | 151  | 480   | 31.5       | 128.0     |  |
-| 6    | DEFENSIVE         | 144  | 480   | 30.0       | 115.9     |  |
-| 7    | CAUTIOUS          | 138  | 480   | 28.7       | 116.9     |  |
-| 8    | WINNER            | 135  | 480   | 28.1       | 115.9     |  |
-| 9    | OPTIMIST          | 41   | 480   | 8.5        | 127.2     |  |
-| 10   | RANDOM            | 38   | 480   | 7.9        | 113.7     |  |
-| 11   | KILLER            | 24   | 480   | 5.0        | 131.7     |  |
+| 1    | CAUTIOUS          | 216  | 660   | 32.7       | 124.8     | 🥇 |
+| 2    | BALANCED          | 215  | 660   | 32.6       | 122.9     | 🥈 |
+| 3    | KILLER            | 202  | 660   | 30.6       | 123.6     | 🥉 |
+| 4    | PROBABILISTIC     | 202  | 660   | 30.6       | 122.6     |  |
+| 5    | PROBABILISTIC_V3  | 200  | 660   | 30.3       | 123.4     |  |
+| 6    | HYBRID_PROB       | 200  | 660   | 30.3       | 125.5     |  |
+| 7    | PROBABILISTIC_V2  | 194  | 660   | 29.4       | 123.4     |  |
+| 8    | WINNER            | 184  | 660   | 27.9       | 115.2     |  |
+| 9    | DEFENSIVE         | 167  | 660   | 25.3       | 113.8     |  |
+| 10   | WEIGHTED_RANDOM   | 75   | 660   | 11.4       | 117.0     |  |
+| 11   | OPTIMIST          | 63   | 660   | 9.5        | 127.6     |  |
+| 12   | RANDOM            | 62   | 660   | 9.4        | 113.6     |  |
 
-Key Notes:
-* Balanced leads—moderate risk handling beating more complex probabilistic variants.
-* Probabilistic_V2 outperforms other probabilistic versions; Hybrid needs tuning to surpass it.
-* Killer over-indexes on captures (very low finish conversion efficiency).
-* Defensive / Cautious cluster mid-table with faster average turns (earlier game resolutions, often not their wins).
-* Optimist aggression not translating to finishes; high average turns suggests stalled conversions.
+Key Notes (Updated):
+* Cautious climbs to #1 post threat unification; exploits volatile opponents though still loses narrowly to Balanced head‑to‑head.
+* Balanced retains near‑top efficiency with slightly faster average turns than Cautious.
+* Killer reformed: major jump in win rate after safer capture logic.
+* Probabilistic variants now tightly clustered (30–30.6%), differentiation reduced—tuning opportunity.
+* Defensive / Winner show low average turns but reduced conversion—over-conservative filtering suspected.
+* Optimist still underperforming; aggression not converting to finishes—needs adaptive risk modulation.
