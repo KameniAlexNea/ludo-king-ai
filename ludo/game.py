@@ -138,22 +138,21 @@ class LudoGame:
         old_position = token.position
         target_position = token.get_target_position(dice_value, player.start_position)
 
-        # Check if the target position is valid
+        if target_position == -1:  # HOME_POSITION sentinel for invalid
+            return {"success": False, "error": "Invalid target position"}
+
+        # Validate board occupancy / capture
         can_move, tokens_to_capture = self.board.can_move_to_position(
             token, target_position
         )
-
         if not can_move:
             return {"success": False, "error": "Invalid move - position blocked"}
 
-        # Execute the move
+        # Apply board side-effects (captures & relocation) first
         captured_tokens = self.board.execute_move(token, old_position, target_position)
 
-        # Update token state
-        success = token.move(dice_value, player.start_position)
-
-        if not success:
-            return {"success": False, "error": "Move execution failed"}
+        # Now commit token internal state without recomputation
+        token.commit_move(target_position, player.start_position)
 
         # Create move result
         move_result = {

@@ -6,7 +6,8 @@ Each player has a color and controls 4 tokens.
 from enum import Enum
 from typing import Dict, List
 
-from .constants import BoardConstants, StrategyConstants
+from .constants import BoardConstants, GameConstants, StrategyConstants
+from .strategies.base import Strategy
 from .token import Token, TokenState
 
 
@@ -24,7 +25,7 @@ class Player:
     Represents a player in the Ludo game.
     """
 
-    def __init__(self, color: PlayerColor, player_id: int, strategy=None):
+    def __init__(self, color: PlayerColor, player_id: int, strategy: Strategy = None):
         """
         Initialize a player with their color and 4 tokens.
 
@@ -36,7 +37,7 @@ class Player:
         self.color = color
         self.player_id = player_id
         self.tokens: List[Token] = []
-        self.strategy = strategy
+        self.strategy: Strategy = strategy
 
         # Create 4 tokens for this player
         for i in range(4):
@@ -152,6 +153,10 @@ class Player:
                     dice_value, self.start_position
                 )
 
+                strategic_value, _components = self._calculate_strategic_value(
+                    token, dice_value, target_position
+                )
+
                 move_info = {
                     "token_id": token.token_id,
                     "current_position": token.position,
@@ -160,9 +165,8 @@ class Player:
                     "move_type": self._get_move_type(token, dice_value),
                     "is_safe_move": self._is_safe_move(token, target_position),
                     "captures_opponent": False,  # Will be calculated by board
-                    "strategic_value": self._calculate_strategic_value(
-                        token, dice_value
-                    ),
+                    "strategic_value": strategic_value,
+                    "strategic_components": _components,
                 }
 
                 possible_moves.append(move_info)
@@ -171,50 +175,117 @@ class Player:
 
     def _get_move_type(self, token: Token, dice_value: int) -> str:
         """Determine the type of move being made."""
-        if token.is_in_home() and dice_value == 6:
+        from .constants import GameConstants  # local import to avoid cycles
+
+        if token.is_in_home() and dice_value == GameConstants.EXIT_HOME_ROLL:
             return "exit_home"
-        elif token.is_in_home_column():
+        if token.is_in_home_column():
             target = token.get_target_position(dice_value, self.start_position)
-            if target == 57:
+            if target == GameConstants.FINISH_POSITION:
                 return "finish"
             return "advance_home_column"
-        else:
-            return "advance_main_board"
+        return "advance_main_board"
 
     def _is_safe_move(self, token: Token, target_position: int) -> bool:
         """Check if the target position is a safe square."""
         return BoardConstants.is_safe_position(target_position, self.color.value)
 
-    def _calculate_strategic_value(self, token: Token, dice_value: int) -> float:
-        """
-        Calculate a strategic value for a move (simplified version).
-        Higher values indicate better moves.
-        """
-        value = 0.0
+    def _calculate_strategic_value(
+        self, token: Token, dice_value: int, target_position: int | None = None
+    ) -> tuple[float, Dict[str, float]]:
+        """Enhanced heuristic with component breakdown.
 
-        # Finishing a token is very valuable
+        Components implemented per requested improvements:
+          1. Exit home bonus
+          2. Home column depth scaling & finish value
+          3. Forward progress weight
+          4. Distance-to-finish acceleration
+          5. Safety bonus (landing on safe square)
+          6. Vulnerability penalty (simple heuristic: landing square unsafe & within
+             typical opponent reach window => penalty)
+
+        Returns summed value and component dict for later analysis.
+        """
+        if target_position is None:
+            target_position = token.get_target_position(dice_value, self.start_position)
+
+        components: Dict[str, float] = {
+            "exit_home": 0.0,
+            "finish": 0.0,
+            "home_column_depth": 0.0,
+            "forward_progress": 0.0,
+            "acceleration": 0.0,
+            "safety": 0.0,
+            "vulnerability_penalty": 0.0,
+        }
+
+        # 1 & 2: Home column / finish logic
         if token.is_in_home_column():
-            target = token.get_target_position(dice_value, self.start_position)
-            if target == 105:  # Updated finish position
-                value += (
-                    StrategyConstants.FINISH_TOKEN_VALUE
-                )  # Finishing is highest priority
+            if target_position == GameConstants.FINISH_POSITION:
+                components["finish"] = StrategyConstants.FINISH_TOKEN_VALUE
             else:
-                value += (
-                    StrategyConstants.HOME_COLUMN_ADVANCE_VALUE
-                )  # Moving in home column is good
-
-        # Exiting home is valuable when you roll a 6
-        elif token.is_in_home() and dice_value == 6:
-            value += StrategyConstants.EXIT_HOME_VALUE
-
-        # Moving active tokens forward
+                depth = target_position - GameConstants.HOME_COLUMN_START  # 0..5
+                max_depth = GameConstants.HOME_COLUMN_SIZE - 1
+                depth_ratio = depth / max_depth if max_depth > 0 else 0
+                base = StrategyConstants.HOME_COLUMN_ADVANCE_VALUE
+                components["home_column_depth"] = base * (
+                    1 + depth_ratio * StrategyConstants.HOME_COLUMN_DEPTH_MULTIPLIER
+                )
+        elif token.is_in_home() and dice_value == GameConstants.EXIT_HOME_ROLL:
+            # 1: Exit home
+            components["exit_home"] = StrategyConstants.EXIT_HOME_VALUE
         elif token.is_active():
-            value += dice_value  # Further movement is generally better
+            # 3: Forward progress
+            components["forward_progress"] = (
+                dice_value * StrategyConstants.FORWARD_PROGRESS_WEIGHT
+            )
+            # 4: Acceleration (closer to finish yields more)
+            steps_remaining = self._estimate_steps_to_finish(token.position)
+            # Heuristic: fewer remaining steps => larger bonus
+            # Convert to pseudo remaining advantage (higher when closer)
+            advantage = max(0, 60 - steps_remaining)  # 60 is rough total path+home
+            components["acceleration"] = (
+                advantage * StrategyConstants.ACCELERATION_WEIGHT
+            )
 
-        return value
+        # 5: Safety bonus for landing square
+        if BoardConstants.is_safe_position(target_position, self.color.value):
+            components["safety"] = StrategyConstants.SAFETY_BONUS
 
-    def set_strategy(self, strategy):
+        # 6: Vulnerability penalty (simple placeholder): if not safe and token is active
+        # and not entering home column and not finishing, apply penalty.
+        if (
+            not BoardConstants.is_safe_position(target_position, self.color.value)
+            and not BoardConstants.is_home_column_position(target_position)
+            and token.is_active()
+        ):
+            components[
+                "vulnerability_penalty"
+            ] = -StrategyConstants.VULNERABILITY_PENALTY_WEIGHT
+
+        total = sum(components.values())
+        return total, components
+
+    def _estimate_steps_to_finish(self, position: int) -> int:
+        """Rough heuristic of remaining steps to finish from a main-board position.
+
+        Not exact path math; adequate for acceleration heuristic.
+        """
+        # If already in home column or finished we don't normally call here, guard anyway
+        if BoardConstants.is_home_column_position(position):
+            # Remaining within column
+            return GameConstants.FINISH_POSITION - position
+
+        # Path: distance to home entry + home column size
+        # Find this player's home entry square
+        entry = BoardConstants.HOME_COLUMN_ENTRIES[self.color.value]
+        if position <= entry:
+            to_entry = entry - position
+        else:
+            to_entry = (GameConstants.MAIN_BOARD_SIZE - position) + entry
+        return to_entry + GameConstants.HOME_COLUMN_SIZE
+
+    def set_strategy(self, strategy: Strategy):
         """
         Set the strategy for this player.
 

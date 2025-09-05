@@ -149,7 +149,7 @@ class Board:
             Tuple[bool, List[Token]]: (can_move, tokens_to_capture)
         """
         tokens_at_target = self.get_tokens_at_position(target_position)
-        tokens_to_capture = []
+        tokens_to_capture: List[Token] = []
 
         # No tokens at target position
         if not tokens_at_target:
@@ -181,14 +181,27 @@ class Board:
         ]
 
         if same_color_tokens:
-            # Can stack with own tokens
+            # Can stack with own tokens. If opponents present too, decide capture rule below.
             if opponent_tokens:
-                # Can capture opponents when landing with own tokens
-                tokens_to_capture = opponent_tokens
+                # If opponent stack size >=2, it's protected (cannot capture a block)
+                opponent_stack_counts = {}
+                for ot in opponent_tokens:
+                    opponent_stack_counts.setdefault(ot.player_color, 0)
+                    opponent_stack_counts[ot.player_color] += 1
+                protected = any(count >= 2 for count in opponent_stack_counts.values())
+                if not protected:
+                    tokens_to_capture = opponent_tokens
             return True, tokens_to_capture
 
         if opponent_tokens:
-            # Can capture all opponent tokens at this position
+            # Single-opponent or mixed-color stack capture logic
+            opponent_stack_counts = {}
+            for ot in opponent_tokens:
+                opponent_stack_counts.setdefault(ot.player_color, 0)
+                opponent_stack_counts[ot.player_color] += 1
+            # If ANY color has >=2 tokens here, square is blocked from capture
+            if any(count >= 2 for count in opponent_stack_counts.values()):
+                return False, []
             tokens_to_capture = opponent_tokens
             return True, tokens_to_capture
 

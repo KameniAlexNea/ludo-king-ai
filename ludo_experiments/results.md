@@ -30,3 +30,32 @@
 3. Late‑game shaping: small bonus for finishing final token sooner to reduce stall turns.
 4. Masked sampling temperature (eval option) to probe robustness vs greedy policy overfit.
 5. Phase metrics: break down win rate & capture ratio for early (≤50 turns) vs late (>50) segments.
+
+---
+
+### 3. Scripted AI Benchmark (Updated)
+
+Final tournament standings after refactor (mixed fours; 660 games aggregate per strategy). Win Rate % = Wins / Games.
+
+| Rank | Strategy          | Wins | Games | Win Rate % | Avg Turns | Medal |
+|------|-------------------|------|-------|-----------:|----------:|:------|
+| 1    | CAUTIOUS          | 216  | 660   | 32.7       | 124.8     | 🥇 |
+| 2    | BALANCED          | 215  | 660   | 32.6       | 122.9     | 🥈 |
+| 3    | KILLER            | 202  | 660   | 30.6       | 123.6     | 🥉 |
+| 4    | PROBABILISTIC     | 202  | 660   | 30.6       | 122.6     |  |
+| 5    | PROBABILISTIC_V3  | 200  | 660   | 30.3       | 123.4     |  |
+| 6    | HYBRID_PROB       | 200  | 660   | 30.3       | 125.5     |  |
+| 7    | PROBABILISTIC_V2  | 194  | 660   | 29.4       | 123.4     |  |
+| 8    | WINNER            | 184  | 660   | 27.9       | 115.2     |  |
+| 9    | DEFENSIVE         | 167  | 660   | 25.3       | 113.8     |  |
+| 10   | WEIGHTED_RANDOM   | 75   | 660   | 11.4       | 117.0     |  |
+| 11   | OPTIMIST          | 63   | 660   | 9.5        | 127.6     |  |
+| 12   | RANDOM            | 62   | 660   | 9.4        | 113.6     |  |
+
+Key Notes (Updated):
+* Cautious climbs to #1 post threat unification; exploits volatile opponents though still loses narrowly to Balanced head‑to‑head.
+* Balanced retains near‑top efficiency with slightly faster average turns than Cautious.
+* Killer reformed: major jump in win rate after safer capture logic.
+* Probabilistic variants now tightly clustered (30–30.6%), differentiation reduced—tuning opportunity.
+* Defensive / Winner show low average turns but reduced conversion—over-conservative filtering suspected.
+* Optimist still underperforming; aggression not converting to finishes—needs adaptive risk modulation.
