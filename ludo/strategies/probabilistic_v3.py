@@ -43,7 +43,7 @@ from typing import Dict, List, Optional, Sequence
 
 from ..constants import BoardConstants, GameConstants
 from .base import Strategy
-from .utils import get_opponent_main_positions, get_my_main_positions
+from .utils import get_my_main_positions, get_opponent_main_positions
 
 MoveDict = Dict[str, object]
 

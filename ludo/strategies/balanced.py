@@ -6,13 +6,13 @@ and cautious (avoid needless risk when ahead). Dynamic weights shift based on
 relative progress and late-game pressure.
 """
 
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Set, Tuple
 
 from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
 from .utils import (
-    NO_THREAT_DISTANCE,
     LARGE_THREAT_COUNT,
+    NO_THREAT_DISTANCE,
     compute_threats_for_moves,
     get_my_main_positions,
 )
@@ -41,8 +41,7 @@ class BalancedStrategy(Strategy):
         opp_max_ratio = self._max_opponent_progress_ratio(game_context)
 
         behind = (
-            my_ratio + StrategyConstants.BALANCED_RISK_TOLERANCE_MARGIN
-            < opp_max_ratio
+            my_ratio + StrategyConstants.BALANCED_RISK_TOLERANCE_MARGIN < opp_max_ratio
         )
         ahead = my_ratio > (
             opp_max_ratio + StrategyConstants.BALANCED_RISK_TOLERANCE_MARGIN
@@ -80,17 +79,13 @@ class BalancedStrategy(Strategy):
         # When clearly ahead, require the capture landing square to be safe.
         capture_choice = self._choose_capture(moves, threat_map, aggressive=behind)
         if capture_choice is not None:
-            cap_move = next(
-                (m for m in moves if m["token_id"] == capture_choice), None
-            )
+            cap_move = next((m for m in moves if m["token_id"] == capture_choice), None)
             if cap_move is not None:
                 if not (ahead and not cap_move.get("is_safe_move")):
                     return capture_choice
 
         # Priority 4: Maintain/create protective blocks while progressing
-        block_moves = self._block_positive_moves(
-            moves, block_positions, my_positions
-        )
+        block_moves = self._block_positive_moves(moves, block_positions, my_positions)
         if block_moves:
             pick = self._select_weighted(block_moves, threat_map, ahead)
             if pick is not None:
@@ -110,9 +105,7 @@ class BalancedStrategy(Strategy):
                 return exit_move["token_id"]
 
         # Priority 7: Future capture positioning (when neither ahead nor severely threatened)
-        future_pos = self._future_capture_positioning(
-            moves, threat_map, game_context
-        )
+        future_pos = self._future_capture_positioning(moves, threat_map, game_context)
         if future_pos is not None:
             return future_pos
 
@@ -137,7 +130,9 @@ class BalancedStrategy(Strategy):
                         occ[t["position"]] = occ.get(t["position"], 0) + 1
         return [pos for pos, c in occ.items() if c >= 2]
 
-    def _block_positive_moves(self, moves: List[Dict], blocks: List[int], my_positions: Set[int]) -> List[Dict]:
+    def _block_positive_moves(
+        self, moves: List[Dict], blocks: List[int], my_positions: Set[int]
+    ) -> List[Dict]:
         """Prefer moves that create or maintain stacks, avoid breaking existing blocks.
 
         - If moving from a block (src in blocks) and destination does not land on own token,
@@ -226,7 +221,9 @@ class BalancedStrategy(Strategy):
         best = max(scored, key=lambda x: x[0])[1]
         return best["token_id"]
 
-    def _estimate_future_capture_potential(self, position: int, rng: int, ctx: Dict) -> float:
+    def _estimate_future_capture_potential(
+        self, position: int, rng: int, ctx: Dict
+    ) -> float:
         """Estimate capture potential based on actual opponent proximity within rng ahead."""
         color = ctx["current_situation"]["player_color"]
         opponent_positions = [
@@ -234,7 +231,8 @@ class BalancedStrategy(Strategy):
             for p in ctx.get("players", [])
             if p["color"] != color
             for t in p["tokens"]
-            if t["position"] >= 0 and not BoardConstants.is_home_column_position(t["position"])
+            if t["position"] >= 0
+            and not BoardConstants.is_home_column_position(t["position"])
         ]
         if not opponent_positions:
             return 0.0
@@ -305,11 +303,15 @@ class BalancedStrategy(Strategy):
         for p in ctx.get("players", []):
             if p.get("color") != current_color:
                 continue
-            finished = p.get("finished_tokens", ctx.get("player_state", {}).get("finished_tokens", 0))
+            finished = p.get(
+                "finished_tokens", ctx.get("player_state", {}).get("finished_tokens", 0)
+            )
             for t in p.get("tokens", []):
                 pos = t.get("position", -1)
                 if BoardConstants.is_home_column_position(pos):
-                    home_depth_sum += (pos - GameConstants.HOME_COLUMN_START) / GameConstants.HOME_COLUMN_SIZE
+                    home_depth_sum += (
+                        pos - GameConstants.HOME_COLUMN_START
+                    ) / GameConstants.HOME_COLUMN_SIZE
             break
         return (finished + home_depth_sum) / GameConstants.TOKENS_PER_PLAYER
 
@@ -324,7 +326,9 @@ class BalancedStrategy(Strategy):
             for t in p.get("tokens", []):
                 pos = t.get("position", -1)
                 if BoardConstants.is_home_column_position(pos):
-                    home_depth_sum += (pos - GameConstants.HOME_COLUMN_START) / GameConstants.HOME_COLUMN_SIZE
+                    home_depth_sum += (
+                        pos - GameConstants.HOME_COLUMN_START
+                    ) / GameConstants.HOME_COLUMN_SIZE
             ratio = (finished + home_depth_sum) / GameConstants.TOKENS_PER_PLAYER
             if ratio > best:
                 best = ratio

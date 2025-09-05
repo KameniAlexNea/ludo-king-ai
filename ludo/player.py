@@ -7,8 +7,8 @@ from enum import Enum
 from typing import Dict, List
 
 from .constants import BoardConstants, GameConstants, StrategyConstants
-from .token import Token, TokenState
 from .strategies.base import Strategy
+from .token import Token, TokenState
 
 
 class PlayerColor(Enum):
@@ -25,7 +25,7 @@ class Player:
     Represents a player in the Ludo game.
     """
 
-    def __init__(self, color: PlayerColor, player_id: int, strategy: Strategy=None):
+    def __init__(self, color: PlayerColor, player_id: int, strategy: Strategy = None):
         """
         Initialize a player with their color and 4 tokens.
 

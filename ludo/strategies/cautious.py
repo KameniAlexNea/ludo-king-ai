@@ -5,13 +5,13 @@ exiting home unless required, and slightly relaxes rules only when falling
 behind late game.
 """
 
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Set
 
-from ..constants import BoardConstants, GameConstants, StrategyConstants
+from ..constants import BoardConstants, StrategyConstants
 from .base import Strategy
 from .utils import (
-    NO_THREAT_DISTANCE,
     LARGE_THREAT_COUNT,
+    NO_THREAT_DISTANCE,
     compute_threats_for_moves,
     get_my_main_positions,
 )
@@ -127,8 +127,12 @@ class CautiousStrategy(Strategy):
         # 7. Last resort: any move with minimal exposure
         moves.sort(
             key=lambda m: (
-                threat_info.get(m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))[0],
-                threat_info.get(m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))[1],
+                threat_info.get(
+                    m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE)
+                )[0],
+                threat_info.get(
+                    m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE)
+                )[1],
                 -int(self._creates_block(m, my_main_positions)),
                 -m["strategic_value"],
             )
@@ -140,7 +144,9 @@ class CautiousStrategy(Strategy):
     def _creates_block(self, move: Dict, my_positions: Set[int]) -> bool:
         """Check if move lands on own token to form a protective block on main board."""
         landing = move.get("target_position", -2)
-        return landing in my_positions and not BoardConstants.is_home_column_position(landing)
+        return landing in my_positions and not BoardConstants.is_home_column_position(
+            landing
+        )
 
     def _get_urgency_level(self, ctx: Dict) -> str:
         """Classify urgency based on finished-token deficit and phase.
@@ -150,7 +156,9 @@ class CautiousStrategy(Strategy):
         player_state = ctx.get("player_state", {})
         my_finished = player_state.get("finished_tokens", 0)
         opponents = ctx.get("opponents", [])
-        max_opp_finished = max((o.get("tokens_finished", 0) for o in opponents), default=0)
+        max_opp_finished = max(
+            (o.get("tokens_finished", 0) for o in opponents), default=0
+        )
         deficit = max_opp_finished - my_finished
 
         if max_opp_finished >= 3 and my_finished <= 1:

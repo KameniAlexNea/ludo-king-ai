@@ -12,8 +12,8 @@ from typing import Dict, List, Tuple
 from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
 from .utils import (
-    NO_THREAT_DISTANCE,
     LARGE_THREAT_COUNT,
+    NO_THREAT_DISTANCE,
     compute_threats_for_moves,
     get_my_main_positions,
 )
@@ -38,8 +38,12 @@ class DefensiveStrategy(Strategy):
         active = player_state.get("active_tokens", 0)
         opponents = game_context.get("opponents", [])
 
-        leading_finished = max((o.get("tokens_finished", 0) for o in opponents), default=0)
-        pressure = leading_finished >= StrategyConstants.DEFENSIVE_EXIT_PRESSURE_THRESHOLD
+        leading_finished = max(
+            (o.get("tokens_finished", 0) for o in opponents), default=0
+        )
+        pressure = (
+            leading_finished >= StrategyConstants.DEFENSIVE_EXIT_PRESSURE_THRESHOLD
+        )
 
         threat_map = compute_threats_for_moves(moves, game_context)
         block_positions = self._own_block_positions(game_context)
@@ -110,12 +114,12 @@ class DefensiveStrategy(Strategy):
         # 8. Fallback: minimal threat then highest strategic value
         moves.sort(
             key=lambda m: (
-                threat_map.get(
-                    m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE)
-                )[0],
-                threat_map.get(
-                    m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE)
-                )[1],
+                threat_map.get(m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))[
+                    0
+                ],
+                threat_map.get(m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))[
+                    1
+                ],
                 -m.get("strategic_value", 0),
             )
         )
@@ -156,7 +160,9 @@ class DefensiveStrategy(Strategy):
             src = mv.get("current_position")
             dst = mv["target_position"]
             from_block = (src in blocks) if src is not None else False
-            creates_stack = dst in my_positions and not BoardConstants.is_home_column_position(dst)
+            creates_stack = (
+                dst in my_positions and not BoardConstants.is_home_column_position(dst)
+            )
             lands_on_block = dst in blocks
             # Avoid breaking a block unless we're re-forming/keeping one
             if from_block and not (creates_stack or lands_on_block):
@@ -224,8 +230,12 @@ class DefensiveStrategy(Strategy):
         ordered = sorted(
             moves,
             key=lambda m: (
-                threat_map.get(m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))[0],
-                threat_map.get(m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))[1],
+                threat_map.get(m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))[
+                    0
+                ],
+                threat_map.get(m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))[
+                    1
+                ],
                 -m.get("strategic_value", 0),
             ),
         )

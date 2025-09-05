@@ -16,11 +16,7 @@ from typing import Dict, List, Tuple
 
 from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
-from .utils import (
-    get_opponent_main_positions,
-    is_safe_or_home,
-    forward_distance,
-)
+from .utils import forward_distance, get_opponent_main_positions, is_safe_or_home
 
 
 def _steps_to_finish(position: int, entry: int) -> int:
@@ -40,6 +36,7 @@ def _steps_to_finish(position: int, entry: int) -> int:
         return GameConstants.FINISH_POSITION - position
     forward = (entry - position) % GameConstants.MAIN_BOARD_SIZE
     return forward + GameConstants.HOME_COLUMN_SIZE
+
 
 def _count_recap_threats(landing: int, opponent_tokens: List[int]) -> int:
     """Count opponent tokens that could recapture within 1..6 forward steps.
@@ -119,7 +116,10 @@ class KillerStrategy(Strategy):
         safe_moves = self._get_safe_moves(moves)
         best_risky = self._get_highest_value_move(risky_moves) if risky_moves else None
         best_safe = self._get_highest_value_move(safe_moves) if safe_moves else None
-        if best_risky and (not best_safe or best_risky["strategic_value"] > best_safe["strategic_value"] + 5):
+        if best_risky and (
+            not best_safe
+            or best_risky["strategic_value"] > best_safe["strategic_value"] + 5
+        ):
             return best_risky["token_id"]
 
         # 6. Fallback highest overall value
@@ -183,9 +183,13 @@ class KillerStrategy(Strategy):
             opp_color = ct["player_color"]
             remaining = _steps_to_finish(mv["target_position"], entries[opp_color])
             # Progress fraction (0..1 roughly) over ring+home length baseline
-            baseline_total = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+            baseline_total = (
+                GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+            )
             progress_frac = max(0.0, 1.0 - (remaining / baseline_total))
-            progress_component += progress_frac * StrategyConstants.KILLER_PROGRESS_WEIGHT
+            progress_component += (
+                progress_frac * StrategyConstants.KILLER_PROGRESS_WEIGHT
+            )
         details["progress"] = progress_component
         score += progress_component
 
@@ -233,7 +237,7 @@ class KillerStrategy(Strategy):
 
     # --- Predictive positioning ---
     def _choose_predictive(self, moves: List[Dict], ctx: Dict) -> int | None:
-        current_color = ctx["current_situation"]["player_color"]
+        # current_color = ctx["current_situation"]["player_color"]
         opponent_positions = get_opponent_main_positions(ctx)
 
         scored: List[Tuple[float, Dict]] = []

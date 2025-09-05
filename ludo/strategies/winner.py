@@ -9,7 +9,6 @@ from typing import Dict, List, Tuple
 
 from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
-from .utils import is_safe_or_home
 
 
 class WinnerStrategy(Strategy):

@@ -4,7 +4,7 @@ Provides common constants, distance utilities, safe-position checks, and
 threat computation to eliminate duplication across strategies.
 """
 
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Set, Tuple
 
 from ..constants import BoardConstants, GameConstants
 
@@ -17,7 +17,9 @@ LARGE_THREAT_COUNT: int = (
 
 def is_safe_or_home(pos: int) -> bool:
     """True if position is a star/start safe square or within any home column."""
-    return BoardConstants.is_home_column_position(pos) or BoardConstants.is_safe_position(pos)
+    return BoardConstants.is_home_column_position(
+        pos
+    ) or BoardConstants.is_safe_position(pos)
 
 
 def forward_distance(start: int, end: int) -> int:

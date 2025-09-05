@@ -8,11 +8,7 @@ from typing import Dict, List, Tuple
 
 from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
-from .utils import (
-    get_opponent_main_positions,
-    forward_distance,
-    is_safe_or_home,
-)
+from .utils import forward_distance, get_opponent_main_positions, is_safe_or_home
 
 
 class OptimistStrategy(Strategy):
@@ -43,7 +39,9 @@ class OptimistStrategy(Strategy):
         ]
         if high_value_risky:
             # Prefer moves with future capture potential
-            best = self._choose_future_capture(high_value_risky, game_context, fallback=True)
+            best = self._choose_future_capture(
+                high_value_risky, game_context, fallback=True
+            )
             if best:
                 return best["token_id"]
 
@@ -67,14 +65,18 @@ class OptimistStrategy(Strategy):
 
         # 5. Secondary risky moves (any remaining risky)
         if risky_moves:
-            best_secondary = self._choose_future_capture(risky_moves, game_context, fallback=True)
+            best_secondary = self._choose_future_capture(
+                risky_moves, game_context, fallback=True
+            )
             if best_secondary:
                 return best_secondary["token_id"]
 
         # 6. High-upside future capture positioning among safe moves
         safe_moves = self._get_safe_moves(moves)
         if safe_moves:
-            future_pos = self._choose_future_capture(safe_moves, game_context, fallback=False)
+            future_pos = self._choose_future_capture(
+                safe_moves, game_context, fallback=False
+            )
             if future_pos:
                 return future_pos["token_id"]
 
@@ -110,7 +112,9 @@ class OptimistStrategy(Strategy):
         return max(scored, key=lambda x: x[0])[1]
 
     # --- Future capture positioning ---
-    def _choose_future_capture(self, moves: List[Dict], ctx: Dict, fallback: bool) -> Dict | None:
+    def _choose_future_capture(
+        self, moves: List[Dict], ctx: Dict, fallback: bool
+    ) -> Dict | None:
         scored: List[Tuple[float, Dict]] = []
         for mv in moves:
             landing = mv["target_position"]
