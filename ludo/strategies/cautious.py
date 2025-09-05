@@ -8,13 +8,13 @@ behind late game.
 from typing import Dict, List, Tuple, Set
 
 from ..constants import BoardConstants, GameConstants, StrategyConstants
-
-# Derived sentinels (avoid magic numbers):
-# - No-threat distance uses one less than home column start (100-1=99 by default)
-# - Large threat count upper-bounds any realistic attacker count
-NO_THREAT_DISTANCE = GameConstants.HOME_COLUMN_START - 1
-LARGE_THREAT_COUNT = GameConstants.MAX_PLAYERS * GameConstants.TOKENS_PER_PLAYER + 1
 from .base import Strategy
+from .utils import (
+    NO_THREAT_DISTANCE,
+    LARGE_THREAT_COUNT,
+    compute_threats_for_moves,
+    get_my_main_positions,
+)
 
 
 class CautiousStrategy(Strategy):
@@ -45,8 +45,7 @@ class CautiousStrategy(Strategy):
         late_game = leading_opponent_finished >= 3 and finished <= 1
         # Refined urgency detection (normal, behind, desperate, late_game)
         urgency = self._get_urgency_level(game_context)
-
-        threat_info = self._annotate_threats(moves, game_context)
+        threat_info = compute_threats_for_moves(moves, game_context)
 
         # 1. Finish
         finish_move = self._get_move_by_type(moves, "finish")
@@ -68,7 +67,7 @@ class CautiousStrategy(Strategy):
             else StrategyConstants.CAUTIOUS_MAX_ALLOWED_THREAT
         )
         safe_moves = self._get_safe_moves(moves)
-        my_main_positions = self._get_my_mainboard_positions(game_context)
+        my_main_positions = get_my_main_positions(game_context)
 
         capture_moves = self._get_capture_moves(moves)
         safe_captures: List[Dict] = [
@@ -136,64 +135,7 @@ class CautiousStrategy(Strategy):
         )
         return moves[0]["token_id"]
 
-    # --- Threat Analysis ---
-    def _annotate_threats(
-        self, moves: List[Dict], ctx: Dict
-    ) -> Dict[int, Tuple[int, int]]:
-        """Return mapping token_id -> (threat_count, min_forward_distance).
-
-        threat_count: number of opponent tokens that could reach landing square in 1..6.
-        min_forward_distance: smallest such distance (large if none found).
-        """
-        current_color = ctx["current_situation"]["player_color"]
-        opponent_positions = [
-            t["position"]
-            for p in ctx.get("players", [])
-            if p["color"] != current_color
-            for t in p["tokens"]
-            if t["position"] >= 0
-            and not BoardConstants.is_home_column_position(t["position"])
-        ]
-        result: Dict[int, Tuple[int, int]] = {}
-        for mv in moves:
-            landing = mv["target_position"]
-            # Treat home column and safe squares (stars, starts) as immune
-            if BoardConstants.is_home_column_position(landing) or BoardConstants.is_safe_position(landing):
-                result[mv["token_id"]] = (0, NO_THREAT_DISTANCE)
-                continue
-            # Treat forming a block (two of our tokens) as immune
-            my_positions = self._get_my_mainboard_positions(ctx)
-            if landing in my_positions:
-                result[mv["token_id"]] = (0, NO_THREAT_DISTANCE)
-                continue
-            threat_count = 0
-            min_dist = NO_THREAT_DISTANCE
-            for opp in opponent_positions:
-                # forward distance from opponent to landing with wrap-around
-                if opp <= landing:
-                    dist = landing - opp
-                else:
-                    dist = (GameConstants.MAIN_BOARD_SIZE - opp) + landing
-                if 1 <= dist <= 6:
-                    threat_count += 1
-                    if dist < min_dist:
-                        min_dist = dist
-            result[mv["token_id"]] = (threat_count, min_dist)
-        return result
-
     # --- Helpers ---
-    def _get_my_mainboard_positions(self, ctx: Dict) -> Set[int]:
-        """Return set of this player's main-board positions (non-home, >=0)."""
-        current_color = ctx.get("current_situation", {}).get("player_color")
-        positions: Set[int] = set()
-        for p in ctx.get("players", []):
-            if p.get("color") != current_color:
-                continue
-            for t in p.get("tokens", []):
-                pos = t.get("position", -1)
-                if pos >= 0 and not BoardConstants.is_home_column_position(pos):
-                    positions.add(pos)
-        return positions
 
     def _creates_block(self, move: Dict, my_positions: Set[int]) -> bool:
         """Check if move lands on own token to form a protective block on main board."""

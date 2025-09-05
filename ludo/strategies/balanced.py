@@ -10,10 +10,12 @@ from typing import Dict, List, Tuple, Set
 
 from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
-
-# Derived sentinels (avoid magic numbers)
-NO_THREAT_DISTANCE = GameConstants.HOME_COLUMN_START - 1
-LARGE_THREAT_COUNT = GameConstants.MAX_PLAYERS * GameConstants.TOKENS_PER_PLAYER + 1
+from .utils import (
+    NO_THREAT_DISTANCE,
+    LARGE_THREAT_COUNT,
+    compute_threats_for_moves,
+    get_my_main_positions,
+)
 
 
 class BalancedStrategy(Strategy):
@@ -50,9 +52,9 @@ class BalancedStrategy(Strategy):
             / GameConstants.TOKENS_PER_PLAYER
         )
 
-        threat_map = self._compute_threats(moves, game_context)
+        threat_map = compute_threats_for_moves(moves, game_context)
         block_positions = self._own_block_positions(game_context)
-        my_positions = self._my_main_positions(game_context)
+        my_positions = get_my_main_positions(game_context)
 
         # Priority 1: Immediate finish
         finish_move = self._get_move_by_type(moves, "finish")
@@ -118,44 +120,7 @@ class BalancedStrategy(Strategy):
         best = self._get_highest_value_move(moves)
         return best["token_id"] if best else 0
 
-    # --- Threat Analysis (reuse concept from cautious/defensive) ---
-    def _compute_threats(
-        self, moves: List[Dict], ctx: Dict
-    ) -> Dict[int, Tuple[int, int]]:
-        color = ctx["current_situation"]["player_color"]
-        opponent_positions = [
-            t["position"]
-            for p in ctx.get("players", [])
-            if p["color"] != color
-            for t in p["tokens"]
-            if t["position"] >= 0
-            and not BoardConstants.is_home_column_position(t["position"])
-        ]
-        res: Dict[int, Tuple[int, int]] = {}
-        for mv in moves:
-            land = mv["target_position"]
-            if BoardConstants.is_home_column_position(land) or BoardConstants.is_safe_position(land):
-                res[mv["token_id"]] = (0, NO_THREAT_DISTANCE)
-                continue
-            cnt = 0
-            mind = NO_THREAT_DISTANCE
-            # Treat forming a stack with own token as immune
-            my_positions = self._my_main_positions(ctx)
-            if land in my_positions:
-                res[mv["token_id"]] = (0, NO_THREAT_DISTANCE)
-                continue
-            for opp in opponent_positions:
-                # forward distance from opponent to landing square
-                if opp <= land:
-                    dist = land - opp
-                else:
-                    dist = (GameConstants.MAIN_BOARD_SIZE - opp) + land
-                if 1 <= dist <= 6:
-                    cnt += 1
-                    if dist < mind:
-                        mind = dist
-            res[mv["token_id"]] = (cnt, mind)
-        return res
+    # --- Threat Analysis: now via shared utils (compute_threats_for_moves) ---
 
     # --- Blocks ---
     def _own_block_positions(self, ctx: Dict) -> List[int]:
@@ -365,16 +330,6 @@ class BalancedStrategy(Strategy):
                 best = ratio
         return best
 
-    def _my_main_positions(self, ctx: Dict) -> Set[int]:
-        color = ctx["current_situation"]["player_color"]
-        positions: Set[int] = set()
-        for p in ctx.get("players", []):
-            if p["color"] != color:
-                continue
-            for t in p.get("tokens", []):
-                pos = t.get("position", -1)
-                if pos >= 0 and not BoardConstants.is_home_column_position(pos):
-                    positions.add(pos)
-        return positions
+    # _my_main_positions removed: use get_my_main_positions from utils
 
     # removed _my_main_positions_from_moves: use context-based positions instead for accuracy

@@ -16,6 +16,11 @@ from typing import Dict, List, Tuple
 
 from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
+from .utils import (
+    get_opponent_main_positions,
+    is_safe_or_home,
+    forward_distance,
+)
 
 
 def _steps_to_finish(position: int, entry: int) -> int:
@@ -45,15 +50,12 @@ def _count_recap_threats(landing: int, opponent_tokens: List[int]) -> int:
     """
     threats = 0
     # Landing on home column or safe squares is immune
-    if BoardConstants.is_home_column_position(landing) or BoardConstants.is_safe_position(landing):
+    if is_safe_or_home(landing):
         return 0
     for pos in opponent_tokens:
         if BoardConstants.is_home_column_position(pos) or pos < 0:
             continue
-        if pos <= landing:
-            forward = landing - pos
-        else:
-            forward = (GameConstants.MAIN_BOARD_SIZE - pos) + landing
+        forward = forward_distance(pos, landing)
         if 1 <= forward <= GameConstants.DICE_MAX:
             threats += 1
     return threats
@@ -131,9 +133,7 @@ class KillerStrategy(Strategy):
             return None
 
         current_color = ctx["current_situation"]["player_color"]
-        opponent_positions = self._collect_opponent_positions(
-            ctx, exclude_color=current_color
-        )
+        opponent_positions = get_opponent_main_positions(ctx)
         finished_map, max_finished = self._opponent_finished_map(ctx, current_color)
         entries = BoardConstants.HOME_COLUMN_ENTRIES
 
@@ -234,24 +234,18 @@ class KillerStrategy(Strategy):
     # --- Predictive positioning ---
     def _choose_predictive(self, moves: List[Dict], ctx: Dict) -> int | None:
         current_color = ctx["current_situation"]["player_color"]
-        opponent_positions = [
-            t["position"]
-            for p in ctx.get("players", [])
-            if p["color"] != current_color
-            for t in p["tokens"]
-            if t["position"] >= 0
-            and not BoardConstants.is_home_column_position(t["position"])
-        ]
+        opponent_positions = get_opponent_main_positions(ctx)
 
         scored: List[Tuple[float, Dict]] = []
         for mv in moves:
             if mv["move_type"] == "finish":
                 continue  # finishing handled later
             landing = mv["target_position"]
-            if BoardConstants.is_home_column_position(landing) or BoardConstants.is_safe_position(landing):
+            if is_safe_or_home(landing):
                 continue
             count = 0
             for opp_pos in opponent_positions:
+                # distance forward from our landing to opponent (opponent ahead)
                 if landing <= opp_pos:
                     dist = opp_pos - landing
                 else:
@@ -273,15 +267,7 @@ class KillerStrategy(Strategy):
         return best["token_id"]
 
     # --- Utility ---
-    @staticmethod
-    def _collect_opponent_positions(ctx: Dict, exclude_color: str) -> List[int]:
-        positions = []
-        for p in ctx.get("players", []):
-            if p["color"] == exclude_color:
-                continue
-            for t in p["tokens"]:
-                positions.append(t["position"])
-        return positions
+    # Removed _collect_opponent_positions in favor of utils.get_opponent_main_positions
 
     @staticmethod
     def _opponent_finished_map(

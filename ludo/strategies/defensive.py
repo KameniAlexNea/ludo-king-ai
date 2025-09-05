@@ -11,6 +11,12 @@ from typing import Dict, List, Tuple
 
 from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
+from .utils import (
+    NO_THREAT_DISTANCE,
+    LARGE_THREAT_COUNT,
+    compute_threats_for_moves,
+    get_my_main_positions,
+)
 
 
 class DefensiveStrategy(Strategy):
@@ -35,9 +41,9 @@ class DefensiveStrategy(Strategy):
         leading_finished = max((o.get("tokens_finished", 0) for o in opponents), default=0)
         pressure = leading_finished >= StrategyConstants.DEFENSIVE_EXIT_PRESSURE_THRESHOLD
 
-        threat_map = self._compute_threats(moves, game_context)
+        threat_map = compute_threats_for_moves(moves, game_context)
         block_positions = self._own_block_positions(game_context)
-        my_positions = self._my_main_positions(game_context)
+        my_positions = get_my_main_positions(game_context)
 
         # 1. Finish immediately
         fin = self._get_move_by_type(moves, "finish")
@@ -116,51 +122,7 @@ class DefensiveStrategy(Strategy):
         return moves[0]["token_id"]
 
     # --- Threat & Safety Helpers ---
-    def _compute_threats(
-        self, moves: List[Dict], ctx: Dict
-    ) -> Dict[int, Tuple[int, int]]:
-        """Return mapping token_id -> (threat_count, min_forward_distance).
-
-        - Uses forward distance from each opponent position to the landing square.
-        - Applies immunity for home column, safe squares (stars/start), and
-          landing that creates/maintains a stack on own token.
-        - Replaces magic sentinels with derived constants.
-        """
-        current_color = ctx["current_situation"]["player_color"]
-        opponent_positions = [
-            t["position"]
-            for p in ctx.get("players", [])
-            if p["color"] != current_color
-            for t in p["tokens"]
-            if t["position"] >= 0
-            and not BoardConstants.is_home_column_position(t["position"])
-        ]
-        my_positions = self._my_main_positions(ctx)
-        res: Dict[int, Tuple[int, int]] = {}
-        for mv in moves:
-            landing = mv["target_position"]
-            # immunity on home column and safe/star/start squares
-            if BoardConstants.is_home_column_position(landing) or BoardConstants.is_safe_position(landing):
-                res[mv["token_id"]] = (0, NO_THREAT_DISTANCE)
-                continue
-            # immunity if landing creates/keeps a stack on own token (block)
-            if landing in my_positions:
-                res[mv["token_id"]] = (0, NO_THREAT_DISTANCE)
-                continue
-            threat_count = 0
-            min_dist = NO_THREAT_DISTANCE
-            for opp in opponent_positions:
-                # forward distance from opponent to our landing (wrap-around)
-                if opp <= landing:
-                    dist = landing - opp
-                else:
-                    dist = (GameConstants.MAIN_BOARD_SIZE - opp) + landing
-                if 1 <= dist <= 6:
-                    threat_count += 1
-                    if dist < min_dist:
-                        min_dist = dist
-            res[mv["token_id"]] = (threat_count, min_dist)
-        return res
+    # Threat computation now handled by utils.compute_threats_for_moves
 
     @staticmethod
     def _is_within_defensive_threat(threat_tuple: Tuple[int, int]) -> bool:
@@ -280,20 +242,4 @@ class DefensiveStrategy(Strategy):
         return to_entry + GameConstants.HOME_COLUMN_SIZE
 
     # --- Shared helpers & constants ---
-    @staticmethod
-    def _my_main_positions(ctx: Dict) -> List[int]:
-        """Own token positions on main board (exclude home column and off-board)."""
-        color = ctx["current_situation"]["player_color"]
-        positions: List[int] = []
-        for p in ctx.get("players", []):
-            if p["color"] != color:
-                continue
-            for t in p["tokens"]:
-                pos = t["position"]
-                if pos >= 0 and not BoardConstants.is_home_column_position(pos):
-                    positions.append(pos)
-        return positions
-
-# Sentinel constants derived from board geometry
-NO_THREAT_DISTANCE = GameConstants.HOME_COLUMN_START - 1
-LARGE_THREAT_COUNT = GameConstants.MAX_PLAYERS * GameConstants.TOKENS_PER_PLAYER + 1
+    # _my_main_positions removed in favor of utils.get_my_main_positions

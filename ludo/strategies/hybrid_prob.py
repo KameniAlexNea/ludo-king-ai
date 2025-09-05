@@ -24,6 +24,7 @@ from typing import Dict, List, Optional, Sequence
 
 from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
+from .utils import get_opponent_main_positions
 
 MoveDict = Dict[str, object]
 
@@ -409,9 +410,12 @@ class HybridProbStrategy(Strategy):
     def _collect_opponent_positions(
         self, game_context: Dict, current_color: str
     ) -> List[int]:
+        res = get_opponent_main_positions(game_context)
+        if res:
+            return res
         board_state = game_context.get("board", {})
         bp = board_state.get("board_positions", {})
-        res: List[int] = []
+        fallback: List[int] = []
         for k, tokens in bp.items():
             try:
                 pos = int(k)
@@ -421,8 +425,8 @@ class HybridProbStrategy(Strategy):
                 continue
             for t in tokens:
                 if t.get("player_color") != current_color:
-                    res.append(pos)
-        return res
+                    fallback.append(pos)
+        return fallback
 
     def _collect_opponent_token_progress(self, game_context: Dict) -> Dict[str, float]:
         result: Dict[str, float] = {}

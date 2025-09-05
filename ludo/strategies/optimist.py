@@ -8,6 +8,11 @@ from typing import Dict, List, Tuple
 
 from ..constants import BoardConstants, GameConstants, StrategyConstants
 from .base import Strategy
+from .utils import (
+    get_opponent_main_positions,
+    forward_distance,
+    is_safe_or_home,
+)
 
 
 class OptimistStrategy(Strategy):
@@ -136,22 +141,15 @@ class OptimistStrategy(Strategy):
         Uses forward distance wrapping around 52. Ignores opponents in home columns
         and tokens off-board (<0). Landing in home column is handled by caller.
         """
-        current_color = ctx["current_situation"]["player_color"]
-        opponent_positions = [
-            t["position"]
-            for p in ctx.get("players", [])
-            if p["color"] != current_color
-            for t in p["tokens"]
-            if t["position"] >= 0
-            and not BoardConstants.is_home_column_position(t["position"])
-        ]
+        # Use shared utils for accurate opponent scanning on main board.
+        opponent_positions = get_opponent_main_positions(ctx)
         count = 0
         for opp in opponent_positions:
-            # distance forward from landing to opponent
-            if landing <= opp:
-                dist = opp - landing
-            else:
-                dist = (GameConstants.MAIN_BOARD_SIZE - landing) + opp
+            # Skip opponents that are safe or in home columns (cannot be captured)
+            if is_safe_or_home(opp):
+                continue
+            # distance forward from landing to opponent using shared helper
+            dist = forward_distance(landing, opp)
             if 1 <= dist <= 6:
                 count += 1
         return count
