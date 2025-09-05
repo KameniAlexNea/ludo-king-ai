@@ -38,7 +38,7 @@ class OptimistStrategy(Strategy):
         ]
         if high_value_risky:
             # Prefer moves with future capture potential
-            best = self._choose_future_capture(high_value_risky, fallback=True)
+            best = self._choose_future_capture(high_value_risky, game_context, fallback=True)
             if best:
                 return best["token_id"]
 
@@ -62,14 +62,14 @@ class OptimistStrategy(Strategy):
 
         # 5. Secondary risky moves (any remaining risky)
         if risky_moves:
-            best_secondary = self._choose_future_capture(risky_moves, fallback=True)
+            best_secondary = self._choose_future_capture(risky_moves, game_context, fallback=True)
             if best_secondary:
                 return best_secondary["token_id"]
 
         # 6. High-upside future capture positioning among safe moves
         safe_moves = self._get_safe_moves(moves)
         if safe_moves:
-            future_pos = self._choose_future_capture(safe_moves, fallback=False)
+            future_pos = self._choose_future_capture(safe_moves, game_context, fallback=False)
             if future_pos:
                 return future_pos["token_id"]
 
@@ -105,13 +105,13 @@ class OptimistStrategy(Strategy):
         return max(scored, key=lambda x: x[0])[1]
 
     # --- Future capture positioning ---
-    def _choose_future_capture(self, moves: List[Dict], fallback: bool) -> Dict | None:
+    def _choose_future_capture(self, moves: List[Dict], ctx: Dict, fallback: bool) -> Dict | None:
         scored: List[Tuple[float, Dict]] = []
         for mv in moves:
             landing = mv["target_position"]
             if BoardConstants.is_home_column_position(landing):
                 continue
-            potential = self._count_targets_in_range(landing, mv)
+            potential = self._count_targets_in_range(landing, ctx)
             if potential == 0 and not fallback:
                 continue
             risk_reward = (
@@ -130,19 +130,31 @@ class OptimistStrategy(Strategy):
         return max(scored, key=lambda x: x[0])[1]
 
     # --- Utilities ---
-    def _count_targets_in_range(self, landing: int, mv: Dict) -> int:
-        # Opponents derived from context passed later via closure? We adjust to fetch global state from decide context; here we rely on mv not containing it; simplified approach: return strategic-based proxy.
-        # For now, approximate using strategic value already containing progress and potential capture heuristics: treat high value as exposing new engagement zone.
-        # TODO: Could integrate real opponent positions similar to killer strategy.
-        # Heuristic: riskier + higher value implies more potential targets.
-        val = mv.get("strategic_value", 0)
-        if val >= 20:
-            return 3
-        if val >= 15:
-            return 2
-        if val >= 10:
-            return 1
-        return 0
+    def _count_targets_in_range(self, landing: int, ctx: Dict) -> int:
+        """Count opponents ahead within 1..6 squares from landing (main path only).
+
+        Uses forward distance wrapping around 52. Ignores opponents in home columns
+        and tokens off-board (<0). Landing in home column is handled by caller.
+        """
+        current_color = ctx["current_situation"]["player_color"]
+        opponent_positions = [
+            t["position"]
+            for p in ctx.get("players", [])
+            if p["color"] != current_color
+            for t in p["tokens"]
+            if t["position"] >= 0
+            and not BoardConstants.is_home_column_position(t["position"])
+        ]
+        count = 0
+        for opp in opponent_positions:
+            # distance forward from landing to opponent
+            if landing <= opp:
+                dist = opp - landing
+            else:
+                dist = (GameConstants.MAIN_BOARD_SIZE - landing) + opp
+            if 1 <= dist <= 6:
+                count += 1
+        return count
 
     @staticmethod
     def _distance_to_finish_proxy(position: int, entry: int) -> int:

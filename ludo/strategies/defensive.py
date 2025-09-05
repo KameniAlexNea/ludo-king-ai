@@ -29,19 +29,15 @@ class DefensiveStrategy(Strategy):
             return 0
 
         player_state = game_context.get("player_state", {})
-        # finished = player_state.get("finished_tokens", 0)
         active = player_state.get("active_tokens", 0)
         opponents = game_context.get("opponents", [])
 
-        leading_finished = max(
-            (o.get("tokens_finished", 0) for o in opponents), default=0
-        )
-        pressure = (
-            leading_finished >= StrategyConstants.DEFENSIVE_EXIT_PRESSURE_THRESHOLD
-        )
+        leading_finished = max((o.get("tokens_finished", 0) for o in opponents), default=0)
+        pressure = leading_finished >= StrategyConstants.DEFENSIVE_EXIT_PRESSURE_THRESHOLD
 
         threat_map = self._compute_threats(moves, game_context)
         block_positions = self._own_block_positions(game_context)
+        my_positions = self._my_main_positions(game_context)
 
         # 1. Finish immediately
         fin = self._get_move_by_type(moves, "finish")
@@ -53,15 +49,14 @@ class DefensiveStrategy(Strategy):
         if home_moves:
             best_home = max(
                 home_moves,
-                key=lambda m: (
-                    m["target_position"],
-                    m.get("strategic_value", 0),
-                ),
+                key=lambda m: (m["target_position"], m.get("strategic_value", 0)),
             )
             return best_home["token_id"]
 
         # 3. Maintain or form blocks via safe moves
-        block_preserving = self._filter_block_friendly(moves, block_positions)
+        block_preserving = self._filter_block_friendly(
+            moves, block_positions, my_positions
+        )
         if block_preserving:
             choice = self._select_safest(block_preserving, threat_map)
             if choice is not None:
@@ -93,7 +88,7 @@ class DefensiveStrategy(Strategy):
         if active < StrategyConstants.DEFENSIVE_MIN_ACTIVE_TOKENS or pressure:
             exit_move = self._get_move_by_type(moves, "exit_home")
             if exit_move and self._is_within_defensive_threat(
-                threat_map.get(exit_move["token_id"], (0, 99))
+                threat_map.get(exit_move["token_id"], (0, NO_THREAT_DISTANCE))
             ):
                 return exit_move["token_id"]
 
@@ -109,8 +104,12 @@ class DefensiveStrategy(Strategy):
         # 8. Fallback: minimal threat then highest strategic value
         moves.sort(
             key=lambda m: (
-                threat_map.get(m["token_id"], (99, 99))[0],
-                threat_map.get(m["token_id"], (99, 99))[1],
+                threat_map.get(
+                    m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE)
+                )[0],
+                threat_map.get(
+                    m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE)
+                )[1],
                 -m.get("strategic_value", 0),
             )
         )
@@ -120,6 +119,13 @@ class DefensiveStrategy(Strategy):
     def _compute_threats(
         self, moves: List[Dict], ctx: Dict
     ) -> Dict[int, Tuple[int, int]]:
+        """Return mapping token_id -> (threat_count, min_forward_distance).
+
+        - Uses forward distance from each opponent position to the landing square.
+        - Applies immunity for home column, safe squares (stars/start), and
+          landing that creates/maintains a stack on own token.
+        - Replaces magic sentinels with derived constants.
+        """
         current_color = ctx["current_situation"]["player_color"]
         opponent_positions = [
             t["position"]
@@ -129,19 +135,26 @@ class DefensiveStrategy(Strategy):
             if t["position"] >= 0
             and not BoardConstants.is_home_column_position(t["position"])
         ]
+        my_positions = self._my_main_positions(ctx)
         res: Dict[int, Tuple[int, int]] = {}
         for mv in moves:
             landing = mv["target_position"]
-            if BoardConstants.is_home_column_position(landing):
-                res[mv["token_id"]] = (0, 99)
+            # immunity on home column and safe/star/start squares
+            if BoardConstants.is_home_column_position(landing) or BoardConstants.is_safe_position(landing):
+                res[mv["token_id"]] = (0, NO_THREAT_DISTANCE)
+                continue
+            # immunity if landing creates/keeps a stack on own token (block)
+            if landing in my_positions:
+                res[mv["token_id"]] = (0, NO_THREAT_DISTANCE)
                 continue
             threat_count = 0
-            min_dist = 99
+            min_dist = NO_THREAT_DISTANCE
             for opp in opponent_positions:
-                if landing <= opp:
-                    dist = opp - landing
+                # forward distance from opponent to our landing (wrap-around)
+                if opp <= landing:
+                    dist = landing - opp
                 else:
-                    dist = (GameConstants.MAIN_BOARD_SIZE - landing) + opp
+                    dist = (GameConstants.MAIN_BOARD_SIZE - opp) + landing
                 if 1 <= dist <= 6:
                     threat_count += 1
                     if dist < min_dist:
@@ -174,24 +187,21 @@ class DefensiveStrategy(Strategy):
         return [pos for pos, cnt in positions.items() if cnt >= 2]
 
     def _filter_block_friendly(
-        self, moves: List[Dict], blocks: List[int]
+        self, moves: List[Dict], blocks: List[int], my_positions: List[int]
     ) -> List[Dict]:
         out: List[Dict] = []
         for mv in moves:
             src = mv.get("current_position")
             dst = mv["target_position"]
-            source_block = src in blocks if src is not None else False
-            dest_block = dst in blocks
-            # keep moves that maintain a block or create a new one
-            if (
-                dest_block
-                or (source_block and dest_block)
-                or (source_block and dest_block)
-            ):
+            from_block = (src in blocks) if src is not None else False
+            creates_stack = dst in my_positions and not BoardConstants.is_home_column_position(dst)
+            lands_on_block = dst in blocks
+            # Avoid breaking a block unless we're re-forming/keeping one
+            if from_block and not (creates_stack or lands_on_block):
+                continue
+            # Prefer moves that create or land on blocks
+            if creates_stack or lands_on_block:
                 out.append(mv)
-            else:
-                # forming new block? we need to know if another of our tokens already at dst via context; simplified: rely on is_safe_move and treat stacked after move as safe (engine prevents capture)
-                pass
         return out
 
     # --- Capture Logic ---
@@ -205,7 +215,9 @@ class DefensiveStrategy(Strategy):
         scored: List[Tuple[float, Dict]] = []
         for mv in safe_caps:
             tid = mv["token_id"]
-            threat_ok = self._is_within_defensive_threat(threat_map.get(tid, (99, 99)))
+            threat_ok = self._is_within_defensive_threat(
+                threat_map.get(tid, (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))
+            )
             if not threat_ok:
                 continue
             progress_value = 0.0
@@ -229,8 +241,8 @@ class DefensiveStrategy(Strategy):
         self, mv: Dict, threat_map: Dict[int, Tuple[int, int]], ctx: Dict
     ) -> bool:
         tid = mv["token_id"]
-        current_threat = threat_map.get(tid, (99, 99))
-        # simulate current position threat by crafting pseudo move? Simpler: treat any move to home column as improvement
+        current_threat = threat_map.get(tid, (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))
+        # Simpler: treat any move to home column as improvement
         if BoardConstants.is_home_column_position(mv["target_position"]):
             return True
         # If landing reduces threat count or increases min distance, consider improvement
@@ -250,8 +262,8 @@ class DefensiveStrategy(Strategy):
         ordered = sorted(
             moves,
             key=lambda m: (
-                threat_map.get(m["token_id"], (99, 99))[0],
-                threat_map.get(m["token_id"], (99, 99))[1],
+                threat_map.get(m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))[0],
+                threat_map.get(m["token_id"], (LARGE_THREAT_COUNT, NO_THREAT_DISTANCE))[1],
                 -m.get("strategic_value", 0),
             ),
         )
@@ -266,3 +278,22 @@ class DefensiveStrategy(Strategy):
         else:
             to_entry = (GameConstants.MAIN_BOARD_SIZE - position) + entry
         return to_entry + GameConstants.HOME_COLUMN_SIZE
+
+    # --- Shared helpers & constants ---
+    @staticmethod
+    def _my_main_positions(ctx: Dict) -> List[int]:
+        """Own token positions on main board (exclude home column and off-board)."""
+        color = ctx["current_situation"]["player_color"]
+        positions: List[int] = []
+        for p in ctx.get("players", []):
+            if p["color"] != color:
+                continue
+            for t in p["tokens"]:
+                pos = t["position"]
+                if pos >= 0 and not BoardConstants.is_home_column_position(pos):
+                    positions.append(pos)
+        return positions
+
+# Sentinel constants derived from board geometry
+NO_THREAT_DISTANCE = GameConstants.HOME_COLUMN_START - 1
+LARGE_THREAT_COUNT = GameConstants.MAX_PLAYERS * GameConstants.TOKENS_PER_PLAYER + 1

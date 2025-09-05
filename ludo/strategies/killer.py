@@ -44,7 +44,8 @@ def _count_recap_threats(landing: int, opponent_tokens: List[int]) -> int:
     coarse boolean.
     """
     threats = 0
-    if BoardConstants.is_home_column_position(landing):
+    # Landing on home column or safe squares is immune
+    if BoardConstants.is_home_column_position(landing) or BoardConstants.is_safe_position(landing):
         return 0
     for pos in opponent_tokens:
         if BoardConstants.is_home_column_position(pos) or pos < 0:
@@ -247,7 +248,7 @@ class KillerStrategy(Strategy):
             if mv["move_type"] == "finish":
                 continue  # finishing handled later
             landing = mv["target_position"]
-            if BoardConstants.is_home_column_position(landing):
+            if BoardConstants.is_home_column_position(landing) or BoardConstants.is_safe_position(landing):
                 continue
             count = 0
             for opp_pos in opponent_positions:
