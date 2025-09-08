@@ -151,4 +151,6 @@ class EnvConfig:
     opponent_curriculum: OpponentCurriculumConfig = field(
         default_factory=OpponentCurriculumConfig
     )
+    # If True, environment will randomize the agent's seat/color each reset
+    randomize_agent_seat: bool = True
     seed: Optional[int] = None

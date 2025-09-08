@@ -123,7 +123,9 @@ class LudoGymEnv(gym.Env):
             self.rng.seed(seed)
             random.seed(seed)
 
-        # 1) Pick opponents (curriculum-aware)
+        # 1) Possibly randomize agent color and pick opponents (curriculum-aware)
+        if getattr(self.cfg, "randomize_agent_seat", False):
+            self.agent_color = self.rng.choice(list(Colors.ALL_COLORS))
         self.opponent_strategies = self._select_opponents()
 
         # 2) Rebuild game and helper objects, attach strategies
@@ -231,7 +233,8 @@ class LudoGymEnv(gym.Env):
 
         # Refresh helpers to bind to the new game instance
         self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
-        self.obs_builder.game = self.game
+        # Rebuild observation builder if agent color changed
+        self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
         self.reward_calc.game = self.game
         self.opp_simulator = OpponentSimulator(
             self.cfg,
