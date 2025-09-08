@@ -77,12 +77,68 @@ class OpponentsConfig:
             "balanced",
             "defensive",
             "random",
+            "weighted_random",
             "cautious",
-            # "probabilistic",
-            # "probabilistic_v2",
-            # "probabilistic_v3",
+            "probabilistic",
+            "probabilistic_v2",
+            "probabilistic_v3",
+            "hybrid_prob",
         ]
     )
+
+
+@dataclass
+class OpponentCurriculumConfig:
+    """Config for progressive opponent sampling during training.
+
+    The curriculum exposes tiers of opponents and episode thresholds. Sampling pool
+    grows cumulatively with each phase: at phase i, we sample from the union of
+    tiers[0..i]. This yields an easy->hard progression without needing global
+    training step coordination across vectorized environments.
+    """
+
+    enabled: bool = True
+    # Use training progress (0..1) instead of local episode count
+    use_progress: bool = True
+    # Tiers ordered from easiest to hardest (names must match StrategyFactory keys)
+    tiers: List[List[str]] = field(
+        default_factory=lambda: [
+            # Easy starters (weak baselines)
+            ["random", "weighted_random", "optimist"],
+            # Moderate heuristics
+            ["winner", "defensive"],
+            # Strong mid-tier probabilistic/aggro
+            ["killer", "hybrid_prob", "probabilistic_v2", "probabilistic_v3"],
+            # Top strategies
+            ["balanced", "probabilistic", "cautious"],
+        ]
+    )
+    # Episode thresholds per environment instance; must be same length as tiers.
+    # Example fallback when progress is not provided: first 100 episodes -> tier 0; 100-300 -> include tier 1; 300-600 -> include tier 2; 600+ -> include tier 3
+    phase_episodes: List[int] = field(default_factory=lambda: [100, 300, 600, 10_000])
+    # Progress boundaries (fractions 0..1). Phases determined by where progress falls:
+    # [0, b0) -> phase 0; [b0, b1) -> phase 1; [b1, b2) -> phase 2; [b2, 1] -> phase 3
+    progress_boundaries: List[float] = field(default_factory=lambda: [0.2, 0.5, 0.9])
+
+    # Difficulty buckets for controlled sampling
+    poor: List[str] = field(default_factory=lambda: [
+        "random",
+        "weighted_random",
+        "optimist",
+    ])
+    medium: List[str] = field(default_factory=lambda: [
+        "winner",
+        "defensive",
+        "hybrid_prob",
+        "probabilistic_v2",
+    ])
+    hard: List[str] = field(default_factory=lambda: [
+        "balanced",
+        "probabilistic",
+        "cautious",
+        "killer",
+        "probabilistic_v3",
+    ])
 
 
 @dataclass
@@ -92,4 +148,7 @@ class EnvConfig:
     reward_cfg: RewardConfig = field(default_factory=RewardConfig)
     obs_cfg: ObservationConfig = field(default_factory=ObservationConfig)
     opponents: OpponentsConfig = field(default_factory=OpponentsConfig)
+    opponent_curriculum: OpponentCurriculumConfig = field(
+        default_factory=OpponentCurriculumConfig
+    )
     seed: Optional[int] = None

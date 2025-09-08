@@ -93,6 +93,8 @@ class LudoGymEnv(gym.Env):
         self._pending_agent_dice = None
         self._pending_valid_moves = []
         self._last_progress_sum = 0.0
+        # Training progress hint (0..1). Can be set by trainer via set_attr during training.
+        self._training_progress = None
 
         # Create utilities in correct dependency order
         self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
@@ -120,43 +122,14 @@ class LudoGymEnv(gym.Env):
             self.cfg.seed = seed
             self.rng.seed(seed)
             random.seed(seed)
-        # Sample new opponent strategies for this episode
-        self.opponent_strategies = self.rng.sample(self.cfg.opponents.candidates, 3)
-        # Recreate game for clean state
-        order = [
-            PlayerColor.RED,
-            PlayerColor.GREEN,
-            PlayerColor.YELLOW,
-            PlayerColor.BLUE,
-        ]
-        self.game = LudoGame(order)
-        # IMPORTANT: Rebuild helper objects so they reference the new game instance.
-        # Previously these held stale pointers to the game created during __init__, causing
-        # observations/rewards/opponent simulation to operate on an out-of-date game state
-        # after each reset. This manifested as features like can_finish never updating when
-        # tests mutated token positions post-reset (obs_builder still saw old tokens at home).
-        self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
-        self.obs_builder.game = (
-            self.game
-        )  # safe to reuse builder instance but update pointer
-        self.reward_calc.game = self.game
-        # Recreate opponent simulator because it closes over move_utils methods
-        self.opp_simulator = OpponentSimulator(
-            self.cfg,
-            self.game,
-            self.agent_color,
-            self.move_utils._roll_dice,
-            self.move_utils._make_strategy_context,
-        )
-        # Reattach strategies - ensure different strategies for each opponent
-        non_agent_colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
-        for i, color in enumerate(non_agent_colors):
-            player = next(p for p in self.game.players if p.color.value == color)
-            strat_name = self.opponent_strategies[i]
-            try:
-                player.set_strategy(StrategyFactory.create_strategy(strat_name))
-            except Exception:
-                pass
+
+        # 1) Pick opponents (curriculum-aware)
+        self.opponent_strategies = self._select_opponents()
+
+        # 2) Rebuild game and helper objects, attach strategies
+        self._rebuild_game_and_helpers()
+
+        # 3) Initialize episode bookkeeping and first agent decision
         self.turns = 0
         self.episode_steps = 0
         self.done = False
@@ -167,16 +140,117 @@ class LudoGymEnv(gym.Env):
         self._pending_valid_moves = []
         self._last_progress_sum = self.move_utils._compute_agent_progress_sum()
 
-        # Advance until it's agent's turn (initial current_player_index is 0 so usually unnecessary)
+        # Ensure agent's turn and roll initial dice
         self.opp_simulator._ensure_agent_turn()
-        # Roll initial dice for agent decision
         self._pending_agent_dice, self._pending_valid_moves = (
             self.move_utils._roll_new_agent_dice()
         )
         obs = self.obs_builder._build_observation(self.turns, self._pending_agent_dice)
         self.last_obs = obs
-        info = {}
+
+        # Diagnostics
+        if not hasattr(self, "_episode_count"):
+            self._episode_count = 0
+        info = {
+            "episode": int(self._episode_count),
+            "opponents": list(self.opponent_strategies),
+            "progress": None if self._training_progress is None else float(self._training_progress),
+        }
+        self._episode_count += 1
         return obs, info
+
+    # ------------------------------
+    # Internal helpers (refactor)
+    # ------------------------------
+    def _select_opponents(self) -> List[str]:
+        """Select 3 opponent strategy names based on curriculum settings.
+
+        Falls back to uniform sampling from candidates if curriculum disabled
+        or misconfigured.
+        """
+        # Curriculum disabled => uniform sample
+        if not (getattr(self.cfg, "opponent_curriculum", None) and self.cfg.opponent_curriculum.enabled):
+            return self.rng.sample(self.cfg.opponents.candidates, 3)
+
+        occ = self.cfg.opponent_curriculum
+        phase_idx = self._determine_curriculum_phase()
+
+        # Filter buckets by allowed candidates
+        allowed = set(getattr(self.cfg.opponents, "candidates", []))
+
+        def sample_from(bucket: List[str], k: int) -> List[str]:
+            pool = [s for s in bucket if not allowed or s in allowed]
+            if not pool:
+                return []
+            if len(pool) < k:
+                return [self.rng.choice(pool) for _ in range(k)]
+            return self.rng.sample(pool, k)
+
+        if phase_idx == 0:
+            picks = sample_from(occ.poor, 2) + sample_from(occ.medium, 1)
+        elif phase_idx == 1:
+            picks = sample_from(occ.poor, 1) + sample_from(occ.medium, 1) + sample_from(occ.hard, 1)
+        else:
+            picks = sample_from(occ.hard, 2) + sample_from(occ.medium, 1)
+
+        if len(picks) < 3:
+            return self.rng.sample(self.cfg.opponents.candidates, 3)
+        return picks
+
+    def _determine_curriculum_phase(self) -> int:
+        """Map training progress or episode count to phase index [0..3]."""
+        occ = self.cfg.opponent_curriculum
+        # Prefer global training progress if provided
+        if occ.use_progress and self._training_progress is not None:
+            p = max(0.0, min(1.0, float(self._training_progress)))
+            b = occ.progress_boundaries
+            if p < b[0]:
+                return 0
+            if p < b[1]:
+                return 1
+            if p < b[2]:
+                return 2
+            return 3
+        # Fallback to per-env episode-based thresholds
+        if not hasattr(self, "_episode_count"):
+            self._episode_count = 0
+        for i, limit in enumerate(occ.phase_episodes):
+            if self._episode_count < limit:
+                return i
+        return len(occ.phase_episodes) - 1
+
+    def _rebuild_game_and_helpers(self) -> None:
+        """Reset game state and rewire all helper objects and opponent strategies."""
+        order = [
+            PlayerColor.RED,
+            PlayerColor.GREEN,
+            PlayerColor.YELLOW,
+            PlayerColor.BLUE,
+        ]
+        self.game = LudoGame(order)
+
+        # Refresh helpers to bind to the new game instance
+        self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
+        self.obs_builder.game = self.game
+        self.reward_calc.game = self.game
+        self.opp_simulator = OpponentSimulator(
+            self.cfg,
+            self.game,
+            self.agent_color,
+            self.move_utils._roll_dice,
+            self.move_utils._make_strategy_context,
+        )
+
+        # Attach chosen opponent strategies
+        non_agent_colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
+        for i, color in enumerate(non_agent_colors):
+            player = next(p for p in self.game.players if p.color.value == color)
+            strat_name = self.opponent_strategies[i]
+            try:
+                player.set_strategy(StrategyFactory.create_strategy(strat_name))
+            except Exception:
+                # Keep default if creation fails
+                pass
 
     def step(self, action: int):  # type: ignore[override]
         """Advance environment by one agent decision (one dice roll).
