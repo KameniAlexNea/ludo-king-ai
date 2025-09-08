@@ -33,7 +33,35 @@
 
 ---
 
-### 3. Scripted AI Benchmark (Updated)
+## 🎯 LUDO 4-PLAYER COMBINATION TOURNAMENT 🎯
+======================================================================
+Starting comprehensive all-combinations tournament...
+🎯 Tournament Configuration:
+   • Available strategies: 12
+   • 4-player combinations: 495
+   • Games per matchup: 10
+   • Max turns per game: 1000
+   • Total games to play: 4950
+🏆 4-PLAYER STRATEGIC LUDO TOURNAMENT 🏆
+======================================================================
+
+🤖 Tournament Participants:
+--------------------------------------------------
+1. KILLER: Aggressive strategy that prioritizes capturing opponents and blocking their progress
+2. WINNER: Prioritizes finishing tokens, deep home advancement and safe progression
+3. OPTIMIST: Optimistic strategy taking calculated risks, prioritizing upside and momentum
+4. DEFENSIVE: Safety-first strategy that preserves blocks, advances home depth, and allows limited safe captures
+5. BALANCED: Adaptive blend of offensive, defensive, and finishing heuristics
+6. PROBABILISTIC: Adaptive strategy using probability of capture vs. opportunity gain
+7. PROBABILISTIC_V3: Full-featured probabilistic strategy with modular risk & opportunity components
+8. PROBABILISTIC_V2: Adaptive prob strategy with multi turn risk and non linear scoring
+9. HYBRID_PROB: Hybrid probabilistic strategy blending risk horizon, progress and safety
+10. RANDOM: Baseline strategy that makes random valid moves
+11. WEIGHTED_RANDOM: Stochastic softmax sampling over strategic values with heuristics
+12. CAUTIOUS: Conservative strategy favoring safe squares, home column advancement, and minimal exposure
+
+
+### 3. Scripted AI Benchmark
 
 Final tournament standings after refactor (mixed fours; 1650 games aggregate per strategy). Win Rate % = Wins / Games.
 
