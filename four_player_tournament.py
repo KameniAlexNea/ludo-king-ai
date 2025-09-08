@@ -12,6 +12,7 @@ from itertools import combinations, combinations_with_replacement
 
 import numpy as np
 from dotenv import load_dotenv
+from loguru import logger
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
 from ludo_stats.game_state_saver import GameStateSaver
@@ -35,10 +36,9 @@ class FourPlayerTournament:
         self.tournament_seed = int(os.getenv("TOURNAMENT_SEED", 42))
         self.verbose_output = os.getenv("VERBOSE_OUTPUT", "true").lower() == "true"
 
-        # Initialize state saver
-        self.state_saver = GameStateSaver(
-            os.getenv("STATE_SAVE_DIR", "saved_states/games")
-        )
+        # Initialize state saver if SAVE_DIR is set
+        save_dir = os.getenv("SAVE_DIR")
+        self.state_saver = GameStateSaver(save_dir) if save_dir else None
 
         # Get all available strategies or use selected ones
         selected_strategies = os.getenv("SELECTED_STRATEGIES", "").strip()
@@ -70,19 +70,19 @@ class FourPlayerTournament:
         )
 
         if self.verbose_output:
-            print("🎯 Tournament Configuration:")
-            print(f"   • Available strategies: {len(self.all_strategies)}")
-            print(f"   • 4-player combinations: {len(self.strategy_combinations)}")
-            print(f"   • Games per matchup: {self.games_per_matchup}")
-            print(f"   • Max turns per game: {self.max_turns_per_game}")
-            print(
+            logger.info("🎯 Tournament Configuration:")
+            logger.info(f"   • Available strategies: {len(self.all_strategies)}")
+            logger.info(f"   • 4-player combinations: {len(self.strategy_combinations)}")
+            logger.info(f"   • Games per matchup: {self.games_per_matchup}")
+            logger.info(f"   • Max turns per game: {self.max_turns_per_game}")
+            logger.info(
                 f"   • Total games to play: {len(self.strategy_combinations) * self.games_per_matchup}"
             )
 
     def run_tournament(self):
         """Execute complete 4-player tournament."""
-        print("🏆 4-PLAYER STRATEGIC LUDO TOURNAMENT 🏆")
-        print("=" * 70)
+        logger.info("🏆 4-PLAYER STRATEGIC LUDO TOURNAMENT 🏆")
+        logger.info("=" * 70)
 
         self._display_participants()
         self._run_round_robin()
@@ -93,34 +93,34 @@ class FourPlayerTournament:
 
     def _display_participants(self):
         """Show tournament participants and their strategies."""
-        print("\n🤖 Tournament Participants:")
-        print("-" * 50)
+        logger.info("\n🤖 Tournament Participants:")
+        logger.info("-" * 50)
 
         descriptions = StrategyFactory.get_strategy_descriptions()
         for i, strategy in enumerate(self.all_strategies, 1):
-            print(f"{i}. {strategy.upper()}: {descriptions[strategy]}")
+            logger.info(f"{i}. {strategy.upper()}: {descriptions[strategy]}")
 
-        print("\n📋 Tournament Format:")
-        print(f"   • {self.games_per_matchup} games per 4-player combination")
-        print(f"   • {len(self.strategy_combinations)} unique combinations")
-        print(f"   • Maximum {self.max_turns_per_game} turns per game")
-        print("   • All combinations tournament with detailed analytics")
+        logger.info("\n📋 Tournament Format:")
+        logger.info(f"   • {self.games_per_matchup} games per 4-player combination")
+        logger.info(f"   • {len(self.strategy_combinations)} unique combinations")
+        logger.info(f"   • Maximum {self.max_turns_per_game} turns per game")
+        logger.info("   • All combinations tournament with detailed analytics")
 
     def _run_round_robin(self):
         """Run tournament with all 4-player combinations."""
-        print("\n🎮 Tournament Execution:")
-        print("=" * 70)
+        logger.info("\n🎮 Tournament Execution:")
+        logger.info("=" * 70)
 
         total_games = 0
         combination_results = []
         start_time = time.time()
 
         for combo_idx, strategy_combo in enumerate(self.strategy_combinations, 1):
-            print(
+            logger.info(
                 f"\nCombination {combo_idx}/{len(self.strategy_combinations)}: "
                 f"{' vs '.join([s.upper() for s in strategy_combo])}"
             )
-            print("-" * 60)
+            logger.info("-" * 60)
 
             combo_wins = {strategy: 0 for strategy in strategy_combo}
 
@@ -131,7 +131,7 @@ class FourPlayerTournament:
                 random.shuffle(game_strategies)
 
                 if self.verbose_output:
-                    print(
+                    logger.info(
                         f"  Game {game_num + 1}: {' → '.join([s.upper() for s in game_strategies])}"
                     )
 
@@ -169,13 +169,13 @@ class FourPlayerTournament:
             combo_summary = ", ".join(
                 [f"{s.upper()}: {wins}" for s, wins in combo_wins.items()]
             )
-            print(f"  Results: {combo_summary}")
+            logger.info(f"  Results: {combo_summary}")
             combination_results.append((strategy_combo, combo_wins))
 
         elapsed = time.time() - start_time
-        print(f"\n⏱️  Tournament completed in {elapsed:.1f} seconds")
-        print(f"📊 Total games played: {total_games}")
-        print(f"🎯 Combinations tested: {len(self.strategy_combinations)}")
+        logger.info(f"\n⏱️  Tournament completed in {elapsed:.1f} seconds")
+        logger.info(f"📊 Total games played: {total_games}")
+        logger.info(f"🎯 Combinations tested: {len(self.strategy_combinations)}")
 
         return combination_results
 
@@ -217,9 +217,10 @@ class FourPlayerTournament:
                 )
 
                 # Save the decision and outcome
-                self.state_saver.save_decision(
-                    strategy_name, context, selected_token, move_result
-                )
+                if self.state_saver:
+                    self.state_saver.save_decision(
+                        strategy_name, context, selected_token, move_result
+                    )
 
                 # Track stats
                 game_results["player_stats"][strategy_name]["moves_made"] += 1
@@ -243,7 +244,7 @@ class FourPlayerTournament:
                 if move_result.get("game_won"):
                     game_results["winner"] = current_player
                     game_results["turns_played"] = turn_count
-                    print(
+                    logger.info(
                         f"  Game {game_number}: {strategy_name.upper()} WINS! ({turn_count} turns)"
                     )
                     break
@@ -257,11 +258,12 @@ class FourPlayerTournament:
             game_results["player_stats"][strategy_name]["turns_taken"] += 1
 
         if not game_results["winner"]:
-            print(f"  Game {game_number}: DRAW (time limit reached)")
+            logger.info(f"  Game {game_number}: DRAW (time limit reached)")
             game_results["turns_played"] = turn_count
 
         # Save game states
-        self.state_saver.save_game(game_number)
+        if self.state_saver:
+            self.state_saver.save_game(game_number)
 
         return game_results
 
@@ -297,8 +299,8 @@ class FourPlayerTournament:
 
     def _display_final_results(self):
         """Display comprehensive tournament results."""
-        print("\n🏆 FINAL TOURNAMENT STANDINGS 🏆")
-        print("=" * 70)
+        logger.info("\n🏆 FINAL TOURNAMENT STANDINGS 🏆")
+        logger.info("=" * 70)
 
         # Calculate standings for all strategies that played
         standings = []
@@ -325,10 +327,10 @@ class FourPlayerTournament:
         standings.sort(key=lambda x: (x["win_rate"], x["wins"]), reverse=True)
 
         # Display standings table
-        print(
+        logger.info(
             f"{'Rank':<4} {'Strategy':<12} {'Wins':<6} {'Games':<7} {'Win Rate':<10} {'Avg Turns':<10}"
         )
-        print("-" * 65)
+        logger.info("-" * 65)
 
         for rank, entry in enumerate(standings, 1):
             medal = (
@@ -340,7 +342,7 @@ class FourPlayerTournament:
                 if rank == 3
                 else "  "
             )
-            print(
+            logger.info(
                 f"{rank:<4} {entry['strategy'].upper():<12} {entry['wins']:<6} {entry['games']:<7} "
                 f"{entry['win_rate']:<9.1f}% {entry['avg_turns']:<9.1f} {medal}"
             )
@@ -349,14 +351,14 @@ class FourPlayerTournament:
 
     def _display_detailed_analysis(self):
         """Show detailed strategic analysis."""
-        print("\n📊 DETAILED PERFORMANCE ANALYSIS 📊")
-        print("=" * 70)
+        logger.info("\n📊 DETAILED PERFORMANCE ANALYSIS 📊")
+        logger.info("=" * 70)
 
         # Performance metrics
-        print(
+        logger.info(
             f"\n{'Strategy':<12} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}"
         )
-        print("-" * 50)
+        logger.info("-" * 50)
 
         for strategy in self.all_strategies:
             if strategy in self.detailed_stats:
@@ -367,13 +369,13 @@ class FourPlayerTournament:
                     else 0
                 )
 
-                print(
+                logger.info(
                     f"{strategy.upper():<12} {stats['tokens_captured']:<10} {stats['tokens_finished']:<10} {efficiency:<11.2f}"
                 )
 
         # Head-to-head analysis (only show strategies with significant interactions)
-        print("\n🥊 HEAD-TO-HEAD ANALYSIS 🥊")
-        print("-" * 50)
+        logger.info("\n🥊 HEAD-TO-HEAD ANALYSIS 🥊")
+        logger.info("-" * 50)
 
         for strategy in self.all_strategies:
             if strategy in self.detailed_stats:
@@ -381,11 +383,11 @@ class FourPlayerTournament:
                 has_interactions = any(record["games"] > 0 for record in h2h.values())
 
                 if has_interactions:
-                    print(f"\n{strategy.upper()} vs Others:")
+                    logger.info(f"\n{strategy.upper()} vs Others:")
                     for opponent, record in h2h.items():
                         if record["games"] > 0:
                             win_rate = (record["wins"] / record["games"]) * 100
-                            print(
+                            logger.info(
                                 f"  vs {opponent.upper():<10}: {record['wins']}/{record['games']} ({win_rate:.1f}%)"
                             )
 
@@ -426,68 +428,27 @@ class FourPlayerTournament:
         return summary
 
 
-def run_strategic_analysis():
-    """Run additional strategic performance analysis."""
-    print("\n🔬 STRATEGIC BEHAVIOR ANALYSIS 🔬")
-    print("=" * 70)
-
-    strategies = StrategyFactory.get_available_strategies()
-
-    # Analyze decision patterns
-    print("\nDecision Pattern Analysis:")
-    print("-" * 40)
-
-    for strategy_name in strategies:
-        strategy = StrategyFactory.create_strategy(strategy_name)
-        print(f"\n{strategy_name.upper()}: {strategy.description}")
-
-        # Test with different scenarios
-        test_scenarios = [
-            (
-                "Aggressive",
-                {"capture_opportunities": [{"value": 8}], "safety_concerns": []},
-            ),
-            (
-                "Defensive",
-                {"capture_opportunities": [], "safety_concerns": [{"risk": 7}]},
-            ),
-            (
-                "Balanced",
-                {
-                    "capture_opportunities": [{"value": 5}],
-                    "safety_concerns": [{"risk": 4}],
-                },
-            ),
-        ]
-
-        for scenario_name, analysis in test_scenarios:
-            print(f"  {scenario_name} scenario: Strategic preference detected")
-
-
 if __name__ == "__main__":
     # Set random seed from environment
     run_game_with_seed(int(os.getenv("TOURNAMENT_SEED", 42)))
 
-    print("🎯 LUDO 4-PLAYER COMBINATION TOURNAMENT 🎯")
-    print("=" * 70)
-    print("Starting comprehensive all-combinations tournament...")
+    logger.info("🎯 LUDO 4-PLAYER COMBINATION TOURNAMENT 🎯")
+    logger.info("=" * 70)
+    logger.info("Starting comprehensive all-combinations tournament...")
 
     # Run main tournament
     tournament = FourPlayerTournament()
     summary = tournament.run_tournament()
 
-    # Additional analysis
-    run_strategic_analysis()
-
     # Final summary
-    print("\n🎯 TOURNAMENT COMPLETE! 🎯")
-    print("=" * 70)
+    logger.info("\n🎯 TOURNAMENT COMPLETE! 🎯")
+    logger.info("=" * 70)
     if summary["champion"]:
-        print(f"🏆 Champion: {summary['champion'].upper()}")
+        logger.info(f"🏆 Champion: {summary['champion'].upper()}")
     else:
-        print("🏆 No clear champion (no games completed)")
-    print(f"📊 Total Games: {summary['total_games']}")
-    print(f"🎯 Combinations Tested: {summary['combinations_tested']}")
-    print(f"🎮 Participants: {', '.join([s.upper() for s in summary['participants']])}")
-    print("\n✅ 4-Player Strategic Tournament System Ready!")
-    print("🔬 Advanced AI evaluation and comparison complete!")
+        logger.info("🏆 No clear champion (no games completed)")
+    logger.info(f"📊 Total Games: {summary['total_games']}")
+    logger.info(f"🎯 Combinations Tested: {summary['combinations_tested']}")
+    logger.info(f"🎮 Participants: {', '.join([s.upper() for s in summary['participants']])}")
+    logger.info("\n✅ 4-Player Strategic Tournament System Ready!")
+    logger.info("🔬 Advanced AI evaluation and comparison complete!")
