@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 from ..constants import BoardConstants, GameConstants
 from .base import Strategy
-from .utils import get_opponent_main_positions
+from .utils import get_opponent_main_positions_with_fallback
 
 # Utility type hint for a move dict
 MoveDict = Dict[str, object]
@@ -140,24 +140,7 @@ class ProbabilisticV2Strategy(Strategy):
         self, game_context: Dict, current_color: str
     ) -> List[int]:
         """Return list of opponent token positions on main loop 0..51."""
-        positions = get_opponent_main_positions(game_context)
-        if positions:
-            return positions
-        # Fallback to board map if utils cannot derive
-        board_state = game_context.get("board", {})
-        board_positions = board_state.get("board_positions", {})
-        fallback: List[int] = []
-        for pos_key, tokens in board_positions.items():
-            try:
-                pos = int(pos_key)
-            except Exception:
-                continue
-            if pos < 0 or pos >= GameConstants.MAIN_BOARD_SIZE:
-                continue
-            for token in tokens:
-                if token.get("player_color") != current_color:
-                    fallback.append(pos)
-        return fallback
+        return get_opponent_main_positions_with_fallback(game_context, current_color)
 
     def _collect_opponent_token_progress(self, game_context: Dict) -> Dict[str, float]:
         """Map token id to its normalized progress from 0 to 1 if info exists."""

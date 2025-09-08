@@ -122,29 +122,17 @@ class Token:
 
         if crosses_entry(current, wrapped_main_pos, home_entry):
             # Steps taken after reaching entry square determine home column depth
-            # Distance from entry to end along movement
-            if current <= home_entry:
-                steps_after_entry = new_position - home_entry
-            else:
-                # We wrapped. Distance from current to last + 1 + entry to end portion
-                distance_to_end = board_last_index - current
-                steps_after_entry = (
-                    dice_value
-                    - (distance_to_end + 1)
-                    - (home_entry)
-                    + 1  # adjust for inclusive counts
-                )
-                # Simpler approach: reconstruct by iterating
-                steps_after_entry = 0
-                steps_taken = 0
-                pos = current
-                while steps_taken < dice_value:
-                    pos = (pos + 1) % GameConstants.MAIN_BOARD_SIZE
-                    steps_taken += 1
-                    if pos == home_entry:
-                        # remaining steps go into home column
-                        steps_after_entry = dice_value - steps_taken
-                        break
+            # Use iterative approach for clarity and to avoid off-by-one errors in complex formulas
+            steps_after_entry = 0
+            steps_taken = 0
+            pos = current
+            while steps_taken < dice_value:
+                pos = (pos + 1) % GameConstants.MAIN_BOARD_SIZE
+                steps_taken += 1
+                if pos == home_entry:
+                    # remaining steps go into home column
+                    steps_after_entry = dice_value - steps_taken
+                    break
 
             target_home_index = BoardConstants.HOME_COLUMN_START + steps_after_entry
             # Cannot exceed finish

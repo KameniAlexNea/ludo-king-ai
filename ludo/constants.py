@@ -258,7 +258,6 @@ class StrategyConstants:
     WEIGHTED_RANDOM_SAFE_BONUS = 0.2
     WEIGHTED_RANDOM_RISK_THREAT_CAP = 3  # damp moves with many potential threats
     WEIGHTED_RANDOM_RISK_PENALTY = 0.5
-    WEIGHTED_RANDOM_MIN_WEIGHT = 0.05  # floor to prevent zero weight collapse
     WEIGHTED_RANDOM_MIN_WEIGHT = 1e-4
 
 
