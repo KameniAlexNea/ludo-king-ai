@@ -67,13 +67,13 @@ class Token:
             return False
 
         if self.is_in_home():
-            # Can only move out of home with a 6
-            return dice_value == 6
+            # Can only leave home with exact EXIT_HOME_ROLL
+            return dice_value == GameConstants.EXIT_HOME_ROLL
 
         if self.is_in_home_column():
-            # Must use exact count to move in home column
+            # Must not overshoot finish
             target_position = self.position + dice_value
-            return target_position <= 105  # Can't go beyond position 105 (finish)
+            return target_position <= GameConstants.FINISH_POSITION
 
         # Token is active on main board
         return True
@@ -90,39 +90,58 @@ class Token:
             int: Target position after the move
         """
         if self.is_in_home():
-            if dice_value == 6:
+            if dice_value == GameConstants.EXIT_HOME_ROLL:
                 return player_start_position
-            return -1  # Can't move
+            return GameConstants.HOME_POSITION  # Can't move
 
         if self.is_in_home_column():
             return self.position + dice_value
 
-        # Active on main board - implement wraparound logic
-        new_position = self.position + dice_value
+        # Active on main board - unified logic
+        current = self.position
+        new_position = current + dice_value
+        home_entry = BoardConstants.HOME_COLUMN_ENTRIES[self.player_color]
 
-        # Get the home entry position for this player
-        home_entry_position = BoardConstants.HOME_COLUMN_ENTRIES[self.player_color]
+        board_last_index = GameConstants.MAIN_BOARD_SIZE - 1
 
-        # Check if we should enter home column
-        if self.position <= home_entry_position < new_position:
-            # Enter home column at position 100 and advance
-            overflow = new_position - home_entry_position - 1
-            return BoardConstants.HOME_COLUMN_START + overflow
+        # Normalize potential wrap for crossing beyond last board index
+        # We need to detect crossing the home_entry square moving forward (circular path)
 
-        # Handle wraparound: after position MAIN_BOARD_SIZE-1, go to start or home
-        if new_position > GameConstants.MAIN_BOARD_SIZE - 1:
-            if (
-                self.player_color == "red"
-                and self.position <= GameConstants.MAIN_BOARD_SIZE - 1
-            ):
-                # Red enters home after main loop
-                overflow = new_position - GameConstants.MAIN_BOARD_SIZE
-                return BoardConstants.HOME_COLUMN_START + overflow
-            else:
-                # All other colors wrap around around to main board
-                return new_position - GameConstants.MAIN_BOARD_SIZE
+        def crosses_entry(start: int, end: int, entry: int) -> bool:
+            """Return True if movement from start->end (forward with wrap) crosses the entry square strictly after leaving it.
 
-        return new_position
+            Crossing means entry is in the open interval (start, end] along forward movement path of length dice_value.
+            """
+            if start <= end:  # no wrap
+                return start < entry <= end
+            # wrapped segment: (start..board_last] U [0..end]
+            return entry > start or entry <= end
+
+        # Compute wrapped main-board landing before considering home column
+        wrapped_main_pos = new_position % GameConstants.MAIN_BOARD_SIZE
+
+        if crosses_entry(current, wrapped_main_pos, home_entry):
+            # Steps taken after reaching entry square determine home column depth
+            # Use iterative approach for clarity and to avoid off-by-one errors in complex formulas
+            steps_after_entry = 0
+            steps_taken = 0
+            pos = current
+            while steps_taken < dice_value:
+                pos = (pos + 1) % GameConstants.MAIN_BOARD_SIZE
+                steps_taken += 1
+                if pos == home_entry:
+                    # remaining steps go into home column
+                    steps_after_entry = dice_value - steps_taken
+                    break
+
+            target_home_index = BoardConstants.HOME_COLUMN_START + steps_after_entry
+            # Cannot exceed finish
+            if target_home_index > GameConstants.FINISH_POSITION:
+                return GameConstants.HOME_POSITION  # invalid move (overshoot)
+            return target_home_index
+
+        # Not entering home column: land on wrapped main-board position
+        return wrapped_main_pos
 
     def move(self, dice_value: int, player_start_position: int) -> bool:
         """
@@ -140,29 +159,46 @@ class Token:
 
         target_position = self.get_target_position(dice_value, player_start_position)
 
-        if target_position == -1:
+        if target_position == GameConstants.HOME_POSITION:
             return False
-
-        # Update token state and position
-        if self.is_in_home() and dice_value == 6:
-            self.state = TokenState.ACTIVE
-            self.position = player_start_position
-        elif self.is_active():
-            if 100 <= target_position <= 105:
-                # Entering home column
-                self.state = TokenState.HOME_COLUMN
-                self.position = target_position
-                if self.position == 105:  # Reached finish
-                    self.state = TokenState.FINISHED
-            else:
-                # Normal move on main board
-                self.position = target_position
-        elif self.is_in_home_column():
-            self.position = target_position
-            if self.position == 105:  # Reached finish
-                self.state = TokenState.FINISHED
+        # Commit the already validated target movement
+        self.commit_move(target_position, player_start_position)
 
         return True
+
+    def commit_move(self, target_position: int, player_start_position: int):
+        """Commit a precomputed, validated movement to target_position.
+
+        This applies state transitions without recomputing legality. Intended
+        for use by higher-level game logic after board validation to prevent
+        duplicate target recomputation.
+        """
+        # Leaving home
+        if self.is_in_home():
+            # Only valid if target equals the player's start position
+            if target_position == player_start_position:
+                self.state = TokenState.ACTIVE
+                self.position = target_position
+            return
+
+        # From active path
+        if self.is_active():
+            if BoardConstants.is_home_column_position(target_position):
+                self.position = target_position
+                self.state = (
+                    TokenState.FINISHED
+                    if target_position == GameConstants.FINISH_POSITION
+                    else TokenState.HOME_COLUMN
+                )
+            else:
+                self.position = target_position
+            return
+
+        # From home column
+        if self.is_in_home_column():
+            self.position = target_position
+            if target_position == GameConstants.FINISH_POSITION:
+                self.state = TokenState.FINISHED
 
     def to_dict(self) -> dict:
         """Convert token to dictionary for AI consumption."""

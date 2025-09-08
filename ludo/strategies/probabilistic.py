@@ -30,6 +30,7 @@ from typing import Dict, List
 
 from ..constants import BoardConstants, GameConstants
 from .base import Strategy
+from .utils import get_opponent_main_positions_with_fallback
 
 
 class ProbabilisticStrategy(Strategy):
@@ -97,25 +98,8 @@ class ProbabilisticStrategy(Strategy):
     def _collect_opponent_positions(
         self, game_context: Dict, current_color: str
     ) -> List[int]:
-        """Extract all opponent token positions on the main path (0-51)."""
-        board_state = game_context.get("board", {})
-        board_positions = board_state.get("board_positions", {})
-        positions: List[int] = []
-        for pos_str, tokens in board_positions.items():  # keys already int but safety
-            try:
-                pos = int(pos_str)
-            except (TypeError, ValueError):
-                pos = pos_str  # if already int
-            if not isinstance(pos, int):
-                continue
-            if (
-                pos < 0 or pos >= GameConstants.MAIN_BOARD_SIZE
-            ):  # ignore home columns / invalid
-                continue
-            for token in tokens:
-                if token.get("player_color") != current_color:
-                    positions.append(pos)
-        return positions
+        """Extract opponent positions on main path with utils; fallback to board map."""
+        return get_opponent_main_positions_with_fallback(game_context, current_color)
 
     def _circular_distance_backward(self, from_pos: int, opp_pos: int) -> int:
         """Distance moving backward along circular 52 path from from_pos to opp_pos.

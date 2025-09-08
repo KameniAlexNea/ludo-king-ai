@@ -3,6 +3,7 @@ langchain-groq
 langchain-ollama
 ollama
 pydantic
+loguru
 # RL Training dependencies
 gymnasium
 stable-baselines3

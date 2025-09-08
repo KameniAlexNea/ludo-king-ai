@@ -3,8 +3,9 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Optional
 
-from ..constants import GameConstants
+from ..constants import BoardConstants, GameConstants
 from .base import Strategy
+from .utils import get_opponent_main_positions_with_fallback
 
 # Utility type hint for a move dict
 MoveDict = Dict[str, object]
@@ -139,22 +140,7 @@ class ProbabilisticV2Strategy(Strategy):
         self, game_context: Dict, current_color: str
     ) -> List[int]:
         """Return list of opponent token positions on main loop 0..51."""
-        board_state = game_context.get("board", {})
-        board_positions = board_state.get(
-            "board_positions", {}
-        )  # map pos -> list of tokens
-        positions: List[int] = []
-        for pos_key, tokens in board_positions.items():
-            try:
-                pos = int(pos_key)
-            except Exception:
-                continue
-            if pos < 0 or pos >= GameConstants.MAIN_BOARD_SIZE:
-                continue
-            for token in tokens:
-                if token.get("player_color") != current_color:
-                    positions.append(pos)
-        return positions
+        return get_opponent_main_positions_with_fallback(game_context, current_color)
 
     def _collect_opponent_token_progress(self, game_context: Dict) -> Dict[str, float]:
         """Map token id to its normalized progress from 0 to 1 if info exists."""
@@ -298,7 +284,7 @@ class ProbabilisticV2Strategy(Strategy):
                     else (GameConstants.MAIN_BOARD_SIZE - cur + tgt)
                 )
                 progress_delta = raw / float(GameConstants.MAIN_BOARD_SIZE)
-            elif tgt >= 100:
+            elif tgt >= BoardConstants.HOME_COLUMN_START:
                 progress_delta = 0.25
         # non linear boost to favor larger advances
         opportunity += (progress_delta**1.4) * 3.0

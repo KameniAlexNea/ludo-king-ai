@@ -43,6 +43,7 @@ from typing import Dict, List, Optional, Sequence
 
 from ..constants import BoardConstants, GameConstants
 from .base import Strategy
+from .utils import get_my_main_positions, get_opponent_main_positions, get_opponent_main_positions_with_fallback, get_my_main_positions_with_fallback
 
 MoveDict = Dict[str, object]
 
@@ -269,7 +270,7 @@ class ProbabilisticV3Strategy(Strategy):
             return 0.0
         if (
             move.get("move_type") == "finish"
-            or (isinstance(tgt, int) and tgt >= 100)
+            or (isinstance(tgt, int) and tgt >= BoardConstants.HOME_COLUMN_START)
             or move.get("is_safe_move")
         ):
             return 0.0
@@ -288,7 +289,11 @@ class ProbabilisticV3Strategy(Strategy):
         tgt = move.get("target_position")
         if not isinstance(tgt, int):
             return 0.0
-        if move.get("move_type") == "finish" or move.get("is_safe_move") or tgt >= 100:
+        if (
+            move.get("move_type") == "finish"
+            or move.get("is_safe_move")
+            or (isinstance(tgt, int) and tgt >= BoardConstants.HOME_COLUMN_START)
+        ):
             return 0.0
         if not opponent_positions:
             return 0.0
@@ -352,7 +357,7 @@ class ProbabilisticV3Strategy(Strategy):
             return 1.0
         if cur < 0:
             return 0.7  # still at home
-        if cur >= 100:
+        if cur >= BoardConstants.HOME_COLUMN_START:
             return 0.3  # already in home column -> nearly safe
         # normalized progress on loop
         norm = cur / float(GameConstants.MAIN_BOARD_SIZE)
@@ -414,7 +419,7 @@ class ProbabilisticV3Strategy(Strategy):
                 else (GameConstants.MAIN_BOARD_SIZE - cur + tgt)
             )
             delta = raw / float(GameConstants.MAIN_BOARD_SIZE)
-        elif tgt >= 100:
+        elif tgt >= BoardConstants.HOME_COLUMN_START:
             delta = 0.25
         else:
             delta = 0.0
@@ -431,8 +436,8 @@ class ProbabilisticV3Strategy(Strategy):
         if mt == "advance_home_column":
             if self.cfg.use_home_column_nonlinear:
                 tgt = move.get("target_position")
-                if isinstance(tgt, int) and tgt >= 100:
-                    depth = (tgt - 100) / 5.0  # 0..1
+                if isinstance(tgt, int) and tgt >= BoardConstants.HOME_COLUMN_START:
+                    depth = (tgt - BoardConstants.HOME_COLUMN_START) / 5.0  # 0..1
                     return (
                         self.cfg.advance_home_bonus
                         + depth * self.cfg.home_column_depth_factor
@@ -477,7 +482,7 @@ class ProbabilisticV3Strategy(Strategy):
 
     def _future_safety_potential(self, move: MoveDict) -> float:
         tgt = move.get("target_position")
-        if not isinstance(tgt, int) or tgt >= 100:
+        if not isinstance(tgt, int) or tgt >= BoardConstants.HOME_COLUMN_START:
             return 0.0
         for d in range(1, 7):
             nxt = (tgt + d) % GameConstants.MAIN_BOARD_SIZE
@@ -538,38 +543,12 @@ class ProbabilisticV3Strategy(Strategy):
     def _collect_opponent_positions(
         self, game_context: Dict, current_color: str
     ) -> List[int]:
-        board_state = game_context.get("board", {})
-        bp = board_state.get("board_positions", {})
-        res: List[int] = []
-        for k, tokens in bp.items():
-            try:
-                pos = int(k)
-            except Exception:
-                continue
-            if pos < 0 or pos >= GameConstants.MAIN_BOARD_SIZE:
-                continue
-            for t in tokens:
-                if t.get("player_color") != current_color:
-                    res.append(pos)
-        return res
+        return get_opponent_main_positions_with_fallback(game_context, current_color)
 
     def _collect_own_positions(
         self, game_context: Dict, current_color: str
     ) -> List[int]:
-        board_state = game_context.get("board", {})
-        bp = board_state.get("board_positions", {})
-        res: List[int] = []
-        for k, tokens in bp.items():
-            try:
-                pos = int(k)
-            except Exception:
-                continue
-            if pos < 0 or pos >= GameConstants.MAIN_BOARD_SIZE:
-                continue
-            for t in tokens:
-                if t.get("player_color") == current_color:
-                    res.append(pos)
-        return res
+        return get_my_main_positions_with_fallback(game_context, current_color)
 
     def _collect_opponent_token_progress(self, game_context: Dict) -> Dict[str, float]:
         # Placeholder: opponents list may not include per-token progress; fallback mid.
