@@ -34,7 +34,6 @@
 ---
 
 ## 🎯 LUDO 4-PLAYER COMBINATION TOURNAMENT 🎯
-======================================================================
 Starting comprehensive all-combinations tournament...
 🎯 Tournament Configuration:
    • Available strategies: 12
@@ -43,7 +42,6 @@ Starting comprehensive all-combinations tournament...
    • Max turns per game: 1000
    • Total games to play: 4950
 🏆 4-PLAYER STRATEGIC LUDO TOURNAMENT 🏆
-======================================================================
 
 🤖 Tournament Participants:
 --------------------------------------------------
