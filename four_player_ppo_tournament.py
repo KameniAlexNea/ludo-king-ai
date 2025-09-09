@@ -357,7 +357,7 @@ class FourPlayerPPOTournament:
             strategy_name = current_player.strategy_name
             dice_value = game.roll_dice()
 
-            context = game.get_game_state_for_ai()
+            context = game.get_ai_decision_context(dice_value)
             context["dice_value"] = dice_value
             if context["valid_moves"]:
                 selected_token = current_player.make_strategic_decision(context)

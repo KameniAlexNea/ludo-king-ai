@@ -286,31 +286,6 @@ class LudoGame:
 
         return turn_result
 
-    def get_game_state_for_ai(self) -> Dict:
-        """
-        Get complete game state formatted for AI consumption.
-
-        Returns:
-            Dict: Complete game state
-        """
-        return {
-            "game_info": {
-                "turn_count": self.turn_count,
-                "current_player": self.get_current_player().color.value,
-                "game_over": self.game_over,
-                "winner": self.winner.color.value if self.winner else None,
-                "last_dice_value": self.last_dice_value,
-                "consecutive_sixes": self.consecutive_sixes,
-            },
-            "players": [player.get_game_state() for player in self.players],
-            "board": self.board.get_board_state_for_ai(self.get_current_player()),
-            "valid_moves": (
-                self.get_valid_moves(self.get_current_player(), self.last_dice_value)
-                if self.last_dice_value > 0
-                else []
-            ),
-        }
-
     def get_ai_decision_context(self, dice_value: int) -> Dict:
         """
         Get context specifically designed for AI decision making.

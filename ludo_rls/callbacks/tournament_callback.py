@@ -277,8 +277,7 @@ class SelfPlayTournamentCallback(BaseCallback):
                     else:
                         # Opponent scripted decision using its strategy; build minimal context
                         try:
-                            context = game.get_game_state_for_ai()
-                            context["dice_value"] = dice
+                            context = game.get_ai_decision_context(dice)
                             if valid_moves:
                                 token_id = current_player.make_strategic_decision(
                                     context
