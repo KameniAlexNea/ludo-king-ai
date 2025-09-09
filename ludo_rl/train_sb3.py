@@ -73,7 +73,7 @@ def main():
     parser.add_argument(
         "--tournament-baselines",
         type=str,
-        default="optimist,balanced,probabilistic_v3,cautious,killer,probabilistic",
+        default="hybrid_prob,balanced,cautious,killer,probabilistic",
         help="Comma separated baseline strategy names (must be valid StrategyFactory names)",
     )
     parser.add_argument(
@@ -87,8 +87,7 @@ def main():
     os.makedirs(args.model_dir, exist_ok=True)
 
     base_cfg = EnvConfig(max_turns=args.max_turns)
-    if args.no_probabilistic_rewards:
-        base_cfg.reward_cfg.use_probabilistic_rewards = False
+    base_cfg.reward_cfg.use_probabilistic_rewards = not args.no_probabilistic_rewards
 
     # Configure opponent curriculum
     base_cfg.opponent_curriculum.enabled = not args.no_curriculum
