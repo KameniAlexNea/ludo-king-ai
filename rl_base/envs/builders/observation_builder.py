@@ -31,8 +31,14 @@ class ObservationBuilder:
         # current player color one-hot (4)
         base += 4
         # scalar flags / stats:
-        # can_finish, dice_norm, agent_finished_fraction, opp_mean_finished_fraction, agent_mean_token_progress
-        base += 5
+        # can_finish, agent_finished_fraction, opp_mean_finished_fraction, agent_mean_token_progress
+        base += 4
+        # dice one-hot
+        base += 6
+        # distance to finish for each token (4)
+        base += 4
+        # tokens at home count (1)
+        base += 1
         if self.cfg.obs_cfg.include_turn_index:
             base += 1
         if self.cfg.obs_cfg.include_blocking_count:
@@ -153,16 +159,37 @@ class ObservationBuilder:
                 if can_finish == 1.0:
                     break
         vec.append(can_finish)
-        # dice norm (pending dice for current decision)
+        # dice one-hot (6 values for 1-6)
         if pending_agent_dice is None:
-            vec.append(0.0)
+            vec.extend([0.0] * 6)
         else:
-            dice_scale = (GameConstants.DICE_MAX - GameConstants.DICE_MIN) / 2.0
-            dice_norm = (
-                pending_agent_dice - GameConstants.DICE_NORMALIZATION_MEAN
-            ) / dice_scale
-            dice_norm = float(max(-1.0, min(1.0, dice_norm)))
-            vec.append(dice_norm)
+            one_hot = [0.0] * 6
+            if 1 <= pending_agent_dice <= 6:
+                one_hot[pending_agent_dice - 1] = 1.0
+            vec.extend(one_hot)
+        # distance to finish for each token
+        for t in agent_player.tokens:
+            if t.position == GameConstants.FINISH_POSITION:
+                dist = 0.0
+            elif t.position < 0:
+                dist = 1.0  # at home, max distance
+            elif t.position < BoardConstants.HOME_COLUMN_START:
+                # on main board
+                dist = (
+                    GameConstants.MAIN_BOARD_SIZE - t.position
+                ) / GameConstants.MAIN_BOARD_SIZE
+            else:
+                # in home column
+                dist = (
+                    GameConstants.FINISH_POSITION - t.position
+                ) / GameConstants.HOME_COLUMN_SIZE
+            vec.append(dist)
+        # tokens at home count
+        tokens_at_home = (
+            sum(1 for t in agent_player.tokens if t.position < 0)
+            / GameConstants.TOKENS_PER_PLAYER
+        )
+        vec.append(tokens_at_home)
         # progress stats
         agent_progress = (
             agent_player.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER
