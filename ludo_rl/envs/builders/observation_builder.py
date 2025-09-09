@@ -17,6 +17,8 @@ class ObservationBuilder:
         self.cfg = cfg
         self.game = game
         self.agent_color = agent_color
+        self.start_position = BoardConstants.START_POSITIONS.get(agent_color)
+        self.obs_size = self._compute_observation_size()
 
     def _compute_observation_size(self) -> int:
         base = 0
@@ -26,6 +28,8 @@ class ObservationBuilder:
         base += 12
         # finished tokens per player (4)
         base += 4
+        # current player color one-hot (4)
+        base += 4
         # scalar flags / stats:
         # can_finish, dice_norm, agent_finished_fraction, opp_mean_finished_fraction, agent_mean_token_progress
         base += 5
@@ -34,6 +38,25 @@ class ObservationBuilder:
         if self.cfg.obs_cfg.include_blocking_count:
             base += 1
         return base
+
+    def _remove_agent_start(self, pos: int) -> int:
+        """
+        Normalize position relative to agent's start position.
+        Makes the agent's start position always appear as 0.
+
+        Args:
+            pos: Original position on the board
+
+        Returns:
+            Position relative to agent's start (agent start becomes 0)
+        """
+        if pos == GameConstants.HOME_POSITION:
+            return pos  # Keep home position as-is
+        if pos >= BoardConstants.HOME_COLUMN_START:
+            return pos  # Keep home column positions as-is
+
+        # For main board positions, make agent's start position = 0
+        return (pos - self.start_position + 1) % GameConstants.MAIN_BOARD_SIZE
 
     def _normalize_position(self, pos: int) -> float:
         if pos == GameConstants.HOME_POSITION:
@@ -46,8 +69,11 @@ class ObservationBuilder:
                 GameConstants.POSITION_NORMALIZATION_FACTOR
                 + depth * GameConstants.POSITION_NORMALIZATION_FACTOR
             )
+
+        # Use relative position where agent's start is always 0
+        relative_pos = self._remove_agent_start(pos)
         return (
-            pos / (GameConstants.MAIN_BOARD_SIZE - 1)
+            relative_pos / (GameConstants.MAIN_BOARD_SIZE - 1)
         ) * GameConstants.POSITION_NORMALIZATION_FACTOR  # [0,0.5]
 
     def _build_observation(
@@ -72,6 +98,9 @@ class ObservationBuilder:
         for color in Colors.ALL_COLORS:
             pl = players_by_color[color]
             vec.append(pl.get_finished_tokens_count() / GameConstants.TOKENS_PER_PLAYER)
+        # player color one-hot in fixed order R,G,Y,B
+        for color in Colors.ALL_COLORS:
+            vec.append(1.0 if color == self.agent_color else 0.0)
         # can any finish (robust: simulate dice for each active/home-column token)
         can_finish = 0.0
         start_pos = BoardConstants.START_POSITIONS.get(self.agent_color)
@@ -194,9 +223,8 @@ class ObservationBuilder:
                 )
             )  # normalize roughly
         obs = np.asarray(vec, dtype=np.float32)
-        expected = self._compute_observation_size()
-        if obs.shape[0] != expected:
+        if obs.shape[0] != self.obs_size:
             raise ValueError(
-                f"Observation length mismatch: got {obs.shape[0]} expected {expected}"
+                f"Observation length mismatch: got {obs.shape[0]} expected {self.obs_size}"
             )
         return obs

@@ -17,6 +17,8 @@ class ObservationBuilder:
         self.cfg = cfg
         self.game = game
         self.agent_color = agent_color
+        self.start_position = BoardConstants.START_POSITIONS.get(agent_color)
+        self.obs_size = self._compute_observation_size()
 
     def _compute_observation_size(self) -> int:
         base = 0
@@ -37,6 +39,25 @@ class ObservationBuilder:
             base += 1
         return base
 
+    def _remove_agent_start(self, pos: int) -> int:
+        """
+        Normalize position relative to agent's start position.
+        Makes the agent's start position always appear as 0.
+
+        Args:
+            pos: Original position on the board
+
+        Returns:
+            Position relative to agent's start (agent start becomes 0)
+        """
+        if pos == GameConstants.HOME_POSITION:
+            return pos  # Keep home position as-is
+        if pos >= BoardConstants.HOME_COLUMN_START:
+            return pos  # Keep home column positions as-is
+
+        # For main board positions, make agent's start position = 0
+        return (pos - self.start_position + 1) % GameConstants.MAIN_BOARD_SIZE
+
     def _normalize_position(self, pos: int) -> float:
         if pos == GameConstants.HOME_POSITION:
             return -1.0
@@ -48,8 +69,11 @@ class ObservationBuilder:
                 GameConstants.POSITION_NORMALIZATION_FACTOR
                 + depth * GameConstants.POSITION_NORMALIZATION_FACTOR
             )
+
+        # Use relative position where agent's start is always 0
+        relative_pos = self._remove_agent_start(pos)
         return (
-            pos / (GameConstants.MAIN_BOARD_SIZE - 1)
+            relative_pos / (GameConstants.MAIN_BOARD_SIZE - 1)
         ) * GameConstants.POSITION_NORMALIZATION_FACTOR  # [0,0.5]
 
     def _build_observation(
@@ -199,9 +223,8 @@ class ObservationBuilder:
                 )
             )  # normalize roughly
         obs = np.asarray(vec, dtype=np.float32)
-        expected = self._compute_observation_size()
-        if obs.shape[0] != expected:
+        if obs.shape[0] != self.obs_size:
             raise ValueError(
-                f"Observation length mismatch: got {obs.shape[0]} expected {expected}"
+                f"Observation length mismatch: got {obs.shape[0]} expected {self.obs_size}"
             )
         return obs
