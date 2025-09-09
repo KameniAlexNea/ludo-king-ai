@@ -118,7 +118,7 @@ class OpponentCurriculumConfig:
     phase_episodes: List[int] = field(default_factory=lambda: [100, 300, 600, 10_000])
     # Progress boundaries (fractions 0..1). Phases determined by where progress falls:
     # [0, b0) -> phase 0; [b0, b1) -> phase 1; [b1, b2) -> phase 2; [b2, 1] -> phase 3
-    progress_boundaries: List[float] = field(default_factory=lambda: [0.2, 0.5, 0.9])
+    progress_boundaries: List[float] = field(default_factory=lambda: [0.1, 0.4, 0.8])
 
     # Difficulty buckets for controlled sampling
     poor: List[str] = field(
