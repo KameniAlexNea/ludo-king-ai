@@ -158,8 +158,8 @@ def main():
     )
 
     # Tournament callback (optional baselines evaluation) - imported lazily to avoid overhead if unused
-    from .callbacks.tournament_callback import ClassicTournamentCallback
     from .callbacks.progress_curriculum import ProgressCurriculumCallback
+    from .callbacks.tournament_callback import ClassicTournamentCallback
 
     baseline_names = [
         s.strip() for s in args.tournament_baselines.split(",") if s.strip()
@@ -174,7 +174,10 @@ def main():
     )
 
     progress_cb = None
-    if base_cfg.opponent_curriculum.enabled and base_cfg.opponent_curriculum.use_progress:
+    if (
+        base_cfg.opponent_curriculum.enabled
+        and base_cfg.opponent_curriculum.use_progress
+    ):
         # Update envs with progress every 10k steps (lightweight)
         progress_cb = ProgressCurriculumCallback(
             total_timesteps=args.total_steps, update_freq=10_000

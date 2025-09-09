@@ -156,7 +156,11 @@ class LudoGymEnv(gym.Env):
         info = {
             "episode": int(self._episode_count),
             "opponents": list(self.opponent_strategies),
-            "progress": None if self._training_progress is None else float(self._training_progress),
+            "progress": (
+                None
+                if self._training_progress is None
+                else float(self._training_progress)
+            ),
         }
         self._episode_count += 1
         return obs, info
@@ -171,7 +175,10 @@ class LudoGymEnv(gym.Env):
         or misconfigured.
         """
         # Curriculum disabled => uniform sample
-        if not (getattr(self.cfg, "opponent_curriculum", None) and self.cfg.opponent_curriculum.enabled):
+        if not (
+            getattr(self.cfg, "opponent_curriculum", None)
+            and self.cfg.opponent_curriculum.enabled
+        ):
             return self.rng.sample(self.cfg.opponents.candidates, 3)
 
         occ = self.cfg.opponent_curriculum
@@ -191,7 +198,11 @@ class LudoGymEnv(gym.Env):
         if phase_idx == 0:
             picks = sample_from(occ.poor, 2) + sample_from(occ.medium, 1)
         elif phase_idx == 1:
-            picks = sample_from(occ.poor, 1) + sample_from(occ.medium, 1) + sample_from(occ.hard, 1)
+            picks = (
+                sample_from(occ.poor, 1)
+                + sample_from(occ.medium, 1)
+                + sample_from(occ.hard, 1)
+            )
         else:
             picks = sample_from(occ.hard, 2) + sample_from(occ.medium, 1)
 

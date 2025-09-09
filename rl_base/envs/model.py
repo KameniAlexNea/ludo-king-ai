@@ -121,29 +121,36 @@ class OpponentCurriculumConfig:
     progress_boundaries: List[float] = field(default_factory=lambda: [0.2, 0.5, 0.9])
 
     # Difficulty buckets for controlled sampling
-    poor: List[str] = field(default_factory=lambda: [
-        "random",
-        "weighted_random",
-        "optimist",
-    ])
-    medium: List[str] = field(default_factory=lambda: [
-        "winner",
-        "defensive",
-        "hybrid_prob",
-        "probabilistic_v2",
-    ])
-    hard: List[str] = field(default_factory=lambda: [
-        "balanced",
-        "probabilistic",
-        "cautious",
-        "killer",
-        "probabilistic_v3",
-    ])
+    poor: List[str] = field(
+        default_factory=lambda: [
+            "random",
+            "weighted_random",
+            "optimist",
+        ]
+    )
+    medium: List[str] = field(
+        default_factory=lambda: [
+            "winner",
+            "defensive",
+            "hybrid_prob",
+            "probabilistic_v2",
+        ]
+    )
+    hard: List[str] = field(
+        default_factory=lambda: [
+            "balanced",
+            "probabilistic",
+            "cautious",
+            "killer",
+            "probabilistic_v3",
+        ]
+    )
 
 
 @dataclass
 class BaseEnvConfig:
     """Base environment configuration shared between RL implementations."""
+
     agent_color: str = Colors.RED
     max_turns: int = 1000
     obs_cfg: ObservationConfig = field(default_factory=ObservationConfig)

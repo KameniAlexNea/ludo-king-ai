@@ -36,17 +36,17 @@ class BasePPOStrategy:
         except Exception:
             pass
         self.env_cfg = env_config or BaseEnvConfig()
-        
+
         # Subclasses should implement this to create the appropriate environment
         self.dummy_env = self._create_dummy_env()
-        
+
         # Build once to establish obs dimension
         obs, _ = self.dummy_env.reset(seed=self.env_cfg.seed)
         self.obs_dim = obs.shape[0]
         self.obs_builder = self.dummy_env.obs_builder
         self.deterministic = deterministic
         self.description = f"PPO Model: {model_name} (obs_dim={self.obs_dim})"
-        
+
         # Attempt to load VecNormalize stats (obs_rms) from sibling files
         self.obs_rms = None
         try:

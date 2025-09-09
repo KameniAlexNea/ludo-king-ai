@@ -21,6 +21,7 @@ from ludo.strategy import StrategyFactory
 @dataclass
 class TournamentMetrics:
     """Common tournament metrics for both classic and self-play variants."""
+
     wins: int = 0
     losses: int = 0
     ranks: List[int] = None
@@ -72,7 +73,7 @@ class TournamentMetrics:
 
 class BaseTournamentCallback(BaseCallback, ABC):
     """Base class for tournament callbacks with shared tournament logic.
-    
+
     Subclasses must implement:
     - _select_ppo_action: How to select actions using PPO policy
     - _build_observation: How to build observations for PPO
@@ -94,7 +95,7 @@ class BaseTournamentCallback(BaseCallback, ABC):
         self.eval_freq = eval_freq
         self.max_turns = max_turns
         self.log_prefix = log_prefix
-        
+
         # Precompute combinations of 3 strategies
         self.combos: List[Tuple[str, str, str]] = []
         if len(self.baselines) >= 3:
@@ -128,15 +129,19 @@ class BaseTournamentCallback(BaseCallback, ABC):
         """Get action mask for valid moves. Optional - return None if not used."""
         return None
 
-    def _setup_game_and_players(self, combo: Tuple[str, str, str]) -> Tuple[LudoGame, object]:
+    def _setup_game_and_players(
+        self, combo: Tuple[str, str, str]
+    ) -> Tuple[LudoGame, object]:
         """Set up game and assign strategies to players."""
-        game = LudoGame([
-            PlayerColor.RED,
-            PlayerColor.GREEN,
-            PlayerColor.YELLOW,
-            PlayerColor.BLUE,
-        ])
-        
+        game = LudoGame(
+            [
+                PlayerColor.RED,
+                PlayerColor.GREEN,
+                PlayerColor.YELLOW,
+                PlayerColor.BLUE,
+            ]
+        )
+
         # Assign strategies to opponent colors
         opponent_colors = [PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
         for idx, color in enumerate(opponent_colors):
@@ -145,54 +150,54 @@ class BaseTournamentCallback(BaseCallback, ABC):
             player = next(p for p in game.players if p.color is color)
             player.set_strategy(strat)
             player.strategy_name = strat_name
-            
+
         # PPO player (always RED)
         ppo_player = next(p for p in game.players if p.color is PlayerColor.RED)
         ppo_player.strategy_name = "ppo"
-        
+
         return game, ppo_player
 
     def _handle_ppo_turn(
-        self, 
-        policy, 
-        game: LudoGame, 
-        ppo_player, 
-        dice: int, 
-        valid_moves: List[dict], 
-        turn_counter: int, 
-        metrics: TournamentMetrics
+        self,
+        policy,
+        game: LudoGame,
+        ppo_player,
+        dice: int,
+        valid_moves: List[dict],
+        turn_counter: int,
+        metrics: TournamentMetrics,
     ) -> bool:
         """Handle PPO player turn. Returns True if game ended."""
         obs = self._build_observation(turn_counter, dice)
         action_mask = self._get_action_mask(valid_moves)
         action = self._select_ppo_action(policy, obs, action_mask)
-        
+
         if valid_moves:
             valid_ids = [m["token_id"] for m in valid_moves]
             if action not in valid_ids:
                 metrics.illegal_actions += 1
                 action = valid_ids[0]
-                
+
             move_res = game.execute_move(ppo_player, action, dice)
             captured = move_res.get("captured_tokens", [])
             if captured:
                 metrics.captures_for += len(captured)
                 metrics.offensive_captures += len(captured)
-                
+
             if move_res.get("token_finished"):
                 pass  # Could track token finish counts if needed
-                
+
             if move_res.get("game_won"):
                 metrics.wins += 1
                 metrics.ranks.append(1)
                 return True  # Game ended
-                
+
             if not move_res.get("extra_turn"):
                 game.next_turn()
         else:
             # No valid moves
             game.next_turn()
-            
+
         metrics.ppo_turns += 1
         return False  # Game continues
 
@@ -203,7 +208,7 @@ class BaseTournamentCallback(BaseCallback, ABC):
         ppo_player,
         dice: int,
         valid_moves: List[dict],
-        metrics: TournamentMetrics
+        metrics: TournamentMetrics,
     ) -> bool:
         """Handle opponent player turn. Returns True if game ended."""
         try:
@@ -211,20 +216,20 @@ class BaseTournamentCallback(BaseCallback, ABC):
             if valid_moves:
                 token_id = current_player.make_strategic_decision(context)
                 move_res = game.execute_move(current_player, token_id, dice)
-                
+
                 # Track captures against PPO
                 if move_res.get("captured_tokens"):
                     for ct in move_res["captured_tokens"]:
                         if ct["player_color"] == ppo_player.color.value:
                             metrics.captures_against += 1
                             metrics.defensive_captures += 1
-                            
+
                 if move_res.get("token_finished"):
                     pass  # Could track if needed
-                    
+
                 if move_res.get("game_won"):
                     return True  # Game ended, opponent won
-                    
+
                 if not move_res.get("extra_turn"):
                     game.next_turn()
             else:
@@ -232,10 +237,12 @@ class BaseTournamentCallback(BaseCallback, ABC):
         except Exception:
             # On any failure, skip turn
             game.next_turn()
-            
+
         return False  # Game continues
 
-    def _compute_final_rank(self, game: LudoGame, ppo_player, metrics: TournamentMetrics):
+    def _compute_final_rank(
+        self, game: LudoGame, ppo_player, metrics: TournamentMetrics
+    ):
         """Compute PPO rank when game ends without explicit winner."""
         if not any(p.has_won() and p is ppo_player for p in game.players):
             # Rank by finished tokens
@@ -255,11 +262,13 @@ class BaseTournamentCallback(BaseCallback, ABC):
         """Run tournament with current policy against baseline strategies."""
         policy = self.model.policy  # type: ignore
         metrics = TournamentMetrics()
-        
+
         if not self.combos:
             if self.verbose:
                 callback_name = self.__class__.__name__
-                print(f"[{callback_name}] Not enough baseline strategies (need >=3). Skipping.")
+                print(
+                    f"[{callback_name}] Not enough baseline strategies (need >=3). Skipping."
+                )
             return metrics.aggregate()
 
         games_per_combo = max(1, self.n_games // len(self.combos))
@@ -275,22 +284,27 @@ class BaseTournamentCallback(BaseCallback, ABC):
                     current_player = game.get_current_player()
                     dice = game.roll_dice()
                     valid_moves = game.get_valid_moves(current_player, dice)
-                    
+
                     game_ended = False
                     if current_player is ppo_player:
                         game_ended = self._handle_ppo_turn(
-                            policy, game, ppo_player, dice, valid_moves, 
-                            turn_counter, metrics
+                            policy,
+                            game,
+                            ppo_player,
+                            dice,
+                            valid_moves,
+                            turn_counter,
+                            metrics,
                         )
                         turn_counter += 1
                     else:
                         game_ended = self._handle_opponent_turn(
                             game, current_player, ppo_player, dice, valid_moves, metrics
                         )
-                    
+
                     if game_ended:
                         break
-                        
+
                     turns_in_game += 1
 
                 # Compute final rank if game didn't end with explicit winner
@@ -301,10 +315,12 @@ class BaseTournamentCallback(BaseCallback, ABC):
         agg = metrics.aggregate()
         for k, v in agg.items():
             self.logger.record(self.log_prefix + k, v)
-            
+
         if self.verbose:
             callback_name = self.__class__.__name__
-            print(f"[{callback_name}] Steps={self.num_timesteps} games={total_games_target} metrics={agg}")
+            print(
+                f"[{callback_name}] Steps={self.num_timesteps} games={total_games_target} metrics={agg}"
+            )
 
         # Ensure TensorBoard flush
         if hasattr(self.logger, "writer") and self.logger.writer:
@@ -313,8 +329,10 @@ class BaseTournamentCallback(BaseCallback, ABC):
         return agg
 
     # Deprecated methods for backward compatibility
-    @abstractmethod 
-    def _policy_select(self, policy, obs: np.ndarray, action_mask: np.ndarray = None) -> int:
+    @abstractmethod
+    def _policy_select(
+        self, policy, obs: np.ndarray, action_mask: np.ndarray = None
+    ) -> int:
         """Deprecated. Use _select_ppo_action instead."""
         return self._select_ppo_action(policy, obs, action_mask)
 
@@ -325,14 +343,18 @@ class BaseTournamentCallback(BaseCallback, ABC):
 
     def _create_game_setup(self):
         """Deprecated. Use _setup_game_and_players instead."""
-        return LudoGame([
-            PlayerColor.RED,
-            PlayerColor.GREEN, 
-            PlayerColor.YELLOW,
-            PlayerColor.BLUE,
-        ])
+        return LudoGame(
+            [
+                PlayerColor.RED,
+                PlayerColor.GREEN,
+                PlayerColor.YELLOW,
+                PlayerColor.BLUE,
+            ]
+        )
 
-    def _assign_strategies_to_players(self, game: LudoGame, strategies: List[str], ppo_color: PlayerColor):
+    def _assign_strategies_to_players(
+        self, game: LudoGame, strategies: List[str], ppo_color: PlayerColor
+    ):
         """Deprecated. Use _setup_game_and_players instead."""
         strategy_idx = 0
         for player in game.players:

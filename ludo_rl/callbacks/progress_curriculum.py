@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from stable_baselines3.common.callbacks import BaseCallback
 
 

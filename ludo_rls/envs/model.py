@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from ludo.constants import Colors
-
 from rl_base.envs.model import BaseEnvConfig, BaseRewardConfig, ObservationConfig
 
 

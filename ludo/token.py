@@ -102,7 +102,7 @@ class Token:
         new_position = current + dice_value
         home_entry = BoardConstants.HOME_COLUMN_ENTRIES[self.player_color]
 
-        board_last_index = GameConstants.MAIN_BOARD_SIZE - 1
+        # board_last_index = GameConstants.MAIN_BOARD_SIZE - 1
 
         # Normalize potential wrap for crossing beyond last board index
         # We need to detect crossing the home_entry square moving forward (circular path)

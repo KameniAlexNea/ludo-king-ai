@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
 
 from ludo.constants import Colors
-
-from rl_base.envs.model import BaseEnvConfig, BaseRewardConfig, ObservationConfig, OpponentsConfig, OpponentCurriculumConfig
+from rl_base.envs.model import (
+    BaseEnvConfig,
+    BaseRewardConfig,
+    ObservationConfig,
+    OpponentCurriculumConfig,
+    OpponentsConfig,
+)
 
 
 @dataclass
 class RewardConfig(BaseRewardConfig):
     """Balanced reward configuration for strategic Ludo play."""
+
     pass  # Uses all the defaults from BaseRewardConfig
 
 

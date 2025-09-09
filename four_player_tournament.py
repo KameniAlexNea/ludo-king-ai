@@ -72,7 +72,9 @@ class FourPlayerTournament:
         if self.verbose_output:
             logger.info("🎯 Tournament Configuration:")
             logger.info(f"   • Available strategies: {len(self.all_strategies)}")
-            logger.info(f"   • 4-player combinations: {len(self.strategy_combinations)}")
+            logger.info(
+                f"   • 4-player combinations: {len(self.strategy_combinations)}"
+            )
             logger.info(f"   • Games per matchup: {self.games_per_matchup}")
             logger.info(f"   • Max turns per game: {self.max_turns_per_game}")
             logger.info(
@@ -449,6 +451,8 @@ if __name__ == "__main__":
         logger.info("🏆 No clear champion (no games completed)")
     logger.info(f"📊 Total Games: {summary['total_games']}")
     logger.info(f"🎯 Combinations Tested: {summary['combinations_tested']}")
-    logger.info(f"🎮 Participants: {', '.join([s.upper() for s in summary['participants']])}")
+    logger.info(
+        f"🎮 Participants: {', '.join([s.upper() for s in summary['participants']])}"
+    )
     logger.info("\n✅ 4-Player Strategic Tournament System Ready!")
     logger.info("🔬 Advanced AI evaluation and comparison complete!")
