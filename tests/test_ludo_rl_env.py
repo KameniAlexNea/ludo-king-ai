@@ -52,11 +52,11 @@ class TestLudoRLEnv(unittest.TestCase):
         # Ensure state reflects home column for consistency
         token.state = TokenState.HOME_COLUMN
         obs = env.obs_builder._build_observation(env.turns, env._pending_agent_dice)
-        # Dynamically compute index: agent(4)+opp(12)+finished(4)=20 -> can_finish at 20
-        can_finish_idx = 4 + 12 + 4
+        # With new observation structure: 4 (agent) + 12 (opponents) + 4 (finished) + 4 (color one-hot) = 24
+        can_finish_idx = 4 + 12 + 4 + 4  # Updated for new observation structure with color one-hot
         if obs[can_finish_idx] != 1.0:
-            # Fallback scan: first scalar section after finished counts; expect exactly one position to flip when moving token
-            scalar_section = obs[4 + 12 + 4 : 4 + 12 + 4 + 6]
+            # Fallback scan: first scalar section after finished counts and color one-hot; expect exactly one position to flip when moving token
+            scalar_section = obs[4 + 12 + 4 + 4 : 4 + 12 + 4 + 4 + 6]
             raise AssertionError(
                 f"can_finish flag not 1 at expected index {can_finish_idx}. Segment={scalar_section.tolist()} token_pos={token.position} remaining={GameConstants.FINISH_POSITION - token.position}"
             )
@@ -66,7 +66,8 @@ class TestLudoRLEnv(unittest.TestCase):
         env.reset()
         # Ensure all tokens far from finish (already true initially)
         obs = env.obs_builder._build_observation(env.turns, env._pending_agent_dice)
-        can_finish_idx = 4 + 12 + 4
+        # With new observation structure: 4 (agent) + 12 (opponents) + 4 (finished) + 4 (color one-hot) = 24
+        can_finish_idx = 4 + 12 + 4 + 4  # Updated for new observation structure with color one-hot
         self.assertEqual(obs[can_finish_idx], 0.0)
 
     def test_reward_components_non_empty(self):

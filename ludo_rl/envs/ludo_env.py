@@ -332,6 +332,7 @@ class LudoGymEnv(gym.Env):
             extra_turn=extra_turn,
             diversity_bonus=diversity_bonus_triggered,
             illegal_action=illegal,
+            reward_components=reward_components,
         )
         # Opponent components already accumulated in reward_components; capture their sum
         opponent_total = sum(reward_components)
