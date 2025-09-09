@@ -11,7 +11,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import random
 import time
-from collections import defaultdict
 from itertools import combinations
 
 import numpy as np
@@ -108,7 +107,9 @@ class FourPlayerPPOTournament(BaseTournament):
         state_saver = GameStateSaver(self.output_dir) if self.output_dir else None
 
         # Initialize parent class
-        super().__init__(max_turns_per_game=self.max_turns_per_game, state_saver=state_saver)
+        super().__init__(
+            max_turns_per_game=self.max_turns_per_game, state_saver=state_saver
+        )
 
         # Resolve model name & path
         self.ppo_model = self._select_best_ppo_model()
@@ -130,7 +131,9 @@ class FourPlayerPPOTournament(BaseTournament):
             print(f"   • Games per matchup: {self.games_per_matchup}")
             print(f"   • Max turns per game: {self.max_turns_per_game}")
             print(f"   • Models directory: {self.models_dir}")
-            print(f"   • Output directory: {self.output_dir if self.output_dir else 'None (no saving)'}")
+            print(
+                f"   • Output directory: {self.output_dir if self.output_dir else 'None (no saving)'}"
+            )
             print(f"   • Environment mode: {self.env_kind}")
             print(
                 f"   • Total games to play: {len(self.strategy_combinations) * self.games_per_matchup}"
@@ -325,7 +328,9 @@ class FourPlayerPPOTournament(BaseTournament):
         """Display comprehensive tournament results."""
         # Create list of all participants including PPO model
         participants = [self.ppo_model] + self.all_strategies
-        return super()._display_final_results(participants, "PPO vs STRATEGIES TOURNAMENT STANDINGS")
+        return super()._display_final_results(
+            participants, "PPO vs STRATEGIES TOURNAMENT STANDINGS"
+        )
 
     def _display_detailed_analysis(self):
         """Show detailed strategic analysis."""
@@ -336,14 +341,18 @@ class FourPlayerPPOTournament(BaseTournament):
     def _get_tournament_summary(self):
         """Return structured tournament summary."""
         participants = [self.ppo_model] + self.all_strategies
-        summary = super()._get_tournament_summary(participants, "PPO vs Strategies Tournament")
+        summary = super()._get_tournament_summary(
+            participants, "PPO vs Strategies Tournament"
+        )
         # Add PPO-specific information
-        summary.update({
-            "ppo_model": self.ppo_model,
-            "strategies": self.all_strategies,
-            "combinations_tested": len(self.strategy_combinations),
-            "games_per_matchup": self.games_per_matchup,
-        })
+        summary.update(
+            {
+                "ppo_model": self.ppo_model,
+                "strategies": self.all_strategies,
+                "combinations_tested": len(self.strategy_combinations),
+                "games_per_matchup": self.games_per_matchup,
+            }
+        )
         return summary
 
 

@@ -7,7 +7,6 @@ Comprehensive tournament between combinations of 4 Ludo AI strategies.
 import os
 import random
 import time
-from collections import defaultdict
 from itertools import combinations, combinations_with_replacement
 
 import numpy as np
@@ -42,7 +41,9 @@ class FourPlayerTournament(BaseTournament):
         state_saver = GameStateSaver(save_dir) if save_dir else None
 
         # Initialize parent class
-        super().__init__(max_turns_per_game=self.max_turns_per_game, state_saver=state_saver)
+        super().__init__(
+            max_turns_per_game=self.max_turns_per_game, state_saver=state_saver
+        )
 
         # Get all available strategies or use selected ones
         selected_strategies = os.getenv("SELECTED_STRATEGIES", "").strip()
@@ -173,7 +174,9 @@ class FourPlayerTournament(BaseTournament):
 
     def _display_final_results(self):
         """Display comprehensive tournament results."""
-        return super()._display_final_results(self.all_strategies, "4-PLAYER STRATEGIC TOURNAMENT STANDINGS")
+        return super()._display_final_results(
+            self.all_strategies, "4-PLAYER STRATEGIC TOURNAMENT STANDINGS"
+        )
 
     def _display_detailed_analysis(self):
         """Show detailed strategic analysis."""
@@ -181,12 +184,16 @@ class FourPlayerTournament(BaseTournament):
 
     def _get_tournament_summary(self):
         """Return structured tournament summary."""
-        summary = super()._get_tournament_summary(self.all_strategies, "4-Player Strategic Combinations")
+        summary = super()._get_tournament_summary(
+            self.all_strategies, "4-Player Strategic Combinations"
+        )
         # Add tournament-specific information
-        summary.update({
-            "combinations_tested": len(self.strategy_combinations),
-            "games_per_matchup": self.games_per_matchup,
-        })
+        summary.update(
+            {
+                "combinations_tested": len(self.strategy_combinations),
+                "games_per_matchup": self.games_per_matchup,
+            }
+        )
         return summary
 
 

@@ -4,18 +4,21 @@ Base Tournament System for Ludo AI Tournaments
 Shared functionality for different tournament types.
 """
 
-import os
 from collections import defaultdict
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from ludo import LudoGame, PlayerColor
+from ludo import LudoGame
 from ludo_stats.game_state_saver import GameStateSaver
 
 
 class BaseTournament:
     """Base class for Ludo tournament systems with shared functionality."""
 
-    def __init__(self, max_turns_per_game: int = 1000, state_saver: Optional[GameStateSaver] = None):
+    def __init__(
+        self,
+        max_turns_per_game: int = 1000,
+        state_saver: Optional[GameStateSaver] = None,
+    ):
         """Initialize base tournament with common attributes."""
         self.max_turns_per_game = max_turns_per_game
         self.state_saver = state_saver
@@ -34,7 +37,9 @@ class BaseTournament:
             }
         )
 
-    def _play_four_player_game(self, game: LudoGame, game_number: str, verbose_output: bool = True) -> Dict[str, Any]:
+    def _play_four_player_game(
+        self, game: LudoGame, game_number: str, verbose_output: bool = True
+    ) -> Dict[str, Any]:
         """Play a complete 4-player game and return detailed results."""
         turn_count = 0
         game_results = {
@@ -78,7 +83,9 @@ class BaseTournament:
 
                 if move_result.get("captured_tokens"):
                     captures = len(move_result["captured_tokens"])
-                    game_results["player_stats"][strategy_name]["tokens_captured"] += captures
+                    game_results["player_stats"][strategy_name]["tokens_captured"] += (
+                        captures
+                    )
                     game_results["game_events"].append(
                         f"Turn {turn_count}: {strategy_name} captured {captures} token(s)"
                     )
@@ -117,7 +124,9 @@ class BaseTournament:
 
         return game_results
 
-    def _process_game_results(self, results: Dict[str, Any], game_players: List[str]) -> None:
+    def _process_game_results(
+        self, results: Dict[str, Any], game_players: List[str]
+    ) -> None:
         """Process and store game results for analysis."""
         winner_name = results["winner"].strategy_name if results["winner"] else None
 
@@ -125,8 +134,12 @@ class BaseTournament:
             stats = self.detailed_stats[player_name]
             stats["games_played"] += 1
             stats["total_turns"] += results["player_stats"][player_name]["turns_taken"]
-            stats["tokens_captured"] += results["player_stats"][player_name]["tokens_captured"]
-            stats["tokens_finished"] += results["player_stats"][player_name]["tokens_finished"]
+            stats["tokens_captured"] += results["player_stats"][player_name][
+                "tokens_captured"
+            ]
+            stats["tokens_finished"] += results["player_stats"][player_name][
+                "tokens_finished"
+            ]
 
             if player_name == winner_name:
                 stats["games_won"] += 1
@@ -141,7 +154,9 @@ class BaseTournament:
                     if player_name == winner_name:
                         stats["head_to_head"][opponent]["wins"] += 1
 
-    def _display_final_results(self, participants: List[str], title: str = "FINAL TOURNAMENT STANDINGS") -> List[Dict[str, Any]]:
+    def _display_final_results(
+        self, participants: List[str], title: str = "FINAL TOURNAMENT STANDINGS"
+    ) -> List[Dict[str, Any]]:
         """Display comprehensive tournament results."""
         print(f"\n🏆 {title} 🏆")
         print("=" * 70)
@@ -179,9 +194,12 @@ class BaseTournament:
 
         for rank, entry in enumerate(standings, 1):
             medal = (
-                "🥇" if rank == 1
-                else "🥈" if rank == 2
-                else "🥉" if rank == 3
+                "🥇"
+                if rank == 1
+                else "🥈"
+                if rank == 2
+                else "🥉"
+                if rank == 3
                 else "  "
             )
             print(
@@ -230,11 +248,14 @@ class BaseTournament:
                                 f"  vs {opponent.upper():<18}: {record['wins']}/{record['games']} ({win_rate:.1f}%)"
                             )
 
-    def _get_tournament_summary(self, participants: List[str], tournament_type: str) -> Dict[str, Any]:
+    def _get_tournament_summary(
+        self, participants: List[str], tournament_type: str
+    ) -> Dict[str, Any]:
         """Return structured tournament summary."""
         # Find champion among participants that actually played
         played_participants = [
-            p for p in participants
+            p
+            for p in participants
             if p in self.detailed_stats and self.detailed_stats[p]["games_played"] > 0
         ]
 
@@ -243,7 +264,8 @@ class BaseTournament:
                 played_participants,
                 key=lambda p: (
                     self.detailed_stats[p]["games_won"],
-                    self.detailed_stats[p]["games_won"] / max(1, self.detailed_stats[p]["games_played"]),
+                    self.detailed_stats[p]["games_won"]
+                    / max(1, self.detailed_stats[p]["games_played"]),
                 ),
             )
             if played_participants
@@ -255,7 +277,8 @@ class BaseTournament:
             "participants": participants,
             "total_games": sum(
                 stats["games_played"] for stats in self.detailed_stats.values()
-            ) // 4,
+            )
+            // 4,
             "results": dict(self.detailed_stats),
             "champion": champion,
         }
