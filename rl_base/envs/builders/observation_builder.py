@@ -56,31 +56,47 @@ class ObservationBuilder:
         Returns:
             Position relative to agent's start (agent start becomes 0)
         """
-        if pos == GameConstants.HOME_POSITION:
-            return pos  # Keep home position as-is
-        if pos >= BoardConstants.HOME_COLUMN_START:
-            return pos  # Keep home column positions as-is
-
-        # For main board positions, make agent's start position = 0
+        if (
+            pos == GameConstants.HOME_POSITION
+            or pos >= BoardConstants.HOME_COLUMN_START
+        ):
+            # Keep home (-1) and home-column (>=100) positions unchanged
+            return pos
         return (pos - self.start_position + 1) % GameConstants.MAIN_BOARD_SIZE
 
     def _normalize_position(self, pos: int) -> float:
+        """Map a raw board position to [-1,1] strictly monotonically.
+
+        Ordering enforced:
+          -1 (HOME) < 0..<51 (main board) < 100..105 (home column to finish)
+        We compress the numeric gap 52..99 (unused) so progression is uniform
+        across the actually reachable sequence of states.
+
+        Monotonic guarantee: if x < y in the above logical ordering, then
+        _normalize_position(x) < _normalize_position(y).
+        """
+        pos = self._remove_agent_start(pos)
+        # Special home (not yet entered play)
         if pos == GameConstants.HOME_POSITION:
             return -1.0
-        if pos >= BoardConstants.HOME_COLUMN_START:
-            depth = (
-                pos - BoardConstants.HOME_COLUMN_START
-            ) / GameConstants.HOME_COLUMN_DEPTH_SCALE  # 0..1
-            return (
-                GameConstants.POSITION_NORMALIZATION_FACTOR
-                + depth * GameConstants.POSITION_NORMALIZATION_FACTOR
-            )
 
-        # Use relative position where agent's start is always 0
-        relative_pos = self._remove_agent_start(pos)
-        return (
-            relative_pos / (GameConstants.MAIN_BOARD_SIZE - 1)
-        ) * GameConstants.POSITION_NORMALIZATION_FACTOR  # [0,0.5]
+        # Build a compact rank skipping unreachable gap 52..99
+        # Ranks: 0 -> home (-1), 1..52 -> board 0..51, 53..58 -> home column 100..105
+        if 0 <= pos < BoardConstants.HOME_COLUMN_START:
+            rank = pos + 1  # 1..52
+        elif pos >= BoardConstants.HOME_COLUMN_START:
+            rank = (GameConstants.MAIN_BOARD_SIZE + 1) + (
+                pos - BoardConstants.HOME_COLUMN_START
+            )  # 53..(53+5)
+        else:
+            # Any unexpected negative (other than HOME) fallback just treat as home
+            return -1.0
+
+        total_ranks = (
+            1 + GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+        )  # 59
+        # Normalize rank to [-1,1]
+        return -1.0 + 2.0 * (rank / (total_ranks - 1))
 
     def _build_observation(
         self, turns: int, pending_agent_dice: int = None
@@ -107,57 +123,33 @@ class ObservationBuilder:
         # player color one-hot in fixed order R,G,Y,B
         for color in Colors.ALL_COLORS:
             vec.append(1.0 if color == self.agent_color else 0.0)
-        # can any finish (robust: simulate dice for each active/home-column token)
+
+        # can any finish (single arithmetic check per token)
+        def remaining_steps_to_finish(pos: int) -> int:
+            if pos == GameConstants.HOME_POSITION:
+                return 1_000_000  # effectively infinite (needs a 6 to exit first)
+            if pos == GameConstants.FINISH_POSITION:
+                return 1_000_000
+            if pos >= BoardConstants.HOME_COLUMN_START:
+                return GameConstants.FINISH_POSITION - pos  # direct steps inside column
+            # main board token
+            home_entry = BoardConstants.HOME_COLUMN_ENTRIES[self.agent_color]
+            if pos <= home_entry:
+                to_entry = home_entry - pos + 1  # +1 step to move past entry into 100
+            else:
+                # wrap around board then enter
+                to_entry = (GameConstants.MAIN_BOARD_SIZE - pos) + home_entry + 1
+            # 5 steps from 100..105
+            return to_entry + (
+                GameConstants.FINISH_POSITION - BoardConstants.HOME_COLUMN_START
+            )
+
         can_finish = 0.0
-        start_pos = BoardConstants.START_POSITIONS.get(self.agent_color)
         for t in agent_player.tokens:
-            if t.position < 0:  # still at home
-                continue
-            # Quick remaining distance heuristic first
-            remaining = GameConstants.FINISH_POSITION - t.position
-            if remaining <= 0:
-                continue
-            if remaining <= GameConstants.DICE_MAX:
-                # Validate by checking if any dice produces exact finish using token movement rules
-                # We clone minimal attributes to avoid mutating original token.
-                for dice_val in range(
-                    GameConstants.DICE_MIN, GameConstants.DICE_MAX + 1
-                ):
-                    # Minimal reproduction of target calculation; reuse logic similar to Token.get_target_position
-                    # If token is in home column (>= HOME_COLUMN_START)
-                    if t.position >= BoardConstants.HOME_COLUMN_START:
-                        target = t.position + dice_val
-                        if target == GameConstants.FINISH_POSITION:
-                            can_finish = 1.0
-                            break
-                    else:
-                        # Main board path
-                        if t.position == GameConstants.HOME_POSITION:
-                            continue
-                        home_entry = BoardConstants.HOME_COLUMN_ENTRIES[
-                            self.agent_color
-                        ]
-                        new_pos = t.position + dice_val
-                        if t.position <= home_entry < new_pos:
-                            overflow = new_pos - home_entry - 1
-                            target = BoardConstants.HOME_COLUMN_START + overflow
-                        elif (
-                            new_pos > GameConstants.MAIN_BOARD_SIZE - 1
-                            and self.agent_color == Colors.RED
-                        ):
-                            overflow = new_pos - GameConstants.MAIN_BOARD_SIZE
-                            target = BoardConstants.HOME_COLUMN_START + overflow
-                        else:
-                            target = (
-                                new_pos
-                                if new_pos <= GameConstants.MAIN_BOARD_SIZE - 1
-                                else new_pos - GameConstants.MAIN_BOARD_SIZE
-                            )
-                        if target == GameConstants.FINISH_POSITION:
-                            can_finish = 1.0
-                            break
-                if can_finish == 1.0:
-                    break
+            steps = remaining_steps_to_finish(t.position)
+            if 1 <= steps <= GameConstants.DICE_MAX:
+                can_finish = 1.0
+                break
         vec.append(can_finish)
         # dice one-hot (6 values for 1-6)
         if pending_agent_dice is None:
@@ -169,20 +161,28 @@ class ObservationBuilder:
             vec.extend(one_hot)
         # distance to finish for each token
         for t in agent_player.tokens:
-            if t.position == GameConstants.FINISH_POSITION:
+            pos = t.position
+            if pos == GameConstants.FINISH_POSITION:
                 dist = 0.0
-            elif t.position < 0:
-                dist = 1.0  # at home, max distance
-            elif t.position < BoardConstants.HOME_COLUMN_START:
-                # on main board
-                dist = (
-                    GameConstants.MAIN_BOARD_SIZE - t.position
-                ) / GameConstants.MAIN_BOARD_SIZE
+            elif pos == GameConstants.HOME_POSITION:
+                dist = 1.0  # still at home
             else:
-                # in home column
-                dist = (
-                    GameConstants.FINISH_POSITION - t.position
-                ) / GameConstants.HOME_COLUMN_SIZE
+                total_path = (
+                    GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+                )
+                # compute steps progressed along this color's path (mirrors logic below for mean_token_progress)
+                if pos >= BoardConstants.HOME_COLUMN_START:
+                    steps_done = GameConstants.MAIN_BOARD_SIZE + (
+                        pos - BoardConstants.HOME_COLUMN_START
+                    )
+                else:
+                    start_pos = BoardConstants.START_POSITIONS.get(self.agent_color)
+                    if pos >= start_pos:
+                        steps_done = pos - start_pos
+                    else:
+                        steps_done = (GameConstants.MAIN_BOARD_SIZE - start_pos) + pos
+                remaining_steps = max(0, total_path - steps_done)
+                dist = min(1.0, remaining_steps / total_path)
             vec.append(dist)
         # tokens at home count
         tokens_at_home = (
@@ -210,24 +210,25 @@ class ObservationBuilder:
         # agent mean token progress (path coverage)
         total_path = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
         start_pos = BoardConstants.START_POSITIONS.get(self.agent_color)
-        token_progress_vals = []
-        for t in agent_player.tokens:
-            pos = t.position
-            if pos < 0:
-                token_progress_vals.append(0.0)
-                continue
+
+        def steps_done_for(pos: int) -> int:
+            if pos == GameConstants.HOME_POSITION:
+                return 0
+            if pos == GameConstants.FINISH_POSITION:
+                return total_path  # full progress
             if pos >= BoardConstants.HOME_COLUMN_START:
-                steps = GameConstants.MAIN_BOARD_SIZE + (
+                return GameConstants.MAIN_BOARD_SIZE + (
                     pos - BoardConstants.HOME_COLUMN_START
                 )
-            else:
-                if start_pos is None:
-                    steps = 0
-                elif pos >= start_pos:
-                    steps = pos - start_pos
-                else:
-                    steps = (GameConstants.MAIN_BOARD_SIZE - start_pos) + pos
-            token_progress_vals.append(min(1.0, steps / total_path))
+            # main board portion relative to this color's start
+            if pos >= start_pos:
+                return pos - start_pos
+            return (GameConstants.MAIN_BOARD_SIZE - start_pos) + pos
+
+        token_progress_vals = []
+        for t in agent_player.tokens:
+            sd = steps_done_for(t.position)
+            token_progress_vals.append(min(1.0, sd / total_path))
         mean_token_progress = sum(token_progress_vals) / max(
             1, len(token_progress_vals)
         )
