@@ -258,34 +258,23 @@ class FourPlayerPPOTournament(BaseTournament):
                     )
 
                 # Create 4-player game
-                game = LudoGame(
-                    [
-                        PlayerColor.RED,
-                        PlayerColor.BLUE,
-                        PlayerColor.GREEN,
-                        PlayerColor.YELLOW,
-                    ]
-                )
+                colours = [
+                    PlayerColor.RED,
+                    PlayerColor.BLUE,
+                    PlayerColor.GREEN,
+                    PlayerColor.YELLOW,
+                ]
+                game = LudoGame(colours)
 
-                # Assign strategies ensuring PPO always sits at RED (index 0)
-                # Find PPO index in randomized order
-                if self.ppo_model in game_players:
-                    ppo_idx = game_players.index(self.ppo_model)
-                    # Swap to front if not already
-                    if ppo_idx != 0:
-                        game_players[0], game_players[ppo_idx] = (
-                            game_players[ppo_idx],
-                            game_players[0],
-                        )
                 # Assign strategies. Always wrap PPO model in its strategy class for consistency across env modes.
-                for i, player_name in enumerate(game_players):
+                for i, (player_name, colour) in enumerate(zip(game_players, colours)):
                     if player_name == self.ppo_model:
                         model_path = f"{self.models_dir}/{player_name}.zip"
                         try:
                             strategy = self.PPOStrategyClass(
                                 model_path,
                                 player_name,
-                                self.EnvConfigClass(agent_color="red"),
+                                self.EnvConfigClass(agent_color=colour.value),
                             )
                         except Exception as e:
                             raise RuntimeError(
