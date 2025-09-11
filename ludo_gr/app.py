@@ -49,9 +49,13 @@ def _init_game(strategies: List[str]):
             # Load PPO strategy with default settings
             color = DEFAULT_PLAYERS[i]
             try:
-                strategy = load_ppo_strategy("classic", "./models", "ppo", color, "best")
+                strategy = load_ppo_strategy(
+                    "classic", "./models", "ppo", color, "best"
+                )
             except Exception as e:
-                print(f"Failed to load PPO strategy: {e}. Using random strategy instead.")
+                print(
+                    f"Failed to load PPO strategy: {e}. Using random strategy instead."
+                )
                 strategy = StrategyFactory.create_strategy("random")
         else:
             strategy = StrategyFactory.create_strategy(strat_name)

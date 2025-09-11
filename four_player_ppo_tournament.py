@@ -17,10 +17,9 @@ import numpy as np
 from dotenv import load_dotenv
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
-
 from ludo_stats.game_state_saver import GameStateSaver
 from ludo_tournament import BaseTournament
-from rl_base.load_ppo_model import select_best_ppo_model, load_ppo_strategy
+from rl_base.load_ppo_model import load_ppo_strategy, select_best_ppo_model
 
 load_dotenv()
 
@@ -226,7 +225,13 @@ class FourPlayerPPOTournament(BaseTournament):
                 # Assign strategies. Always wrap PPO model in its strategy class for consistency across env modes.
                 for i, (player_name, colour) in enumerate(zip(game_players, colours)):
                     if player_name == self.ppo_model:
-                        strategy = load_ppo_strategy(self.env_kind, self.models_dir, player_name, colour, self.model_preference)
+                        strategy = load_ppo_strategy(
+                            self.env_kind,
+                            self.models_dir,
+                            player_name,
+                            colour,
+                            self.model_preference,
+                        )
                     else:
                         strategy = StrategyFactory.create_strategy(player_name)
                     game.players[i].set_strategy(strategy)

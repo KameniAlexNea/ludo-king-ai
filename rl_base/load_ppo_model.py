@@ -29,7 +29,7 @@ def select_best_ppo_model(models_dir, model_preference):
     model_files: list[str] = [f for f in os.listdir(models_dir) if f.endswith(".zip")]
     if not model_files:
         raise FileNotFoundError(f"No PPO model files found in {models_dir}/")
-    
+
     # Define preference order
     if model_preference == "best":
         prefs = ["best", "final", "steps"]
@@ -37,7 +37,7 @@ def select_best_ppo_model(models_dir, model_preference):
         prefs = ["final", "best", "steps"]
     elif model_preference == "steps":
         prefs = ["steps", "best", "final"]
-    
+
     # Try each preference in order
     for pref in prefs:
         if pref == "best":
@@ -69,12 +69,18 @@ def select_best_ppo_model(models_dir, model_preference):
     return model_files[0].replace(".zip", "")
 
 
-def load_ppo_strategy(env_kind: str, models_dir: str, player_name: str = "ppo", agent_color: PlayerColor = PlayerColor.RED, model_preference: str = "last"):
+def load_ppo_strategy(
+    env_kind: str,
+    models_dir: str,
+    player_name: str = "ppo",
+    agent_color: PlayerColor = PlayerColor.RED,
+    model_preference: str = "last",
+):
     """Load and return the PPO strategy instance."""
     EnvConfigClass, PPOStrategyClass = load_ppo_wrapper(env_kind)
     model_name = select_best_ppo_model(models_dir, model_preference)
     model_path = os.path.join(models_dir, f"{model_name}.zip")
-    
+
     try:
         strategy = PPOStrategyClass(
             model_path,
@@ -85,5 +91,5 @@ def load_ppo_strategy(env_kind: str, models_dir: str, player_name: str = "ppo", 
         raise RuntimeError(
             f"Failed to initialize PPO strategy for model '{model_name}': {e}"
         ) from e
-    
+
     return strategy
