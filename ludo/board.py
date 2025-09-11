@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from ludo.constants import BoardConstants
 from ludo.player import Player, PlayerColor
-from ludo.token import Token
+from ludo.token import Token, TokenState
 
 
 @dataclass
@@ -239,7 +239,6 @@ class Board:
         # Capture opponent tokens
         for captured_token in tokens_to_capture:
             self.remove_token(captured_token, new_position)
-            from .token import TokenState
 
             captured_token.state = TokenState.HOME
             captured_token.position = -1

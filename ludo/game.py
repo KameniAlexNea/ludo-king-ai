@@ -146,7 +146,7 @@ class LudoGame:
         old_position = token.position
         target_position = token.get_target_position(dice_value, player.start_position)
 
-        if target_position == -1:  # HOME_POSITION sentinel for invalid
+        if target_position == token.position:
             return {"success": False, "error": "Invalid target position"}
 
         # Validate board occupancy / capture

@@ -175,8 +175,6 @@ class Player:
 
     def _get_move_type(self, token: Token, dice_value: int) -> str:
         """Determine the type of move being made."""
-        from .constants import GameConstants  # local import to avoid cycles
-
         if token.is_in_home() and dice_value == GameConstants.EXIT_HOME_ROLL:
             return "exit_home"
         if token.is_in_home_column():
