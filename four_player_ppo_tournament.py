@@ -21,6 +21,7 @@ from ludo import LudoGame, PlayerColor, StrategyFactory
 # Dynamic PPO strategy & EnvConfig import handled after CLI args (see FourPlayerPPOTournament._load_ppo_wrapper)
 from ludo_stats.game_state_saver import GameStateSaver
 from ludo_tournament import BaseTournament
+from rl_base.load_ppo_model import load_ppo_strategy
 
 load_dotenv()
 
@@ -72,13 +73,12 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        "--env",
-        choices=["single-seat", "classic"],
-        default="single-seat",
-        help="Which PPO environment/wrapper to use: single-seat (ludo_rls) or classic multi-seat (ludo_rl).",
+        "--model-preference",
+        type=str,
+        choices=["best", "final", "steps"],
+        default="best",
+        help="Preference for selecting PPO model: 'best' (prefer BEST model), 'final' (prefer FINAL model), 'steps' (prefer highest step count)",
     )
-
-    return parser.parse_args()
 
 
 def run_game_with_seed(seed):
@@ -99,6 +99,7 @@ class FourPlayerPPOTournament(BaseTournament):
         self.output_dir = args.output_dir
         self.selected_strategies = args.strategies
         self.env_kind = args.env  # 'single-seat' or 'classic'
+        self.model_preference = args.model_preference  # 'best', 'final', or 'steps'
 
         # Dynamic PPO wrapper classes (for classic mode) / policy loading
         self._load_ppo_wrapper()
@@ -126,6 +127,7 @@ class FourPlayerPPOTournament(BaseTournament):
         if self.verbose_output:
             print("🎯 PPO vs Strategies Tournament Configuration:")
             print(f"   • PPO Model: {self.ppo_model}")
+            print(f"   • Model Preference: {self.model_preference}")
             print(f"   • Available strategies: {len(self.all_strategies)}")
             print(f"   • Strategy combinations: {len(self.strategy_combinations)}")
             print(f"   • Games per matchup: {self.games_per_matchup}")
@@ -163,35 +165,48 @@ class FourPlayerPPOTournament(BaseTournament):
         return StrategyFactory.get_available_strategies()
 
     def _select_best_ppo_model(self):
-        """Select the best PPO model (prefer FINAL, then highest step count)."""
+        """Select the best PPO model based on configured preference."""
         if not os.path.exists(self.models_dir):
             raise FileNotFoundError(f"Models directory {self.models_dir} not found")
 
         model_files = [f for f in os.listdir(self.models_dir) if f.endswith(".zip")]
         if not model_files:
             raise FileNotFoundError(f"No PPO model files found in {self.models_dir}/")
-
-        # Prefer FINAL model, then highest step count
-        final_model = next((f for f in model_files if "final" in f.lower()), None)
-        if final_model:
-            return final_model.replace(".zip", "")
-
-        # Extract step numbers and find highest
-        step_models = []
-        for f in model_files:
-            try:
-                # Extract number from filename like "ppo_ludo_1000000_steps"
-                parts = f.replace(".zip", "").split("_")
-                for part in parts:
-                    if part.isdigit():
-                        step_models.append((int(part), f.replace(".zip", "")))
-                        break
-            except Exception:
-                continue
-
-        if step_models:
-            step_models.sort(reverse=True)
-            return step_models[0][1]
+        
+        # Define preference order
+        if self.model_preference == "best":
+            prefs = ["best", "final", "steps"]
+        elif self.model_preference == "final":
+            prefs = ["final", "best", "steps"]
+        elif self.model_preference == "steps":
+            prefs = ["steps", "best", "final"]
+        
+        # Try each preference in order
+        for pref in prefs:
+            if pref == "best":
+                best_model = next((f for f in model_files if "best" in f.lower()), None)
+                if best_model:
+                    return best_model.replace(".zip", "")
+            elif pref == "final":
+                final_model = next((f for f in model_files if "final" in f.lower()), None)
+                if final_model:
+                    return final_model.replace(".zip", "")
+            elif pref == "steps":
+                # Extract step numbers and find highest
+                step_models = []
+                for f in model_files:
+                    try:
+                        # Extract number from filename like "ppo_ludo_1000000_steps"
+                        parts = f.replace(".zip", "").split("_")
+                        for part in parts:
+                            if part.isdigit():
+                                step_models.append((int(part), f.replace(".zip", "")))
+                                break
+                    except Exception:
+                        continue
+                if step_models:
+                    step_models.sort(reverse=True)
+                    return step_models[0][1]
 
         # Fallback to first model
         return model_files[0].replace(".zip", "")

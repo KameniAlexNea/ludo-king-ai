@@ -42,14 +42,14 @@ def _img_to_data_uri(pil_img):
 
 def _init_game(strategies: List[str]):
     # Instantiate strategies via factory
-    strategy_objs = []
-    for color, strat_name in zip(DEFAULT_PLAYERS, strategies):
-        strategy_objs.append(StrategyFactory.create_strategy(strat_name))
+    strategy_objs = [
+        StrategyFactory.create_strategy(strat_name) for strat_name in strategies
+    ]
     # Build game with chosen strategies
-    game = LudoGame([c for c in DEFAULT_PLAYERS])
+    game = LudoGame(DEFAULT_PLAYERS)
     # Attach strategies
     for player, strat in zip(game.players, strategy_objs):
-        player.strategy = strat
+        player.set_strategy(strat)
     return game
 
 
