@@ -99,10 +99,13 @@ def _play_step(game: LudoGame):
     dice = game.roll_dice()
     valid = game.get_valid_moves(current_player, dice)
     if not valid:
-        game.next_turn()
+        # If rolled a 6, player gets another turn even with no moves
+        extra_turn = (dice == 6)
+        if not extra_turn:
+            game.next_turn()
         return (
             game,
-            f"{current_player.color.value} rolled {dice} - no moves",
+            f"{current_player.color.value} rolled {dice} - no moves{' (extra turn)' if extra_turn else ''}",
             _game_state_tokens(game),
         )
     # If player has strategy use it; else pick first
