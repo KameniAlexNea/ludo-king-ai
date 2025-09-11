@@ -6,14 +6,14 @@ from ludo.constants import BoardConstants, GameConstants
 from ludo.game import LudoGame
 from ludo.player import Player
 
-from ..model import EnvConfig
+from ..model import BaseEnvConfig
 from .probabilistic_calculator import ProbabilisticCalculator
 
 
 class RewardCalculator:
     """Handles reward computation, including probabilistic modifiers."""
 
-    def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: str):
+    def __init__(self, cfg: BaseEnvConfig, game: LudoGame, agent_color: str):
         self.cfg = cfg
         self.game = game
         self.agent_color = agent_color

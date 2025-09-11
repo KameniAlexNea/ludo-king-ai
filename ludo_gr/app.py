@@ -17,8 +17,9 @@ from ludo.game import LudoGame
 from ludo.player import PlayerColor
 from ludo.strategy import StrategyFactory
 from ludo_gr.board_viz import draw_board
+from rl_base.load_ppo_model import load_ppo_strategy
 
-AI_STRATEGIES = StrategyFactory.get_available_strategies()
+AI_STRATEGIES = ["ppo"] + StrategyFactory.get_available_strategies()
 DEFAULT_PLAYERS = [
     PlayerColor.RED,
     PlayerColor.GREEN,
@@ -43,13 +44,27 @@ def _img_to_data_uri(pil_img):
 def _init_game(strategies: List[str]):
     # Instantiate strategies via factory
     strategy_objs = []
-    for color, strat_name in zip(DEFAULT_PLAYERS, strategies):
-        strategy_objs.append(StrategyFactory.create_strategy(strat_name))
+    for i, strat_name in enumerate(strategies):
+        if strat_name == "ppo":
+            # Load PPO strategy with default settings
+            color = DEFAULT_PLAYERS[i]
+            try:
+                strategy = load_ppo_strategy(
+                    "classic", "./models", "ppo", color, "best"
+                )
+            except Exception as e:
+                print(
+                    f"Failed to load PPO strategy: {e}. Using random strategy instead."
+                )
+                strategy = StrategyFactory.create_strategy("random")
+        else:
+            strategy = StrategyFactory.create_strategy(strat_name)
+        strategy_objs.append(strategy)
     # Build game with chosen strategies
-    game = LudoGame([c for c in DEFAULT_PLAYERS])
+    game = LudoGame(DEFAULT_PLAYERS)
     # Attach strategies
     for player, strat in zip(game.players, strategy_objs):
-        player.strategy = strat
+        player.set_strategy(strat)
     return game
 
 

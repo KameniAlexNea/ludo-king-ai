@@ -1,167 +1,62 @@
-"""Simple deterministic reward calculation utilities for LudoGymEnv.
+"""Simple deterministic reward calculation utilities for LudoGymEnv (ludo_rl version).
 
-This module provides a minimal reward function that lets the agent learn
-strategic play through experience, rather than hard-coding policy decisions.
+This inherits from the base calculator and customizes for the ludo_rl environment.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-from ludo.constants import BoardConstants, GameConstants
-from ludo.game import LudoGame
-from ludo.player import Player
-from ludo.token import Token
+from rl_base.envs.calculators.reward_calculator import RewardCalculator
 
 from ..model import EnvConfig
-from ..model import SimpleRewardConstants as RewardConstants
 
 
-class SimpleRewardCalculator:
-    """Minimal reward calculator that lets the agent learn strategy through experience."""
+class SimpleRewardCalculator(RewardCalculator):
+    """Classic multi-seat reward calculator."""
 
-    def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: str):
-        self.cfg = cfg
-        self.game = game
-        self.agent_color = agent_color
-
-    def _get_token_progress(
-        self, token: Token, position: Optional[int] = None
-    ) -> float:
-        """Calculate a token's normalized progress towards its finish line (0.0 to 1.0).
-
-        Args:
-            token: The token to calculate progress for
-            position: Optional position to calculate progress at (defaults to token's current position)
-        """
-        pos = position if position is not None else token.position
-
-        if pos >= GameConstants.FINISH_POSITION:
-            return 1.0
-        if pos < 0:
-            return 0.0
-
-        # Total number of spaces a token must travel from home to finish
-        total_path_length = (
-            GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
-        )
-
-        # Calculate steps from start to current position
-        player_start_pos = BoardConstants.START_POSITIONS.get(token.player_color)
-        if player_start_pos is None:
-            return 0.0
-
-        current_steps = 0
-        if pos < GameConstants.HOME_COLUMN_START:
-            # On main board
-            if pos >= player_start_pos:
-                current_steps = pos - player_start_pos
-            else:
-                # Wrap around the board
-                current_steps = (GameConstants.MAIN_BOARD_SIZE - player_start_pos) + pos
-        else:
-            # In home column
-            current_steps = GameConstants.MAIN_BOARD_SIZE + (
-                pos - GameConstants.HOME_COLUMN_START
-            )
-
-        return min(current_steps / total_path_length, 1.0)
-
-    def _compute_movement_reward(self, move_res: Dict) -> float:
-        """Unified movement reward combining progress and safety incentives.
-
-        Uses the start_position captured before executing the move to avoid zero deltas.
-        """
-        token: Optional[Token] = move_res.get("token")
-        if token is None or not isinstance(token, Token):
-            return 0.0
-
-        target_pos = move_res.get("target_position")
-        start_pos = move_res.get("start_position")
-        if target_pos is None or start_pos is None:
-            return 0.0
-
-        initial_progress = self._get_token_progress(token, start_pos)
-        final_progress = self._get_token_progress(token, target_pos)
-        progress_delta = final_progress - initial_progress
-        if progress_delta <= 0:
-            return 0.0
-
-        reward = progress_delta * RewardConstants.TOKEN_PROGRESS_REWARD
-        if BoardConstants.is_home_column_position(target_pos):
-            reward *= RewardConstants.HOME_COLUMN_MULTIPLIER
-        if BoardConstants.is_safe_position(target_pos):
-            reward += RewardConstants.SAFE_POSITION_BONUS
-        return reward
-
-    def _compute_capture_reward(self, move_res: Dict) -> float:
-        """Simple capture reward - let agent learn capture value."""
-        captured_tokens = move_res.get("captured_tokens", [])
-        return len(captured_tokens) * RewardConstants.CAPTURE_REWARD
-
-    def _compute_got_captured_penalty(
-        self, move_res: Dict, token_positions_before: Optional[List[int]] = None
-    ) -> float:
-        """Simple capture penalty."""
-        if token_positions_before is not None:
-            # Count tokens that were captured
-            agent_player = next(
-                p for p in self.game.players if p.color.value == self.agent_color
-            )
-            current_positions = [
-                token.position for token in agent_player.tokens
-            ]  # Simplified
-            captured_count = sum(
-                1
-                for before, current in zip(token_positions_before, current_positions)
-                if before >= 0 and current < 0
-            )
-            return captured_count * RewardConstants.GOT_CAPTURED_PENALTY
-        else:
-            # Fallback
-            return (
-                RewardConstants.GOT_CAPTURED_PENALTY
-                if move_res.get("was_captured")
-                else 0.0
-            )
+    def __init__(self, cfg: EnvConfig, game, agent_color: str):
+        super().__init__(cfg, game, agent_color)
 
     def compute_comprehensive_reward(
         self,
         move_res: Dict,
-        progress_delta: float,  # overall board progress (agent-wide) if needed
+        progress_delta: float,
         extra_turn: bool,
         diversity_bonus: bool,
         illegal_action: bool,
-        token_positions_before: Optional[List[int]] = None,
+        reward_components: List[float],
     ) -> Dict[str, float]:
-        """Return a dict of atomic reward components (no side-effects)."""
-        components: Dict[str, float] = {}
+        """Compute comprehensive reward components.
 
-        components["capture"] = self._compute_capture_reward(move_res)
-        components["got_captured"] = self._compute_got_captured_penalty(
-            move_res, token_positions_before
-        )
-        components["movement"] = self._compute_movement_reward(move_res)
+        Returns:
+            Dict of reward components (not total reward like base class)
+        """
+        components = {}
+
+        rcfg = self.cfg.reward_cfg
+
+        # Handle illegal actions
+        if illegal_action:
+            components["illegal"] = rcfg.illegal_action
+
+        # Handle other rewards
+        if move_res.get("captured_tokens"):
+            capture_count = len(move_res["captured_tokens"])
+            components["capture"] = rcfg.capture * capture_count
+
+        if move_res.get("got_captured"):
+            components["got_captured"] = rcfg.got_captured
+
+        if extra_turn:
+            components["extra_turn"] = rcfg.extra_turn
 
         if move_res.get("token_finished"):
-            components["token_finished"] = RewardConstants.TOKEN_PROGRESS_REWARD * 10
-        if extra_turn:
-            components["extra_turn"] = RewardConstants.EXTRA_TURN_BONUS
-        if diversity_bonus:
-            components["diversity"] = self.cfg.reward_cfg.diversity_bonus
-        if illegal_action:
-            components["illegal"] = self.cfg.reward_cfg.illegal_action
-        # Optionally include progress_delta shaping (currently off)
-        if progress_delta != 0.0:
-            # small shaping term (can tune or disable)
-            components["progress_delta"] = progress_delta * 0.0  # disabled
+            components["token_finished"] = rcfg.finish_token
+
+        # Progress reward
+        if progress_delta > 0:
+            components["progress"] = progress_delta * rcfg.progress_scale
+
+        # Time penalty (small per-step cost)
+        components["time"] = rcfg.time_penalty
 
         return components
-
-    def get_terminal_reward(
-        self, agent_player: Player, opponents: list[Player]
-    ) -> float:
-        """Simple terminal rewards."""
-        if agent_player.has_won():
-            return RewardConstants.WIN_REWARD
-        elif any(opp.has_won() for opp in opponents):
-            return RewardConstants.LOSS_PENALTY
-        return 0.0

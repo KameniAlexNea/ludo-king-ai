@@ -1,127 +1,20 @@
-"""Simple deterministic reward calculation utilities for LudoGymEnv.
+"""Simple deterministic reward calculation utilities for LudoGymEnv (ludo_rls version).
 
-This module provides a minimal reward function that lets the agent learn
-strategic play through experience, rather than hard-coding policy decisions.
+This inherits from the base calculator and customizes for the ludo_rls environment.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-from ludo.constants import BoardConstants, GameConstants
-from ludo.game import LudoGame
-from ludo.player import Player
-from ludo.token import Token
+from rl_base.envs.calculators.reward_calculator import RewardCalculator
 
 from ..model import EnvConfig
-from ..model import SimpleRewardConstants as RewardConstants
 
 
-class SimpleRewardCalculator:
-    """Minimal reward calculator that lets the agent learn strategy through experience."""
+class SimpleRewardCalculator(RewardCalculator):
+    """Self-play reward calculator with ludo_rls specific features."""
 
-    def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: str):
-        self.cfg = cfg
-        self.game = game
-        self.agent_color = agent_color
-
-    def _get_token_progress(
-        self, token: Token, position: Optional[int] = None
-    ) -> float:
-        """Calculate a token's normalized progress towards its finish line (0.0 to 1.0).
-
-        Args:
-            token: The token to calculate progress for
-            position: Optional position to calculate progress at (defaults to token's current position)
-        """
-        pos = position if position is not None else token.position
-
-        if pos >= GameConstants.FINISH_POSITION:
-            return 1.0
-        if pos < 0:
-            return 0.0
-
-        # Total number of spaces a token must travel from home to finish
-        total_path_length = (
-            GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
-        )
-
-        # Calculate steps from start to current position
-        player_start_pos = BoardConstants.START_POSITIONS.get(token.player_color)
-        if player_start_pos is None:
-            return 0.0
-
-        current_steps = 0
-        if pos < GameConstants.HOME_COLUMN_START:
-            # On main board
-            if pos >= player_start_pos:
-                current_steps = pos - player_start_pos
-            else:
-                # Wrap around the board
-                current_steps = (GameConstants.MAIN_BOARD_SIZE - player_start_pos) + pos
-        else:
-            # In home column
-            current_steps = GameConstants.MAIN_BOARD_SIZE + (
-                pos - GameConstants.HOME_COLUMN_START
-            )
-
-        return min(current_steps / total_path_length, 1.0)
-
-    def _compute_movement_reward(self, move_res: Dict) -> float:
-        """Unified movement reward combining progress and safety incentives.
-
-        Uses the start_position captured before executing the move to avoid zero deltas.
-        """
-        token: Optional[Token] = move_res.get("token")
-        if token is None or not isinstance(token, Token):
-            return 0.0
-
-        target_pos = move_res.get("target_position")
-        start_pos = move_res.get("start_position")
-        if target_pos is None or start_pos is None:
-            return 0.0
-
-        initial_progress = self._get_token_progress(token, start_pos)
-        final_progress = self._get_token_progress(token, target_pos)
-        progress_delta = final_progress - initial_progress
-        if progress_delta <= 0:
-            return 0.0
-
-        reward = progress_delta * RewardConstants.TOKEN_PROGRESS_REWARD
-        if BoardConstants.is_home_column_position(target_pos):
-            reward *= RewardConstants.HOME_COLUMN_MULTIPLIER
-        if BoardConstants.is_safe_position(target_pos):
-            reward += RewardConstants.SAFE_POSITION_BONUS
-        return reward
-
-    def _compute_capture_reward(self, move_res: Dict) -> float:
-        """Simple capture reward - let agent learn capture value."""
-        captured_tokens = move_res.get("captured_tokens", [])
-        return len(captured_tokens) * RewardConstants.CAPTURE_REWARD
-
-    def _compute_got_captured_penalty(
-        self, move_res: Dict, token_positions_before: Optional[List[int]] = None
-    ) -> float:
-        """Simple capture penalty."""
-        if token_positions_before is not None:
-            # Count tokens that were captured
-            agent_player = next(
-                p for p in self.game.players if p.color.value == self.agent_color
-            )
-            current_positions = [
-                token.position for token in agent_player.tokens
-            ]  # Simplified
-            captured_count = sum(
-                1
-                for before, current in zip(token_positions_before, current_positions)
-                if before >= 0 and current < 0
-            )
-            return captured_count * RewardConstants.GOT_CAPTURED_PENALTY
-        else:
-            # Fallback
-            return (
-                RewardConstants.GOT_CAPTURED_PENALTY
-                if move_res.get("was_captured")
-                else 0.0
-            )
+    def __init__(self, cfg: EnvConfig, game, agent_color: str):
+        super().__init__(cfg, game, agent_color)
 
     def compute_comprehensive_reward(
         self,
@@ -130,62 +23,76 @@ class SimpleRewardCalculator:
         extra_turn: bool,
         diversity_bonus: bool,
         illegal_action: bool,
-        token_positions_before: Optional[List[int]] = None,
+        reward_components: List[float],
+        token_positions_before: List[int] = None,
         masked_autocorrect: bool = False,
     ) -> Dict[str, float]:
-        """Return a dict of atomic reward components (no side-effects).
+        """Extended version that supports ludo_rls specific parameters.
 
-        masked_autocorrect: indicates the chosen action was invalid but auto-corrected due to masking (apply scaled penalty)
+        Args:
+            token_positions_before: Token positions before the move (for ludo_rls compatibility)
+            masked_autocorrect: Whether action was auto-corrected due to masking
+
+        Returns:
+            Dict of reward components (not total reward like base class)
         """
-        components: Dict[str, float] = {}
+        # Use the base method but ignore the extra parameters for now
+        # and return a dict instead of total reward
+        components = {}
 
-        cap = self._compute_capture_reward(move_res)
-        if cap != 0:
-            components["capture"] = cap
-        got_cap = self._compute_got_captured_penalty(move_res, token_positions_before)
-        if got_cap != 0:
-            components["got_captured"] = got_cap
-        move_r = self._compute_movement_reward(move_res)
-        if move_r != 0:
-            components["movement"] = move_r
+        rcfg = self.cfg.reward_cfg
+
+        # Handle illegal actions
+        if illegal_action:
+            penalty = rcfg.illegal_action
+            if masked_autocorrect:
+                penalty *= getattr(rcfg, "illegal_masked_scale", 0.25)
+            components["illegal"] = penalty
+
+        # Handle other rewards similar to base class
+        if move_res.get("captured_tokens"):
+            capture_count = len(move_res["captured_tokens"])
+            components["capture"] = rcfg.capture * capture_count
+
+        if move_res.get("got_captured"):
+            components["got_captured"] = rcfg.got_captured
+
+        if extra_turn:
+            components["extra_turn"] = rcfg.extra_turn
 
         if move_res.get("token_finished"):
-            components["token_finished"] = self.cfg.reward_cfg.finish_token
-        if extra_turn:
-            components["extra_turn"] = self.cfg.reward_cfg.extra_turn
-        if diversity_bonus:
-            components["diversity"] = self.cfg.reward_cfg.diversity_bonus
-        if illegal_action:
-            penalty = self.cfg.reward_cfg.illegal_action
-            if masked_autocorrect:
-                penalty *= self.cfg.reward_cfg.illegal_masked_scale
-            components["illegal"] = penalty
-        # per-step small time penalty
-        components["time"] = self.cfg.reward_cfg.time_penalty
-        if progress_delta != 0.0:
-            # minimal shaping
-            components["progress"] = progress_delta * self.cfg.reward_cfg.progress_scale
+            components["token_finished"] = rcfg.finish_token
+
+        # Progress reward
+        if progress_delta > 0:
+            components["progress"] = progress_delta * rcfg.progress_scale
+
+        # Time penalty (small per-step cost)
+        components["time"] = rcfg.time_penalty
+
         return components
 
     def get_terminal_reward(
-        self,
-        agent_player: Player,
-        opponents: list[Player],
-        truncated: bool = False,
+        self, agent_player, opponents: list, truncated: bool = False
     ) -> float:
-        """Return terminal reward.
+        """Extended version that supports truncated parameter for ludo_rls.
 
-        Priority:
-          1. If true game_over: win -> win reward, else lose reward.
-          2. Else if episode truncated (timeout) with no winner: apply draw penalty.
-          3. Otherwise: 0.
+        Args:
+            agent_player: The agent player
+            opponents: List of opponent players
+            truncated: Whether the episode was truncated due to timeout
+
+        Returns:
+            Terminal reward value
         """
+        rcfg = self.cfg.reward_cfg
+
         if self.game.game_over:
             if agent_player.has_won():
-                return self.cfg.reward_cfg.win
-            return self.cfg.reward_cfg.lose
+                return rcfg.win
+            return rcfg.lose
         if truncated:
             # Only treat as draw if nobody actually won
             if not any(p.has_won() for p in self.game.players):
-                return self.cfg.reward_cfg.draw_penalty
+                return getattr(rcfg, "draw_penalty", -2.0)
         return 0.0

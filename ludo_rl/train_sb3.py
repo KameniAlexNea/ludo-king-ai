@@ -73,8 +73,13 @@ def main():
     parser.add_argument(
         "--tournament-baselines",
         type=str,
-        default="optimist,balanced,probabilistic_v3,cautious,killer,probabilistic",
+        default="hybrid_prob,balanced,cautious,killer,probabilistic",
         help="Comma separated baseline strategy names (must be valid StrategyFactory names)",
+    )
+    parser.add_argument(
+        "--no-curriculum",
+        action="store_true",
+        help="Disable graduated opponent curriculum (sample uniformly from candidates)",
     )
     args = parser.parse_args()
 
@@ -82,8 +87,11 @@ def main():
     os.makedirs(args.model_dir, exist_ok=True)
 
     base_cfg = EnvConfig(max_turns=args.max_turns)
-    if args.no_probabilistic_rewards:
-        base_cfg.reward_cfg.use_probabilistic_rewards = False
+    base_cfg.reward_cfg.use_probabilistic_rewards = not args.no_probabilistic_rewards
+
+    # Configure opponent curriculum
+    base_cfg.opponent_curriculum.enabled = not args.no_curriculum
+    # Use default progress-based curriculum; no advanced CLI overrides
 
     if args.n_envs == 1:
         env_fns = [make_env(0, 42, base_cfg)]
@@ -149,6 +157,7 @@ def main():
     )
 
     # Tournament callback (optional baselines evaluation) - imported lazily to avoid overhead if unused
+    from .callbacks.progress_curriculum import ProgressCurriculumCallback
     from .callbacks.tournament_callback import ClassicTournamentCallback
 
     baseline_names = [
@@ -163,9 +172,23 @@ def main():
         verbose=1,
     )
 
+    progress_cb = None
+    if (
+        base_cfg.opponent_curriculum.enabled
+        and base_cfg.opponent_curriculum.use_progress
+    ):
+        # Update envs with progress every 10k steps (lightweight)
+        progress_cb = ProgressCurriculumCallback(
+            total_timesteps=args.total_steps, update_freq=10_000
+        )
+
+    callbacks = [checkpoint_cb, eval_cb, tournament_cb]
+    if progress_cb:
+        callbacks.append(progress_cb)
+
     model.learn(
         total_timesteps=args.total_steps,
-        callback=[checkpoint_cb, eval_cb, tournament_cb],
+        callback=callbacks,
     )
     model.save(os.path.join(args.model_dir, "ppo_ludo_final"))
 

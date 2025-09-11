@@ -69,6 +69,11 @@ class BoardConstants:
         "blue": {40},  # Only starting position (safe for everyone)
     }
 
+    # Home column positions (100 to 105)
+    HOME_COLUMN_START = GameConstants.HOME_COLUMN_START
+    HOME_COLUMN_END = GameConstants.FINISH_POSITION
+    FINISH_POSITION = GameConstants.FINISH_POSITION
+
     # All safe squares (combination of star squares and colored squares)
     @classmethod
     def get_all_safe_squares(cls) -> Set[int]:
@@ -77,11 +82,6 @@ class BoardConstants:
         for color_squares in cls.COLORED_SAFE_SQUARES.values():
             all_safe.update(color_squares)
         return all_safe
-
-    # Home column positions (100 to 105)
-    HOME_COLUMN_START = GameConstants.HOME_COLUMN_START
-    HOME_COLUMN_END = GameConstants.FINISH_POSITION
-    FINISH_POSITION = GameConstants.FINISH_POSITION
 
     @classmethod
     def is_home_column_position(cls, position: int) -> bool:

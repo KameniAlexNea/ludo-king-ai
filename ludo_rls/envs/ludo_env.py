@@ -334,6 +334,7 @@ class LudoGymEnv(gym.Env):
             illegal_action=illegal,
             token_positions_before=token_positions_before,
             masked_autocorrect=masked_autocorrect,
+            reward_components=reward_components,
         )
         # Opponent components already accumulated in reward_components; capture their sum
         opponent_total = sum(reward_components)

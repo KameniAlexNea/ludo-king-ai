@@ -7,13 +7,13 @@ from ludo.game import LudoGame
 from ludo.player import Player
 from ludo.token import Token
 
-from ..model import EnvConfig
+from ..model import BaseEnvConfig
 
 
 class ProbabilisticCalculator:
     """Handles probabilistic calculations for risk assessment and rewards."""
 
-    def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: str):
+    def __init__(self, cfg: BaseEnvConfig, game: LudoGame, agent_color: str):
         self.cfg = cfg
         self.game = game
         self.agent_color = agent_color

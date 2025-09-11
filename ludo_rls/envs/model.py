@@ -1,33 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from ludo.constants import Colors
-
-
-# Reward calculation constants
-class SimpleRewardConstants:
-    """Minimal constants for reward calculations - let the agent learn strategy."""
-
-    # Core rewards (let agent learn when these matter)
-    TOKEN_PROGRESS_REWARD = 1.0  # Increased from 0.1 for stronger learning signal
-    CAPTURE_REWARD = 10.0  # Increased from 5.0
-    GOT_CAPTURED_PENALTY = -6.0  # Increased from -3.0
-    EXTRA_TURN_BONUS = 2.0  # Increased from 1.0
-    SAFE_POSITION_BONUS = 1.0  # Increased from 0.5
-
-    # Terminal rewards
-    WIN_REWARD = 200.0  # Increased from 100.0
-    LOSS_PENALTY = -200.0  # Increased from -100.0
-
-    # Minimal scaling (avoid over-engineering)
-    PROGRESS_NONLINEARITY = 1.2  # Slight non-linearity for progress
-    HOME_COLUMN_MULTIPLIER = 2.0  # Bonus for home column progress
+from rl_base.envs.model import BaseEnvConfig, BaseRewardConfig, ObservationConfig
 
 
 @dataclass
-class RewardConfig:
+class RewardConfig(BaseRewardConfig):
     """Balanced reward configuration for strategic Ludo play (self-play tuned)."""
 
     # Major events (highest priority)
@@ -64,19 +44,10 @@ class RewardConfig:
 
 
 @dataclass
-class ObservationConfig:
-    include_blocking_count: bool = True
-    include_turn_index: bool = True
-    include_raw_dice: bool = True
-    normalize_positions: bool = True
-
-
-@dataclass
-class EnvConfig:
+class EnvConfig(BaseEnvConfig):
     agent_color: str = Colors.RED
     max_turns: int = 1000
     reward_cfg: RewardConfig = field(default_factory=RewardConfig)
     obs_cfg: ObservationConfig = field(default_factory=ObservationConfig)
-    seed: Optional[int] = None
     use_action_mask: bool = True  # When True, invalid chosen actions are auto-corrected without large penalty
     randomize_training_color: bool = True  # Re-sample training seat each reset

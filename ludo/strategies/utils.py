@@ -109,7 +109,9 @@ def compute_threats_for_moves(
     return res
 
 
-def get_opponent_main_positions_with_fallback(game_context: Dict, current_color: str) -> List[int]:
+def get_opponent_main_positions_with_fallback(
+    game_context: Dict, current_color: str
+) -> List[int]:
     """Get opponent positions with fallback to board_state if utils fails."""
     res = get_opponent_main_positions(game_context)
     if res:
@@ -130,7 +132,9 @@ def get_opponent_main_positions_with_fallback(game_context: Dict, current_color:
     return fallback
 
 
-def get_my_main_positions_with_fallback(game_context: Dict, current_color: str) -> List[int]:
+def get_my_main_positions_with_fallback(
+    game_context: Dict, current_color: str
+) -> List[int]:
     """Get own positions with fallback to board_state if utils fails."""
     mine = list(get_my_main_positions(game_context))
     if mine:
