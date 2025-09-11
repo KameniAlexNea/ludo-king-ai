@@ -25,8 +25,8 @@ class SimpleRewardCalculator(RewardCalculator):
         diversity_bonus: bool,
         illegal_action: bool,
         reward_components: List[float],
-        masked_autocorrect: bool = True,
-        *args, **kwargs
+        token_positions_before: List[int] = None,
+        masked_autocorrect: bool = False,
     ) -> Dict[str, float]:
         """Extended version that supports ludo_rls specific parameters.
 
@@ -37,33 +37,53 @@ class SimpleRewardCalculator(RewardCalculator):
         Returns:
             Dict of reward components (not total reward like base class)
         """
-        # Call parent method to get base components (ignore extra parameters)
-        components = super().compute_comprehensive_reward(
-            move_res=move_res,
-            progress_delta=progress_delta,
-            extra_turn=extra_turn,
-            diversity_bonus=diversity_bonus,
-            illegal_action=illegal_action,
-            reward_components=reward_components,
-            *args, **kwargs
-        )
+        # Use the base method but ignore the extra parameters for now
+        # and return a dict instead of total reward
+        components = {}
 
-        # ludo_rls specific customizations
         rcfg = self.cfg.reward_cfg
 
-        # Handle masked_autocorrect for illegal actions
-        if illegal_action and masked_autocorrect:
+        # Handle illegal actions
+        if illegal_action:
             penalty = rcfg.illegal_action
-            penalty *= getattr(rcfg, "illegal_masked_scale", 0.25)
+            if masked_autocorrect:
+                penalty *= getattr(rcfg, "illegal_masked_scale", 0.25)
             components["illegal"] = penalty
 
-        # Handle got_captured (not in base class)
+        # Handle other rewards similar to base class
+        if move_res.get("captured_tokens"):
+            capture_count = len(move_res["captured_tokens"])
+            components["capture"] = rcfg.capture * capture_count
+
         if move_res.get("got_captured"):
             components["got_captured"] = rcfg.got_captured
 
-        # Ensure component names match expected format
-        if "finish" in components:
-            components["token_finished"] = components.pop("finish")
+        if extra_turn:
+            components["extra_turn"] = rcfg.extra_turn
+
+        if move_res.get("token_finished"):
+            components["token_finished"] = rcfg.finish_token
+
+        # Progress reward
+        if progress_delta > 0:
+            components["progress"] = progress_delta * rcfg.progress_scale
+
+        if diversity_bonus:
+            # Inactivity penalty (encourage activating tokens)
+            agent_player = next(
+                p for p in self.game.players if p.color.value == self.agent_color
+            )
+            tokens_at_home = sum(1 for t in agent_player.tokens if t.position < 0)
+            inactivity_penalty = tokens_at_home * rcfg.inactivity_penalty
+            components["inactivity"] = inactivity_penalty
+
+            # Active token bonus (reward having tokens on board)
+            active_tokens = GameConstants.TOKENS_PER_PLAYER - tokens_at_home
+            active_bonus = active_tokens * rcfg.active_token_bonus
+            components["active_bonus"] = active_bonus
+
+        # Time penalty (small per-step cost)
+        components["time"] = rcfg.time_penalty
 
         return components
 

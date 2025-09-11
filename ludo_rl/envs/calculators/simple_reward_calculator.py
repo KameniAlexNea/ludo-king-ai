@@ -25,33 +25,55 @@ class SimpleRewardCalculator(RewardCalculator):
         diversity_bonus: bool,
         illegal_action: bool,
         reward_components: List[float],
-        *args, **kwargs
+        *args,
+        **kwargs,
     ) -> Dict[str, float]:
-        """Compute comprehensive reward components using parent class logic.
+        """Compute comprehensive reward components.
 
         Returns:
             Dict of reward components (not total reward like base class)
         """
-        # Call parent method to get base components
-        components = super().compute_comprehensive_reward(
-            move_res=move_res,
-            progress_delta=progress_delta,
-            extra_turn=extra_turn,
-            diversity_bonus=diversity_bonus,
-            illegal_action=illegal_action,
-            reward_components=reward_components,
-            *args, **kwargs
-        )
+        components = {}
 
-        # SimpleRewardCalculator specific customizations
         rcfg = self.cfg.reward_cfg
 
-        # Handle got_captured (not in base class)
+        # Handle illegal actions
+        if illegal_action:
+            components["illegal"] = rcfg.illegal_action
+
+        # Handle other rewards
+        if move_res.get("captured_tokens"):
+            capture_count = len(move_res["captured_tokens"])
+            components["capture"] = rcfg.capture * capture_count
+
         if move_res.get("got_captured"):
             components["got_captured"] = rcfg.got_captured
 
-        # Ensure component names match expected format
-        if "finish" in components:
-            components["token_finished"] = components.pop("finish")
+        if extra_turn:
+            components["extra_turn"] = rcfg.extra_turn
+
+        if move_res.get("token_finished"):
+            components["token_finished"] = rcfg.finish_token
+
+        # Progress reward
+        if progress_delta > 0:
+            components["progress"] = progress_delta * rcfg.progress_scale
+
+        if diversity_bonus:
+            # Inactivity penalty (encourage activating tokens)
+            agent_player = next(
+                p for p in self.game.players if p.color.value == self.agent_color
+            )
+            tokens_at_home = sum(1 for t in agent_player.tokens if t.position < 0)
+            inactivity_penalty = tokens_at_home * rcfg.inactivity_penalty
+            components["inactivity"] = inactivity_penalty
+
+            # Active token bonus (reward having tokens on board)
+            active_tokens = GameConstants.TOKENS_PER_PLAYER - tokens_at_home
+            active_bonus = active_tokens * rcfg.active_token_bonus
+            components["active_bonus"] = active_bonus
+
+        # Time penalty (small per-step cost)
+        components["time"] = rcfg.time_penalty
 
         return components
