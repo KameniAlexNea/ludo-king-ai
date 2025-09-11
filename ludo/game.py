@@ -6,8 +6,8 @@ Manages game flow, rules, and provides interface for AI players.
 import random
 from typing import Dict, List, Optional, Union
 
-from .board import Board
-from .player import Player, PlayerColor
+from ludo.board import Board
+from ludo.player import Player, PlayerColor
 
 
 class LudoGame:

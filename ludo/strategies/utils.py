@@ -6,7 +6,7 @@ threat computation to eliminate duplication across strategies.
 
 from typing import Dict, List, Set, Tuple
 
-from ..constants import BoardConstants, GameConstants
+from ludo.constants import BoardConstants, GameConstants
 
 # Sentinel constants derived from board geometry (avoid magic numbers)
 NO_THREAT_DISTANCE: int = GameConstants.HOME_COLUMN_START - 1

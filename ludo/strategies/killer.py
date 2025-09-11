@@ -14,9 +14,13 @@ API and existing detail fields while correcting previous priority inversions.
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
-from ..constants import BoardConstants, GameConstants, StrategyConstants
-from .base import Strategy
-from .utils import forward_distance, get_opponent_main_positions, is_safe_or_home
+from ludo.constants import BoardConstants, GameConstants, StrategyConstants
+from ludo.strategies.base import Strategy
+from ludo.strategies.utils import (
+    forward_distance,
+    get_opponent_main_positions,
+    is_safe_or_home,
+)
 
 
 def _steps_to_finish(position: int, entry: int) -> int:

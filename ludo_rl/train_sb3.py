@@ -19,7 +19,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
-from .envs.ludo_env import EnvConfig, LudoGymEnv
+from ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
 
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig):

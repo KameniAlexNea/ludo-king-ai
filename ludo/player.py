@@ -6,9 +6,9 @@ Each player has a color and controls 4 tokens.
 from enum import Enum
 from typing import Dict, List
 
-from .constants import BoardConstants, GameConstants, StrategyConstants
-from .strategies.base import Strategy
-from .token import Token, TokenState
+from ludo.constants import BoardConstants, GameConstants, StrategyConstants
+from ludo.strategies.base import Strategy
+from ludo.token import Token, TokenState
 
 
 class PlayerColor(Enum):

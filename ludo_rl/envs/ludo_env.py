@@ -33,16 +33,14 @@ from ludo.constants import Colors, GameConstants
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
 from ludo.strategy import StrategyFactory
-
-from .builders.observation_builder import ObservationBuilder
-
-# from .calculators.reward_calculator import RewardCalculator
-from .calculators.simple_reward_calculator import (
+from ludo_rl.envs.calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )
-from .model import EnvConfig
-from .simulators.opponent_simulator import OpponentSimulator
-from .utils.move_utils import MoveUtils
+from ludo_rl.envs.model import EnvConfig
+from ludo_rl.envs.simulators.opponent_simulator import OpponentSimulator
+from ludo_rl.envs.utils.move_utils import MoveUtils
+
+from .builders.observation_builder import ObservationBuilder
 
 
 class LudoGymEnv(gym.Env):

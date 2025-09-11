@@ -5,8 +5,7 @@ from typing import List, Optional
 
 from ludo.constants import GameConstants
 from ludo.game import LudoGame
-
-from ..model import EnvConfig
+from ludo_rl.envs.model import EnvConfig
 
 
 class OpponentSimulator:

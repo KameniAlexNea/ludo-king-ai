@@ -32,16 +32,13 @@ from stable_baselines3 import PPO
 from ludo.constants import GameConstants
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
-
-from .builders.observation_builder import ObservationBuilder
-
-# from .calculators.reward_calculator import RewardCalculator
-from .calculators.simple_reward_calculator import (
+from ludo_rls.envs.builders.observation_builder import ObservationBuilder
+from ludo_rls.envs.calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )
-from .model import EnvConfig
-from .simulators.opponent_simulator import OpponentSimulator
-from .utils.move_utils import MoveUtils
+from ludo_rls.envs.model import EnvConfig
+from ludo_rls.envs.simulators.opponent_simulator import OpponentSimulator
+from ludo_rls.envs.utils.move_utils import MoveUtils
 
 
 class LudoGymEnv(gym.Env):

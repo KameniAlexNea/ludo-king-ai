@@ -7,8 +7,7 @@ import numpy as np
 from ludo.constants import BoardConstants, GameConstants
 from ludo.game import LudoGame
 from ludo.player import Player
-
-from ..model import BaseEnvConfig
+from rl_base.envs.model import BaseEnvConfig
 
 
 class MoveUtils:

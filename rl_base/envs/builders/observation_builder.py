@@ -6,8 +6,7 @@ import numpy as np
 
 from ludo.constants import BoardConstants, Colors, GameConstants
 from ludo.game import LudoGame
-
-from ..model import BaseEnvConfig
+from rl_base.envs.model import BaseEnvConfig
 
 
 class ObservationBuilder:

@@ -6,9 +6,8 @@ This inherits from the base calculator and customizes for the ludo_rl environmen
 from typing import Dict, List
 
 from ludo.constants import GameConstants
+from ludo_rl.envs.model import EnvConfig
 from rl_base.envs.calculators.reward_calculator import RewardCalculator
-
-from ..model import EnvConfig
 
 
 class SimpleRewardCalculator(RewardCalculator):

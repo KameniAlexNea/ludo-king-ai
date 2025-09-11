@@ -6,9 +6,9 @@ import os
 import re
 from typing import Dict, Optional
 
-from ..base import Strategy
-from ..random_strategy import RandomStrategy
-from .prompt import create_prompt
+from ludo.strategies.base import Strategy
+from ludo.strategies.llm.prompt import create_prompt
+from ludo.strategies.random_strategy import RandomStrategy
 
 RESPONSE_PATTERNS = [
     re.compile(r"(?:^|\s)([0-3])(?:\s|$)"),  # Standalone digit

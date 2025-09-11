@@ -35,10 +35,9 @@ from typing import Sequence
 
 import numpy as np
 
+from ludo_rl.envs.builders.observation_builder import ObservationBuilder
+from ludo_rl.envs.model import EnvConfig
 from rl_base.callbacks.base_tournament_callback import BaseTournamentCallback
-
-from ..envs.builders.observation_builder import ObservationBuilder
-from ..envs.model import EnvConfig
 
 
 def _policy_select(policy, obs: np.ndarray) -> int:

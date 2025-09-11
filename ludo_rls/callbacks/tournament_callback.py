@@ -30,10 +30,9 @@ from typing import List, Sequence
 import numpy as np
 
 from ludo.constants import Colors, GameConstants
+from ludo_rls.envs.builders.observation_builder import ObservationBuilder
+from ludo_rls.envs.model import EnvConfig
 from rl_base.callbacks.base_tournament_callback import BaseTournamentCallback
-
-from ..envs.builders.observation_builder import ObservationBuilder
-from ..envs.model import EnvConfig
 
 
 def _soft_action_select(

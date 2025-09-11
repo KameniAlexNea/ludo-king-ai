@@ -7,8 +7,7 @@ import torch
 from stable_baselines3 import PPO
 
 from ludo.constants import GameConstants
-
-from ..envs.model import BaseEnvConfig
+from rl_base.envs.model import BaseEnvConfig
 
 
 class BasePPOStrategy:

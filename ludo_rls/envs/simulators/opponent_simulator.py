@@ -4,9 +4,8 @@ from typing import Any, List, Optional
 
 from ludo.constants import GameConstants
 from ludo.game import LudoGame
-
-from ..builders.observation_builder import ObservationBuilder
-from ..model import EnvConfig
+from ludo_rls.envs.builders.observation_builder import ObservationBuilder
+from ludo_rls.envs.model import EnvConfig
 
 
 class OpponentSimulator:

@@ -6,9 +6,9 @@ Manages the game board state and validates moves.
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
-from .constants import BoardConstants
-from .player import Player, PlayerColor
-from .token import Token
+from ludo.constants import BoardConstants
+from ludo.player import Player, PlayerColor
+from ludo.token import Token
 
 
 @dataclass
