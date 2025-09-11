@@ -85,6 +85,7 @@ def parse_arguments():
         default="classic",
         help="Environment kind: 'classic' or 'single-seat'",
     )
+    return parser.parse_args()
 
 
 def run_game_with_seed(seed):

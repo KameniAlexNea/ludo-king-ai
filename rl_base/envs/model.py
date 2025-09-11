@@ -6,60 +6,45 @@ from typing import List, Optional
 from ludo.constants import Colors
 
 
-# Reward calculation constants
-class SimpleRewardConstants:
-    """Minimal constants for reward calculations - let the agent learn strategy."""
-
-    # Core rewards (let agent learn when these matter)
-    TOKEN_PROGRESS_REWARD = 1.0  # Increased from 0.1 for stronger learning signal
-    CAPTURE_REWARD = 10.0  # Increased from 5.0
-    GOT_CAPTURED_PENALTY = -6.0  # Increased from -3.0
-    EXTRA_TURN_BONUS = 2.0  # Increased from 1.0
-    SAFE_POSITION_BONUS = 1.0  # Increased from 0.5
-
-    # Terminal rewards
-    WIN_REWARD = 200.0  # Increased from 100.0
-    LOSS_PENALTY = -200.0  # Increased from -100.0
-
-    # Minimal scaling (avoid over-engineering)
-    PROGRESS_NONLINEARITY = 1.2  # Slight non-linearity for progress
-    HOME_COLUMN_MULTIPLIER = 2.0  # Bonus for home column progress
-
-
 @dataclass
 class BaseRewardConfig:
-    """Base reward configuration for strategic Ludo play."""
+    """Base reward configuration for strategic Ludo play.
 
-    # Major events (highest priority - should dominate)
-    win: float = 50.0  # Game victory
-    lose: float = -50.0  # Game loss
-    finish_token: float = 15.0  # Finishing tokens (very important)
-    capture: float = 8.0  # Capturing opponents (important)
-    got_captured: float = -5.0  # Getting captured (bad but recoverable)
-    all_tokens_killed: float = -20.0  # All tokens captured (severe)
+    Values are tuned for stable RL training with proper reward shaping.
+    Terminal rewards are high to provide clear learning signals.
+    Action rewards are moderate to encourage good play without dominating.
+    """
 
-    # Action rewards (moderate priority)
-    extra_turn: float = 3.0  # Rolling a 6 (useful)
+    # Terminal rewards (highest priority - sparse but strong signals)
+    win: float = 50.0  # Game victory - primary objective
+    lose: float = -50.0  # Game loss - symmetric penalty
+    finish_token: float = 10.0  # Finishing individual tokens - important milestone
+    all_tokens_killed: float = -25.0  # All tokens captured - severe penalty
 
-    # Strategic positioning (should encourage good play but not dominate)
-    home_progress_bonus: float = 4.0  # Progress in home stretch
-    blocking_bonus: float = 2.0  # Creating blocks
-    safety_bonus: float = 3.0  # Escaping danger
+    # Major action rewards (should encourage key strategic actions)
+    capture: float = 8.0  # Capturing opponent tokens - very valuable
+    got_captured: float = -8.0  # Being captured - symmetric penalty
+    extra_turn: float = 3.0  # Rolling 6 for another turn - useful but not dominant
+
+    # Strategic positioning rewards (moderate shaping)
+    home_progress_bonus: float = 2.0  # Progress in home column
+    blocking_bonus: float = 1.5  # Creating blocks to protect position
+    safety_bonus: float = 2.0  # Moving to safe positions
     home_approach_bonus: float = 1.0  # Approaching home entry
 
-    # Small continuous signals (should barely register)
-    progress_scale: float = 0.1  # General progress (minimal)
-    diversity_bonus: float = 1.5  # Token diversity (increased to encourage activation)
-    inactivity_penalty: float = -0.05  # Penalty per token at home per step
-    active_token_bonus: float = 0.1  # Bonus per active token per step
+    # Small continuous rewards (minimal shaping to avoid reward hacking)
+    progress_scale: float = 0.05  # General board progress
+    diversity_bonus: float = 0.5  # Encouraging token activation
+    active_token_bonus: float = 0.1  # Bonus per active token
+    inactivity_penalty: float = -0.02  # Penalty per token stuck at home
 
-    # Penalties (should be clear boundaries)
-    illegal_action: float = -10.0  # Invalid moves (strong negative)
-    time_penalty: float = -0.01  # Efficiency (tiny)
+    # Clear boundaries (strong penalties for invalid actions)
+    illegal_action: float = -15.0  # Invalid moves - strong negative
+    time_penalty: float = -0.005  # Small efficiency penalty
 
-    # Risk modulation (if you want it)
-    use_probabilistic_rewards: bool = False  # Start simple, add complexity later
-    risk_weight: float = 0.3  # Conservative if enabled
+    # Advanced features (disabled by default for simplicity)
+    use_probabilistic_rewards: bool = False
+    risk_weight: float = 0.2
 
 
 @dataclass
