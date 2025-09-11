@@ -103,9 +103,16 @@ def _play_step(game: LudoGame):
         extra_turn = (dice == 6)
         if not extra_turn:
             game.next_turn()
+        
+        # Debug info: show all token positions
+        token_positions = []
+        for i, token in enumerate(current_player.tokens):
+            token_positions.append(f"token {i}: {token.position} ({token.state.value})")
+        positions_str = ", ".join(token_positions)
+        
         return (
             game,
-            f"{current_player.color.value} rolled {dice} - no moves{' (extra turn)' if extra_turn else ''}",
+            f"{current_player.color.value} rolled {dice} - no moves{' (extra turn)' if extra_turn else ''} | Positions: {positions_str}",
             _game_state_tokens(game),
         )
     # If player has strategy use it; else pick first

@@ -6,19 +6,12 @@ from ludo.player import PlayerColor
 def load_ppo_wrapper(env_kind):
     """Dynamically import the correct EnvConfig and PPOStrategy based on env_kind."""
     if env_kind == "classic":
-        from ludo_rl.envs.model import EnvConfig as ClassicEnvConfig
-        from ludo_rl.ppo_strategy import PPOStrategy as ClassicPPOStrategy
-
-        EnvConfigClass = ClassicEnvConfig
-        PPOStrategyClass = ClassicPPOStrategy
+        from ludo_rl.envs.model import EnvConfig
+        from ludo_rl.ppo_strategy import PPOStrategy
     else:  # single-seat
-        from ludo_rls.envs.model import EnvConfig as SingleEnvConfig
-        from ludo_rls.ppo_strategy import PPOStrategy as SinglePPOStrategy
-
-        EnvConfigClass = SingleEnvConfig
-        PPOStrategyClass = SinglePPOStrategy
-
-    return EnvConfigClass, PPOStrategyClass
+        from ludo_rls.envs.model import EnvConfig
+        from ludo_rls.ppo_strategy import PPOStrategy
+    return EnvConfig, PPOStrategy
 
 
 def select_best_ppo_model(models_dir, model_preference):
