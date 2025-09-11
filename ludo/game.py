@@ -7,6 +7,7 @@ import random
 from typing import Dict, List, Optional, Union
 
 from ludo.board import Board
+from ludo.constants import GameConstants
 from ludo.player import Player, PlayerColor
 
 
@@ -62,8 +63,7 @@ class LudoGame:
         """Place all tokens in their starting home positions."""
         for player in self.players:
             for token in player.tokens:
-                # Tokens start in home (position -1), so no board placement needed
-                pass
+                token.position = GameConstants.HOME_POSITION
 
         self._player_map = {player.color.value: player for player in self.players}
 
