@@ -74,7 +74,7 @@ def load_ppo_strategy(
     models_dir: str,
     player_name: str = "ppo",
     agent_color: PlayerColor = PlayerColor.RED,
-    model_preference: str = "last",
+    model_preference: str = "final",
 ):
     """Load and return the PPO strategy instance."""
     EnvConfigClass, PPOStrategyClass = load_ppo_wrapper(env_kind)

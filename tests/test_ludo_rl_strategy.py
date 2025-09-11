@@ -35,7 +35,7 @@ class DummyModel:
 
 class TestPPOStrategy(unittest.TestCase):
     def test_strategy_decide_valid_action(self):
-        # Monkeypatch PPO.load in the base strategy module where it's actually imported
+        # Monkeypatch PPO.load directly in the base_ppo_strategy module for testing
         import rl_base.strategies.base_ppo_strategy as base_ppo_module
 
         # Provide a wrapper that tolerates extra kwargs like device

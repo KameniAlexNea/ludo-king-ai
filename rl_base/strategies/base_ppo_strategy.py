@@ -105,7 +105,7 @@ class BasePPOStrategy:
         return int(turn_count), int(dice_val)
 
     # --- Public API --------------------------------------------------------------
-    def decide(self, game_context: dict) -> int:  # noqa: C901 (kept small already)
+    def decide(self, game_context: dict) -> int:
         valid_moves = game_context.get("valid_moves", [])
         if not valid_moves:
             return 0  # nothing to do
