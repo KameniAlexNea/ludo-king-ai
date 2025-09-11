@@ -35,6 +35,7 @@ from typing import Sequence
 
 import numpy as np
 
+from ludo.player import PlayerColor
 from ludo_rl.envs.builders.observation_builder import ObservationBuilder
 from ludo_rl.envs.model import EnvConfig
 from rl_base.callbacks.base_tournament_callback import BaseTournamentCallback
@@ -83,15 +84,5 @@ class ClassicTournamentCallback(BaseTournamentCallback):
     def _setup_game_and_players(self, combo):
         """Set up game and assign strategies, with obs_builder initialization."""
         game, ppo_player = super()._setup_game_and_players(combo)
-        # Initialize observation builder for this game
-        from ludo.player import PlayerColor
-
         self.obs_builder = ObservationBuilder(self.env_cfg, game, PlayerColor.RED.value)
         return game, ppo_player
-
-    # Support the deprecated method for backward compatibility
-    def _policy_select(
-        self, policy, obs: np.ndarray, action_mask: np.ndarray = None
-    ) -> int:
-        """Deprecated method - delegates to _select_ppo_action."""
-        return self._select_ppo_action(policy, obs, action_mask)

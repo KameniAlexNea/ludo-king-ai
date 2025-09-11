@@ -65,9 +65,7 @@ class LudoGame:
                 # Tokens start in home (position -1), so no board placement needed
                 pass
 
-        self._player_map = {
-            player.color.value: player for player in self.players
-        }
+        self._player_map = {player.color.value: player for player in self.players}
 
     def get_current_player(self) -> Player:
         """Get the player whose turn it is."""

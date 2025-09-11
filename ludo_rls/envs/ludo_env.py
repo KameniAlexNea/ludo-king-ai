@@ -216,9 +216,7 @@ class LudoGymEnv(gym.Env):
             return self.last_obs, 0.0, True, False, {}
 
         reward_components: List[float] = []
-        agent_player = next(
-            p for p in self.game.players if p.color.value == self.training_color
-        )
+        agent_player = self.game.get_player_from_color(self.training_color)
         self.agent_color = self.training_color  # ensure consistency for builders
 
         # Ensure we have a pending dice & valid moves (should always be true except pathological cases)

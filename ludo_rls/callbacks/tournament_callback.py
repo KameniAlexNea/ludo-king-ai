@@ -148,10 +148,3 @@ class SelfPlayTournamentCallback(BaseTournamentCallback):
 
         self.obs_builder = ObservationBuilder(self.env_cfg, game, PlayerColor.RED.value)
         return game, ppo_player
-
-    # Support the deprecated method for backward compatibility
-    def _policy_select(
-        self, policy, obs: np.ndarray, action_mask: np.ndarray = None
-    ) -> int:
-        """Deprecated method - delegates to _select_ppo_action."""
-        return self._select_ppo_action(policy, obs, action_mask)

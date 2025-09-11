@@ -250,7 +250,7 @@ class LudoGymEnv(gym.Env):
         # Attach chosen opponent strategies
         non_agent_colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
         for i, color in enumerate(non_agent_colors):
-            player = next(p for p in self.game.players if p.color.value == color)
+            player = self.game.get_player_from_color(color)
             strat_name = self.opponent_strategies[i]
             try:
                 player.set_strategy(StrategyFactory.create_strategy(strat_name))
@@ -270,9 +270,7 @@ class LudoGymEnv(gym.Env):
             return self.last_obs, 0.0, True, False, {}
 
         reward_components: List[float] = []
-        agent_player = next(
-            p for p in self.game.players if p.color.value == self.agent_color
-        )
+        agent_player = self.game.get_player_from_color(self.agent_color)
 
         # Ensure we have a pending dice & valid moves (should always be true except pathological cases)
         if self._pending_agent_dice is None:

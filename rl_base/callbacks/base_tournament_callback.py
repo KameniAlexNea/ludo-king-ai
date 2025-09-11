@@ -14,7 +14,7 @@ import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 
 from ludo.game import LudoGame
-from ludo.player import PlayerColor
+from ludo.player import Player, PlayerColor
 from ludo.strategy import StrategyFactory
 
 
@@ -131,7 +131,7 @@ class BaseTournamentCallback(BaseCallback, ABC):
 
     def _setup_game_and_players(
         self, combo: Tuple[str, str, str]
-    ) -> Tuple[LudoGame, object]:
+    ) -> Tuple[LudoGame, Player]:
         """Set up game and assign strategies to players."""
         game = LudoGame(
             [
@@ -147,12 +147,12 @@ class BaseTournamentCallback(BaseCallback, ABC):
         for idx, color in enumerate(opponent_colors):
             strat_name = combo[idx]
             strat = StrategyFactory.create_strategy(strat_name)
-            player = next(p for p in game.players if p.color is color)
+            player = game.get_player_from_color(color)
             player.set_strategy(strat)
             player.strategy_name = strat_name
 
         # PPO player (always RED)
-        ppo_player = next(p for p in game.players if p.color is PlayerColor.RED)
+        ppo_player = game.get_player_from_color(PlayerColor.RED)
         ppo_player.strategy_name = "ppo"
 
         return game, ppo_player
@@ -161,7 +161,7 @@ class BaseTournamentCallback(BaseCallback, ABC):
         self,
         policy,
         game: LudoGame,
-        ppo_player,
+        ppo_player: Player,
         dice: int,
         valid_moves: List[dict],
         turn_counter: int,
@@ -204,8 +204,8 @@ class BaseTournamentCallback(BaseCallback, ABC):
     def _handle_opponent_turn(
         self,
         game: LudoGame,
-        current_player,
-        ppo_player,
+        current_player: Player,
+        ppo_player: Player,
         dice: int,
         valid_moves: List[dict],
         metrics: TournamentMetrics,
@@ -241,7 +241,7 @@ class BaseTournamentCallback(BaseCallback, ABC):
         return False  # Game continues
 
     def _compute_final_rank(
-        self, game: LudoGame, ppo_player, metrics: TournamentMetrics
+        self, game: LudoGame, ppo_player: Player, metrics: TournamentMetrics
     ):
         """Compute PPO rank when game ends without explicit winner."""
         if not any(p.has_won() and p is ppo_player for p in game.players):
@@ -249,7 +249,7 @@ class BaseTournamentCallback(BaseCallback, ABC):
             finished = [(p.get_finished_tokens_count(), p) for p in game.players]
             finished.sort(reverse=True, key=lambda x: x[0])
             rank_positions = {
-                pl.color.value: i + 1 for i, (cnt, pl) in enumerate(finished)
+                pl.color.value: i + 1 for i, (_, pl) in enumerate(finished)
             }
             ppo_rank = rank_positions[ppo_player.color.value]
             if ppo_rank == 1:
@@ -327,40 +327,3 @@ class BaseTournamentCallback(BaseCallback, ABC):
             self.logger.writer.flush()
 
         return agg
-
-    # Deprecated methods for backward compatibility
-    @abstractmethod
-    def _policy_select(
-        self, policy, obs: np.ndarray, action_mask: np.ndarray = None
-    ) -> int:
-        """Deprecated. Use _select_ppo_action instead."""
-        return self._select_ppo_action(policy, obs, action_mask)
-
-    def _log_metrics(self, metrics_dict: Dict[str, float]):
-        """Deprecated. Metrics are now logged automatically."""
-        for key, value in metrics_dict.items():
-            self.logger.record(f"{self.log_prefix}{key}", value)
-
-    def _create_game_setup(self):
-        """Deprecated. Use _setup_game_and_players instead."""
-        return LudoGame(
-            [
-                PlayerColor.RED,
-                PlayerColor.GREEN,
-                PlayerColor.YELLOW,
-                PlayerColor.BLUE,
-            ]
-        )
-
-    def _assign_strategies_to_players(
-        self, game: LudoGame, strategies: List[str], ppo_color: PlayerColor
-    ):
-        """Deprecated. Use _setup_game_and_players instead."""
-        strategy_idx = 0
-        for player in game.players:
-            if player.color != ppo_color:
-                if strategy_idx < len(strategies):
-                    strat = StrategyFactory.create_strategy(strategies[strategy_idx])
-                    player.set_strategy(strat)
-                    player.strategy_name = strategies[strategy_idx]
-                    strategy_idx += 1

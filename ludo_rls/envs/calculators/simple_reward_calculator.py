@@ -69,9 +69,7 @@ class SimpleRewardCalculator(RewardCalculator):
 
         if diversity_bonus:
             # Inactivity penalty (encourage activating tokens)
-            agent_player = next(
-                p for p in self.game.players if p.color.value == self.agent_color
-            )
+            agent_player = self.game.get_player_from_color(self.agent_color)
             tokens_at_home = sum(1 for t in agent_player.tokens if t.position < 0)
             inactivity_penalty = tokens_at_home * rcfg.inactivity_penalty
             components["inactivity"] = inactivity_penalty
