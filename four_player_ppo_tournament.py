@@ -18,10 +18,9 @@ from dotenv import load_dotenv
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
 
-# Dynamic PPO strategy & EnvConfig import handled after CLI args (see FourPlayerPPOTournament._load_ppo_wrapper)
 from ludo_stats.game_state_saver import GameStateSaver
 from ludo_tournament import BaseTournament
-from rl_base.load_ppo_model import load_ppo_strategy
+from rl_base.load_ppo_model import select_best_ppo_model, load_ppo_strategy
 
 load_dotenv()
 
@@ -76,8 +75,16 @@ def parse_arguments():
         "--model-preference",
         type=str,
         choices=["best", "final", "steps"],
-        default="best",
+        default="final",
         help="Preference for selecting PPO model: 'best' (prefer BEST model), 'final' (prefer FINAL model), 'steps' (prefer highest step count)",
+    )
+
+    parser.add_argument(
+        "--env",
+        type=str,
+        choices=["classic", "single-seat"],
+        default="classic",
+        help="Environment kind: 'classic' or 'single-seat'",
     )
 
 
@@ -101,9 +108,6 @@ class FourPlayerPPOTournament(BaseTournament):
         self.env_kind = args.env  # 'single-seat' or 'classic'
         self.model_preference = args.model_preference  # 'best', 'final', or 'steps'
 
-        # Dynamic PPO wrapper classes (for classic mode) / policy loading
-        self._load_ppo_wrapper()
-
         # Initialize state saver only if output directory is specified
         state_saver = GameStateSaver(self.output_dir) if self.output_dir else None
 
@@ -113,7 +117,7 @@ class FourPlayerPPOTournament(BaseTournament):
         )
 
         # Resolve model name & path
-        self.ppo_model = self._select_best_ppo_model()
+        self.ppo_model = select_best_ppo_model(self.models_dir, self.model_preference)
         self.ppo_model_path = os.path.join(self.models_dir, f"{self.ppo_model}.zip")
 
         # PPO policy will be accessed via PPOStrategyClass wrapper uniformly.
@@ -141,21 +145,6 @@ class FourPlayerPPOTournament(BaseTournament):
                 f"   • Total games to play: {len(self.strategy_combinations) * self.games_per_matchup}"
             )
 
-    def _load_ppo_wrapper(self):
-        """Dynamically import the correct EnvConfig and PPOStrategy based on env_kind."""
-        if self.env_kind == "classic":
-            from ludo_rl.envs.model import EnvConfig as ClassicEnvConfig
-            from ludo_rl.ppo_strategy import PPOStrategy as ClassicPPOStrategy
-
-            self.EnvConfigClass = ClassicEnvConfig
-            self.PPOStrategyClass = ClassicPPOStrategy
-        else:  # single-seat
-            from ludo_rls.envs.model import EnvConfig as SingleEnvConfig
-            from ludo_rls.ppo_strategy import PPOStrategy as SinglePPOStrategy
-
-            self.EnvConfigClass = SingleEnvConfig
-            self.PPOStrategyClass = SinglePPOStrategy
-
     def _get_strategies(self):
         """Get strategies to use in tournament."""
         if self.selected_strategies:
@@ -163,53 +152,6 @@ class FourPlayerPPOTournament(BaseTournament):
         if os.getenv("SELECTED_STRATEGIES"):
             return list(os.getenv("SELECTED_STRATEGIES").split(","))
         return StrategyFactory.get_available_strategies()
-
-    def _select_best_ppo_model(self):
-        """Select the best PPO model based on configured preference."""
-        if not os.path.exists(self.models_dir):
-            raise FileNotFoundError(f"Models directory {self.models_dir} not found")
-
-        model_files = [f for f in os.listdir(self.models_dir) if f.endswith(".zip")]
-        if not model_files:
-            raise FileNotFoundError(f"No PPO model files found in {self.models_dir}/")
-        
-        # Define preference order
-        if self.model_preference == "best":
-            prefs = ["best", "final", "steps"]
-        elif self.model_preference == "final":
-            prefs = ["final", "best", "steps"]
-        elif self.model_preference == "steps":
-            prefs = ["steps", "best", "final"]
-        
-        # Try each preference in order
-        for pref in prefs:
-            if pref == "best":
-                best_model = next((f for f in model_files if "best" in f.lower()), None)
-                if best_model:
-                    return best_model.replace(".zip", "")
-            elif pref == "final":
-                final_model = next((f for f in model_files if "final" in f.lower()), None)
-                if final_model:
-                    return final_model.replace(".zip", "")
-            elif pref == "steps":
-                # Extract step numbers and find highest
-                step_models = []
-                for f in model_files:
-                    try:
-                        # Extract number from filename like "ppo_ludo_1000000_steps"
-                        parts = f.replace(".zip", "").split("_")
-                        for part in parts:
-                            if part.isdigit():
-                                step_models.append((int(part), f.replace(".zip", "")))
-                                break
-                    except Exception:
-                        continue
-                if step_models:
-                    step_models.sort(reverse=True)
-                    return step_models[0][1]
-
-        # Fallback to first model
-        return model_files[0].replace(".zip", "")
 
     def run_tournament(self):
         """Execute PPO vs Strategies tournament."""
@@ -284,17 +226,7 @@ class FourPlayerPPOTournament(BaseTournament):
                 # Assign strategies. Always wrap PPO model in its strategy class for consistency across env modes.
                 for i, (player_name, colour) in enumerate(zip(game_players, colours)):
                     if player_name == self.ppo_model:
-                        model_path = f"{self.models_dir}/{player_name}.zip"
-                        try:
-                            strategy = self.PPOStrategyClass(
-                                model_path,
-                                player_name,
-                                self.EnvConfigClass(agent_color=colour.value),
-                            )
-                        except Exception as e:
-                            raise RuntimeError(
-                                f"Failed to initialize PPO strategy for model '{player_name}': {e}"
-                            ) from e
+                        strategy = load_ppo_strategy(self.env_kind, self.models_dir, player_name, colour, self.model_preference)
                     else:
                         strategy = StrategyFactory.create_strategy(player_name)
                     game.players[i].set_strategy(strategy)
