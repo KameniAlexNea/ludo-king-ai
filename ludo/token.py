@@ -94,14 +94,15 @@ class Token:
             return GameConstants.HOME_POSITION  # Can't move
 
         if self.is_in_home_column():
-            return self.position + dice_value
+            target_position = self.position + dice_value
+            if target_position > GameConstants.FINISH_POSITION:
+                return self.position  # Can't move
+            return target_position
 
         # Active on main board - unified logic
         current = self.position
         new_position = current + dice_value
         home_entry = BoardConstants.HOME_COLUMN_ENTRIES[self.player_color]
-
-        # board_last_index = GameConstants.MAIN_BOARD_SIZE - 1
 
         # Normalize potential wrap for crossing beyond last board index
         # We need to detect crossing the home_entry square moving forward (circular path)
@@ -133,7 +134,9 @@ class Token:
                     steps_after_entry = dice_value - steps_taken
                     break
 
-            target_home_index = BoardConstants.HOME_COLUMN_START + steps_after_entry
+            target_home_index = BoardConstants.HOME_COLUMN_START + max(
+                0, steps_after_entry - 1
+            )
             # Cannot exceed finish
             if target_home_index > GameConstants.FINISH_POSITION:
                 return GameConstants.HOME_POSITION  # invalid move (overshoot)
