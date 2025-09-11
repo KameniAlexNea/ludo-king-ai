@@ -68,7 +68,7 @@ class OpponentSimulator:
                         reward_components.append(self.cfg.reward_cfg.got_captured)
                 if agent_captured:
                     player = self.game.get_player_from_color(self.agent_color)
-                    all_captured = all(t.position < 0 for t in player.tokens)
+                    all_captured = all(t.position == GameConstants.HOME_POSITION for t in player.tokens)
                     if all_captured:
                         reward_components.append(self.cfg.reward_cfg.all_tokens_killed)
             if not move_res.get("extra_turn") or self.game.game_over:
