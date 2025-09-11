@@ -69,7 +69,8 @@ class Token:
             # Can only leave home with exact EXIT_HOME_ROLL
             return dice_value == GameConstants.EXIT_HOME_ROLL
 
-        if self.is_in_home_column():
+        # Check if position is in home column, regardless of state
+        if BoardConstants.is_home_column_position(self.position):
             # Must not overshoot finish
             target_position = self.position + dice_value
             return target_position <= GameConstants.FINISH_POSITION
@@ -91,9 +92,10 @@ class Token:
         if self.is_in_home():
             if dice_value == GameConstants.EXIT_HOME_ROLL:
                 return player_start_position
-            return GameConstants.HOME_POSITION  # Can't move
+            return self.position  # Can't move
 
-        if self.is_in_home_column():
+        # Check if position is in home column, regardless of state
+        if BoardConstants.is_home_column_position(self.position):
             target_position = self.position + dice_value
             if target_position > GameConstants.FINISH_POSITION:
                 return self.position  # Can't move
@@ -139,7 +141,7 @@ class Token:
             )
             # Cannot exceed finish
             if target_home_index > GameConstants.FINISH_POSITION:
-                return GameConstants.HOME_POSITION  # invalid move (overshoot)
+                return self.position  # invalid move (overshoot)
             return target_home_index
 
         # Not entering home column: land on wrapped main-board position
@@ -161,8 +163,8 @@ class Token:
 
         target_position = self.get_target_position(dice_value, player_start_position)
 
-        if target_position == GameConstants.HOME_POSITION:
-            return False
+        if target_position == self.position:
+            return False  # Invalid move, no change in position
         # Commit the already validated target movement
         self.commit_move(target_position, player_start_position)
 
