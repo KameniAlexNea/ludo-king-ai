@@ -97,6 +97,7 @@ class LudoGame:
         """
         if self.consecutive_sixes >= 3:
             # Player loses turn after 3 consecutive sixes
+            self.consecutive_sixes = 0
             return []
 
         possible_moves = player.get_possible_moves(dice_value)
@@ -139,7 +140,7 @@ class LudoGame:
         token = player.tokens[token_id]
 
         # Check if move is valid
-        if not token.can_move(dice_value, None):
+        if not token.can_move(dice_value):
             return {"success": False, "error": "Token cannot move with this dice value"}
 
         old_position = token.position

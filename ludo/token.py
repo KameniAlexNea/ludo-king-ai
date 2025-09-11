@@ -52,13 +52,12 @@ class Token:
         """Check if token has reached the center."""
         return self.state == TokenState.FINISHED
 
-    def can_move(self, dice_value: int, current_board_state) -> bool:
+    def can_move(self, dice_value: int) -> bool:
         """
         Check if this token can make a valid move with the given dice value.
 
         Args:
             dice_value: The value rolled on the dice (1-6)
-            current_board_state: Current state of the board to check for blocks/captures
 
         Returns:
             bool: True if the token can move, False otherwise
@@ -154,7 +153,7 @@ class Token:
         Returns:
             bool: True if move was successful, False otherwise
         """
-        if not self.can_move(dice_value, None):  # Simplified check
+        if not self.can_move(dice_value):  # Simplified check
             return False
 
         target_position = self.get_target_position(dice_value, player_start_position)

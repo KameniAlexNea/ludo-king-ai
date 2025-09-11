@@ -61,7 +61,7 @@ class Player:
         movable_tokens = []
 
         for token in self.tokens:
-            if token.can_move(dice_value, None):  # Simplified check for now
+            if token.can_move(dice_value):  # Simplified check for now
                 movable_tokens.append(token)
 
         return movable_tokens
@@ -148,7 +148,7 @@ class Player:
         possible_moves = []
 
         for token in self.tokens:
-            if token.can_move(dice_value, None):
+            if token.can_move(dice_value):
                 target_position = token.get_target_position(
                     dice_value, self.start_position
                 )
