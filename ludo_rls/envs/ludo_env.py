@@ -39,6 +39,7 @@ from .calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )
 from .model import EnvConfig
+from .simulators.opponent_simulator import OpponentSimulator
 from .utils.move_utils import MoveUtils
 
 
@@ -97,6 +98,7 @@ class LudoGymEnv(gym.Env):
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
         self.reward_calc = RewardCalculator(self.cfg, self.game, self.agent_color)
         # No separate simulator – each env.step corresponds to exactly one player decision.
+        self.opp_simulator = None
 
         # Now that all objects are created, set the proper observation space
         obs_dim = self.obs_builder._compute_observation_size()
@@ -122,20 +124,23 @@ class LudoGymEnv(gym.Env):
         self.game = LudoGame(order)
         # (Re)select training color (Option B always single-seat); randomize if enabled
         if self.cfg.randomize_training_color:
-            self.training_color = self.rng.choice(
-                [
-                    PlayerColor.RED.value,
-                    PlayerColor.GREEN.value,
-                    PlayerColor.YELLOW.value,
-                    PlayerColor.BLUE.value,
-                ]
-            )
+            self.training_color = self.rng.choice([i.value for i in order])
         else:
             self.training_color = self.game.get_current_player().color.value
         self.agent_color = self.training_color
 
         # Snapshot frozen opponent policy
         self._snapshot_policy()
+        # Initialize or update simulator with current state
+        self.opp_simulator = OpponentSimulator(
+            self.cfg,
+            self.game,
+            self.training_color,
+            self._frozen_policy,
+            self.obs_builder,
+            self._policy_action,  # Pass method reference
+            self.rng,
+        )
         # Rebuild helper objects references
         self.move_utils = MoveUtils(self.cfg, self.game, self.agent_color)
         self.obs_builder.game = self.game
@@ -154,7 +159,7 @@ class LudoGymEnv(gym.Env):
         self._last_progress_sum = self.move_utils._compute_agent_progress_sum()
 
         # Advance internal simulation until it's training seat's turn
-        self._advance_until_training_turn(initial=True)
+        self._advance_until_training_turn()
         obs = self.obs_builder._build_observation(self.turns, self._pending_agent_dice)
         self.last_obs = obs
         return obs, {}
@@ -193,56 +198,16 @@ class LudoGymEnv(gym.Env):
                     return i
         return act
 
-    def _advance_until_training_turn(self, initial: bool = False):
-        """Simulate opponent turns (not training_color) until it's training_color's turn.
-
-        Sets pending dice & valid moves for training seat when done.
-        If initial=True, we don't increment global turn counter yet.
-        """
-        safety_counter = 0
-        while (
-            not self.game.game_over
-            and self.game.get_current_player().color.value != self.training_color
-        ):
-            safety_counter += 1
-            if safety_counter > 5000:  # hard safety to avoid infinite loop
-                break
-
-            current_player = self.game.get_current_player()
-            dice = self.game.roll_dice()
-            valid_moves = self.game.get_valid_moves(current_player, dice)
-
-            took_action = False
-            extra_turn = False
-
-            if valid_moves:
-                # Observation from training perspective to keep policy consistent
-                temp_obs = self.obs_builder._build_observation(self.turns, dice)
-                action = self._policy_action(self._frozen_policy, temp_obs, valid_moves)
-                valid_ids = [m["token_id"] for m in valid_moves]
-                if action not in valid_ids:
-                    action = valid_ids[0]
-                move_res = self.game.execute_move(current_player, action, dice)
-                took_action = True
-                extra_turn = bool(move_res.get("extra_turn", False))
-
-            if not took_action:  # no valid moves, or policy refused
-                self.game.next_turn()
-                continue  # next loop iteration
-
-            # If they earned an extra turn and haven't won, let loop iterate again with same current_player
-            if extra_turn and not current_player.has_won() and not self.game.game_over:
-                continue
-
-            # Otherwise advance to next player
-            if not self.game.game_over:
-                self.game.next_turn()
-
+    def _advance_until_training_turn(
+        self, reward_components: Optional[List[float]] = None
+    ):
+        """Simulate opponent turns until it's training_color's turn, accumulating capture penalties if provided."""
+        self.opp_simulator._simulate_until_agent_turn(reward_components, self.turns)
+        # After simulation, if it's the agent's turn, roll dice
         if (
             not self.game.game_over
             and self.game.get_current_player().color.value == self.training_color
         ):
-            # Roll dice for training seat
             self._pending_agent_dice, self._pending_valid_moves = (
                 self.move_utils._roll_new_agent_dice()
             )
@@ -315,7 +280,7 @@ class LudoGymEnv(gym.Env):
         # If no extra turn: simulate opponents until training seat again
         if not extra_turn and not self.game.game_over:
             self.game.next_turn()
-            self._advance_until_training_turn()
+            self._advance_until_training_turn(reward_components)
             # sync (may still be training seat or game over)
             self.move_utils.agent_color = self.training_color
             self.obs_builder.agent_color = self.training_color

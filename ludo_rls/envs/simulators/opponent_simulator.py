@@ -1,7 +1,7 @@
-"""Opponent simulation utilities for LudoGymEnv."""
+"""Opponent simulation utilities for LudoGymEnv (single-seat training)."""
 
-import random
-from typing import List, Optional
+from typing import Any, List, Optional
+
 
 from ludo.constants import GameConstants
 from ludo.game import LudoGame
@@ -10,56 +10,52 @@ from ..model import EnvConfig
 
 
 class OpponentSimulator:
-    """Handles simulation of opponent turns."""
+    """Handles simulation of opponent turns using frozen policy."""
 
     def __init__(
         self,
         cfg: EnvConfig,
         game: LudoGame,
         agent_color: str,
-        roll_dice_func,
-        make_strategy_context_func,
+        frozen_policy: Optional[Any],
+        obs_builder,  # Reference to observation builder for temp obs
+        policy_action_func,  # Reference to _policy_action method
+        rng,  # Random number generator
     ):
         self.cfg = cfg
         self.game = game
         self.agent_color = agent_color
-        self._roll_dice = roll_dice_func
-        self._make_strategy_context = make_strategy_context_func
+        self._frozen_policy = frozen_policy
+        self.obs_builder = obs_builder
+        self._policy_action = policy_action_func
+        self.rng = rng
 
     def _simulate_single_opponent_turn(
-        self, reward_components: Optional[List[float]] = None
+        self, reward_components: Optional[List[float]] = None, turns: int = 0
     ):
         """Simulate exactly one opponent player sequence including any extra turns.
 
-        Converted from recursive form to iterative to avoid deep recursion in
-        pathological chains (captures + sixes). Safety-capped.
         If reward_components provided, apply capture penalties immediately.
         """
         current_player = self.game.get_current_player()
         if current_player.color.value == self.agent_color:
             return
-        max_chain = GameConstants.MAX_OPPONENT_CHAIN_LENGTH  # generous safety cap
+        max_chain = GameConstants.MAX_OPPONENT_CHAIN_LENGTH  # Safety cap
         chain_count = 0
         while not self.game.game_over and chain_count < max_chain:
-            dice_value = self._roll_dice()
-            valid_moves = self.game.get_valid_moves(current_player, dice_value)
+            dice = self.game.roll_dice()
+            valid_moves = self.game.get_valid_moves(current_player, dice)
             if not valid_moves:
-                # forfeited turn (e.g., 3 sixes or no moves)
                 self.game.next_turn()
                 return
-            try:
-                ctx = self._make_strategy_context(
-                    current_player, dice_value, valid_moves
-                )
-                # Add randomness to opponent decisions for better training
-                if random.random() < 0.1:  # 10% chance of random move
-                    token_choice = random.choice(valid_moves)["token_id"]
-                else:
-                    token_choice = current_player.make_strategic_decision(ctx)
-            except Exception:
-                token_choice = valid_moves[0]["token_id"]
-            move_res = self.game.execute_move(current_player, token_choice, dice_value)
-            # Immediate capture penalty if this move captured agent tokens
+            # Build temp observation from agent's perspective
+            temp_obs = self.obs_builder._build_observation(turns, dice)
+            action = self._policy_action(self._frozen_policy, temp_obs, valid_moves)
+            valid_ids = [m["token_id"] for m in valid_moves]
+            if action not in valid_ids:
+                action = valid_ids[0]
+            move_res = self.game.execute_move(current_player, action, dice)
+            # Check for agent captures and add penalties
             if reward_components and move_res.get("captured_tokens"):
                 agent_captured = False
                 for ct in move_res["captured_tokens"]:
@@ -82,19 +78,16 @@ class OpponentSimulator:
         if not self.game.game_over and self.game.get_current_player() is current_player:
             self.game.next_turn()
 
-    def _simulate_opponents(self, reward_components: List[float]):
-        # Simulate opponents in order until agent's turn or game over.
-        # Capture penalties are handled inside _simulate_single_opponent_turn now.
+    def _simulate_until_agent_turn(
+        self, reward_components: Optional[List[float]] = None, turns: int = 0
+    ):
+        """Simulate opponents until it's the agent's turn or game over."""
+        safety_counter = 0
         while (
             not self.game.game_over
             and self.game.get_current_player().color.value != self.agent_color
         ):
-            self._simulate_single_opponent_turn(reward_components)
-
-    def _ensure_agent_turn(self):
-        # Simulate opponents until agent color is current player or game over
-        while (
-            not self.game.game_over
-            and self.game.get_current_player().color.value != self.agent_color
-        ):
-            self._simulate_single_opponent_turn()
+            safety_counter += 1
+            if safety_counter > 5000:  # Hard safety
+                break
+            self._simulate_single_opponent_turn(reward_components, turns)
