@@ -252,8 +252,8 @@ class LudoGame:
         valid_moves = self.get_valid_moves(current_player, dice_value)
 
         if not valid_moves:
-            turn_result["turn_ended"] = (dice_value != 6)
-            turn_result["extra_turn"] = (dice_value == 6)
+            turn_result["turn_ended"] = dice_value != 6
+            turn_result["extra_turn"] = dice_value == 6
             turn_result["reason"] = "No valid moves available"
             if dice_value != 6:
                 self.next_turn()

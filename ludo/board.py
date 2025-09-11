@@ -166,8 +166,9 @@ class Board:
             ]
 
             if opponent_tokens:
-                # Can't land on opponent tokens in safe squares
-                return False, []
+                # CAN land on opponent tokens in safe squares (but they don't get captured)
+                # The safe rule protects existing tokens from being captured
+                return True, []  # Can move but no captures
             else:
                 # Can stack with own tokens
                 return True, []
