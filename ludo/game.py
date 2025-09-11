@@ -66,7 +66,7 @@ class LudoGame:
                 pass
 
         self._player_map = {
-            color.value: player for color, player in zip(self.players, self.players)
+            player.color.value: player for player in self.players
         }
 
     def get_current_player(self) -> Player:
