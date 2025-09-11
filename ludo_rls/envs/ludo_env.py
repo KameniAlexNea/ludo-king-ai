@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+from stable_baselines3 import PPO
 
 from ludo.constants import GameConstants
 from ludo.game import LudoGame
@@ -47,7 +48,7 @@ class LudoGymEnv(gym.Env):
     metadata = {"render_modes": ["human"], "name": "LudoSelfPlayEnv-v1"}
 
     def __init__(
-        self, config: Optional[EnvConfig] = None, model: Optional[Any] = None
+        self, config: Optional[EnvConfig] = None, model: Optional[PPO] = None
     ):  # gym style accepts **kwargs
         super().__init__()
         self.cfg = config or EnvConfig()
@@ -67,15 +68,6 @@ class LudoGymEnv(gym.Env):
         self.agent_color = self.training_color  # alias maintained for builders
 
         self._frozen_policy = None  # snapshot of model.policy at reset for opponents
-
-        # Spaces (will be properly set after objects are created)
-        self.observation_space = spaces.Box(
-            low=-1.0,
-            high=1.0,
-            shape=(50,),
-            dtype=np.float32,  # Temporary shape
-        )
-        self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
 
         # Episode / bookkeeping
         self.turns = 0  # count of agent decision turns (not full game cycles)
@@ -103,8 +95,12 @@ class LudoGymEnv(gym.Env):
         # Now that all objects are created, set the proper observation space
         obs_dim = self.obs_builder._compute_observation_size()
         self.observation_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(obs_dim,), dtype=np.float32
+            low=-1.0,
+            high=1.0,
+            shape=(obs_dim,),
+            dtype=np.float32,  # Temporary shape
         )
+        self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
 
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
@@ -358,9 +354,10 @@ class LudoGymEnv(gym.Env):
     def render(self):  # minimal
         print(f"Turn {self.turns} agent_color={self.agent_color}")
 
-    def set_model(self, model: Any):
+    def set_model(self, model: PPO):
         # Placeholder for compatibility; model usage external in training loop.
         self.model = model
+        self._snapshot_policy()
 
     def close(self):
         pass

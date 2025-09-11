@@ -2,10 +2,10 @@
 
 from typing import Any, List, Optional
 
-
 from ludo.constants import GameConstants
 from ludo.game import LudoGame
 
+from ..builders.observation_builder import ObservationBuilder
 from ..model import EnvConfig
 
 
@@ -18,7 +18,7 @@ class OpponentSimulator:
         game: LudoGame,
         agent_color: str,
         frozen_policy: Optional[Any],
-        obs_builder,  # Reference to observation builder for temp obs
+        obs_builder: ObservationBuilder,  # Reference to observation builder for temp obs
         policy_action_func,  # Reference to _policy_action method
         rng,  # Random number generator
     ):
