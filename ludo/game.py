@@ -4,7 +4,7 @@ Manages game flow, rules, and provides interface for AI players.
 """
 
 import random
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from .board import Board
 from .player import Player, PlayerColor
@@ -53,12 +53,21 @@ class LudoGame:
         # Initialize board with all tokens in home
         self._initialize_board()
 
+    def get_player_from_color(self, color: Union[PlayerColor, str]) -> Player:
+        if isinstance(color, PlayerColor):
+            color = color.value
+        return self._player_map[color]
+
     def _initialize_board(self):
         """Place all tokens in their starting home positions."""
         for player in self.players:
             for token in player.tokens:
                 # Tokens start in home (position -1), so no board placement needed
                 pass
+
+        self._player_map = {
+            color.value: player for color, player in zip(self.players, self.players)
+        }
 
     def get_current_player(self) -> Player:
         """Get the player whose turn it is."""

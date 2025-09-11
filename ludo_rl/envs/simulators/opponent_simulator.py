@@ -1,5 +1,6 @@
 """Opponent simulation utilities for LudoGymEnv."""
 
+import random
 from typing import List, Optional
 
 from ludo.constants import GameConstants
@@ -51,8 +52,6 @@ class OpponentSimulator:
                     current_player, dice_value, valid_moves
                 )
                 # Add randomness to opponent decisions for better training
-                import random
-
                 if random.random() < 0.1:  # 10% chance of random move
                     token_choice = random.choice(valid_moves)["token_id"]
                 else:
@@ -62,9 +61,16 @@ class OpponentSimulator:
             move_res = self.game.execute_move(current_player, token_choice, dice_value)
             # Immediate capture penalty if this move captured agent tokens
             if reward_components and move_res.get("captured_tokens"):
+                agent_captured = False
                 for ct in move_res["captured_tokens"]:
                     if ct.get("player_color") == self.agent_color:
+                        agent_captured = True
                         reward_components.append(self.cfg.reward_cfg.got_captured)
+                if agent_captured:
+                    player = self.game.get_player_from_color(self.agent_color)
+                    all_captured = all(t.position < 0 for t in player.tokens)
+                    if all_captured:
+                        reward_components.append(self.cfg.reward_cfg.all_tokens_killed)
             if not move_res.get("extra_turn") or self.game.game_over:
                 if not self.game.game_over:
                     self.game.next_turn()

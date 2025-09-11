@@ -36,6 +36,7 @@ class BaseRewardConfig:
     finish_token: float = 15.0  # Finishing tokens (very important)
     capture: float = 8.0  # Capturing opponents (important)
     got_captured: float = -5.0  # Getting captured (bad but recoverable)
+    all_tokens_killed: float = -20.0  # All tokens captured (severe)
 
     # Action rewards (moderate priority)
     extra_turn: float = 3.0  # Rolling a 6 (useful)
