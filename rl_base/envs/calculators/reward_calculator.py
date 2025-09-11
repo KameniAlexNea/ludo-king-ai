@@ -162,6 +162,19 @@ class RewardCalculator:
         total_reward += rcfg.time_penalty
         reward_components.append(rcfg.time_penalty)  # time
 
+        # Inactivity penalty (encourage activating tokens)
+        agent_player = next(p for p in self.game.players if p.color.value == self.agent_color)
+        tokens_at_home = sum(1 for t in agent_player.tokens if t.position < 0)
+        inactivity_penalty = tokens_at_home * rcfg.inactivity_penalty
+        total_reward += inactivity_penalty
+        reward_components.append(inactivity_penalty)  # inactivity
+
+        # Active token bonus (reward having tokens on board)
+        active_tokens = GameConstants.TOKENS_PER_PLAYER - tokens_at_home
+        active_bonus = active_tokens * rcfg.active_token_bonus
+        total_reward += active_bonus
+        reward_components.append(active_bonus)  # active_bonus
+
         return total_reward
 
     def get_terminal_reward(

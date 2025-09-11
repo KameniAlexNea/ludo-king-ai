@@ -85,9 +85,6 @@ class LudoGymEnv(gym.Env):
         self.episode_steps = 0
         self.done = False
         self.last_obs: Optional[np.ndarray] = None
-        self._token_activation_flags = {
-            i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
-        }
 
         # Initialize state variables that reset() expects
         self._pending_agent_dice = None
@@ -135,9 +132,6 @@ class LudoGymEnv(gym.Env):
         self.turns = 0
         self.episode_steps = 0
         self.done = False
-        self._token_activation_flags = {
-            i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
-        }
         self._pending_agent_dice = None
         self._pending_valid_moves = []
         self._last_progress_sum = self.move_utils._compute_agent_progress_sum()
@@ -315,11 +309,11 @@ class LudoGymEnv(gym.Env):
             move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
             move_res["start_position"] = start_pos
 
-            # Check diversity bonus
+            # Check diversity bonus - give bonus every time a token is activated from home
             tok = agent_player.tokens[exec_token_id]
-            if tok.position >= 0 and not self._token_activation_flags[exec_token_id]:
+            if tok.position >= 0 and start_pos < 0:
                 diversity_bonus_triggered = True
-                self._token_activation_flags[exec_token_id] = True
+                # Allow repeated bonuses for reactivating tokens
 
             extra_turn = move_res.get("extra_turn", False)
         else:

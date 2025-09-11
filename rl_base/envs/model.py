@@ -48,7 +48,9 @@ class BaseRewardConfig:
 
     # Small continuous signals (should barely register)
     progress_scale: float = 0.1  # General progress (minimal)
-    diversity_bonus: float = 0.3  # Token diversity (minimal)
+    diversity_bonus: float = 1.5  # Token diversity (increased to encourage activation)
+    inactivity_penalty: float = -0.05  # Penalty per token at home per step
+    active_token_bonus: float = 0.1  # Bonus per active token per step
 
     # Penalties (should be clear boundaries)
     illegal_action: float = -10.0  # Invalid moves (strong negative)
