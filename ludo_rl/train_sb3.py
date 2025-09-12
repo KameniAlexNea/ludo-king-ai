@@ -14,8 +14,8 @@ import copy
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
-from stable_baselines3 import PPO, DDPG
+import numpy as np
+from stable_baselines3 import DDPG, PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
@@ -34,7 +34,7 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig):
     return _init
 
 
-def main():
+def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--total-steps", type=int, default=2_000_000)
     parser.add_argument("--n-envs", type=int, default=8)
@@ -107,8 +107,10 @@ def main():
         action="store_true",
         help="Disable graduated opponent curriculum (sample uniformly from candidates)",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
 
+
+def main(args):
     os.makedirs(args.logdir, exist_ok=True)
     os.makedirs(args.model_dir, exist_ok=True)
 
@@ -145,6 +147,11 @@ def main():
         norm_reward=False,
         clip_obs=10.0,
     )
+    # Sync observation normalization stats from training env
+    try:
+        eval_env.obs_rms = copy.deepcopy(vec_env.obs_rms)
+    except Exception:
+        pass
 
     if args.algorithm.lower() == "ppo":
         # Use larger network for complex observation space
@@ -234,6 +241,19 @@ def main():
     baseline_names = [
         s.strip() for s in args.tournament_baselines.split(",") if s.strip()
     ]
+
+    # Build a normalization function using training VecNormalize statistics
+    def _normalize_obs(obs_np):
+        # VecNormalize expects batch shape [n_envs, obs_dim]; use single-env shape
+        # and only normalize observations (reward=False)
+        try:
+            obs = np.asarray(obs_np, dtype=np.float32)
+            obs = obs[None, :]  # add batch dim
+            obs_norm = vec_env.normalize_obs(obs)
+            return obs_norm[0]
+        except Exception:
+            return obs_np
+
     tournament_cb = ClassicTournamentCallback(
         baselines=baseline_names,
         n_games=args.tournament_games,
@@ -241,6 +261,7 @@ def main():
         max_turns=args.max_turns,
         log_prefix="tournament/",
         verbose=1,
+        normalize_obs_fn=_normalize_obs,
     )
 
     progress_cb = None
@@ -265,4 +286,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = get_args()
+    main(args)

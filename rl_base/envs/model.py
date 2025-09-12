@@ -16,8 +16,8 @@ class BaseRewardConfig:
     """
 
     # Terminal rewards (highest priority - sparse but strong signals)
-    win: float = 50.0  # Game victory - primary objective
-    lose: float = -50.0  # Game loss - symmetric penalty
+    win: float = 100.0  # Game victory - primary objective
+    lose: float = -150.0  # Game loss - symmetric penalty
     finish_token: float = 10.0  # Finishing individual tokens - important milestone
     all_tokens_killed: float = -25.0  # All tokens captured - severe penalty
 

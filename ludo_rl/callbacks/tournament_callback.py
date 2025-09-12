@@ -53,7 +53,11 @@ def _policy_select(policy, obs: np.ndarray) -> int:
 
 
 class ClassicTournamentCallback(BaseTournamentCallback):
-    """Tournament callback for classic multi-seat PPO using shared base class."""
+    """Tournament callback for classic multi-seat PPO using shared base class.
+
+    Optionally normalizes observations using a provided function (e.g., from VecNormalize)
+    so that evaluation matches training-time normalization statistics.
+    """
 
     def __init__(
         self,
@@ -63,16 +67,28 @@ class ClassicTournamentCallback(BaseTournamentCallback):
         max_turns: int = 1000,
         log_prefix: str = "tournament/",
         verbose: int = 0,
+        normalize_obs_fn=None,
     ):
         super().__init__(baselines, n_games, eval_freq, max_turns, log_prefix, verbose)
         # Set up environment configuration and observation builder
         self.env_cfg = EnvConfig(max_turns=max_turns)
         self.obs_builder = None  # Will be created per game
+        # Optional normalization function: np.ndarray -> np.ndarray
+        self.normalize_obs_fn = normalize_obs_fn
 
     def _select_ppo_action(
         self, policy, obs: np.ndarray, action_mask: np.ndarray | None = None
     ) -> int:
-        """Select action using PPO policy with simple stochastic sampling."""
+        """Select action using PPO policy with simple stochastic sampling.
+
+        Applies observation normalization if a normalization function was provided.
+        """
+        if self.normalize_obs_fn is not None:
+            try:
+                obs = self.normalize_obs_fn(obs)
+            except Exception:
+                # Fallback to raw obs if normalization fails
+                pass
         return _policy_select(policy, obs)
 
     def _build_observation(self, turn_counter: int, dice: int) -> np.ndarray:
