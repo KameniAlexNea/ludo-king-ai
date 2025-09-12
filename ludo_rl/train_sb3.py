@@ -2,6 +2,7 @@
 
 Usage (after installing requirements):
     python -m ludo_rl.train_sb3 --total-steps 2000000 --n-envs 8
+    python -m ludo_rl.train_sb3 --load-model ./models/ppo_ludo_final.zip --total-steps 1000000
 
 Produces models/, logs/ and tensorboard metrics.
 """
@@ -41,6 +42,12 @@ def main():
     parser.add_argument("--model-dir", type=str, default="./models")
     parser.add_argument("--eval-freq", type=int, default=50_000)
     parser.add_argument("--checkpoint-freq", type=int, default=100_000)
+    parser.add_argument(
+        "--load-model",
+        type=str,
+        default=None,
+        help="Path to pre-trained model to continue training from (e.g., ./models/ppo_ludo_final.zip)",
+    )
     parser.add_argument(
         "--max-turns",
         type=int,
@@ -138,6 +145,20 @@ def main():
         tensorboard_log=args.logdir,
         device="auto",
     )
+
+    # Load pre-trained model if specified
+    if args.load_model:
+        if os.path.exists(args.load_model):
+            print(f"Loading pre-trained model from: {args.load_model}")
+            try:
+                model = PPO.load(args.load_model, env=vec_env)
+                print("Model loaded successfully!")
+            except Exception as e:
+                print(f"Error loading model: {e}")
+                print("Starting training from scratch...")
+        else:
+            print(f"Model path not found: {args.load_model}")
+            print("Starting training from scratch...")
 
     checkpoint_cb = CheckpointCallback(
         save_freq=args.checkpoint_freq,
