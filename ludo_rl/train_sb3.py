@@ -60,9 +60,21 @@ def main():
         help="Disable probabilistic reward shaping for debugging",
     )
     parser.add_argument(
+        "--n-steps",
+        type=int,
+        default=2048,  # Increased from 512 for better stability
+        help="Number of steps per PPO update",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=512,  # Increased from 256 for better stability
+        help="Minibatch size for PPO updates",
+    )
+    parser.add_argument(
         "--ent-coef",
         type=float,
-        default=0.01,
+        default=0.05,  # Increased from 0.01 for better exploration
         help="Entropy coefficient for exploration (higher = more exploration)",
     )
     parser.add_argument(
@@ -135,13 +147,17 @@ def main():
     )
 
     if args.algorithm.lower() == "ppo":
+        # Use larger network for complex observation space
+        policy_kwargs = {
+            "net_arch": dict(pi=[256, 128], vf=[256, 128])  # Larger network
+        }
         model = PPO(
             "MlpPolicy",
             vec_env,
             verbose=0,
             learning_rate=3e-4,
-            n_steps=512,
-            batch_size=256,
+            n_steps=args.n_steps,  # Use CLI argument
+            batch_size=args.batch_size,  # Use CLI argument
             n_epochs=10,
             gamma=0.99,
             gae_lambda=0.95,
@@ -151,8 +167,13 @@ def main():
             max_grad_norm=0.5,
             tensorboard_log=args.logdir,
             device="auto",
+            policy_kwargs=policy_kwargs,
         )
     elif args.algorithm.lower() == "ddpg":
+        # Use larger network for complex observation space
+        policy_kwargs = {
+            "net_arch": dict(pi=[256, 128], qf=[256, 128])  # Larger network
+        }
         model = DDPG(
             "MlpPolicy",
             vec_env,
@@ -167,6 +188,7 @@ def main():
             gradient_steps=1,
             tensorboard_log=args.logdir,
             device="auto",
+            policy_kwargs=policy_kwargs,
         )
     else:
         raise ValueError(f"Unsupported algorithm: {args.algorithm}")
