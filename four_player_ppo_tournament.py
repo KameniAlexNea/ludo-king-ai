@@ -15,12 +15,13 @@ from itertools import combinations
 
 import numpy as np
 from dotenv import load_dotenv
+from loguru import logger
 
 from ludo import LudoGame, PlayerColor, StrategyFactory
 from ludo_stats.game_state_saver import GameStateSaver
 from ludo_tournament import BaseTournament
 from rl_base.load_ppo_model import load_ppo_strategy, select_best_ppo_model
-from loguru import logger
+
 load_dotenv()
 
 
@@ -133,7 +134,9 @@ class FourPlayerPPOTournament(BaseTournament):
             logger.info(f"   • PPO Model: {self.ppo_model}")
             logger.info(f"   • Model Preference: {self.model_preference}")
             logger.info(f"   • Available strategies: {len(self.all_strategies)}")
-            logger.info(f"   • Strategy combinations: {len(self.strategy_combinations)}")
+            logger.info(
+                f"   • Strategy combinations: {len(self.strategy_combinations)}"
+            )
             logger.info(f"   • Games per matchup: {self.games_per_matchup}")
             logger.info(f"   • Max turns per game: {self.max_turns_per_game}")
             logger.info(f"   • Models directory: {self.models_dir}")
@@ -314,15 +317,13 @@ if __name__ == "__main__":
     summary = tournament.run_tournament()
 
     # Final summary
-    logger.info("\n🎯 TOURNAMENT COMPLETE! 🎯")
-    logger.info("=" * 70)
+    print("\n🎯 TOURNAMENT COMPLETE! 🎯")
+    print("=" * 70)
     if summary["champion"]:
-        logger.info(f"🏆 Champion: {summary['champion'].upper()}")
+        print(f"🏆 Champion: {summary['champion'].upper()}")
     else:
-        logger.info("🏆 No clear champion (no games completed)")
-    logger.info(f"📊 Total Games: {summary['total_games']}")
-    logger.info(f"🎯 Combinations Tested: {summary['combinations_tested']}")
-    logger.info(f"🤖 PPO Model: {summary['ppo_model'].upper()}")
-    logger.info(f"🎮 Strategies: {', '.join([s.upper() for s in summary['strategies']])}")
-    logger.info("\n✅ PPO vs Strategies Tournament System Ready!")
-    logger.info("🔬 Advanced PPO vs Strategies evaluation complete!")
+        print("🏆 No clear champion (no games completed)")
+    print(f"📊 Total Games: {summary['total_games']}")
+    print(f"🎯 Combinations Tested: {summary['combinations_tested']}")
+    print(f"🤖 PPO Model: {summary['ppo_model'].upper()}")
+    print(f"🎮 Strategies: {', '.join([s.upper() for s in summary['strategies']])}")

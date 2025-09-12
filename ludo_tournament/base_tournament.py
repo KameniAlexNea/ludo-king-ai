@@ -7,9 +7,11 @@ Shared functionality for different tournament types.
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
+from loguru import logger
+
 from ludo import LudoGame
 from ludo_stats.game_state_saver import GameStateSaver
-from loguru import logger
+
 
 class BaseTournament:
     """Base class for Ludo tournament systems with shared functionality."""
@@ -215,7 +217,9 @@ class BaseTournament:
         logger.info("=" * 70)
 
         # Performance metrics
-        logger.info(f"\n{'Model':<20} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}")
+        logger.info(
+            f"\n{'Model':<20} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}"
+        )
         logger.info("-" * 60)
 
         for participant in participants:
