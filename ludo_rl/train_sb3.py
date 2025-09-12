@@ -15,6 +15,8 @@ import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import numpy as np
+from sb3_contrib import MaskablePPO
+from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3 import DDPG, PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
@@ -29,6 +31,19 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig):
         cfg = copy.deepcopy(base_cfg)
         cfg.seed = seed + rank
         env = LudoGymEnv(cfg)
+
+        # Action mask getter compatible with sb3-contrib ActionMasker
+        def mask_fn(env_inst):
+            # Use the env's last computed valid moves to build mask
+            pending = getattr(env_inst, "_pending_valid_moves", None)
+            return env_inst.move_utils.action_masks(pending)
+
+        # Only wrap if ActionMasker is available and algorithm requires it
+        try:
+            wrapped = ActionMasker(env, mask_fn)
+            return wrapped
+        except Exception:
+            return env
         return env
 
     return _init
@@ -80,9 +95,9 @@ def get_args():
     parser.add_argument(
         "--algorithm",
         type=str,
-        default="ppo",
-        choices=["ppo", "ddpg"],
-        help="RL algorithm to use (ppo or ddpg)",
+        default="maskable_ppo",
+        choices=["ppo", "maskable_ppo", "ddpg"],
+        help="RL algorithm to use (ppo, maskable_ppo or ddpg)",
     )
     parser.add_argument(
         "--tournament-freq",
@@ -176,6 +191,26 @@ def main(args):
             device="auto",
             policy_kwargs=policy_kwargs,
         )
+    elif args.algorithm.lower() == "maskable_ppo":
+        policy_kwargs = {"net_arch": dict(pi=[256, 128], vf=[256, 128])}
+        model = MaskablePPO(
+            "MlpPolicy",
+            vec_env,
+            verbose=0,
+            learning_rate=3e-4,
+            n_steps=args.n_steps,
+            batch_size=args.batch_size,
+            n_epochs=10,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.2,
+            ent_coef=args.ent_coef,
+            vf_coef=0.5,
+            max_grad_norm=0.5,
+            tensorboard_log=args.logdir,
+            device="auto",
+            policy_kwargs=policy_kwargs,
+        )
     elif args.algorithm.lower() == "ddpg":
         # Use larger network for complex observation space
         policy_kwargs = {
@@ -207,6 +242,8 @@ def main(args):
             try:
                 if args.algorithm.lower() == "ppo":
                     model = PPO.load(args.load_model, env=vec_env)
+                elif args.algorithm.lower() == "maskable_ppo":
+                    model = MaskablePPO.load(args.load_model, env=vec_env)
                 elif args.algorithm.lower() == "ddpg":
                     model = DDPG.load(args.load_model, env=vec_env)
                 print("Model loaded successfully!")

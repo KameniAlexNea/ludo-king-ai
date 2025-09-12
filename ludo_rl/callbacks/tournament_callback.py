@@ -89,6 +89,16 @@ class ClassicTournamentCallback(BaseTournamentCallback):
             except Exception:
                 # Fallback to raw obs if normalization fails
                 pass
+        # If MaskablePPO with action_masks keyword is supported, pass the mask
+        try:
+            if action_mask is not None and hasattr(policy, "predict"):
+                action, _ = policy.predict(
+                    obs[None, :], deterministic=False, action_masks=action_mask
+                )
+                return int(action)
+        except TypeError:
+            # Fallback when predict() does not support action_masks
+            pass
         return _policy_select(policy, obs)
 
     def _build_observation(self, turn_counter: int, dice: int) -> np.ndarray:
@@ -102,3 +112,19 @@ class ClassicTournamentCallback(BaseTournamentCallback):
         game, ppo_player = super()._setup_game_and_players(combo)
         self.obs_builder = ObservationBuilder(self.env_cfg, game, PlayerColor.RED.value)
         return game, ppo_player
+
+    def _get_action_mask(self, valid_moves: np.ndarray | None) -> np.ndarray | None:
+        """Build an action mask from valid move list when available."""
+        # valid_moves is the list of moves from the game loop
+        try:
+            from ludo.constants import GameConstants
+
+            mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
+            if valid_moves:
+                valid_ids = {m["token_id"] for m in valid_moves}
+                for i in range(GameConstants.TOKENS_PER_PLAYER):
+                    if i in valid_ids:
+                        mask[i] = 1
+            return mask
+        except Exception:
+            return None
