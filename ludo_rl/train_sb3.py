@@ -15,7 +15,7 @@ import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, DDPG
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
@@ -66,6 +66,13 @@ def main():
         help="Entropy coefficient for exploration (higher = more exploration)",
     )
     parser.add_argument(
+        "--algorithm",
+        type=str,
+        default="ppo",
+        choices=["ppo", "ddpg"],
+        help="RL algorithm to use (ppo or ddpg)",
+    )
+    parser.add_argument(
         "--tournament-freq",
         type=int,
         default=100_000,
@@ -105,7 +112,6 @@ def main():
         vec_env = DummyVecEnv(env_fns)
     else:
         # Use different seeds for each environment to add stochasticity
-
         env_fns = [make_env(i, 42 + i * 100, base_cfg) for i in range(args.n_envs)]
         vec_env = SubprocVecEnv(env_fns)
 
@@ -128,30 +134,52 @@ def main():
         clip_obs=10.0,
     )
 
-    model = PPO(
-        "MlpPolicy",
-        vec_env,
-        verbose=0,
-        learning_rate=3e-4,
-        n_steps=512,
-        batch_size=256,
-        n_epochs=10,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=args.ent_coef,  # Use CLI argument
-        vf_coef=0.5,
-        max_grad_norm=0.5,
-        tensorboard_log=args.logdir,
-        device="auto",
-    )
+    if args.algorithm.lower() == "ppo":
+        model = PPO(
+            "MlpPolicy",
+            vec_env,
+            verbose=0,
+            learning_rate=3e-4,
+            n_steps=512,
+            batch_size=256,
+            n_epochs=10,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.2,
+            ent_coef=args.ent_coef,  # Use CLI argument
+            vf_coef=0.5,
+            max_grad_norm=0.5,
+            tensorboard_log=args.logdir,
+            device="auto",
+        )
+    elif args.algorithm.lower() == "ddpg":
+        model = DDPG(
+            "MlpPolicy",
+            vec_env,
+            verbose=0,
+            learning_rate=1e-3,
+            buffer_size=1_000_000,
+            learning_starts=100,
+            batch_size=256,
+            tau=0.005,
+            gamma=0.99,
+            train_freq=1,
+            gradient_steps=1,
+            tensorboard_log=args.logdir,
+            device="auto",
+        )
+    else:
+        raise ValueError(f"Unsupported algorithm: {args.algorithm}")
 
     # Load pre-trained model if specified
     if args.load_model:
         if os.path.exists(args.load_model):
             print(f"Loading pre-trained model from: {args.load_model}")
             try:
-                model = PPO.load(args.load_model, env=vec_env)
+                if args.algorithm.lower() == "ppo":
+                    model = PPO.load(args.load_model, env=vec_env)
+                elif args.algorithm.lower() == "ddpg":
+                    model = DDPG.load(args.load_model, env=vec_env)
                 print("Model loaded successfully!")
             except Exception as e:
                 print(f"Error loading model: {e}")
@@ -163,7 +191,7 @@ def main():
     checkpoint_cb = CheckpointCallback(
         save_freq=args.checkpoint_freq,
         save_path=args.model_dir,
-        name_prefix="ppo_ludo",
+        name_prefix=f"{args.algorithm.lower()}_ludo",
         save_replay_buffer=True,
         save_vecnormalize=True,
     )
@@ -174,7 +202,7 @@ def main():
         log_path=args.logdir,
         eval_freq=args.eval_freq,
         deterministic=False,  # Use stochastic evaluation
-        n_eval_episodes=20,  # More evaluation episodes
+        n_eval_episodes=100,  # More evaluation episodes
     )
 
     # Tournament callback (optional baselines evaluation) - imported lazily to avoid overhead if unused
@@ -211,7 +239,7 @@ def main():
         total_timesteps=args.total_steps,
         callback=callbacks,
     )
-    model.save(os.path.join(args.model_dir, "ppo_ludo_final"))
+    model.save(os.path.join(args.model_dir, f"{args.algorithm.lower()}_ludo_final"))
 
 
 if __name__ == "__main__":

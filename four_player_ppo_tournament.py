@@ -130,21 +130,19 @@ class FourPlayerPPOTournament(BaseTournament):
         self.strategy_combinations = list(combinations(self.all_strategies, 3))
 
         if self.verbose_output:
-            logger.info("🎯 PPO vs Strategies Tournament Configuration:")
-            logger.info(f"   • PPO Model: {self.ppo_model}")
-            logger.info(f"   • Model Preference: {self.model_preference}")
-            logger.info(f"   • Available strategies: {len(self.all_strategies)}")
-            logger.info(
-                f"   • Strategy combinations: {len(self.strategy_combinations)}"
-            )
-            logger.info(f"   • Games per matchup: {self.games_per_matchup}")
-            logger.info(f"   • Max turns per game: {self.max_turns_per_game}")
-            logger.info(f"   • Models directory: {self.models_dir}")
-            logger.info(
+            print("🎯 PPO vs Strategies Tournament Configuration:")
+            print(f"   • PPO Model: {self.ppo_model}")
+            print(f"   • Model Preference: {self.model_preference}")
+            print(f"   • Available strategies: {len(self.all_strategies)}")
+            print(f"   • Strategy combinations: {len(self.strategy_combinations)}")
+            print(f"   • Games per matchup: {self.games_per_matchup}")
+            print(f"   • Max turns per game: {self.max_turns_per_game}")
+            print(f"   • Models directory: {self.models_dir}")
+            print(
                 f"   • Output directory: {self.output_dir if self.output_dir else 'None (no saving)'}"
             )
-            logger.info(f"   • Environment mode: {self.env_kind}")
-            logger.info(
+            print(f"   • Environment mode: {self.env_kind}")
+            print(
                 f"   • Total games to play: {len(self.strategy_combinations) * self.games_per_matchup}"
             )
 
