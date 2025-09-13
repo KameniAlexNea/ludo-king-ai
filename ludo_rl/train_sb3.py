@@ -13,7 +13,7 @@ import argparse
 import copy
 import os
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import numpy as np
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
@@ -89,8 +89,14 @@ def get_args():
     parser.add_argument(
         "--ent-coef",
         type=float,
-        default=0.05,  # Increased from 0.01 for better exploration
+        default=0.1,  # Increased from 0.01 for better exploration
         help="Entropy coefficient for exploration (higher = more exploration)",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=5e-4,  # Slightly higher for faster learning with better rewards
+        help="Learning rate for PPO",
     )
     parser.add_argument(
         "--algorithm",
@@ -167,17 +173,15 @@ def main(args):
         eval_env.obs_rms = copy.deepcopy(vec_env.obs_rms)
     except Exception:
         pass
-
+    policy_kwargs = {
+        "net_arch": dict(pi=[512, 256, 128], vf=[512, 256, 128])
+    }  # Increased capacity
     if args.algorithm.lower() == "ppo":
-        # Use larger network for complex observation space
-        policy_kwargs = {
-            "net_arch": dict(pi=[256, 128], vf=[256, 128])  # Larger network
-        }
         model = PPO(
             "MlpPolicy",
             vec_env,
             verbose=0,
-            learning_rate=3e-4,
+            learning_rate=args.learning_rate,  # Use CLI argument
             n_steps=args.n_steps,  # Use CLI argument
             batch_size=args.batch_size,  # Use CLI argument
             n_epochs=10,
@@ -192,12 +196,11 @@ def main(args):
             policy_kwargs=policy_kwargs,
         )
     elif args.algorithm.lower() == "maskable_ppo":
-        policy_kwargs = {"net_arch": dict(pi=[256, 128], vf=[256, 128])}
         model = MaskablePPO(
             "MlpPolicy",
             vec_env,
             verbose=0,
-            learning_rate=3e-4,
+            learning_rate=args.learning_rate,  # Use CLI argument
             n_steps=args.n_steps,
             batch_size=args.batch_size,
             n_epochs=10,
@@ -212,15 +215,11 @@ def main(args):
             policy_kwargs=policy_kwargs,
         )
     elif args.algorithm.lower() == "ddpg":
-        # Use larger network for complex observation space
-        policy_kwargs = {
-            "net_arch": dict(pi=[256, 128], qf=[256, 128])  # Larger network
-        }
         model = DDPG(
             "MlpPolicy",
             vec_env,
             verbose=0,
-            learning_rate=1e-3,
+            learning_rate=args.learning_rate,
             buffer_size=1_000_000,
             learning_starts=100,
             batch_size=256,

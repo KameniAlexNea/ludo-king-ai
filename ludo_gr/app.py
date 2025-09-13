@@ -19,7 +19,7 @@ from ludo.strategy import StrategyFactory
 from ludo_gr.board_viz import draw_board
 from rl_base.load_ppo_model import load_ppo_strategy
 
-AI_STRATEGIES = StrategyFactory.get_available_strategies() # ["ppo"] + 
+AI_STRATEGIES = ["ppo"] + StrategyFactory.get_available_strategies()
 DEFAULT_PLAYERS = [
     PlayerColor.RED,
     PlayerColor.GREEN,
