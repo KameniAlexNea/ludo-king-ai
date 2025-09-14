@@ -36,7 +36,8 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig):
         def mask_fn(env_inst):
             # Use the env's last computed valid moves to build mask
             pending = getattr(env_inst, "_pending_valid_moves", None)
-            return env_inst.move_utils.action_masks(pending)
+            mask = env_inst.move_utils.action_masks(pending)
+            return mask.astype(bool)  # Convert to boolean for ActionMasker
 
         # Only wrap if ActionMasker is available and algorithm requires it
         try:
@@ -95,7 +96,7 @@ def get_args():
     parser.add_argument(
         "--learning-rate",
         type=float,
-        default=5e-4,  # Slightly higher for faster learning with better rewards
+        default=1e-4,  # Reduced from 5e-4 for more stable learning
         help="Learning rate for PPO",
     )
     parser.add_argument(

@@ -29,7 +29,7 @@ from typing import List, Sequence
 
 import numpy as np
 
-from ludo.constants import Colors, GameConstants
+from ludo.constants import GameConstants
 from ludo_rls.envs.builders.observation_builder import ObservationBuilder
 from ludo_rls.envs.model import EnvConfig
 from rl_base.callbacks.base_tournament_callback import BaseTournamentCallback
@@ -58,41 +58,6 @@ def _soft_action_select(
         legal_indices = np.nonzero(action_mask)[0]
         return int(legal_indices[0])
     return act
-
-
-def _ensure_color_feature(obs: np.ndarray, current_color: str) -> np.ndarray:
-    """If observation vector is missing color one-hot (detected by length), append it.
-
-    Training self-play env includes 4 extra slots. Baseline env likely shorter.
-    We detect by comparing length mod 4 of last features heuristically.
-    Simpler: if len(obs) % 4 != 0 and len(obs) <= 40 assume missing and append.
-    More robust: check against a known self-play length via policy observation_space if available.
-    Here we'll append one-hot if length differs from model.observation_space.shape[0].
-    """
-    # current policy obs size might include one-hot
-    try:
-        target_len = int(
-            getattr(
-                getattr(_ensure_color_feature, "policy_ref", None), "observation_space"
-            ).shape[0]
-        )  # type: ignore
-    except Exception:
-        target_len = None
-    if target_len is not None and obs.shape[0] == target_len:
-        return obs
-    # If target len known and we're shorter by exactly 4, append
-    if target_len is not None and target_len - obs.shape[0] == 4:
-        pass
-    elif target_len is None:
-        # Heuristic: if not multiple of 4 after removing last 5 scalars assume missing
-        pass
-    # Build one-hot
-    one_hot = np.zeros(4, dtype=obs.dtype)
-    for i, c in enumerate(Colors.ALL_COLORS):
-        if c == current_color:
-            one_hot[i] = 1.0
-            break
-    return np.concatenate([obs, one_hot], axis=0)
 
 
 class SelfPlayTournamentCallback(BaseTournamentCallback):

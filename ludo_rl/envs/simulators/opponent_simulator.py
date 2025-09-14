@@ -50,8 +50,9 @@ class OpponentSimulator:
                 ctx = self._make_strategy_context(
                     current_player, dice_value, valid_moves
                 )
-                # Add randomness to opponent decisions for better training
-                if random.random() < 0.1:  # 10% chance of random move
+                # Add controlled randomness to opponent decisions for better training
+                # Reduce from 10% to 3% to maintain strategy while adding some unpredictability
+                if random.random() < 0.03:  # 3% chance of random move
                     token_choice = random.choice(valid_moves)["token_id"]
                 else:
                     token_choice = current_player.make_strategic_decision(ctx)

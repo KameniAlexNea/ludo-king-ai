@@ -5,7 +5,7 @@ This inherits from the base calculator and customizes for the ludo_rl environmen
 
 from typing import Dict, List
 
-from ludo.constants import GameConstants
+from ludo.constants import BoardConstants, GameConstants
 from ludo_rl.envs.model import EnvConfig
 from rl_base.envs.calculators.reward_calculator import RewardCalculator
 
@@ -27,7 +27,7 @@ class SimpleRewardCalculator(RewardCalculator):
         *args,
         **kwargs,
     ) -> Dict[str, float]:
-        """Compute comprehensive reward components.
+        """Compute comprehensive reward components with strategic depth.
 
         Returns:
             Dict of reward components (not total reward like base class)
@@ -54,20 +54,56 @@ class SimpleRewardCalculator(RewardCalculator):
         if move_res.get("token_finished"):
             components["token_finished"] = rcfg.finish_token
 
-        # Progress reward
+        # Enhanced progress reward with strategic milestones
         if progress_delta > 0:
             components["progress"] = progress_delta * rcfg.progress_scale
 
+            # Strategic milestone bonuses - only for the token that actually moved
+            agent_player = self.game.get_player_from_color(self.agent_color)
+            home_entry_pos = BoardConstants.HOME_COLUMN_ENTRIES[self.agent_color]
+
+            # Find the token that moved (the one with start_position in move_res)
+            moved_token_start = move_res.get("start_position", -1)
+            if moved_token_start >= 0:  # Token was already on board
+                # Find token by matching current position with start position
+                moved_token = None
+                for token in agent_player.tokens:
+                    if token.position == moved_token_start:
+                        moved_token = token
+                        break
+
+                if moved_token:
+                    # Home column entry bonus (when entering home column approach)
+                    if (
+                        moved_token.position >= home_entry_pos
+                        and moved_token_start < home_entry_pos
+                    ):
+                        components["home_column_entry"] = rcfg.home_column_entry_bonus
+
+                    # Critical position bonuses (safe squares, near home)
+                    if (
+                        moved_token.position in BoardConstants.STAR_SQUARES
+                    ):  # Safe squares
+                        components["safe_square_bonus"] = rcfg.safe_square_bonus
+                    elif (
+                        moved_token.position >= home_entry_pos + 1
+                    ):  # Very close to home
+                        components["near_home_bonus"] = rcfg.near_home_bonus
+
         if diversity_bonus:
-            # Inactivity penalty (encourage activating tokens)
+            # Inactivity penalty (encourage activating tokens) - configurable scaling
             agent_player = self.game.get_player_from_color(self.agent_color)
             tokens_at_home = sum(1 for t in agent_player.tokens if t.position < 0)
-            inactivity_penalty = tokens_at_home * rcfg.inactivity_penalty
+            inactivity_penalty = (
+                tokens_at_home * rcfg.inactivity_penalty * rcfg.diversity_penalty_scale
+            )
             components["inactivity"] = inactivity_penalty
 
-            # Active token bonus (reward having tokens on board)
+            # Active token bonus (reward having tokens on board) - configurable scaling
             active_tokens = GameConstants.TOKENS_PER_PLAYER - tokens_at_home
-            active_bonus = active_tokens * rcfg.active_token_bonus
+            active_bonus = (
+                active_tokens * rcfg.active_token_bonus * rcfg.diversity_bonus_scale
+            )
             components["active_bonus"] = active_bonus
 
         # Time penalty (small per-step cost)

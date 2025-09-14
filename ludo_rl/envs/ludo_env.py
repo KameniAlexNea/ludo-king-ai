@@ -117,9 +117,10 @@ class LudoGymEnv(gym.Env):
             self.cfg.seed = seed
             self.rng.seed(seed)
             random.seed(seed)
+            np.random.seed(seed)
 
         # 1) Possibly randomize agent color and pick opponents (curriculum-aware)
-        if getattr(self.cfg, "randomize_agent_seat", False):
+        if self.cfg.randomize_agent_seat:
             self.agent_color = self.rng.choice(list(Colors.ALL_COLORS))
         self.opponent_strategies = self._select_opponents()
 
@@ -166,18 +167,15 @@ class LudoGymEnv(gym.Env):
         Falls back to uniform sampling from candidates if curriculum disabled
         or misconfigured.
         """
-        # Curriculum disabled => uniform sample
-        if not (
-            getattr(self.cfg, "opponent_curriculum", None)
-            and self.cfg.opponent_curriculum.enabled
-        ):
+        # Curriculum disabled/25% random for diversity => uniform sample
+        if not self.cfg.opponent_curriculum.enabled or self.rng.random() < 0.25:
             return self.rng.sample(self.cfg.opponents.candidates, 3)
 
         occ = self.cfg.opponent_curriculum
         phase_idx = self._determine_curriculum_phase()
 
         # Filter buckets by allowed candidates
-        allowed = set(getattr(self.cfg.opponents, "candidates", []))
+        allowed = set(self.cfg.opponents.candidates)
 
         def sample_from(bucket: List[str], k: int) -> List[str]:
             pool = [s for s in bucket if not allowed or s in allowed]
@@ -290,14 +288,25 @@ class LudoGymEnv(gym.Env):
         move_res = {}
         diversity_bonus_triggered = False
 
-        if not no_moves_available:
+        if no_moves_available:
+            # No valid moves available this turn (e.g., no 6 to exit, or blocked)
+            # This is NOT an illegal action by the agent; simply skip move execution.
+            illegal = False
+            # Skip the turn (no move execution)
+            extra_turn = False
+        else:
             valid_token_ids = [m["token_id"] for m in valid_moves]
             # Convert action to int in case it's a numpy array
             action = int(action)
             if action not in valid_token_ids:
                 illegal = True
-                # choose fallback (first valid) for execution so environment state advances
-                exec_token_id = valid_token_ids[0]
+                # For illegal actions, we have two options:
+                # 1. Execute a random valid move (current approach)
+                # 2. Skip the turn entirely
+                # Option 1 is better for learning as it maintains game flow
+                exec_token_id = self.rng.choice(
+                    valid_token_ids
+                )  # Random instead of first
             else:
                 exec_token_id = action
             # Capture start position for progress calculation inside reward_calc
@@ -312,9 +321,7 @@ class LudoGymEnv(gym.Env):
                 # Allow repeated bonuses for reactivating tokens
 
             extra_turn = move_res.get("extra_turn", False)
-        else:
-            # No valid moves: treat as skipped turn (no illegal penalty)
-            extra_turn = False
+        
 
         # Opponent simulation if no extra turn and game not over
         if not extra_turn and not self.game.game_over:

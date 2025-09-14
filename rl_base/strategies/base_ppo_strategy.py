@@ -27,7 +27,7 @@ class BasePPOStrategy:
         model_name: str,
         env_config: BaseEnvConfig | None = None,
         deterministic: bool = True,
-        maskable: bool = True,
+        maskable: bool = False,
     ):
         self.model_name = model_name
         self.model = (MaskablePPO if maskable else PPO).load(model_path, device="cpu")

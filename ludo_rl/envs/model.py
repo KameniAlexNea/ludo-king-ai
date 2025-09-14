@@ -14,38 +14,59 @@ from rl_base.envs.model import (
 
 @dataclass
 class RewardConfig(BaseRewardConfig):
-    """Improved reward configuration for better PPO learning."""
+    """Corrected reward configuration for stable PPO learning.
 
-    # Increase terminal rewards for stronger learning signals
-    win: float = 200.0  # Increased from 100.0
-    lose: float = -200.0  # Increased from -150.0
-    finish_token: float = 25.0  # Increased from 10.0
+    Values are tuned for stable RL training with proper reward shaping.
+    Terminal rewards are moderate to provide clear learning signals.
+    Action rewards are balanced to encourage good play without dominating.
+    """
 
-    # Boost major action rewards
-    capture: float = 15.0  # Increased from 8.0
-    got_captured: float = -15.0  # Increased from -8.0
-    extra_turn: float = 8.0  # Increased from 3.0
+    # Terminal rewards (highest priority - sparse but strong signals)
+    win: float = 100.0  # Increased for stronger learning signal
+    lose: float = -100.0  # Increased for stronger learning signal
+    finish_token: float = 10.0  # Increased for stronger learning signal
 
-    # Significantly increase progress rewards for better learning signal
-    progress_scale: float = 0.5  # Increased from 0.05 (10x boost!)
-    home_progress_bonus: float = 5.0  # Increased from 2.0
-    home_approach_bonus: float = 3.0  # Increased from 1.0
+    # Major action rewards (should encourage key strategic actions)
+    capture: float = 8.0  # Capturing opponent tokens - very valuable
+    got_captured: float = -8.0  # Being captured - symmetric penalty
+    extra_turn: float = 3.0  # Rolling 6 for another turn - useful but not dominant
 
-    # Boost strategic positioning rewards
-    blocking_bonus: float = 4.0  # Increased from 1.5
-    safety_bonus: float = 6.0  # Increased from 2.0
+    # Strategic positioning rewards (moderate shaping)
+    home_progress_bonus: float = 2.0  # Progress in home column
+    blocking_bonus: float = 1.5  # Creating blocks to protect position
+    safety_bonus: float = 2.0  # Moving to safe positions
+    home_approach_bonus: float = 1.0  # Approaching home entry
 
-    # Increase exploration incentives
-    diversity_bonus: float = 2.0  # Increased from 0.5
-    active_token_bonus: float = 0.3  # Increased from 0.1
-    inactivity_penalty: float = -0.1  # Increased from -0.02
+    # Small continuous rewards (minimal shaping to avoid reward hacking)
+    progress_scale: float = 0.05  # Increased from 0.01 for more learning signal
+    diversity_bonus: float = 0.5  # Encouraging token activation
+    active_token_bonus: float = 0.1  # Bonus per active token
+    inactivity_penalty: float = -0.02  # Penalty per token stuck at home
 
-    # Stronger penalties for illegal actions
-    illegal_action: float = -30.0  # Increased from -15.0
+    # Strategic milestone bonuses (configurable scaling) - simplified
+    home_column_entry_bonus: float = (
+        0.5  # Reduced bonus for entering home column approach
+    )
+    safe_square_bonus: float = 0.1  # Reduced bonus for landing on safe squares
+    near_home_bonus: float = 0.2  # Reduced bonus for being very close to home
 
-    # Enable probabilistic rewards for risk-awareness
+    # Diversity bonus scaling (to reduce frequency/magnitude)
+    diversity_penalty_scale: float = (
+        0.05  # Further reduced scale factor for inactivity penalty
+    )
+    diversity_bonus_scale: float = (
+        0.2  # Further reduced scale factor for active token bonus
+    )
+
+    # Clear boundaries (strong penalties for invalid actions)
+    illegal_action: float = (
+        -50.0
+    )  # Invalid moves - very strong negative to prevent illegal actions
+    time_penalty: float = -0.001  # Reduced time penalty for less negative pressure
+
+    # Advanced features (disabled by default for simplicity)
     use_probabilistic_rewards: bool = False
-    risk_weight: float = 0.3  # Increased from 0.2
+    risk_weight: float = 0.2
 
 
 @dataclass
