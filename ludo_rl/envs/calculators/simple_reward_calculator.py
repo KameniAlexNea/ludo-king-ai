@@ -62,33 +62,27 @@ class SimpleRewardCalculator(RewardCalculator):
             agent_player = self.game.get_player_from_color(self.agent_color)
             home_entry_pos = BoardConstants.HOME_COLUMN_ENTRIES[self.agent_color]
 
-            # Find the token that moved (the one with start_position in move_res)
+            # Find the token that moved
+            moved_token = agent_player.tokens[move_res["token_id"]]
             moved_token_start = move_res.get("start_position", -1)
-            if moved_token_start >= 0:  # Token was already on board
-                # Find token by matching current position with start position
-                moved_token = None
-                for token in agent_player.tokens:
-                    if token.position == moved_token_start:
-                        moved_token = token
-                        break
 
-                if moved_token:
-                    # Home column entry bonus (when entering home column approach)
-                    if (
-                        moved_token.position >= home_entry_pos
-                        and moved_token_start < home_entry_pos
-                    ):
-                        components["home_column_entry"] = rcfg.home_column_entry_bonus
+            if moved_token:
+                # Home column entry bonus (when entering home column approach)
+                if (
+                    moved_token.position >= home_entry_pos
+                    and moved_token_start < home_entry_pos
+                ):
+                    components["home_column_entry"] = rcfg.home_column_entry_bonus
 
-                    # Critical position bonuses (safe squares, near home)
-                    if (
-                        moved_token.position in BoardConstants.STAR_SQUARES
-                    ):  # Safe squares
-                        components["safe_square_bonus"] = rcfg.safe_square_bonus
-                    elif (
-                        moved_token.position >= home_entry_pos + 1
-                    ):  # Very close to home
-                        components["near_home_bonus"] = rcfg.near_home_bonus
+                # Critical position bonuses (safe squares, near home)
+                if (
+                    moved_token.position in BoardConstants.STAR_SQUARES
+                ):  # Safe squares
+                    components["safe_square_bonus"] = rcfg.safe_square_bonus
+                elif (
+                    moved_token.position >= home_entry_pos + 1
+                ):  # Very close to home
+                    components["near_home_bonus"] = rcfg.near_home_bonus
 
         if diversity_bonus:
             # Inactivity penalty (encourage activating tokens) - configurable scaling

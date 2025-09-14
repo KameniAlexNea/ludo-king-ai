@@ -22,6 +22,8 @@ from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
+from ludo_rl.callbacks.progress_curriculum import ProgressCurriculumCallback
+from ludo_rl.callbacks.tournament_callback import ClassicTournamentCallback
 from ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
 
 
@@ -266,14 +268,11 @@ def main(args):
         eval_env,
         best_model_save_path=args.model_dir,
         log_path=args.logdir,
-        eval_freq=args.eval_freq,
+        eval_freq=max(args.eval_freq // args.n_envs, 1),
         deterministic=False,  # Use stochastic evaluation
         n_eval_episodes=100,  # More evaluation episodes
+        verbose=1,
     )
-
-    # Tournament callback (optional baselines evaluation) - imported lazily to avoid overhead if unused
-    from .callbacks.progress_curriculum import ProgressCurriculumCallback
-    from .callbacks.tournament_callback import ClassicTournamentCallback
 
     baseline_names = [
         s.strip() for s in args.tournament_baselines.split(",") if s.strip()

@@ -113,7 +113,7 @@ class ClassicTournamentCallback(BaseTournamentCallback):
         self.obs_builder = ObservationBuilder(self.env_cfg, game, PlayerColor.RED.value)
         return game, ppo_player
 
-    def _get_action_mask(self, valid_moves: np.ndarray | None) -> np.ndarray | None:
+    def _get_action_mask(self, valid_moves: list | None) -> np.ndarray | None:
         """Build an action mask from valid move list when available."""
         # valid_moves is the list of moves from the game loop
         try:
