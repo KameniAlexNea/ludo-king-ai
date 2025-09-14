@@ -36,9 +36,9 @@ from typing import Sequence
 import numpy as np
 
 from ludo.player import PlayerColor
-from ludo_rl.envs.builders.observation_builder import ObservationBuilder
 from ludo_rl.envs.model import EnvConfig
 from rl_base.callbacks.base_tournament_callback import BaseTournamentCallback
+from rl_base.envs.builders.observation_builder import ObservationBuilder
 
 
 def _policy_select(policy, obs: np.ndarray) -> int:

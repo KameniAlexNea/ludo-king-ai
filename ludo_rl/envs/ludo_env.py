@@ -38,9 +38,8 @@ from ludo_rl.envs.calculators.simple_reward_calculator import (
 )
 from ludo_rl.envs.model import EnvConfig
 from ludo_rl.envs.simulators.opponent_simulator import OpponentSimulator
-from ludo_rl.envs.utils.move_utils import MoveUtils
-
-from .builders.observation_builder import ObservationBuilder
+from rl_base.envs.builders.observation_builder import ObservationBuilder
+from rl_base.envs.utils.move_utils import MoveUtils
 
 
 class LudoGymEnv(gym.Env):
@@ -321,7 +320,6 @@ class LudoGymEnv(gym.Env):
                 # Allow repeated bonuses for reactivating tokens
 
             extra_turn = move_res.get("extra_turn", False)
-        
 
         # Opponent simulation if no extra turn and game not over
         if not extra_turn and not self.game.game_over:
