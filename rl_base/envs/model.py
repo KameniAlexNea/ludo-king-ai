@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from ludo.constants import Colors
+from ludo_engine.constants import Colors
 
 
 @dataclass

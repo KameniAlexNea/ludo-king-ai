@@ -2,9 +2,9 @@
 
 from typing import Dict, List, Optional
 
-from ludo.constants import BoardConstants, GameConstants
-from ludo.game import LudoGame
-from ludo.player import Player
+from ludo_engine.constants import BoardConstants, GameConstants
+from ludo_engine.game import LudoGame
+from ludo_engine.player import Player
 from rl_base.envs.calculators.probabilistic_calculator import ProbabilisticCalculator
 from rl_base.envs.model import BaseEnvConfig
 

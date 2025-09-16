@@ -10,10 +10,10 @@ import unittest
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ludo.board import Board
-from ludo.game import LudoGame
-from ludo.player import Player, PlayerColor
-from ludo.token import Token, TokenState
+from ludo_engine.board import Board
+from ludo_engine.game import LudoGame
+from ludo_engine.player import Player, PlayerColor
+from ludo_engine.token import Token, TokenState
 
 
 class TokenTestCase(unittest.TestCase):
@@ -295,7 +295,7 @@ class IntegrationTestCase(unittest.TestCase):
 
     def test_complete_game_flow(self):
         """Test a complete game from start to strategic finish."""
-        from ludo.strategy import StrategyFactory
+        from ludo_engine.strategy import StrategyFactory
 
         game = LudoGame([PlayerColor.RED, PlayerColor.BLUE])
 
@@ -349,7 +349,7 @@ class IntegrationTestCase(unittest.TestCase):
 
     def test_strategy_behavior_differences(self):
         """Test that different strategies behave differently."""
-        from ludo.strategy import StrategyFactory
+        from ludo_engine.strategy import StrategyFactory
 
         # Create a game context with multiple options
         game = LudoGame([PlayerColor.RED, PlayerColor.BLUE])

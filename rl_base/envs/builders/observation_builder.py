@@ -4,8 +4,8 @@ from typing import List
 
 import numpy as np
 
-from ludo.constants import BoardConstants, Colors, GameConstants
-from ludo.game import LudoGame
+from ludo_engine.constants import BoardConstants, Colors, GameConstants
+from ludo_engine.game import LudoGame
 from rl_base.envs.model import BaseEnvConfig
 
 

@@ -4,6 +4,7 @@ langchain-ollama
 ollama
 pydantic
 loguru
+ludo-king-engine
 # RL Training dependencies
 gymnasium
 stable-baselines3
