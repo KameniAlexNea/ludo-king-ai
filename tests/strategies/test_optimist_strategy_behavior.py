@@ -1,6 +1,6 @@
 import unittest
 
-from ludo.strategies.optimist import OptimistStrategy
+from ludo_engine.strategies.optimist import OptimistStrategy
 
 
 class TestOptimistStrategyBehavior(unittest.TestCase):

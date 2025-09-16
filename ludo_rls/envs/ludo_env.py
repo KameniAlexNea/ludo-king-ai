@@ -29,9 +29,9 @@ import numpy as np
 from gymnasium import spaces
 from stable_baselines3 import PPO
 
-from ludo.constants import GameConstants
-from ludo.game import LudoGame
-from ludo.player import PlayerColor
+from ludo_engine.constants import GameConstants
+from ludo_engine.game import LudoGame
+from ludo_engine.player import PlayerColor
 from ludo_rls.envs.calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )

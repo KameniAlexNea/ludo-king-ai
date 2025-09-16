@@ -1,6 +1,6 @@
 import unittest
 
-from ludo.strategies.defensive import DefensiveStrategy
+from ludo_engine.strategies.defensive import DefensiveStrategy
 
 
 class TestDefensiveStrategyBehavior(unittest.TestCase):

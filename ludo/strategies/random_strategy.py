@@ -5,7 +5,7 @@ Random Strategy - Makes completely random valid moves.
 import random
 from typing import Dict
 
-from ludo.strategies.base import Strategy
+from ludo_engine.strategies.base import Strategy
 
 
 class RandomStrategy(Strategy):

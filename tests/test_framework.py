@@ -12,9 +12,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import Dict, List
 
-from ludo.game import LudoGame
-from ludo.player import PlayerColor
-from ludo.strategy import Strategy, StrategyFactory
+from ludo_engine.game import LudoGame
+from ludo_engine.player import PlayerColor
+from ludo_engine.strategy import Strategy, StrategyFactory
 from tests.test_models import ExpectedBehavior, TestDataFactory, TestScenarioBuilder
 
 

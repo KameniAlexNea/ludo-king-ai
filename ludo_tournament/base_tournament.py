@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from ludo import LudoGame
+from ludo_engine import LudoGame
 from ludo_stats.game_state_saver import GameStateSaver
 
 

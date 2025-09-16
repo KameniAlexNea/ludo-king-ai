@@ -1,6 +1,6 @@
 import unittest
 
-from ludo.strategies.hybrid_prob import HybridProbStrategy
+from ludo_engine.strategies.hybrid_prob import HybridProbStrategy
 
 
 class TestHybridProbStrategyBehavior(unittest.TestCase):

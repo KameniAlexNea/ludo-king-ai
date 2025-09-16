@@ -1,6 +1,6 @@
 import unittest
 
-from ludo.strategies.winner import WinnerStrategy
+from ludo_engine.strategies.winner import WinnerStrategy
 
 
 class TestWinnerStrategyBehavior(unittest.TestCase):

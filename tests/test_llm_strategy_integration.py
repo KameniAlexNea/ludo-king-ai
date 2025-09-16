@@ -4,7 +4,7 @@ Integration tests for LLM Strategy with real game scenarios.
 
 import unittest
 
-from ludo.strategies.llm.strategy import LLMStrategy
+from ludo_engine.strategies.llm.strategy import LLMStrategy
 
 
 class MockGameLLMClient:

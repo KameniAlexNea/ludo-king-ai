@@ -2,20 +2,20 @@
 Strategies module - Collection of all available Ludo AI strategies.
 """
 
-from ludo.strategies.balanced import BalancedStrategy
-from ludo.strategies.base import Strategy
-from ludo.strategies.cautious import CautiousStrategy
-from ludo.strategies.defensive import DefensiveStrategy
-from ludo.strategies.hybrid_prob import HybridConfig, HybridProbStrategy
-from ludo.strategies.killer import KillerStrategy
-from ludo.strategies.llm import LLMStrategy
-from ludo.strategies.optimist import OptimistStrategy
-from ludo.strategies.probabilistic import ProbabilisticStrategy
-from ludo.strategies.probabilistic_v2 import ProbabilisticV2Strategy
-from ludo.strategies.probabilistic_v3 import ProbabilisticV3Strategy, V3Config
-from ludo.strategies.random_strategy import RandomStrategy
-from ludo.strategies.weighted_random import WeightedRandomStrategy
-from ludo.strategies.winner import WinnerStrategy
+from ludo_engine.strategies.balanced import BalancedStrategy
+from ludo_engine.strategies.base import Strategy
+from ludo_engine.strategies.cautious import CautiousStrategy
+from ludo_engine.strategies.defensive import DefensiveStrategy
+from ludo_engine.strategies.hybrid_prob import HybridConfig, HybridProbStrategy
+from ludo_engine.strategies.killer import KillerStrategy
+from ludo_engine.strategies.llm import LLMStrategy
+from ludo_engine.strategies.optimist import OptimistStrategy
+from ludo_engine.strategies.probabilistic import ProbabilisticStrategy
+from ludo_engine.strategies.probabilistic_v2 import ProbabilisticV2Strategy
+from ludo_engine.strategies.probabilistic_v3 import ProbabilisticV3Strategy, V3Config
+from ludo_engine.strategies.random_strategy import RandomStrategy
+from ludo_engine.strategies.weighted_random import WeightedRandomStrategy
+from ludo_engine.strategies.winner import WinnerStrategy
 
 # Strategy Mapping - Centralized mapping of strategy names to classes
 STRATEGIES: dict[str, Strategy] = {

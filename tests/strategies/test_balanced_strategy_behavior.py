@@ -1,6 +1,6 @@
 import unittest
 
-from ludo.strategies.balanced import BalancedStrategy
+from ludo_engine.strategies.balanced import BalancedStrategy
 
 
 class TestBalancedStrategyBehavior(unittest.TestCase):

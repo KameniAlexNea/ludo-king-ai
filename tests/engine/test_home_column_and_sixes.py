@@ -1,8 +1,8 @@
 import unittest
 
-from ludo.game import LudoGame
-from ludo.player import PlayerColor
-from ludo.token import TokenState
+from ludo_engine.game import LudoGame
+from ludo_engine.player import PlayerColor
+from ludo_engine.token import TokenState
 
 
 class TestHomeColumnAndSixes(unittest.TestCase):

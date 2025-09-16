@@ -29,10 +29,10 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from ludo.constants import Colors, GameConstants
-from ludo.game import LudoGame
-from ludo.player import PlayerColor
-from ludo.strategy import StrategyFactory
+from ludo_engine.constants import Colors, GameConstants
+from ludo_engine.game import LudoGame
+from ludo_engine.player import PlayerColor
+from ludo_engine.strategy import StrategyFactory
 from ludo_rl.envs.calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )

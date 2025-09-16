@@ -14,9 +14,9 @@ API and existing detail fields while correcting previous priority inversions.
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
-from ludo.constants import BoardConstants, GameConstants, StrategyConstants
-from ludo.strategies.base import Strategy
-from ludo.strategies.utils import (
+from ludo_engine.constants import BoardConstants, GameConstants, StrategyConstants
+from ludo_engine.strategies.base import Strategy
+from ludo_engine.strategies.utils import (
     forward_distance,
     get_opponent_main_positions,
     is_safe_or_home,

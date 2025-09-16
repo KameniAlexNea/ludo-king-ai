@@ -1,7 +1,7 @@
 import unittest
 
-from ludo.game import LudoGame
-from ludo.player import PlayerColor
+from ludo_engine.game import LudoGame
+from ludo_engine.player import PlayerColor
 
 
 class TestGameCore(unittest.TestCase):

@@ -1,6 +1,6 @@
 import unittest
 
-from ludo.strategies.weighted_random import WeightedRandomStrategy
+from ludo_engine.strategies.weighted_random import WeightedRandomStrategy
 
 
 class TestWeightedRandomStrategyBehavior(unittest.TestCase):

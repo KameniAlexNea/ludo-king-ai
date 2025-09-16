@@ -7,9 +7,9 @@ behind late game.
 
 from typing import Dict, List, Set
 
-from ludo.constants import BoardConstants, StrategyConstants
-from ludo.strategies.base import Strategy
-from ludo.strategies.utils import (
+from ludo_engine.constants import BoardConstants, StrategyConstants
+from ludo_engine.strategies.base import Strategy
+from ludo_engine.strategies.utils import (
     LARGE_THREAT_COUNT,
     NO_THREAT_DISTANCE,
     compute_threats_for_moves,

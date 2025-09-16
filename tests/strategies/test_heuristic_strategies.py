@@ -1,10 +1,10 @@
 import unittest
 
-from ludo.game import LudoGame
-from ludo.player import PlayerColor
-from ludo.strategies.cautious import CautiousStrategy
-from ludo.strategies.killer import KillerStrategy
-from ludo.strategies.random_strategy import RandomStrategy
+from ludo_engine.game import LudoGame
+from ludo_engine.player import PlayerColor
+from ludo_engine.strategies.cautious import CautiousStrategy
+from ludo_engine.strategies.killer import KillerStrategy
+from ludo_engine.strategies.random_strategy import RandomStrategy
 
 
 class TestHeuristicStrategies(unittest.TestCase):

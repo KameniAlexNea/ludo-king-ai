@@ -4,7 +4,7 @@ LLM Strategy - Uses Language Models (Ollama/Groq) for decision making.
 
 import os
 
-from ludo.strategies.llm import LLMStrategy
+from ludo_engine.strategies.llm import LLMStrategy
 
 
 class OllamaStrategy(LLMStrategy):

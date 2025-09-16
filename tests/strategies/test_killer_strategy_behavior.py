@@ -1,6 +1,6 @@
 import unittest
 
-from ludo.strategies.killer import KillerStrategy
+from ludo_engine.strategies.killer import KillerStrategy
 
 
 def base_players(current_color: str, opponent_pos: int):

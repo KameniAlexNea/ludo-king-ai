@@ -1,6 +1,6 @@
 import unittest
 
-from ludo.strategies.cautious import CautiousStrategy
+from ludo_engine.strategies.cautious import CautiousStrategy
 
 
 def players_for_threat(current_color: str, threatening_pos: int):

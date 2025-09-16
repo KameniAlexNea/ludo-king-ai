@@ -4,10 +4,10 @@ A structured implementation for AI to play Ludo King.
 """
 
 from ludo.board import Board, Position
-from ludo.constants import BoardConstants, Colors, GameConstants, StrategyConstants
+from ludo_engine.constants import BoardConstants, Colors, GameConstants, StrategyConstants
 from ludo.game import LudoGame
 from ludo.player import Player, PlayerColor
-from ludo.strategies import (
+from ludo_engine.strategies import (
     STRATEGIES,
     BalancedStrategy,
     CautiousStrategy,
@@ -19,7 +19,7 @@ from ludo.strategies import (
     WinnerStrategy,
 )
 from ludo.strategy import StrategyFactory
-from ludo.token import Token, TokenState
+from ludo_engine.token import Token, TokenState
 
 __all__ = [
     "LudoGame",

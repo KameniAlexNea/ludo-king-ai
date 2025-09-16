@@ -1,8 +1,8 @@
 import os
 import unittest
 
-from ludo.game import LudoGame
-from ludo.player import PlayerColor
+from ludo_engine.game import LudoGame
+from ludo_engine.player import PlayerColor
 from ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
 
 MODEL_DIR = "models/ppo_training"

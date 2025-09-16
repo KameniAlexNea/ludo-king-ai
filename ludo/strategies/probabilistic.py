@@ -28,9 +28,9 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from ludo.constants import BoardConstants, GameConstants
-from ludo.strategies.base import Strategy
-from ludo.strategies.utils import get_opponent_main_positions_with_fallback
+from ludo_engine.constants import BoardConstants, GameConstants
+from ludo_engine.strategies.base import Strategy
+from ludo_engine.strategies.utils import get_opponent_main_positions_with_fallback
 
 
 class ProbabilisticStrategy(Strategy):

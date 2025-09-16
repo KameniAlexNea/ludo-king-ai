@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 
-from ludo.constants import Colors, GameConstants
+from ludo_engine.constants import Colors, GameConstants
 from ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
 
 

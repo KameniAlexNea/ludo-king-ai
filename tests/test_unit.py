@@ -255,7 +255,7 @@ class GameLogicTestCase(unittest.TestCase):
         # Should have 4 possible moves (one for each token to exit home)
         self.assertGreater(len(valid_moves), 0)
         # Check that at least one move is exit_home type
-        exit_moves = [m for m in valid_moves if m.get("move_type") == "exit_home"]
+        exit_moves = [m for m in valid_moves if m.move_type == "exit_home"]
         self.assertGreater(len(exit_moves), 0)
 
     def test_move_execution(self):
@@ -264,8 +264,8 @@ class GameLogicTestCase(unittest.TestCase):
 
         # Execute exit home move
         result = self.game.execute_move(player, 0, 6)
-        self.assertTrue(result["success"])
-        self.assertTrue(result.get("extra_turn", False))  # Rolling 6 gives extra turn
+        self.assertTrue(result.success)
+        self.assertTrue(result.extra_turn)  # Rolling 6 gives extra turn
 
         # Check token position
         token = player.tokens[0]
@@ -275,19 +275,19 @@ class GameLogicTestCase(unittest.TestCase):
         """Test AI decision context generation."""
         context = self.game.get_ai_decision_context(6)
 
-        self.assertIn("current_situation", context)
-        self.assertIn("player_state", context)
-        self.assertIn("opponents", context)
-        self.assertIn("valid_moves", context)
-        self.assertIn("strategic_analysis", context)
+        self.assertIsNotNone(context.current_situation)
+        self.assertIsNotNone(context.player_state)
+        self.assertIsNotNone(context.opponents)
+        self.assertIsNotNone(context.valid_moves)
+        self.assertIsNotNone(context.strategic_analysis)
 
         # Check current situation
-        situation = context["current_situation"]
-        self.assertEqual(situation["dice_value"], 6)
-        self.assertEqual(situation["player_color"], "red")
+        situation = context.current_situation
+        self.assertEqual(situation.dice_value, 6)
+        self.assertEqual(situation.player_color, "red")
 
         # Should have moves available with dice value 6
-        self.assertGreater(len(context["valid_moves"]), 0)
+        self.assertGreater(len(context.valid_moves), 0)
 
 
 class IntegrationTestCase(unittest.TestCase):

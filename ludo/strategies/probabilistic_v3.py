@@ -41,9 +41,9 @@ import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence
 
-from ludo.constants import BoardConstants, GameConstants
-from ludo.strategies.base import Strategy
-from ludo.strategies.utils import (
+from ludo_engine.constants import BoardConstants, GameConstants
+from ludo_engine.strategies.base import Strategy
+from ludo_engine.strategies.utils import (
     get_my_main_positions_with_fallback,
     get_opponent_main_positions_with_fallback,
 )

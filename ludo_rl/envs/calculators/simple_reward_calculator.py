@@ -5,7 +5,7 @@ This inherits from the base calculator and customizes for the ludo_rl environmen
 
 from typing import Dict, List
 
-from ludo.constants import BoardConstants, GameConstants
+from ludo_engine.constants import BoardConstants, GameConstants
 from ludo_rl.envs.model import EnvConfig
 from rl_base.envs.calculators.reward_calculator import RewardCalculator
 

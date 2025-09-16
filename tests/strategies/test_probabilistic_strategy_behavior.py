@@ -1,6 +1,6 @@
 import unittest
 
-from ludo.strategies.probabilistic import ProbabilisticStrategy
+from ludo_engine.strategies.probabilistic import ProbabilisticStrategy
 
 
 class TestProbabilisticStrategyBehavior(unittest.TestCase):

@@ -7,7 +7,7 @@ import random
 from typing import Dict, List, Optional, Union
 
 from ludo.board import Board
-from ludo.constants import GameConstants
+from ludo_engine.constants import GameConstants
 from ludo.player import Player, PlayerColor
 
 

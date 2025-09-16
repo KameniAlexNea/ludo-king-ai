@@ -19,8 +19,8 @@ import math
 import random
 from typing import Dict, List
 
-from ludo.constants import BoardConstants, GameConstants, StrategyConstants
-from ludo.strategies.base import Strategy
+from ludo_engine.constants import BoardConstants, GameConstants, StrategyConstants
+from ludo_engine.strategies.base import Strategy
 
 
 class WeightedRandomStrategy(Strategy):

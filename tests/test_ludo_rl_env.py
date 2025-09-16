@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
-from ludo.constants import Colors, GameConstants
-from ludo.token import TokenState
+from ludo_engine.constants import Colors, GameConstants
+from ludo_engine.token import TokenState
 from ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
 
 # Observation structure constants for maintainability

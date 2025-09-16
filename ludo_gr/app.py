@@ -13,9 +13,9 @@ import json
 
 import gradio as gr
 
-from ludo.game import LudoGame
-from ludo.player import PlayerColor
-from ludo.strategy import StrategyFactory
+from ludo_engine.game import LudoGame
+from ludo_engine.player import PlayerColor
+from ludo_engine.strategy import StrategyFactory
 from ludo_gr.board_viz import draw_board
 from rl_base.load_ppo_model import load_ppo_strategy
 

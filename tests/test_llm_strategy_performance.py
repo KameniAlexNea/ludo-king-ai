@@ -6,8 +6,8 @@ import time
 import unittest
 from statistics import mean
 
-from ludo.strategies.llm.prompt import create_prompt
-from ludo.strategies.llm.strategy import LLMStrategy
+from ludo_engine.strategies.llm.prompt import create_prompt
+from ludo_engine.strategies.llm.strategy import LLMStrategy
 
 
 class BenchmarkLLMClient:

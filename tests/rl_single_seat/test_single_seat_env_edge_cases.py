@@ -1,6 +1,6 @@
 import unittest
 
-from ludo.token import TokenState
+from ludo_engine.token import TokenState
 from ludo_rls.envs.ludo_env import EnvConfig
 from ludo_rls.envs.ludo_env import LudoGymEnv as SingleSeatEnv
 
