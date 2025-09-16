@@ -18,12 +18,13 @@ class SimpleRewardCalculator(RewardCalculator):
 
     def compute_comprehensive_reward(
         self,
-        move_res: Dict,
+        move_res,
         progress_delta: float,
         extra_turn: bool,
         diversity_bonus: bool,
         illegal_action: bool,
         reward_components: List[float],
+        start_position: int = -1,
         *args,
         **kwargs,
     ) -> Dict[str, float]:
@@ -41,17 +42,14 @@ class SimpleRewardCalculator(RewardCalculator):
             components["illegal"] = rcfg.illegal_action
 
         # Handle other rewards
-        if move_res.get("captured_tokens"):
-            capture_count = len(move_res["captured_tokens"])
+        if move_res.captured_tokens:
+            capture_count = len(move_res.captured_tokens)
             components["capture"] = rcfg.capture * capture_count
-
-        if move_res.get("got_captured"):
-            components["got_captured"] = rcfg.got_captured
 
         if extra_turn:
             components["extra_turn"] = rcfg.extra_turn
 
-        if move_res.get("token_finished"):
+        if move_res.finished_token:
             components["token_finished"] = rcfg.finish_token
 
         # Enhanced progress reward with strategic milestones
@@ -63,8 +61,8 @@ class SimpleRewardCalculator(RewardCalculator):
             home_entry_pos = BoardConstants.HOME_COLUMN_ENTRIES[self.agent_color]
 
             # Find the token that moved
-            moved_token = agent_player.tokens[move_res["token_id"]]
-            moved_token_start = move_res.get("start_position", -1)
+            moved_token = agent_player.tokens[move_res.token_id]
+            moved_token_start = start_position
 
             if moved_token:
                 # Home column entry bonus (when entering home column approach)

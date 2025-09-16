@@ -58,10 +58,10 @@ class MoveUtils:
                 total += (GameConstants.MAIN_BOARD_SIZE + home_steps) / total_path
         return total
 
-    def action_masks(self, pending_valid_moves: List[Dict]) -> np.ndarray:
+    def action_masks(self, pending_valid_moves: List) -> np.ndarray:
         mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
         if pending_valid_moves:
-            valid_ids = {m["token_id"] for m in pending_valid_moves}
+            valid_ids = {m.token_id for m in pending_valid_moves}
             for i in range(GameConstants.TOKENS_PER_PLAYER):
                 if i in valid_ids:
                     mask[i] = 1
