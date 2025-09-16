@@ -5,9 +5,9 @@ This inherits from the base calculator and customizes for the ludo_rls environme
 
 from typing import Dict, List
 
+from ludo.constants import GameConstants
+from ludo_rls.envs.model import EnvConfig
 from rl_base.envs.calculators.reward_calculator import RewardCalculator
-
-from ..model import EnvConfig
 
 
 class SimpleRewardCalculator(RewardCalculator):
@@ -66,6 +66,18 @@ class SimpleRewardCalculator(RewardCalculator):
         # Progress reward
         if progress_delta > 0:
             components["progress"] = progress_delta * rcfg.progress_scale
+
+        if diversity_bonus:
+            # Inactivity penalty (encourage activating tokens)
+            agent_player = self.game.get_player_from_color(self.agent_color)
+            tokens_at_home = sum(1 for t in agent_player.tokens if t.position < 0)
+            inactivity_penalty = tokens_at_home * rcfg.inactivity_penalty
+            components["inactivity"] = inactivity_penalty
+
+            # Active token bonus (reward having tokens on board)
+            active_tokens = GameConstants.TOKENS_PER_PLAYER - tokens_at_home
+            active_bonus = active_tokens * rcfg.active_token_bonus
+            components["active_bonus"] = active_bonus
 
         # Time penalty (small per-step cost)
         components["time"] = rcfg.time_penalty

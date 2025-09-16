@@ -7,8 +7,8 @@ maintaining safety. Prefers finishing > deep home advancement > safe captures
 
 from typing import Dict, List, Tuple
 
-from ..constants import BoardConstants, GameConstants, StrategyConstants
-from .base import Strategy
+from ludo.constants import BoardConstants, GameConstants, StrategyConstants
+from ludo.strategies.base import Strategy
 
 
 class WinnerStrategy(Strategy):

@@ -19,8 +19,8 @@ from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
-from .callbacks.tournament_callback import SelfPlayTournamentCallback
-from .envs.ludo_env import EnvConfig, LudoGymEnv
+from ludo_rls.callbacks.tournament_callback import SelfPlayTournamentCallback
+from ludo_rls.envs.ludo_env import EnvConfig, LudoGymEnv
 
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig):

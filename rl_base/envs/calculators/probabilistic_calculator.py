@@ -6,8 +6,7 @@ from ludo.constants import BoardConstants, GameConstants
 from ludo.game import LudoGame
 from ludo.player import Player
 from ludo.token import Token
-
-from ..model import BaseEnvConfig
+from rl_base.envs.model import BaseEnvConfig
 
 
 class ProbabilisticCalculator:

@@ -4,11 +4,11 @@ import pickle
 
 import numpy as np
 import torch
+from sb3_contrib import MaskablePPO
 from stable_baselines3 import PPO
 
 from ludo.constants import GameConstants
-
-from ..envs.model import BaseEnvConfig
+from rl_base.envs.model import BaseEnvConfig
 
 
 class BasePPOStrategy:
@@ -27,9 +27,10 @@ class BasePPOStrategy:
         model_name: str,
         env_config: BaseEnvConfig | None = None,
         deterministic: bool = True,
+        maskable: bool = False,
     ):
         self.model_name = model_name
-        self.model = PPO.load(model_path, device="cpu")
+        self.model = (MaskablePPO if maskable else PPO).load(model_path, device="cpu")
         # Ensure policy on CPU for deterministic test environment
         try:
             self.model.policy.to("cpu")

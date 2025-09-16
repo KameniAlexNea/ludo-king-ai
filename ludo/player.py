@@ -6,9 +6,9 @@ Each player has a color and controls 4 tokens.
 from enum import Enum
 from typing import Dict, List
 
-from .constants import BoardConstants, GameConstants, StrategyConstants
-from .strategies.base import Strategy
-from .token import Token, TokenState
+from ludo.constants import BoardConstants, GameConstants, StrategyConstants
+from ludo.strategies.base import Strategy
+from ludo.token import Token, TokenState
 
 
 class PlayerColor(Enum):
@@ -61,7 +61,7 @@ class Player:
         movable_tokens = []
 
         for token in self.tokens:
-            if token.can_move(dice_value, None):  # Simplified check for now
+            if token.can_move(dice_value):  # Simplified check for now
                 movable_tokens.append(token)
 
         return movable_tokens
@@ -148,7 +148,7 @@ class Player:
         possible_moves = []
 
         for token in self.tokens:
-            if token.can_move(dice_value, None):
+            if token.can_move(dice_value):
                 target_position = token.get_target_position(
                     dice_value, self.start_position
                 )
@@ -175,8 +175,6 @@ class Player:
 
     def _get_move_type(self, token: Token, dice_value: int) -> str:
         """Determine the type of move being made."""
-        from .constants import GameConstants  # local import to avoid cycles
-
         if token.is_in_home() and dice_value == GameConstants.EXIT_HOME_ROLL:
             return "exit_home"
         if token.is_in_home_column():

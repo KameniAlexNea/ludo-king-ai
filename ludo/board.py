@@ -6,9 +6,9 @@ Manages the game board state and validates moves.
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
-from .constants import BoardConstants
-from .player import Player, PlayerColor
-from .token import Token
+from ludo.constants import BoardConstants
+from ludo.player import Player, PlayerColor
+from ludo.token import Token, TokenState
 
 
 @dataclass
@@ -166,8 +166,9 @@ class Board:
             ]
 
             if opponent_tokens:
-                # Can't land on opponent tokens in safe squares
-                return False, []
+                # CAN land on opponent tokens in safe squares (but they don't get captured)
+                # The safe rule protects existing tokens from being captured
+                return True, []  # Can move but no captures
             else:
                 # Can stack with own tokens
                 return True, []
@@ -239,7 +240,6 @@ class Board:
         # Capture opponent tokens
         for captured_token in tokens_to_capture:
             self.remove_token(captured_token, new_position)
-            from .token import TokenState
 
             captured_token.state = TokenState.HOME
             captured_token.position = -1

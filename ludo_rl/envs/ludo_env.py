@@ -33,16 +33,13 @@ from ludo.constants import Colors, GameConstants
 from ludo.game import LudoGame
 from ludo.player import PlayerColor
 from ludo.strategy import StrategyFactory
-
-from .builders.observation_builder import ObservationBuilder
-
-# from .calculators.reward_calculator import RewardCalculator
-from .calculators.simple_reward_calculator import (
+from ludo_rl.envs.calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )
-from .model import EnvConfig
-from .simulators.opponent_simulator import OpponentSimulator
-from .utils.move_utils import MoveUtils
+from ludo_rl.envs.model import EnvConfig
+from ludo_rl.envs.simulators.opponent_simulator import OpponentSimulator
+from rl_base.envs.builders.observation_builder import ObservationBuilder
+from rl_base.envs.utils.move_utils import MoveUtils
 
 
 class LudoGymEnv(gym.Env):
@@ -85,9 +82,6 @@ class LudoGymEnv(gym.Env):
         self.episode_steps = 0
         self.done = False
         self.last_obs: Optional[np.ndarray] = None
-        self._token_activation_flags = {
-            i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
-        }
 
         # Initialize state variables that reset() expects
         self._pending_agent_dice = None
@@ -122,9 +116,10 @@ class LudoGymEnv(gym.Env):
             self.cfg.seed = seed
             self.rng.seed(seed)
             random.seed(seed)
+            np.random.seed(seed)
 
         # 1) Possibly randomize agent color and pick opponents (curriculum-aware)
-        if getattr(self.cfg, "randomize_agent_seat", False):
+        if self.cfg.randomize_agent_seat:
             self.agent_color = self.rng.choice(list(Colors.ALL_COLORS))
         self.opponent_strategies = self._select_opponents()
 
@@ -135,9 +130,6 @@ class LudoGymEnv(gym.Env):
         self.turns = 0
         self.episode_steps = 0
         self.done = False
-        self._token_activation_flags = {
-            i: False for i in range(GameConstants.TOKENS_PER_PLAYER)
-        }
         self._pending_agent_dice = None
         self._pending_valid_moves = []
         self._last_progress_sum = self.move_utils._compute_agent_progress_sum()
@@ -174,18 +166,15 @@ class LudoGymEnv(gym.Env):
         Falls back to uniform sampling from candidates if curriculum disabled
         or misconfigured.
         """
-        # Curriculum disabled => uniform sample
-        if not (
-            getattr(self.cfg, "opponent_curriculum", None)
-            and self.cfg.opponent_curriculum.enabled
-        ):
+        # Curriculum disabled/25% random for diversity => uniform sample
+        if not self.cfg.opponent_curriculum.enabled or self.rng.random() < 0.25:
             return self.rng.sample(self.cfg.opponents.candidates, 3)
 
         occ = self.cfg.opponent_curriculum
         phase_idx = self._determine_curriculum_phase()
 
         # Filter buckets by allowed candidates
-        allowed = set(getattr(self.cfg.opponents, "candidates", []))
+        allowed = set(self.cfg.opponents.candidates)
 
         def sample_from(bucket: List[str], k: int) -> List[str]:
             pool = [s for s in bucket if not allowed or s in allowed]
@@ -258,7 +247,7 @@ class LudoGymEnv(gym.Env):
         # Attach chosen opponent strategies
         non_agent_colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
         for i, color in enumerate(non_agent_colors):
-            player = next(p for p in self.game.players if p.color.value == color)
+            player = self.game.get_player_from_color(color)
             strat_name = self.opponent_strategies[i]
             try:
                 player.set_strategy(StrategyFactory.create_strategy(strat_name))
@@ -278,9 +267,7 @@ class LudoGymEnv(gym.Env):
             return self.last_obs, 0.0, True, False, {}
 
         reward_components: List[float] = []
-        agent_player = next(
-            p for p in self.game.players if p.color.value == self.agent_color
-        )
+        agent_player = self.game.get_player_from_color(self.agent_color)
 
         # Ensure we have a pending dice & valid moves (should always be true except pathological cases)
         if self._pending_agent_dice is None:
@@ -300,14 +287,25 @@ class LudoGymEnv(gym.Env):
         move_res = {}
         diversity_bonus_triggered = False
 
-        if not no_moves_available:
+        if no_moves_available:
+            # No valid moves available this turn (e.g., no 6 to exit, or blocked)
+            # This is NOT an illegal action by the agent; simply skip move execution.
+            illegal = False
+            # Skip the turn (no move execution)
+            extra_turn = False
+        else:
             valid_token_ids = [m["token_id"] for m in valid_moves]
             # Convert action to int in case it's a numpy array
             action = int(action)
             if action not in valid_token_ids:
                 illegal = True
-                # choose fallback (first valid) for execution so environment state advances
-                exec_token_id = valid_token_ids[0]
+                # For illegal actions, we have two options:
+                # 1. Execute a random valid move (current approach)
+                # 2. Skip the turn entirely
+                # Option 1 is better for learning as it maintains game flow
+                exec_token_id = self.rng.choice(
+                    valid_token_ids
+                )  # Random instead of first
             else:
                 exec_token_id = action
             # Capture start position for progress calculation inside reward_calc
@@ -315,16 +313,13 @@ class LudoGymEnv(gym.Env):
             move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
             move_res["start_position"] = start_pos
 
-            # Check diversity bonus
+            # Check diversity bonus - give bonus every time a token is activated from home
             tok = agent_player.tokens[exec_token_id]
-            if tok.position >= 0 and not self._token_activation_flags[exec_token_id]:
+            if tok.position >= 0 and start_pos < 0:
                 diversity_bonus_triggered = True
-                self._token_activation_flags[exec_token_id] = True
+                # Allow repeated bonuses for reactivating tokens
 
             extra_turn = move_res.get("extra_turn", False)
-        else:
-            # No valid moves: treat as skipped turn (no illegal penalty)
-            extra_turn = False
 
         # Opponent simulation if no extra turn and game not over
         if not extra_turn and not self.game.game_over:

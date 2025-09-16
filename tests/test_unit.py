@@ -68,6 +68,37 @@ class TokenTestCase(unittest.TestCase):
         self.assertIn("state", token_dict)
         self.assertIn("position", token_dict)
 
+    def test_token_home_column_movement(self):
+        """Test token movement within home column."""
+        # Manually set token to home column state
+        self.token.state = TokenState.HOME_COLUMN
+        self.token.position = 101  # In home column
+
+        # Test valid move within home column
+        self.assertTrue(self.token.can_move(2))  # 101 + 2 = 103 <= 105
+        target = self.token.get_target_position(2, 1)
+        self.assertEqual(target, 103)
+
+        # Test move to finish
+        self.assertTrue(self.token.can_move(4))  # 101 + 4 = 105 <= 105
+        target = self.token.get_target_position(4, 1)
+        self.assertEqual(target, 105)
+
+        # Test invalid move (overshoot)
+        self.assertFalse(self.token.can_move(5))  # 101 + 5 = 106 > 105
+        target = self.token.get_target_position(5, 1)
+        self.assertEqual(target, 101)  # Should return current position
+
+        # Test another position
+        self.token.position = 102
+        self.assertTrue(self.token.can_move(3))  # 102 + 3 = 105
+        target = self.token.get_target_position(3, 1)
+        self.assertEqual(target, 105)
+
+        self.assertFalse(self.token.can_move(4))  # 102 + 4 = 106 > 105
+        target = self.token.get_target_position(4, 1)
+        self.assertEqual(target, 102)
+
 
 class PlayerTestCase(unittest.TestCase):
     """Test cases for Player class."""

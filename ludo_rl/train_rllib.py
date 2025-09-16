@@ -23,7 +23,7 @@ from ray import init, tune
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 from ray.rllib.algorithms.ppo import PPOConfig
 
-from .envs.ludo_env import EnvConfig, LudoGymEnv
+from ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
 
 ENV_NAME = "LudoGymEnv-v0"
 

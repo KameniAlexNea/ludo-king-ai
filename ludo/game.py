@@ -4,10 +4,11 @@ Manages game flow, rules, and provides interface for AI players.
 """
 
 import random
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
-from .board import Board
-from .player import Player, PlayerColor
+from ludo.board import Board
+from ludo.constants import GameConstants
+from ludo.player import Player, PlayerColor
 
 
 class LudoGame:
@@ -53,12 +54,18 @@ class LudoGame:
         # Initialize board with all tokens in home
         self._initialize_board()
 
+    def get_player_from_color(self, color: Union[PlayerColor, str]) -> Player:
+        if isinstance(color, PlayerColor):
+            color = color.value
+        return self._player_map[color]
+
     def _initialize_board(self):
         """Place all tokens in their starting home positions."""
         for player in self.players:
             for token in player.tokens:
-                # Tokens start in home (position -1), so no board placement needed
-                pass
+                token.position = GameConstants.HOME_POSITION
+
+        self._player_map = {player.color.value: player for player in self.players}
 
     def get_current_player(self) -> Player:
         """Get the player whose turn it is."""
@@ -90,6 +97,7 @@ class LudoGame:
         """
         if self.consecutive_sixes >= 3:
             # Player loses turn after 3 consecutive sixes
+            self.consecutive_sixes = 0
             return []
 
         possible_moves = player.get_possible_moves(dice_value)
@@ -132,13 +140,13 @@ class LudoGame:
         token = player.tokens[token_id]
 
         # Check if move is valid
-        if not token.can_move(dice_value, None):
+        if not token.can_move(dice_value):
             return {"success": False, "error": "Token cannot move with this dice value"}
 
         old_position = token.position
         target_position = token.get_target_position(dice_value, player.start_position)
 
-        if target_position == -1:  # HOME_POSITION sentinel for invalid
+        if target_position == token.position:
             return {"success": False, "error": "Invalid target position"}
 
         # Validate board occupancy / capture
@@ -244,9 +252,11 @@ class LudoGame:
         valid_moves = self.get_valid_moves(current_player, dice_value)
 
         if not valid_moves:
-            turn_result["turn_ended"] = True
+            turn_result["turn_ended"] = dice_value != 6
+            turn_result["extra_turn"] = dice_value == 6
             turn_result["reason"] = "No valid moves available"
-            self.next_turn()
+            if dice_value != 6:
+                self.next_turn()
             return turn_result
 
         # Select move (use provided token_id or first available)

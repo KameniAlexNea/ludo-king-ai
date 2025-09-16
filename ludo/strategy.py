@@ -5,7 +5,7 @@ Strategy factory and main interface.
 
 from typing import Dict, List
 
-from .strategies import STRATEGIES, Strategy
+from ludo.strategies import STRATEGIES, Strategy
 
 
 # Strategy Factory

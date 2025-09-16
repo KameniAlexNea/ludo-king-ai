@@ -7,6 +7,8 @@ Shared functionality for different tournament types.
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
+from loguru import logger
+
 from ludo import LudoGame
 from ludo_stats.game_state_saver import GameStateSaver
 
@@ -100,7 +102,7 @@ class BaseTournament:
                     game_results["winner"] = current_player
                     game_results["turns_played"] = turn_count
                     if verbose_output:
-                        print(
+                        logger.info(
                             f"  Game {game_number}: {strategy_name.upper()} WINS! ({turn_count} turns)"
                         )
                     break
@@ -115,7 +117,7 @@ class BaseTournament:
 
         if not game_results["winner"]:
             if verbose_output:
-                print(f"  Game {game_number}: DRAW (time limit reached)")
+                logger.info(f"  Game {game_number}: DRAW (time limit reached)")
             game_results["turns_played"] = turn_count
 
         # Save game states if state saver is available
@@ -158,8 +160,8 @@ class BaseTournament:
         self, participants: List[str], title: str = "FINAL TOURNAMENT STANDINGS"
     ) -> List[Dict[str, Any]]:
         """Display comprehensive tournament results."""
-        print(f"\n🏆 {title} 🏆")
-        print("=" * 70)
+        logger.info(f"\n🏆 {title} 🏆")
+        logger.info("=" * 70)
 
         # Calculate standings for all participants that played
         standings = []
@@ -187,10 +189,10 @@ class BaseTournament:
         standings.sort(key=lambda x: (x["win_rate"], x["wins"]), reverse=True)
 
         # Display standings table
-        print(
+        logger.info(
             f"{'Rank':<4} {'Model':<20} {'Wins':<6} {'Games':<7} {'Win Rate':<10} {'Avg Turns':<10}"
         )
-        print("-" * 75)
+        logger.info("-" * 75)
 
         for rank, entry in enumerate(standings, 1):
             medal = (
@@ -202,7 +204,7 @@ class BaseTournament:
                 if rank == 3
                 else "  "
             )
-            print(
+            logger.info(
                 f"{rank:<4} {entry['model'].upper():<20} {entry['wins']:<6} {entry['games']:<7} "
                 f"{entry['win_rate']:<9.1f}% {entry['avg_turns']:<9.1f} {medal}"
             )
@@ -211,12 +213,14 @@ class BaseTournament:
 
     def _display_detailed_analysis(self, participants: List[str]) -> None:
         """Show detailed strategic analysis."""
-        print("\n📊 DETAILED PERFORMANCE ANALYSIS 📊")
-        print("=" * 70)
+        logger.info("\n📊 DETAILED PERFORMANCE ANALYSIS 📊")
+        logger.info("=" * 70)
 
         # Performance metrics
-        print(f"\n{'Model':<20} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}")
-        print("-" * 60)
+        logger.info(
+            f"\n{'Model':<20} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}"
+        )
+        logger.info("-" * 60)
 
         for participant in participants:
             if participant in self.detailed_stats:
@@ -226,13 +230,13 @@ class BaseTournament:
                     if stats["games_played"] > 0
                     else 0
                 )
-                print(
+                logger.info(
                     f"{participant.upper():<20} {stats['tokens_captured']:<10} {stats['tokens_finished']:<10} {efficiency:<11.2f}"
                 )
 
         # Head-to-head analysis (only show models with significant interactions)
-        print("\n🥊 HEAD-TO-HEAD ANALYSIS 🥊")
-        print("-" * 50)
+        logger.info("\n🥊 HEAD-TO-HEAD ANALYSIS 🥊")
+        logger.info("-" * 50)
 
         for participant in participants:
             if participant in self.detailed_stats:
@@ -240,11 +244,11 @@ class BaseTournament:
                 has_interactions = any(record["games"] > 0 for record in h2h.values())
 
                 if has_interactions:
-                    print(f"\n{participant.upper()} vs Others:")
+                    logger.info(f"\n{participant.upper()} vs Others:")
                     for opponent, record in h2h.items():
                         if record["games"] > 0:
                             win_rate = (record["wins"] / record["games"]) * 100
-                            print(
+                            logger.info(
                                 f"  vs {opponent.upper():<18}: {record['wins']}/{record['games']} ({win_rate:.1f}%)"
                             )
 

@@ -2,20 +2,20 @@
 Strategies module - Collection of all available Ludo AI strategies.
 """
 
-from .balanced import BalancedStrategy
-from .base import Strategy
-from .cautious import CautiousStrategy
-from .defensive import DefensiveStrategy
-from .hybrid_prob import HybridConfig, HybridProbStrategy
-from .killer import KillerStrategy
-from .llm import LLMStrategy
-from .optimist import OptimistStrategy
-from .probabilistic import ProbabilisticStrategy
-from .probabilistic_v2 import ProbabilisticV2Strategy
-from .probabilistic_v3 import ProbabilisticV3Strategy, V3Config
-from .random_strategy import RandomStrategy
-from .weighted_random import WeightedRandomStrategy
-from .winner import WinnerStrategy
+from ludo.strategies.balanced import BalancedStrategy
+from ludo.strategies.base import Strategy
+from ludo.strategies.cautious import CautiousStrategy
+from ludo.strategies.defensive import DefensiveStrategy
+from ludo.strategies.hybrid_prob import HybridConfig, HybridProbStrategy
+from ludo.strategies.killer import KillerStrategy
+from ludo.strategies.llm import LLMStrategy
+from ludo.strategies.optimist import OptimistStrategy
+from ludo.strategies.probabilistic import ProbabilisticStrategy
+from ludo.strategies.probabilistic_v2 import ProbabilisticV2Strategy
+from ludo.strategies.probabilistic_v3 import ProbabilisticV3Strategy, V3Config
+from ludo.strategies.random_strategy import RandomStrategy
+from ludo.strategies.weighted_random import WeightedRandomStrategy
+from ludo.strategies.winner import WinnerStrategy
 
 # Strategy Mapping - Centralized mapping of strategy names to classes
 STRATEGIES: dict[str, Strategy] = {

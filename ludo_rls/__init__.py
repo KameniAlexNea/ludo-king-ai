@@ -10,4 +10,4 @@ Entry points:
     from ludo_rls.envs import LudoGymEnv
 """
 
-from .envs.ludo_env import LudoGymEnv  # noqa: F401
+from ludo_rls.envs.ludo_env import LudoGymEnv  # noqa: F401

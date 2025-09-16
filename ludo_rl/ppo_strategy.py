@@ -1,7 +1,6 @@
+from ludo_rl.envs.ludo_env import LudoGymEnv
+from ludo_rl.envs.model import EnvConfig
 from rl_base.strategies.base_ppo_strategy import BasePPOStrategy
-
-from .envs.ludo_env import LudoGymEnv
-from .envs.model import EnvConfig
 
 
 class PPOStrategy(BasePPOStrategy):

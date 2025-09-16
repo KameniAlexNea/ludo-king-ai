@@ -8,9 +8,9 @@ relative progress and late-game pressure.
 
 from typing import Dict, List, Set, Tuple
 
-from ..constants import BoardConstants, GameConstants, StrategyConstants
-from .base import Strategy
-from .utils import (
+from ludo.constants import BoardConstants, GameConstants, StrategyConstants
+from ludo.strategies.base import Strategy
+from ludo.strategies.utils import (
     LARGE_THREAT_COUNT,
     NO_THREAT_DISTANCE,
     compute_threats_for_moves,

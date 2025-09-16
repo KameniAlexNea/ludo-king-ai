@@ -29,16 +29,16 @@ def run_game_with_seed(seed):
 class FourPlayerTournament(BaseTournament):
     """Advanced 4-player tournament system for strategic AI evaluation."""
 
-    def __init__(self):
+    def __init__(self, args=None):
         # Load configuration from .env
-        self.max_turns_per_game = int(os.getenv("MAX_TURNS_PER_GAME", 500))
-        self.games_per_matchup = int(os.getenv("GAMES_PER_MATCHUP", 10))
-        self.tournament_seed = int(os.getenv("TOURNAMENT_SEED", 42))
-        self.verbose_output = os.getenv("VERBOSE_OUTPUT", "true").lower() == "true"
+        self.max_turns_per_game = args.max_turns
+        self.games_per_matchup = args.games_per_matchup
+        self.tournament_seed = args.seed
+        self.verbose_output = args.verbose
+        self.save_dir = args.save_dir
 
         # Initialize state saver if SAVE_DIR is set
-        save_dir = os.getenv("SAVE_DIR")
-        state_saver = GameStateSaver(save_dir) if save_dir else None
+        state_saver = GameStateSaver(self.save_dir) if self.save_dir else None
 
         # Initialize parent class
         super().__init__(
@@ -210,16 +210,14 @@ if __name__ == "__main__":
     summary = tournament.run_tournament()
 
     # Final summary
-    logger.info("\n🎯 TOURNAMENT COMPLETE! 🎯")
-    logger.info("=" * 70)
+    print("\n🎯 TOURNAMENT COMPLETE! 🎯")
+    print("=" * 70)
     if summary["champion"]:
-        logger.info(f"🏆 Champion: {summary['champion'].upper()}")
+        print(f"🏆 Champion: {summary['champion'].upper()}")
     else:
-        logger.info("🏆 No clear champion (no games completed)")
-    logger.info(f"📊 Total Games: {summary['total_games']}")
-    logger.info(f"🎯 Combinations Tested: {summary['combinations_tested']}")
-    logger.info(
-        f"🎮 Participants: {', '.join([s.upper() for s in summary['participants']])}"
-    )
-    logger.info("\n✅ 4-Player Strategic Tournament System Ready!")
-    logger.info("🔬 Advanced AI evaluation and comparison complete!")
+        print("🏆 No clear champion (no games completed)")
+    print(f"📊 Total Games: {summary['total_games']}")
+    print(f"🎯 Combinations Tested: {summary['combinations_tested']}")
+    print(f"🎮 Participants: {', '.join([s.upper() for s in summary['participants']])}")
+    print("\n✅ 4-Player Strategic Tournament System Ready!")
+    print("🔬 Advanced AI evaluation and comparison complete!")

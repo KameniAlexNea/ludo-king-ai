@@ -6,7 +6,7 @@ Each player has 4 tokens that move around the board.
 from dataclasses import dataclass
 from enum import Enum
 
-from .constants import BoardConstants, GameConstants
+from ludo.constants import BoardConstants, GameConstants
 
 
 class TokenState(Enum):
@@ -52,13 +52,12 @@ class Token:
         """Check if token has reached the center."""
         return self.state == TokenState.FINISHED
 
-    def can_move(self, dice_value: int, current_board_state) -> bool:
+    def can_move(self, dice_value: int) -> bool:
         """
         Check if this token can make a valid move with the given dice value.
 
         Args:
             dice_value: The value rolled on the dice (1-6)
-            current_board_state: Current state of the board to check for blocks/captures
 
         Returns:
             bool: True if the token can move, False otherwise
@@ -70,7 +69,8 @@ class Token:
             # Can only leave home with exact EXIT_HOME_ROLL
             return dice_value == GameConstants.EXIT_HOME_ROLL
 
-        if self.is_in_home_column():
+        # Check if position is in home column, regardless of state
+        if BoardConstants.is_home_column_position(self.position):
             # Must not overshoot finish
             target_position = self.position + dice_value
             return target_position <= GameConstants.FINISH_POSITION
@@ -92,17 +92,19 @@ class Token:
         if self.is_in_home():
             if dice_value == GameConstants.EXIT_HOME_ROLL:
                 return player_start_position
-            return GameConstants.HOME_POSITION  # Can't move
+            return self.position  # Can't move
 
-        if self.is_in_home_column():
-            return self.position + dice_value
+        # Check if position is in home column, regardless of state
+        if BoardConstants.is_home_column_position(self.position):
+            target_position = self.position + dice_value
+            if target_position > GameConstants.FINISH_POSITION:
+                return self.position  # Can't move
+            return target_position
 
         # Active on main board - unified logic
         current = self.position
         new_position = current + dice_value
         home_entry = BoardConstants.HOME_COLUMN_ENTRIES[self.player_color]
-
-        # board_last_index = GameConstants.MAIN_BOARD_SIZE - 1
 
         # Normalize potential wrap for crossing beyond last board index
         # We need to detect crossing the home_entry square moving forward (circular path)
@@ -134,10 +136,12 @@ class Token:
                     steps_after_entry = dice_value - steps_taken
                     break
 
-            target_home_index = BoardConstants.HOME_COLUMN_START + steps_after_entry
+            target_home_index = BoardConstants.HOME_COLUMN_START + max(
+                0, steps_after_entry - 1
+            )
             # Cannot exceed finish
             if target_home_index > GameConstants.FINISH_POSITION:
-                return GameConstants.HOME_POSITION  # invalid move (overshoot)
+                return self.position  # invalid move (overshoot)
             return target_home_index
 
         # Not entering home column: land on wrapped main-board position
@@ -154,13 +158,13 @@ class Token:
         Returns:
             bool: True if move was successful, False otherwise
         """
-        if not self.can_move(dice_value, None):  # Simplified check
+        if not self.can_move(dice_value):  # Simplified check
             return False
 
         target_position = self.get_target_position(dice_value, player_start_position)
 
-        if target_position == GameConstants.HOME_POSITION:
-            return False
+        if target_position == self.position:
+            return False  # Invalid move, no change in position
         # Commit the already validated target movement
         self.commit_move(target_position, player_start_position)
 

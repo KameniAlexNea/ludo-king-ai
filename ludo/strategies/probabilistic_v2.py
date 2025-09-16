@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Optional
 
-from ..constants import BoardConstants, GameConstants
-from .base import Strategy
-from .utils import get_opponent_main_positions_with_fallback
+from ludo.constants import BoardConstants, GameConstants
+from ludo.strategies.base import Strategy
+from ludo.strategies.utils import get_opponent_main_positions_with_fallback
 
 # Utility type hint for a move dict
 MoveDict = Dict[str, object]

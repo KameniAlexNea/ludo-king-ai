@@ -1,11 +1,11 @@
 """Opponent simulation utilities for LudoGymEnv."""
 
+import random
 from typing import List, Optional
 
 from ludo.constants import GameConstants
 from ludo.game import LudoGame
-
-from ..model import EnvConfig
+from ludo_rl.envs.model import EnvConfig
 
 
 class OpponentSimulator:
@@ -50,10 +50,9 @@ class OpponentSimulator:
                 ctx = self._make_strategy_context(
                     current_player, dice_value, valid_moves
                 )
-                # Add randomness to opponent decisions for better training
-                import random
-
-                if random.random() < 0.1:  # 10% chance of random move
+                # Add controlled randomness to opponent decisions for better training
+                # Reduce from 10% to 3% to maintain strategy while adding some unpredictability
+                if random.random() < 0.03:  # 3% chance of random move
                     token_choice = random.choice(valid_moves)["token_id"]
                 else:
                     token_choice = current_player.make_strategic_decision(ctx)
@@ -62,9 +61,18 @@ class OpponentSimulator:
             move_res = self.game.execute_move(current_player, token_choice, dice_value)
             # Immediate capture penalty if this move captured agent tokens
             if reward_components and move_res.get("captured_tokens"):
+                agent_captured = False
                 for ct in move_res["captured_tokens"]:
                     if ct.get("player_color") == self.agent_color:
+                        agent_captured = True
                         reward_components.append(self.cfg.reward_cfg.got_captured)
+                if agent_captured:
+                    player = self.game.get_player_from_color(self.agent_color)
+                    all_captured = all(
+                        t.position == GameConstants.HOME_POSITION for t in player.tokens
+                    )
+                    if all_captured:
+                        reward_components.append(self.cfg.reward_cfg.all_tokens_killed)
             if not move_res.get("extra_turn") or self.game.game_over:
                 if not self.game.game_over:
                     self.game.next_turn()

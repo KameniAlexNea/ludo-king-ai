@@ -35,10 +35,10 @@ from typing import Sequence
 
 import numpy as np
 
+from ludo.player import PlayerColor
+from ludo_rl.envs.model import EnvConfig
 from rl_base.callbacks.base_tournament_callback import BaseTournamentCallback
-
-from ..envs.builders.observation_builder import ObservationBuilder
-from ..envs.model import EnvConfig
+from rl_base.envs.builders.observation_builder import ObservationBuilder
 
 
 def _policy_select(policy, obs: np.ndarray) -> int:
@@ -53,7 +53,11 @@ def _policy_select(policy, obs: np.ndarray) -> int:
 
 
 class ClassicTournamentCallback(BaseTournamentCallback):
-    """Tournament callback for classic multi-seat PPO using shared base class."""
+    """Tournament callback for classic multi-seat PPO using shared base class.
+
+    Optionally normalizes observations using a provided function (e.g., from VecNormalize)
+    so that evaluation matches training-time normalization statistics.
+    """
 
     def __init__(
         self,
@@ -63,16 +67,38 @@ class ClassicTournamentCallback(BaseTournamentCallback):
         max_turns: int = 1000,
         log_prefix: str = "tournament/",
         verbose: int = 0,
+        normalize_obs_fn=None,
     ):
         super().__init__(baselines, n_games, eval_freq, max_turns, log_prefix, verbose)
         # Set up environment configuration and observation builder
         self.env_cfg = EnvConfig(max_turns=max_turns)
         self.obs_builder = None  # Will be created per game
+        # Optional normalization function: np.ndarray -> np.ndarray
+        self.normalize_obs_fn = normalize_obs_fn
 
     def _select_ppo_action(
         self, policy, obs: np.ndarray, action_mask: np.ndarray | None = None
     ) -> int:
-        """Select action using PPO policy with simple stochastic sampling."""
+        """Select action using PPO policy with simple stochastic sampling.
+
+        Applies observation normalization if a normalization function was provided.
+        """
+        if self.normalize_obs_fn is not None:
+            try:
+                obs = self.normalize_obs_fn(obs)
+            except Exception:
+                # Fallback to raw obs if normalization fails
+                pass
+        # If MaskablePPO with action_masks keyword is supported, pass the mask
+        try:
+            if action_mask is not None and hasattr(policy, "predict"):
+                action, _ = policy.predict(
+                    obs[None, :], deterministic=False, action_masks=action_mask
+                )
+                return int(action)
+        except TypeError:
+            # Fallback when predict() does not support action_masks
+            pass
         return _policy_select(policy, obs)
 
     def _build_observation(self, turn_counter: int, dice: int) -> np.ndarray:
@@ -84,15 +110,21 @@ class ClassicTournamentCallback(BaseTournamentCallback):
     def _setup_game_and_players(self, combo):
         """Set up game and assign strategies, with obs_builder initialization."""
         game, ppo_player = super()._setup_game_and_players(combo)
-        # Initialize observation builder for this game
-        from ludo.player import PlayerColor
-
         self.obs_builder = ObservationBuilder(self.env_cfg, game, PlayerColor.RED.value)
         return game, ppo_player
 
-    # Support the deprecated method for backward compatibility
-    def _policy_select(
-        self, policy, obs: np.ndarray, action_mask: np.ndarray = None
-    ) -> int:
-        """Deprecated method - delegates to _select_ppo_action."""
-        return self._select_ppo_action(policy, obs, action_mask)
+    def _get_action_mask(self, valid_moves: list | None) -> np.ndarray | None:
+        """Build an action mask from valid move list when available."""
+        # valid_moves is the list of moves from the game loop
+        try:
+            from ludo.constants import GameConstants
+
+            mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
+            if valid_moves:
+                valid_ids = {m["token_id"] for m in valid_moves}
+                for i in range(GameConstants.TOKENS_PER_PLAYER):
+                    if i in valid_ids:
+                        mask[i] = 1
+            return mask
+        except Exception:
+            return None

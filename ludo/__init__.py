@@ -3,11 +3,11 @@ Ludo King AI Environment
 A structured implementation for AI to play Ludo King.
 """
 
-from .board import Board, Position
-from .constants import BoardConstants, Colors, GameConstants, StrategyConstants
-from .game import LudoGame
-from .player import Player, PlayerColor
-from .strategies import (
+from ludo.board import Board, Position
+from ludo.constants import BoardConstants, Colors, GameConstants, StrategyConstants
+from ludo.game import LudoGame
+from ludo.player import Player, PlayerColor
+from ludo.strategies import (
     STRATEGIES,
     BalancedStrategy,
     CautiousStrategy,
@@ -18,8 +18,8 @@ from .strategies import (
     Strategy,
     WinnerStrategy,
 )
-from .strategy import StrategyFactory
-from .token import Token, TokenState
+from ludo.strategy import StrategyFactory
+from ludo.token import Token, TokenState
 
 __all__ = [
     "LudoGame",

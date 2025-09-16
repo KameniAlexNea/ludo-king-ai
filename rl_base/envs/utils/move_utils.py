@@ -7,8 +7,7 @@ import numpy as np
 from ludo.constants import BoardConstants, GameConstants
 from ludo.game import LudoGame
 from ludo.player import Player
-
-from ..model import BaseEnvConfig
+from rl_base.envs.model import BaseEnvConfig
 
 
 class MoveUtils:
@@ -36,22 +35,27 @@ class MoveUtils:
         return [t.position for t in player.tokens]
 
     def _compute_agent_progress_sum(self) -> float:
-        player = next(p for p in self.game.players if p.color.value == self.agent_color)
+        player = self.game.get_player_from_color(self.agent_color)
+        start_pos = BoardConstants.START_POSITIONS.get(self.agent_color)
+        total_path = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
         total = 0.0
         for t in player.tokens:
-            if t.position == -1:
+            if t.position == GameConstants.HOME_POSITION:
+                continue
+            if t.position == GameConstants.FINISH_POSITION:
+                total += 1.0
                 continue
             if 0 <= t.position < GameConstants.MAIN_BOARD_SIZE:
-                # Main board progress: 0-51 normalized to 0-0.5
-                total += t.position / float(
-                    GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
-                )
+                # Normalize relative to agent's start
+                if t.position >= start_pos:
+                    steps_done = t.position - start_pos
+                else:
+                    steps_done = GameConstants.MAIN_BOARD_SIZE - start_pos + t.position
+                total += steps_done / total_path
             elif t.position >= BoardConstants.HOME_COLUMN_START:
-                # Home column progress: 100-105 mapped to 0.5-1.0 range
-                home_progress = (t.position - BoardConstants.HOME_COLUMN_START) / float(
-                    GameConstants.HOME_COLUMN_SIZE - 1
-                )
-                total += 0.5 + (home_progress * 0.5)  # Map to 0.5-1.0 range
+                # Home column: add main board progress + home progress
+                home_steps = t.position - BoardConstants.HOME_COLUMN_START
+                total += (GameConstants.MAIN_BOARD_SIZE + home_steps) / total_path
         return total
 
     def action_masks(self, pending_valid_moves: List[Dict]) -> np.ndarray:
