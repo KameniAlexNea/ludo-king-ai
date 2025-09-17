@@ -4,9 +4,9 @@ from typing import Dict, List
 
 import numpy as np
 
-from ludo_engine.constants import BoardConstants, GameConstants
-from ludo_engine.game import LudoGame
-from ludo_engine.player import Player
+from ludo_engine.models import BoardConstants, GameConstants
+from ludo_engine.core import LudoGame
+from ludo_engine.core import Player
 from rl_base.envs.model import BaseEnvConfig
 
 

@@ -17,6 +17,7 @@ dependencies = [
     "python-dotenv>=1.1.1",
     "ray[rllib]>=2.10.0",
     "ruamel-yaml>=0.17.0",
+    "sb3-contrib>=2.7.0",
     "stable-baselines3>=2.3.0",
     "tensorboard>=2.20.0",
     "tox>=4.29.0",

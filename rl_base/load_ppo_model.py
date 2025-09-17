@@ -1,6 +1,6 @@
 import os
 
-from ludo_engine.player import PlayerColor
+from ludo_engine.core import PlayerColor
 
 
 def load_ppo_wrapper(env_kind):

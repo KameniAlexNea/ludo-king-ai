@@ -2,8 +2,8 @@
 
 from typing import Any, List, Optional
 
-from ludo_engine.constants import GameConstants
-from ludo_engine.game import LudoGame
+from ludo_engine.models import GameConstants
+from ludo_engine.core import LudoGame
 from ludo_rls.envs.model import EnvConfig
 from rl_base.envs.builders.observation_builder import ObservationBuilder
 

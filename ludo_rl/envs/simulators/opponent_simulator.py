@@ -3,8 +3,8 @@
 import random
 from typing import List, Optional
 
-from ludo_engine.constants import GameConstants
-from ludo_engine.game import LudoGame
+from ludo_engine.models import GameConstants
+from ludo_engine.core import LudoGame
 from ludo_rl.envs.model import EnvConfig
 
 

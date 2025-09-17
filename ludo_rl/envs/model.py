@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ludo_engine.constants import Colors
+from ludo_engine.models import Colors
 from rl_base.envs.model import (
     BaseEnvConfig,
     BaseRewardConfig,
