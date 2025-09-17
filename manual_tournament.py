@@ -8,8 +8,8 @@ import os
 import random
 
 from dotenv import load_dotenv
-
 from ludo_engine import LudoGame, PlayerColor, StrategyFactory
+
 from ludo_stats.game_state_saver import GameStateSaver
 
 load_dotenv()
@@ -61,7 +61,7 @@ def main():
             provider = input("  LLM provider (ollama/groq) [ollama]: ") or "ollama"
             model = input("  LLM model name [gpt-oss]: ") or "gpt-oss"
             # Instantiate appropriate LLM strategy class
-            from ludo_engine.strategies.llm.strategy import LLMStrategy
+            from ludo_engine.strategies import LLMStrategy
 
             strategy_instance = LLMStrategy(provider=provider, model=model)
         else:

@@ -28,12 +28,10 @@ from typing import Any, Dict, List, Optional
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
-
-from ludo_engine.models import Colors, GameConstants
-from ludo_engine.core import LudoGame
-from ludo_engine.core import PlayerColor
-from ludo_engine.models import MoveResult
+from ludo_engine.core import LudoGame, PlayerColor
+from ludo_engine.models import Colors, GameConstants, MoveResult
 from ludo_engine.strategies.strategy import StrategyFactory
+
 from ludo_rl.envs.calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )
@@ -295,7 +293,7 @@ class LudoGymEnv(gym.Env):
             # Skip the turn (no move execution)
             extra_turn = False
             # Create a dummy move result for no-move case
-            
+
             move_res = MoveResult(
                 success=True,
                 player_color=self.agent_color,
@@ -307,7 +305,7 @@ class LudoGymEnv(gym.Env):
                 finished_token=False,
                 extra_turn=False,
                 error=None,
-                game_won=False
+                game_won=False,
             )
         else:
             valid_token_ids = [m.token_id for m in valid_moves]

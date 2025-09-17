@@ -34,9 +34,9 @@ from __future__ import annotations
 from typing import Sequence
 
 import numpy as np
-
 from ludo_engine.core import PlayerColor
 from ludo_engine.models import GameConstants
+
 from ludo_rl.envs.model import EnvConfig
 from rl_base.callbacks.base_tournament_callback import BaseTournamentCallback
 from rl_base.envs.builders.observation_builder import ObservationBuilder
@@ -118,8 +118,6 @@ class ClassicTournamentCallback(BaseTournamentCallback):
         """Build an action mask from valid move list when available."""
         # valid_moves is the list of moves from the game loop
         try:
-            
-
             mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
             if valid_moves:
                 valid_ids = {m["token_id"] for m in valid_moves}

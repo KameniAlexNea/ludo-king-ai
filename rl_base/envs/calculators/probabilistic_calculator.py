@@ -2,10 +2,9 @@
 
 from typing import Dict, Optional
 
+from ludo_engine.core import LudoGame, Player, Token
 from ludo_engine.models import BoardConstants, GameConstants
-from ludo_engine.core import LudoGame
-from ludo_engine.core import Player
-from ludo_engine.core import Token
+
 from rl_base.envs.model import BaseEnvConfig
 
 

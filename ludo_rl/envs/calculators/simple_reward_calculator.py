@@ -6,6 +6,7 @@ This inherits from the base calculator and customizes for the ludo_rl environmen
 from typing import Dict, List
 
 from ludo_engine.models import BoardConstants, GameConstants
+
 from ludo_rl.envs.model import EnvConfig
 from rl_base.envs.calculators.reward_calculator import RewardCalculator
 
@@ -73,13 +74,9 @@ class SimpleRewardCalculator(RewardCalculator):
                     components["home_column_entry"] = rcfg.home_column_entry_bonus
 
                 # Critical position bonuses (safe squares, near home)
-                if (
-                    moved_token.position in BoardConstants.STAR_SQUARES
-                ):  # Safe squares
+                if moved_token.position in BoardConstants.STAR_SQUARES:  # Safe squares
                     components["safe_square_bonus"] = rcfg.safe_square_bonus
-                elif (
-                    moved_token.position >= home_entry_pos + 1
-                ):  # Very close to home
+                elif moved_token.position >= home_entry_pos + 1:  # Very close to home
                     components["near_home_bonus"] = rcfg.near_home_bonus
 
         if diversity_bonus:

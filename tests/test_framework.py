@@ -15,6 +15,7 @@ from typing import Dict, List
 from ludo_engine.game import LudoGame
 from ludo_engine.player import PlayerColor
 from ludo_engine.strategy import Strategy, StrategyFactory
+
 from tests.test_models import ExpectedBehavior, TestDataFactory, TestScenarioBuilder
 
 

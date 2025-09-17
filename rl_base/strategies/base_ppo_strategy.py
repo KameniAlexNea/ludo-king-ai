@@ -4,10 +4,10 @@ import pickle
 
 import numpy as np
 import torch
+from ludo_engine.models import GameConstants
 from sb3_contrib import MaskablePPO
 from stable_baselines3 import PPO
 
-from ludo_engine.models import GameConstants
 from rl_base.envs.model import BaseEnvConfig
 
 

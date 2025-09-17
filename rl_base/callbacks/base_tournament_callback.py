@@ -11,11 +11,9 @@ from itertools import combinations
 from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
-from stable_baselines3.common.callbacks import BaseCallback
-
-from ludo_engine.core import LudoGame
-from ludo_engine.core import Player, PlayerColor
+from ludo_engine.core import LudoGame, Player, PlayerColor
 from ludo_engine.strategies.strategy import StrategyFactory
+from stable_baselines3.common.callbacks import BaseCallback
 
 
 @dataclass

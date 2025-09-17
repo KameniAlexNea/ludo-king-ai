@@ -27,11 +27,10 @@ from typing import Any, Dict, List, Optional
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+from ludo_engine.core import LudoGame, PlayerColor
+from ludo_engine.models import GameConstants
 from stable_baselines3 import PPO
 
-from ludo_engine.models import GameConstants
-from ludo_engine.core import LudoGame
-from ludo_engine.core import PlayerColor
 from ludo_rls.envs.calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )

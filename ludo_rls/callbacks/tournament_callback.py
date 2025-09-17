@@ -30,6 +30,7 @@ from typing import List, Sequence
 import numpy as np
 from ludo_engine.core import PlayerColor
 from ludo_engine.models import GameConstants
+
 from ludo_rls.envs.model import EnvConfig
 from rl_base.callbacks.base_tournament_callback import BaseTournamentCallback
 from rl_base.envs.builders.observation_builder import ObservationBuilder
@@ -109,7 +110,6 @@ class SelfPlayTournamentCallback(BaseTournamentCallback):
         """Set up game and assign strategies, with obs_builder initialization."""
         game, ppo_player = super()._setup_game_and_players(combo)
         # Initialize observation builder for this game
-        
 
         self.obs_builder = ObservationBuilder(self.env_cfg, game, PlayerColor.RED.value)
         return game, ppo_player
