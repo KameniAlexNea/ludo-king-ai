@@ -1,8 +1,8 @@
 import unittest
 
 import numpy as np
-from ludo_engine.models import Colors, GameConstants
 from ludo_engine.core import TokenState
+from ludo_engine.models import Colors, GameConstants
 
 from ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
 

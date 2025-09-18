@@ -4,7 +4,7 @@ import pickle
 
 import numpy as np
 import torch
-from ludo_engine.models import GameConstants, ValidMove, AIDecisionContext
+from ludo_engine.models import AIDecisionContext, GameConstants, ValidMove
 from sb3_contrib import MaskablePPO
 from stable_baselines3 import PPO
 
@@ -77,7 +77,9 @@ class BasePPOStrategy:
                 mask[tid] = 1.0
         return mask
 
-    def _inject_context_into_dummy_game(self, ctx: AIDecisionContext) -> tuple[int, int]:
+    def _inject_context_into_dummy_game(
+        self, ctx: AIDecisionContext
+    ) -> tuple[int, int]:
         """Mutate dummy game to reflect context player token positions.
 
         Returns (turn_count, dice_value) extracted from context.
@@ -89,7 +91,10 @@ class BasePPOStrategy:
         valid_moves = game_context.valid_moves
         if not valid_moves:
             return 0  # nothing to do
-        turn_count, dice_val = game_context.current_situation.turn_count, game_context.current_situation.dice_value
+        turn_count, dice_val = (
+            game_context.current_situation.turn_count,
+            game_context.current_situation.dice_value,
+        )
         # Build observation via canonical builder
         obs = self.obs_builder._build_observation(turn_count, dice_val)
         if obs.shape[0] != self.obs_dim:

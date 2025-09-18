@@ -39,8 +39,13 @@ class SimpleRewardCalculator(RewardCalculator):
             Dict of reward components (not total reward like base class)
         """
         if move_res is None:
-            return {"illegal": self.cfg.reward_cfg.illegal_action if illegal_action else 0.0, "time": self.cfg.reward_cfg.time_penalty}
-        
+            return {
+                "illegal": (
+                    self.cfg.reward_cfg.illegal_action if illegal_action else 0.0
+                ),
+                "time": self.cfg.reward_cfg.time_penalty,
+            }
+
         # Use the base method but ignore the extra parameters for now
         # and return a dict instead of total reward
         components = {}
@@ -59,7 +64,10 @@ class SimpleRewardCalculator(RewardCalculator):
             capture_count = len(move_res.captured_tokens)
             components["capture"] = rcfg.capture * capture_count
 
-        if move_res.new_position == GameConstants.HOME_POSITION and move_res.old_position != GameConstants.HOME_POSITION:
+        if (
+            move_res.new_position == GameConstants.HOME_POSITION
+            and move_res.old_position != GameConstants.HOME_POSITION
+        ):
             components["got_captured"] = rcfg.got_captured
 
         if extra_turn:

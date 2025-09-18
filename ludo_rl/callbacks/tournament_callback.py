@@ -33,8 +33,8 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ludo_engine import ValidMove
 import numpy as np
+from ludo_engine import ValidMove
 from ludo_engine.core import PlayerColor
 from ludo_engine.models import GameConstants
 

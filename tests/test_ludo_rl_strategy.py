@@ -2,18 +2,20 @@ import unittest
 from pathlib import Path
 
 import torch
-from ludo_engine.models import Colors, GameConstants
-
-from ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
 from ludo_engine.models import (
     AIDecisionContext,
+    Colors,
     CurrentSituation,
-    PlayerState,
+    GameConstants,
     OpponentInfo,
-    ValidMove,
+    PlayerState,
     StrategicAnalysis,
     TokenInfo,
+    ValidMove,
 )
+
+from ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
+
 
 class DummyPolicy:
     class Dist:

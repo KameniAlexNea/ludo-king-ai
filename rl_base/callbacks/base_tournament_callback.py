@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from itertools import combinations
 from typing import Dict, List, Sequence, Tuple
 
-from ludo_engine.models import ValidMove
 import numpy as np
 from ludo_engine.core import LudoGame, Player, PlayerColor
+from ludo_engine.models import ValidMove
 from ludo_engine.strategies.strategy import StrategyFactory
 from stable_baselines3.common.callbacks import BaseCallback
 

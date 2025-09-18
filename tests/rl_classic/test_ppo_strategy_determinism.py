@@ -1,8 +1,7 @@
 import os
 import unittest
 
-from ludo_engine.core import LudoGame
-from ludo_engine.core import PlayerColor
+from ludo_engine.core import LudoGame, PlayerColor
 
 from ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
 

@@ -1,9 +1,9 @@
 """General utilities for LudoGymEnv."""
 
-from typing import Dict, List
+from typing import List
 
 import numpy as np
-from ludo_engine.core import LudoGame, Player
+from ludo_engine.core import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, ValidMove
 
 from rl_base.envs.model import BaseEnvConfig

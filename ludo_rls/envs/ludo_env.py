@@ -25,11 +25,10 @@ import random
 from typing import Any, Dict, List, Optional
 
 import gymnasium as gym
-from ludo_engine.models import MoveResult, ValidMove
 import numpy as np
 from gymnasium import spaces
 from ludo_engine.core import LudoGame, PlayerColor
-from ludo_engine.models import GameConstants
+from ludo_engine.models import GameConstants, MoveResult, ValidMove
 from stable_baselines3 import PPO
 
 from ludo_rls.envs.calculators.simple_reward_calculator import (
@@ -171,7 +170,9 @@ class LudoGymEnv(gym.Env):
         else:
             self._frozen_policy = None
 
-    def _policy_action(self, policy, obs: np.ndarray, valid_moves: List[ValidMove]) -> int:
+    def _policy_action(
+        self, policy, obs: np.ndarray, valid_moves: List[ValidMove]
+    ) -> int:
         if not valid_moves:
             return -1
         mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
