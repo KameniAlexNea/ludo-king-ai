@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from itertools import combinations
 from typing import Dict, List, Sequence, Tuple
 
+from ludo_engine.models import ValidMove
 import numpy as np
 from ludo_engine.core import LudoGame, Player, PlayerColor
 from ludo_engine.strategies.strategy import StrategyFactory
@@ -123,7 +124,7 @@ class BaseTournamentCallback(BaseCallback, ABC):
         """Build observation for PPO. Implementation varies by environment."""
         pass
 
-    def _get_action_mask(self, valid_moves: List[dict]) -> np.ndarray | None:
+    def _get_action_mask(self, valid_moves: List[ValidMove]) -> np.ndarray | None:
         """Get action mask for valid moves. Optional - return None if not used."""
         return None
 
@@ -161,7 +162,7 @@ class BaseTournamentCallback(BaseCallback, ABC):
         game: LudoGame,
         ppo_player: Player,
         dice: int,
-        valid_moves: List[dict],
+        valid_moves: List[ValidMove],
         turn_counter: int,
         metrics: TournamentMetrics,
     ) -> bool:
@@ -171,26 +172,26 @@ class BaseTournamentCallback(BaseCallback, ABC):
         action = self._select_ppo_action(policy, obs, action_mask)
 
         if valid_moves:
-            valid_ids = [m["token_id"] for m in valid_moves]
+            valid_ids = [m.token_id for m in valid_moves]
             if action not in valid_ids:
                 metrics.illegal_actions += 1
                 action = valid_ids[0]
 
             move_res = game.execute_move(ppo_player, action, dice)
-            captured = move_res.get("captured_tokens", [])
+            captured = move_res.captured_tokens
             if captured:
                 metrics.captures_for += len(captured)
                 metrics.offensive_captures += len(captured)
 
-            if move_res.get("token_finished"):
+            if move_res.finished_token:
                 pass  # Could track token finish counts if needed
 
-            if move_res.get("game_won"):
+            if move_res.game_won:
                 metrics.wins += 1
                 metrics.ranks.append(1)
                 return True  # Game ended
 
-            if not move_res.get("extra_turn"):
+            if not move_res.extra_turn:
                 game.next_turn()
         else:
             # No valid moves
@@ -205,7 +206,7 @@ class BaseTournamentCallback(BaseCallback, ABC):
         current_player: Player,
         ppo_player: Player,
         dice: int,
-        valid_moves: List[dict],
+        valid_moves: List[ValidMove],
         metrics: TournamentMetrics,
     ) -> bool:
         """Handle opponent player turn. Returns True if game ended."""
@@ -216,19 +217,19 @@ class BaseTournamentCallback(BaseCallback, ABC):
                 move_res = game.execute_move(current_player, token_id, dice)
 
                 # Track captures against PPO
-                if move_res.get("captured_tokens"):
-                    for ct in move_res["captured_tokens"]:
-                        if ct["player_color"] == ppo_player.color.value:
+                if move_res.captured_tokens:
+                    for ct in move_res.captured_tokens:
+                        if ct.player_color == ppo_player.color.value:
                             metrics.captures_against += 1
                             metrics.defensive_captures += 1
 
-                if move_res.get("token_finished"):
+                if move_res.finished_token:
                     pass  # Could track if needed
 
-                if move_res.get("game_won"):
+                if move_res.game_won:
                     return True  # Game ended, opponent won
 
-                if not move_res.get("extra_turn"):
+                if not move_res.extra_turn:
                     game.next_turn()
             else:
                 game.next_turn()

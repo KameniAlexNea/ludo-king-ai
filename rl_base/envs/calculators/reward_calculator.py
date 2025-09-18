@@ -2,9 +2,9 @@
 
 from typing import Dict, List, Optional
 
-from ludo_engine.constants import BoardConstants, GameConstants
-from ludo_engine.game import LudoGame
-from ludo_engine.player import Player
+from ludo_engine.models import BoardConstants, GameConstants, ValidMove, MoveResult
+from ludo_engine.core import LudoGame
+from ludo_engine.core import Player
 
 from rl_base.envs.calculators.probabilistic_calculator import ProbabilisticCalculator
 from rl_base.envs.model import BaseEnvConfig
@@ -20,9 +20,9 @@ class RewardCalculator:
         self.prob_calc = ProbabilisticCalculator(cfg, game, agent_color)
 
     # NOTE: Use color-aware forward distance to model capture feasibility.
-    def _compute_positional_reward(self, move_res: Dict) -> float:
+    def _compute_positional_reward(self, move_res: MoveResult) -> float:
         """Reward smart positioning (approaching finish, staying together, etc.)."""
-        target_pos = move_res.get("target_position")
+        target_pos = move_res.new_position
         if target_pos is None or target_pos < 0:
             return 0.0
 
@@ -41,10 +41,10 @@ class RewardCalculator:
 
         return reward
 
-    def _compute_safety_reward(self, move_res: Dict) -> float:
+    def _compute_safety_reward(self, move_res: MoveResult) -> float:
         """Reward moving to safe positions when threatened."""
-        target_pos = move_res.get("target_position")
-        source_pos = move_res.get("source_position")
+        target_pos = move_res.new_position
+        source_pos = move_res.old_position
 
         if target_pos is None:
             return 0.0
@@ -74,12 +74,12 @@ class RewardCalculator:
             return delta * self.cfg.reward_cfg.progress_scale
         return 0.0
 
-    def _compute_probabilistic_multiplier(self, move: Optional[Dict]) -> float:
+    def _compute_probabilistic_multiplier(self, move: MoveResult) -> float:
         """Compute a simple, bounded risk-based multiplier for positive rewards."""
         if not self.cfg.reward_cfg.use_probabilistic_rewards or not move:
             return 1.0
 
-        target_pos = move.get("target_position")
+        target_pos = move.new_position
         if target_pos is None or not isinstance(target_pos, int) or target_pos < 0:
             return 1.0
 
@@ -92,7 +92,7 @@ class RewardCalculator:
 
     def compute_comprehensive_reward(
         self,
-        move_res: Dict,
+        move_res: MoveResult,
         progress_delta: float,
         extra_turn: bool,
         diversity_bonus: bool,
@@ -106,13 +106,13 @@ class RewardCalculator:
         multiplier = self._compute_probabilistic_multiplier(move_res)
 
         # Major event rewards (highest priority)
-        if move_res.get("captured_tokens"):
-            capture_reward = rcfg.capture * len(move_res["captured_tokens"])
+        if move_res.captured_tokens:
+            capture_reward = rcfg.capture * len(move_res.captured_tokens)
             if capture_reward > 0:
                 capture_reward *= multiplier
             component_rewards["capture"] = capture_reward
 
-        if move_res.get("token_finished"):
+        if move_res.token_finished:
             finish_reward = rcfg.finish_token
             component_rewards["finish"] = finish_reward
 

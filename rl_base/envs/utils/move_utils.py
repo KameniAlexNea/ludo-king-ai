@@ -4,7 +4,7 @@ from typing import Dict, List
 
 import numpy as np
 from ludo_engine.core import LudoGame, Player
-from ludo_engine.models import BoardConstants, GameConstants
+from ludo_engine.models import BoardConstants, GameConstants, ValidMove
 
 from rl_base.envs.model import BaseEnvConfig
 
@@ -57,7 +57,7 @@ class MoveUtils:
                 total += (GameConstants.MAIN_BOARD_SIZE + home_steps) / total_path
         return total
 
-    def action_masks(self, pending_valid_moves: List) -> np.ndarray:
+    def action_masks(self, pending_valid_moves: List[ValidMove]) -> np.ndarray:
         mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
         if pending_valid_moves:
             valid_ids = {m.token_id for m in pending_valid_moves}
@@ -67,7 +67,7 @@ class MoveUtils:
         return mask
 
     def _make_strategy_context(
-        self, player: Player, dice_value: int, valid_moves: List[Dict]
+        self, player: Player, dice_value: int, valid_moves: List[ValidMove]
     ):
         # Basic context bridging existing strategies expecting a structure similar to tournaments
         board_state = self.game.board.get_board_state_for_ai(player)
