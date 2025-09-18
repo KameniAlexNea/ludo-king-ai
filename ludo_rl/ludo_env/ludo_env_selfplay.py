@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import random
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from ludo_engine.core import LudoGame, PlayerColor
-from ludo_engine.models import Colors, GameConstants, MoveResult
+from ludo_engine.models import Colors, GameConstants, MoveResult, ValidMove
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
 from ludo_rl.utils.move_utils import MoveUtils
+from sb3_contrib import MaskablePPO
+from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
+
 
 
 class LudoRLEnvSelfPlay(gym.Env):
@@ -32,55 +35,38 @@ class LudoRLEnvSelfPlay(gym.Env):
         self.agent_color = Colors.RED
         self._episode = 0
 
-        self.game = LudoGame([PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE])
+        self.game = LudoGame(
+            [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
+        )
         self.obs_builder = ObservationBuilder(cfg, self.game, self.agent_color)
         self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32
+        )
 
         self._pending_dice: Optional[int] = None
-        self._pending_valid: List = []
+        self._pending_valid: List[ValidMove] = []
         self.turns = 0
         self.illegal_actions = 0
 
-        # Opponent policy: loaded via load_frozen_model
-        self._frozen_model = None
-        self._frozen_obs_stats = None  # expects object with .mean, .var, and epsilon 1e-8
+        # Live training model and frozen snapshot used by opponents
+        self.model: MaskablePPO = None
+        self._frozen_policy: MaskableActorCriticPolicy = None
         self._opponent_builders: Dict[str, ObservationBuilder] = {}
 
-    # ---- Frozen model management ----
-    def load_frozen_model(self, path: str, obs_rms: Optional[Any] = None) -> bool:
-        """Load a frozen model from disk to be used as opponent policy.
+    # ---- Model snapshot management (in-memory) ----
+    def set_model(self, model: MaskablePPO) -> None:
+        """Inject the live model; env will snapshot its policy on reset for opponents."""
+        self.model = model
 
-        path: path to a saved SB3 model (MaskablePPO).
-        obs_rms: optional RunningMeanStd stats from VecNormalize for observation normalization.
-        """
+    def _snapshot_policy(self) -> None:
         try:
-            from sb3_contrib import MaskablePPO
-
-            self._frozen_model = MaskablePPO.load(path, device="cpu")
-            self._frozen_obs_stats = getattr(obs_rms, "__dict__", obs_rms) or obs_rms
-            return True
+            self._frozen_policy = getattr(self.model, "policy", None)
         except Exception:
-            self._frozen_model = None
-            self._frozen_obs_stats = None
-            return False
-
-    def _normalize_for_frozen(self, obs: np.ndarray) -> np.ndarray:
-        stats = self._frozen_obs_stats
-        if stats is None:
-            return obs
-        try:
-            mean = getattr(stats, "mean", None)
-            var = getattr(stats, "var", None)
-            eps = getattr(stats, "epsilon", 1e-8) or 1e-8
-            if mean is None or var is None:
-                return obs
-            return (obs - mean) / np.sqrt(var + eps)
-        except Exception:
-            return obs
+            self._frozen_policy = None
 
     # ---- gym api ----
-    def reset(self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None):
+    def reset(self, *, seed: Optional[int] = None, options: Optional[Dict] = None):
         if seed is not None:
             self.rng.seed(seed)
             random.seed(seed)
@@ -89,13 +75,18 @@ class LudoRLEnvSelfPlay(gym.Env):
         if self.cfg.randomize_agent:
             self.agent_color = self.rng.choice(list(Colors.ALL_COLORS))
 
-        self.game = LudoGame([PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE])
+        self.game = LudoGame(
+            [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
+        )
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
         # per-opponent builders (perspectives)
         self._opponent_builders = {}
         for c in Colors.ALL_COLORS:
             if c != self.agent_color:
                 self._opponent_builders[c] = ObservationBuilder(self.cfg, self.game, c)
+
+        # Snapshot current policy for this episode (used by opponents)
+        self._snapshot_policy()
 
         self._pending_dice = None
         self._pending_valid = []
@@ -114,7 +105,10 @@ class LudoRLEnvSelfPlay(gym.Env):
         return obs, info
 
     def _ensure_agent_turn(self):
-        while not self.game.game_over and self.game.get_current_player().color.value != self.agent_color:
+        while (
+            not self.game.game_over
+            and self.game.get_current_player().color.value != self.agent_color
+        ):
             self._simulate_single_opponent()
 
     def _roll_agent_dice(self):
@@ -135,14 +129,15 @@ class LudoRLEnvSelfPlay(gym.Env):
                 ob = ObservationBuilder(self.cfg, self.game, p.color.value)
                 self._opponent_builders[p.color.value] = ob
             opp_obs = ob.build(self.turns, dice)
-            opp_obs = self._normalize_for_frozen(opp_obs)
             mask = MoveUtils.action_mask(valid)
 
             # Use frozen model if available; else random valid
             tok_id = None
-            if self._frozen_model is not None:
+            if self._frozen_policy is not None:
                 try:
-                    action, _ = self._frozen_model.predict(opp_obs[None, :], deterministic=False, action_masks=mask)
+                    action, _ = self._frozen_policy.predict(
+                        opp_obs[None, :], deterministic=True, action_masks=mask
+                    )
                     tok_id = int(action)
                     if tok_id not in [m.token_id for m in valid]:
                         tok_id = None
@@ -171,9 +166,19 @@ class LudoRLEnvSelfPlay(gym.Env):
 
         if not valid:
             # no moves, lose turn
-            res = MoveResult(success=True, player_color=agent.color.value, token_id=0, dice_value=dice,
-                             old_position=-1, new_position=-1, captured_tokens=[], finished_token=False,
-                             extra_turn=False, error=None, game_won=False)
+            res = MoveResult(
+                success=True,
+                player_color=agent.color.value,
+                token_id=0,
+                dice_value=dice,
+                old_position=-1,
+                new_position=-1,
+                captured_tokens=[],
+                finished_token=False,
+                extra_turn=False,
+                error=None,
+                game_won=False,
+            )
             extra = False
         else:
             action = int(action)
@@ -189,7 +194,10 @@ class LudoRLEnvSelfPlay(gym.Env):
         # opponent turns if no extra turn
         if not extra and not self.game.game_over:
             self.game.next_turn()
-            while not self.game.game_over and self.game.get_current_player().color.value != self.agent_color:
+            while (
+                not self.game.game_over
+                and self.game.get_current_player().color.value != self.agent_color
+            ):
                 self._simulate_single_opponent()
 
         # rewards

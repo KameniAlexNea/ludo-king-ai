@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import List, Optional, Sequence
 
 import numpy as np
+from loguru import logger
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
@@ -11,7 +12,7 @@ from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.opponents import build_opponent_triplets
-from loguru import logger
+
 
 class SimpleBaselineEvalCallback(BaseCallback):
     """Periodically evaluate the current policy vs fixed baselines.

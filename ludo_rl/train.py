@@ -4,7 +4,6 @@ import argparse
 import copy
 import os
 
-import numpy as np
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
@@ -15,8 +14,8 @@ from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
 from ludo_rl.config import EnvConfig, TrainConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
-from ludo_rl.callbacks.selfplay_sync import SelfPlaySyncCallback
 from ludo_rl.utils.move_utils import MoveUtils
+
 # build per-rank env
 
 
@@ -52,8 +51,13 @@ def parse_args():
     p.add_argument("--batch-size", type=int, default=TrainConfig.batch_size)
     p.add_argument("--ent-coef", type=float, default=TrainConfig.ent_coef)
     p.add_argument("--max-turns", type=int, default=TrainConfig.max_turns)
-    p.add_argument("--env-type", type=str, default="classic", choices=["classic", "selfplay"], help="Environment type")
-    p.add_argument("--selfplay-sync-freq", type=int, default=100_000, help="Timesteps between frozen model snapshots for self-play")
+    p.add_argument(
+        "--env-type",
+        type=str,
+        default="classic",
+        choices=["classic", "selfplay"],
+        help="Environment type",
+    )
     return p.parse_args()
 
 
@@ -68,7 +72,10 @@ def main():
         venv = DummyVecEnv([make_env(0, 42, env_cfg, args.env_type)])
     else:
         venv = SubprocVecEnv(
-            [make_env(i, 42 + i * 100, env_cfg, args.env_type) for i in range(args.n_envs)]
+            [
+                make_env(i, 42 + i * 100, env_cfg, args.env_type)
+                for i in range(args.n_envs)
+            ]
         )
 
     venv = VecMonitor(venv)
@@ -95,6 +102,14 @@ def main():
         device="auto",
     )
 
+    # When using selfplay, inject the live model into envs so they can snapshot policy at reset
+    if args.env_type == "selfplay":
+        try:
+            venv.env_method("set_model", model)
+        except Exception:
+            # Some VecEnv types may require accessing the underlying attribute
+            pass
+
     progress_cb = ProgressCallback(total_timesteps=args.total_steps, update_freq=10_000)
     eval_cb = SimpleBaselineEvalCallback(
         baselines=[s.strip() for s in args.eval_baselines.split(",") if s.strip()],
@@ -104,8 +119,6 @@ def main():
         verbose=1,
     )
     callbacks = [progress_cb, eval_cb]
-    if args.env_type == "selfplay":
-        callbacks.append(SelfPlaySyncCallback(save_dir=args.model_dir, save_freq=args.selfplay_sync_freq, verbose=1))
 
     model.learn(total_timesteps=args.total_steps, callback=callbacks)
     model.save(os.path.join(args.model_dir, "maskable_ppo_ludo_rl_final"))
