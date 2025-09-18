@@ -5,6 +5,7 @@ This inherits from the base calculator and customizes for the ludo_rl environmen
 
 from typing import Dict, List
 
+from ludo_engine import MoveResult
 from ludo_engine.models import BoardConstants, GameConstants
 
 from ludo_rl.envs.model import EnvConfig
@@ -19,7 +20,7 @@ class SimpleRewardCalculator(RewardCalculator):
 
     def compute_comprehensive_reward(
         self,
-        move_res,
+        move_res: MoveResult,
         progress_delta: float,
         extra_turn: bool,
         diversity_bonus: bool,
@@ -34,6 +35,8 @@ class SimpleRewardCalculator(RewardCalculator):
         Returns:
             Dict of reward components (not total reward like base class)
         """
+        if move_res is None:
+            return {"illegal": self.cfg.reward_cfg.illegal_action if illegal_action else 0.0, "time": self.cfg.reward_cfg.time_penalty}
         components = {}
 
         rcfg = self.cfg.reward_cfg
@@ -46,6 +49,9 @@ class SimpleRewardCalculator(RewardCalculator):
         if move_res.captured_tokens:
             capture_count = len(move_res.captured_tokens)
             components["capture"] = rcfg.capture * capture_count
+
+        if move_res.new_position == GameConstants.HOME_POSITION and move_res.old_position != GameConstants.HOME_POSITION:
+            components["got_captured"] = rcfg.got_captured
 
         if extra_turn:
             components["extra_turn"] = rcfg.extra_turn

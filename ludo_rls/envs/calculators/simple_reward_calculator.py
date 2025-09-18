@@ -5,7 +5,7 @@ This inherits from the base calculator and customizes for the ludo_rls environme
 
 from typing import Dict, List
 
-from ludo_engine import Player
+from ludo_engine import MoveResult, Player
 from ludo_engine.models import GameConstants
 
 from ludo_rls.envs.model import EnvConfig
@@ -20,7 +20,7 @@ class SimpleRewardCalculator(RewardCalculator):
 
     def compute_comprehensive_reward(
         self,
-        move_res: Dict,
+        move_res: MoveResult,
         progress_delta: float,
         extra_turn: bool,
         diversity_bonus: bool,
@@ -38,6 +38,9 @@ class SimpleRewardCalculator(RewardCalculator):
         Returns:
             Dict of reward components (not total reward like base class)
         """
+        if move_res is None:
+            return {"illegal": self.cfg.reward_cfg.illegal_action if illegal_action else 0.0, "time": self.cfg.reward_cfg.time_penalty}
+        
         # Use the base method but ignore the extra parameters for now
         # and return a dict instead of total reward
         components = {}
@@ -52,17 +55,17 @@ class SimpleRewardCalculator(RewardCalculator):
             components["illegal"] = penalty
 
         # Handle other rewards similar to base class
-        if move_res.get("captured_tokens"):
-            capture_count = len(move_res["captured_tokens"])
+        if move_res.captured_tokens:
+            capture_count = len(move_res.captured_tokens)
             components["capture"] = rcfg.capture * capture_count
 
-        if move_res.get("got_captured"):
+        if move_res.new_position == GameConstants.HOME_POSITION and move_res.old_position != GameConstants.HOME_POSITION:
             components["got_captured"] = rcfg.got_captured
 
         if extra_turn:
             components["extra_turn"] = rcfg.extra_turn
 
-        if move_res.get("token_finished"):
+        if move_res and move_res.finished_token:
             components["token_finished"] = rcfg.finish_token
 
         # Progress reward
