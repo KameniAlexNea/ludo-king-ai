@@ -4,7 +4,9 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 
 class ProgressCallback(BaseCallback):
-    def __init__(self, total_timesteps: int, update_freq: int = 10_000, verbose: int = 0):
+    def __init__(
+        self, total_timesteps: int, update_freq: int = 10_000, verbose: int = 0
+    ):
         super().__init__(verbose)
         self.total = max(1, int(total_timesteps))
         self.freq = max(1, int(update_freq))

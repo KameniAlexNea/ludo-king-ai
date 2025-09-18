@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import os
-from typing import List, Sequence, Optional
+from typing import List, Optional, Sequence
 
 import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
@@ -50,7 +49,9 @@ class SimpleBaselineEvalCallback(BaseCallback):
         self.eval_env = DummyVecEnv([_make_eval])
         self.eval_env = VecMonitor(self.eval_env)
         # We'll set VecNormalize and tie obs_rms in _on_training_start
-        self.eval_env = VecNormalize(self.eval_env, training=False, norm_obs=True, norm_reward=False)
+        self.eval_env = VecNormalize(
+            self.eval_env, training=False, norm_obs=True, norm_reward=False
+        )
 
     def _on_training_start(self) -> None:
         # Share normalization stats if training env has them
@@ -103,19 +104,28 @@ class SimpleBaselineEvalCallback(BaseCallback):
                 try:
                     from ludo_rl.utils.move_utils import MoveUtils
 
-                    action_masks = MoveUtils.action_mask(getattr(base_env, "_pending_valid", None))
+                    action_masks = MoveUtils.action_mask(
+                        getattr(base_env, "_pending_valid", None)
+                    )
                 except Exception:
                     action_masks = None
 
-                action, _ = self.model.predict(obs, deterministic=False, action_masks=action_masks)
+                action, _ = self.model.predict(
+                    obs, deterministic=False, action_masks=action_masks
+                )
                 # Step base env directly and keep obs normalized via VecNormalize
-                next_obs, reward, terminated, truncated, info = base_env.step(int(action))
+                next_obs, reward, terminated, truncated, info = base_env.step(
+                    int(action)
+                )
                 obs = self.eval_env.normalize_obs(next_obs)
                 total_turns += 1
                 done = bool(terminated or truncated)
                 if done:
                     try:
-                        won = base_env.game.game_over and base_env.game.winner == base_env.agent_color
+                        won = (
+                            base_env.game.game_over
+                            and base_env.game.winner == base_env.agent_color
+                        )
                     except Exception:
                         won = reward > 0
                     wins += 1 if won else 0
@@ -131,4 +141,6 @@ class SimpleBaselineEvalCallback(BaseCallback):
         except Exception:
             pass
         if self.verbose:
-            print(f"[Eval] win_rate={win_rate:.3f} avg_turns={avg_turns:.1f} over {self.n_games} games")
+            print(
+                f"[Eval] win_rate={win_rate:.3f} avg_turns={avg_turns:.1f} over {self.n_games} games"
+            )

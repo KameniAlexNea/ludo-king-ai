@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import os
 import copy
+import os
+
 import numpy as np
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
@@ -14,8 +15,8 @@ from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
 from ludo_rl.config import EnvConfig, TrainConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 
-
 # build per-rank env
+
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig):
     def _init():
@@ -69,7 +70,9 @@ def main():
     if args.n_envs == 1:
         venv = DummyVecEnv([make_env(0, 42, env_cfg)])
     else:
-        venv = SubprocVecEnv([make_env(i, 42 + i * 100, env_cfg) for i in range(args.n_envs)])
+        venv = SubprocVecEnv(
+            [make_env(i, 42 + i * 100, env_cfg) for i in range(args.n_envs)]
+        )
 
     venv = VecMonitor(venv)
     venv = VecNormalize(venv, norm_reward=False)

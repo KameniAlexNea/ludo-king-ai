@@ -65,7 +65,6 @@ class CurriculumConfig:
     boundaries: List[float] = field(default_factory=lambda: [0.25, 0.6, 0.9])
 
 
-
 @dataclass
 class EnvConfig:
     max_turns: int = 500

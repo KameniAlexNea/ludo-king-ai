@@ -28,10 +28,14 @@ class LudoRLEnv(gym.Env):
         self._episode = 0
         self._progress: Optional[float] = None
 
-        self.game = LudoGame([PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE])
+        self.game = LudoGame(
+            [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
+        )
         self.obs_builder = ObservationBuilder(cfg, self.game, self.agent_color)
         self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32
+        )
 
         self._pending_dice: Optional[int] = None
         self._pending_valid: List = []
@@ -40,7 +44,12 @@ class LudoRLEnv(gym.Env):
 
     # ---- opponent sampling ----
     def _sample_opponents(self) -> List[str]:
-        return sample_opponents(self.cfg.opponents.candidates, self._progress, self.cfg.curriculum.boundaries, self.rng)
+        return sample_opponents(
+            self.cfg.opponents.candidates,
+            self._progress,
+            self.cfg.curriculum.boundaries,
+            self.rng,
+        )
 
     def _attach_strategies(self, strategies: List[str]):
         colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
@@ -52,14 +61,18 @@ class LudoRLEnv(gym.Env):
                 pass
 
     # ---- gym api ----
-    def reset(self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None):
+    def reset(
+        self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
+    ):
         if seed is not None:
             self.rng.seed(seed)
             random.seed(seed)
             np.random.seed(seed)
         if self.cfg.randomize_agent:
             self.agent_color = self.rng.choice(list(Colors.ALL_COLORS))
-        self.game = LudoGame([PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE])
+        self.game = LudoGame(
+            [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
+        )
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
 
         self._pending_dice = None
@@ -86,7 +99,10 @@ class LudoRLEnv(gym.Env):
         return obs, info
 
     def _ensure_agent_turn(self):
-        while not self.game.game_over and self.game.get_current_player().color.value != self.agent_color:
+        while (
+            not self.game.game_over
+            and self.game.get_current_player().color.value != self.agent_color
+        ):
             self._simulate_single_opponent()
 
     def _roll_agent_dice(self):
@@ -126,9 +142,19 @@ class LudoRLEnv(gym.Env):
 
         if not valid:
             # no moves, lose turn
-            res = MoveResult(success=True, player_color=agent.color.value, token_id=0, dice_value=dice,
-                             old_position=-1, new_position=-1, captured_tokens=[], finished_token=False,
-                             extra_turn=False, error=None, game_won=False)
+            res = MoveResult(
+                success=True,
+                player_color=agent.color.value,
+                token_id=0,
+                dice_value=dice,
+                old_position=-1,
+                new_position=-1,
+                captured_tokens=[],
+                finished_token=False,
+                extra_turn=False,
+                error=None,
+                game_won=False,
+            )
             extra = False
         else:
             action = int(action)
@@ -144,7 +170,10 @@ class LudoRLEnv(gym.Env):
         # opponent turns if no extra turn
         if not extra and not self.game.game_over:
             self.game.next_turn()
-            while not self.game.game_over and self.game.get_current_player().color.value != self.agent_color:
+            while (
+                not self.game.game_over
+                and self.game.get_current_player().color.value != self.agent_color
+            ):
                 self._simulate_single_opponent()
 
         # rewards

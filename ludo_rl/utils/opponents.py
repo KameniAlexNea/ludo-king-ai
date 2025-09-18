@@ -1,4 +1,6 @@
-def sample_opponents(opponent_names: list[str], progress: float, boundaries: list[float], rgn) -> list[str]:
+def sample_opponents(
+    opponent_names: list[str], progress: float, boundaries: list[float], rgn
+) -> list[str]:
     """Sample 3 opponent strategies using a single, simple weighted scheme.
 
     - Every strategy has a base weight (derived from the benchmark order).
@@ -45,10 +47,14 @@ def sample_opponents(opponent_names: list[str], progress: float, boundaries: lis
         mult = {"easy": 0.5, "medium": 0.9, "hard": 1.3, "elite": 1.6}
 
     def cat(name: str) -> str:
-        if name in easy: return "easy"
-        if name in medium: return "medium"
-        if name in hard: return "hard"
-        if name in elite: return "elite"
+        if name in easy:
+            return "easy"
+        if name in medium:
+            return "medium"
+        if name in hard:
+            return "hard"
+        if name in elite:
+            return "elite"
         return "medium"
 
     # Compute final weights for all available candidates
@@ -76,6 +82,7 @@ def sample_opponents(opponent_names: list[str], progress: float, boundaries: lis
         wts.pop(idx)
     return chosen
 
+
 def build_opponent_triplets(baselines: list[str], n_games: int) -> list[list[str]]:
     """Build a list of opponent triplets for evaluation games.
 
@@ -100,5 +107,5 @@ def build_opponent_triplets(baselines: list[str], n_games: int) -> list[list[str
         triplets = [(["random", "random", "random"])]
     while len(triplets) < n_games:
         triplets.extend(triplets)
-    triplets = triplets[: n_games]
+    triplets = triplets[:n_games]
     return triplets

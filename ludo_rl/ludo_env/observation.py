@@ -4,7 +4,7 @@ from typing import List
 
 import numpy as np
 from ludo_engine.core import LudoGame
-from ludo_engine.models import BoardConstants, Colors, GameConstants
+from ludo_engine.models import BoardConstants, GameConstants
 
 from ludo_rl.config import EnvConfig
 
