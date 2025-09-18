@@ -8,9 +8,8 @@ from typing import Dict, List
 from ludo_engine import MoveResult, Player
 from ludo_engine.models import GameConstants
 
-from .reward_calculator_base import RewardCalculator
-
 from ..models.model_single_seat import EnvConfig
+from .reward_calculator_base import RewardCalculator
 
 
 class SimpleRewardCalculator(RewardCalculator):

@@ -32,13 +32,12 @@ from ludo_engine.models import GameConstants, MoveResult, ValidMove
 from stable_baselines3 import PPO
 
 from ..builders.observation_builder import ObservationBuilder
-from ..utils.move_utils import MoveUtils
-
 from ..calculators.simple_reward_calculator_single_seat import (
     SimpleRewardCalculator as RewardCalculator,
 )
 from ..models.model_single_seat import EnvConfig
 from ..simulators.opponent_simulator_single_seat import OpponentSimulator
+from ..utils.move_utils import MoveUtils
 
 
 class LudoGymEnv(gym.Env):

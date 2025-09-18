@@ -6,7 +6,6 @@ from ludo_engine.core import LudoGame
 from ludo_engine.models import GameConstants
 
 from ..builders.observation_builder import ObservationBuilder
-
 from ..models.model_single_seat import EnvConfig
 
 

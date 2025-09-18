@@ -1,7 +1,6 @@
-from .base_ppo_strategy import BasePPOStrategy
-
 from ..envs.ludo_env.ludo_env_single_seat import LudoGymEnv
 from ..envs.models.model_single_seat import EnvConfig
+from .base_ppo_strategy import BasePPOStrategy
 
 
 class PPOStrategy(BasePPOStrategy):

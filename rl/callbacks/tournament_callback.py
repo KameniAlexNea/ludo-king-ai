@@ -31,10 +31,9 @@ import numpy as np
 from ludo_engine.core import PlayerColor
 from ludo_engine.models import GameConstants
 
-from .base_tournament_callback import BaseTournamentCallback
 from ..envs.builders.observation_builder import ObservationBuilder
-
 from ..envs.models.model_multi_seat import EnvConfig
+from .base_tournament_callback import BaseTournamentCallback
 
 
 def _soft_action_select(
