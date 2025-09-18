@@ -14,7 +14,7 @@ from ludo_rl.callbacks.curriculum import ProgressCallback
 from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
 from ludo_rl.config import EnvConfig, TrainConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
-
+from ludo_rl.utils.move_utils import MoveUtils
 # build per-rank env
 
 
@@ -23,17 +23,7 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig):
         cfg = copy.deepcopy(base_cfg)
         cfg.seed = seed + rank
         env = LudoRLEnv(cfg)
-
-        # Minimal mask callback bridging env state to masker
-        def mask_fn_final(env_inst):
-            try:
-                from ludo_rl.utils.move_utils import MoveUtils
-
-                return MoveUtils.action_mask(getattr(env_inst, "_pending_valid", None))
-            except Exception:
-                return np.ones(4, dtype=bool)
-
-        return ActionMasker(env, mask_fn_final)
+        return ActionMasker(env, MoveUtils.get_action_mask_for_env)
 
     return _init
 

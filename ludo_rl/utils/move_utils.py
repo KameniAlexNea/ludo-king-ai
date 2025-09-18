@@ -16,3 +16,11 @@ class MoveUtils:
                 if i in valid:
                     mask[i] = 1
         return mask.astype(bool)
+
+    @staticmethod
+    def get_action_mask_for_env(env) -> np.ndarray:
+        """Get action mask for a given environment instance, handling exceptions gracefully."""
+        try:
+            return MoveUtils.action_mask(getattr(env, "_pending_valid", None))
+        except Exception:
+            return np.ones(GameConstants.TOKENS_PER_PLAYER, dtype=bool)

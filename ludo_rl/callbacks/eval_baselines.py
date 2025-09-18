@@ -9,8 +9,9 @@ from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
+from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.opponents import build_opponent_triplets
-
+from loguru import logger
 
 class SimpleBaselineEvalCallback(BaseCallback):
     """Periodically evaluate the current policy vs fixed baselines.
@@ -100,15 +101,7 @@ class SimpleBaselineEvalCallback(BaseCallback):
             total_turns = 0
             while not done:
                 # Build action mask from pending valid moves
-                action_masks = None
-                try:
-                    from ludo_rl.utils.move_utils import MoveUtils
-
-                    action_masks = MoveUtils.action_mask(
-                        getattr(base_env, "_pending_valid", None)
-                    )
-                except Exception:
-                    action_masks = None
+                action_masks = MoveUtils.get_action_mask_for_env(base_env)
 
                 action, _ = self.model.predict(
                     obs, deterministic=False, action_masks=action_masks
@@ -141,6 +134,6 @@ class SimpleBaselineEvalCallback(BaseCallback):
         except Exception:
             pass
         if self.verbose:
-            print(
+            logger.info(
                 f"[Eval] win_rate={win_rate:.3f} avg_turns={avg_turns:.1f} over {self.n_games} games"
             )
