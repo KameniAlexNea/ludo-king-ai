@@ -3,7 +3,7 @@ import unittest
 
 from ludo_engine.core import LudoGame, PlayerColor
 
-from ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
+from rl.ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
 
 MODEL_DIR = "models/ppo_training"
 MODEL_FILE = "best_model.zip"

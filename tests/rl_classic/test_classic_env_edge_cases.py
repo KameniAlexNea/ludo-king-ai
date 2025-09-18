@@ -1,6 +1,6 @@
 import unittest
 
-from ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
+from rl.ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
 
 
 class TestClassicEnvEdgeCases(unittest.TestCase):

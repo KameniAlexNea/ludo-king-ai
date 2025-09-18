@@ -1,8 +1,8 @@
 import unittest
 
 try:
-    from ludo_rls.envs.ludo_env import EnvConfig
-    from ludo_rls.envs.ludo_env import LudoGymEnv as SingleSeatEnv
+    from rl.ludo_rls.envs.ludo_env import EnvConfig
+    from rl.ludo_rls.envs.ludo_env import LudoGymEnv as SingleSeatEnv
 except Exception:
     SingleSeatEnv = None
     EnvConfig = None

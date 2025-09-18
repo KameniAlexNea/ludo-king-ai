@@ -2,8 +2,8 @@ import unittest
 
 from ludo_engine.core import TokenState
 
-from ludo_rls.envs.ludo_env import EnvConfig
-from ludo_rls.envs.ludo_env import LudoGymEnv as SingleSeatEnv
+from rl.ludo_rls.envs.ludo_env import EnvConfig
+from rl.ludo_rls.envs.ludo_env import LudoGymEnv as SingleSeatEnv
 
 
 class TestSingleSeatEnvEdgeCases(unittest.TestCase):

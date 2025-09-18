@@ -14,7 +14,7 @@ from ludo_engine.models import (
     ValidMove,
 )
 
-from ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
+from rl.ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
 
 
 class DummyPolicy:
@@ -46,7 +46,7 @@ class DummyModel:
 class TestPPOStrategy(unittest.TestCase):
     def test_strategy_decide_valid_action(self):
         # Monkeypatch PPO.load directly in the base_ppo_strategy module for testing
-        import rl_base.strategies.base_ppo_strategy as base_ppo_module
+        import rl.rl_base.strategies.base_ppo_strategy as base_ppo_module
 
         # Provide a wrapper that tolerates extra kwargs like device
         def _dummy_load(path, **kwargs):  # pragma: no cover - simple adapter
