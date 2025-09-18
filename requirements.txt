@@ -9,7 +9,6 @@ ludo-king-engine
 gymnasium
 stable-baselines3
 sb3-contrib
-ray[rllib]
 ruamel.yaml
 gradio
 pillow
