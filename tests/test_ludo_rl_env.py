@@ -4,7 +4,7 @@ import numpy as np
 from ludo_engine.core import TokenState
 from ludo_engine.models import Colors, GameConstants
 
-from rl.ludo_rl.envs.ludo_env import EnvConfig, LudoGymEnv
+from rl.envs.ludo_env.ludo_env_multi_seat import EnvConfig, LudoGymEnv
 
 # Observation structure constants for maintainability
 AGENT_TOKENS = 4
