@@ -75,3 +75,30 @@ def sample_opponents(opponent_names: list[str], progress: float, boundaries: lis
         chosen.append(cand.pop(idx))
         wts.pop(idx)
     return chosen
+
+def build_opponent_triplets(baselines: list[str], n_games: int) -> list[list[str]]:
+    """Build a list of opponent triplets for evaluation games.
+
+    Generates permutations of the provided baselines to create diverse 3-opponent combinations,
+    then repeats or truncates to reach the desired number of games.
+    """
+    import itertools
+
+    uniq = list(dict.fromkeys(baselines))  # deduplicate keeping order
+    triplets = []
+    if len(uniq) >= 3:
+        for comb in itertools.combinations(uniq, 3):
+            for perm in itertools.permutations(comb, 3):
+                triplets.append(list(perm))
+    else:
+        # If fewer than 3 provided, pad with repeats to reach 3
+        pad = (uniq * 3)[:3]
+        triplets = [pad]
+
+    # Repeat or truncate to reach n_games size
+    if len(triplets) == 0:
+        triplets = [(["random", "random", "random"])]
+    while len(triplets) < n_games:
+        triplets.extend(triplets)
+    triplets = triplets[: n_games]
+    return triplets

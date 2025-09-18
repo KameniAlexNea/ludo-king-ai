@@ -33,16 +33,28 @@ class ObservationConfig:
 class OpponentConfig:
     candidates: List[str] = field(
         default_factory=lambda: [
-            "random",
-            "weighted_random",
-            "optimist",
-            "defensive",
-            "winner",
-            "balanced",
-            "cautious",
-            "killer",
+            "probabilistic_v2",
+            "probabilistic_v3",
             "probabilistic",
             "hybrid_prob",
+            "killer",
+            "cautious",
+            "defensive",
+            "balanced",
+            "winner",
+            "optimist",
+            "random",
+            "weighted_random",
+        ]
+    )
+    evaluation_candidates: List[str] = field(
+        default_factory=lambda: [
+            "probabilistic_v2",
+            "probabilistic_v3",
+            "probabilistic",
+            "hybrid_prob",
+            "killer",
+            "cautious",
         ]
     )
 
@@ -60,6 +72,7 @@ class SamplingConfig:
     p_uniform: Probability to ignore curriculum/weights and sample uniformly
                from all candidates for diversity.
     """
+
     p_uniform: float = 0.4
 
 
@@ -90,4 +103,4 @@ class TrainConfig:
     model_dir: str = "./training/models"
     max_turns: int = 500
     eval_games: int = 60
-    eval_baselines: str = ",".join(OpponentConfig().candidates)
+    eval_baselines: str = ",".join(OpponentConfig.evaluation_candidates)

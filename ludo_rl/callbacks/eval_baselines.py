@@ -10,6 +10,7 @@ from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
+from ludo_rl.utils.opponents import build_opponent_triplets
 
 
 class SimpleBaselineEvalCallback(BaseCallback):
@@ -28,7 +29,7 @@ class SimpleBaselineEvalCallback(BaseCallback):
 
     def __init__(
         self,
-        baselines: Sequence[str] = ("random", "probabilistic"),
+        baselines: Sequence[str],
         n_games: int = 60,
         eval_freq: int = 100_000,
         log_prefix: str = "eval/",
@@ -77,25 +78,7 @@ class SimpleBaselineEvalCallback(BaseCallback):
         turns_list: List[int] = []
 
         # Build a small pool of opponent triplets using permutations and sampling
-        import itertools
-
-        uniq = list(dict.fromkeys(self.baselines))  # deduplicate keeping order
-        triplets = []
-        if len(uniq) >= 3:
-            for comb in itertools.combinations(uniq, 3):
-                for perm in itertools.permutations(comb, 3):
-                    triplets.append(list(perm))
-        else:
-            # If fewer than 3 provided, pad with repeats to reach 3
-            pad = (uniq * 3)[:3]
-            triplets = [pad]
-
-        # Repeat or truncate to reach n_games size
-        if len(triplets) == 0:
-            triplets = [(["random", "random", "random"])]
-        while len(triplets) < self.n_games:
-            triplets.extend(triplets)
-        triplets = triplets[: self.n_games]
+        triplets = build_opponent_triplets(self.baselines, self.n_games)
 
         # Share obs_rms again in case it changed
         try:

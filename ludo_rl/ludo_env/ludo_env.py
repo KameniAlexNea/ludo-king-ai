@@ -68,7 +68,10 @@ class LudoRLEnv(gym.Env):
         self.illegal_actions = 0
 
         # attach strategies per episode (allow fixed opponents via options)
-        self._attach_strategies(self._sample_opponents())
+        if options and isinstance(options, dict) and "opponents" in options:
+            self._attach_strategies(options["opponents"])
+        else:
+            self._attach_strategies(self._sample_opponents())
 
         # advance to agent turn and roll dice
         self._ensure_agent_turn()
