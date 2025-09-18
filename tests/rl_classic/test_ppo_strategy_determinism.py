@@ -1,9 +1,9 @@
 import os
 import unittest
 
-from ludo.game import LudoGame
-from ludo.player import PlayerColor
-from ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
+from ludo_engine.core import LudoGame, PlayerColor
+
+from rl.strategies.ppo_strategy_multi_seat import EnvConfig, PPOStrategy
 
 MODEL_DIR = "models/ppo_training"
 MODEL_FILE = "best_model.zip"

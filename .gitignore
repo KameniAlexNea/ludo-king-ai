@@ -214,9 +214,11 @@ saved_states/
 # Test and temporary model files
 *.pth
 training_progress.png
-models/
+# models/
+all_models
 *.out
 logs
 logs_self
 models_self
 gradio_runtime
+training

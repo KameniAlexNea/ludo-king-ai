@@ -23,8 +23,11 @@ Consult the dedicated READMEs in each subpackage for deep details. This root fil
 ```
 README.md              # (you are here)
 ludo/                  # Core engine (see ludo/README.md)
-ludo_rl/               # Classic multi-seat RL env (see ludo_rl/README.md)
-ludo_rls/              # Single-seat fast-forward RL env (see ludo_rls/README.md)
+rl/                    # Consolidated RL training package
+  ludo_rl/             # Classic multi-seat RL env (see rl/ludo_rl/README.md)
+  ludo_rls/            # Single-seat fast-forward RL env (see rl/ludo_rls/README.md)
+  rl_base/             # Base RL utilities and shared components
+training/              # Consolidated training scripts (multi-seat and single-seat)
 four_player_tournament.py  # Heuristic / mixed strategy tournaments
 manual_tournament.py       # Manual / scripted runs
 ludo_evaluator.py          # Evaluation harness / stats
@@ -52,18 +55,18 @@ Both centralize terminal logic inside reward calculators; shaping is additive bu
 ## Quick Start (Single-Seat PPO Recommended)
 Train PPO (Stable-Baselines3):
 ```bash
-python -m ludo_rls.train_sb3 --total-steps 1000000 --n-envs 8 \
+python training/train_single_seat.py --total-steps 1000000 --n-envs 8 \
     --tournament-freq 100000 --tournament-games 240
 ```
 
 Resume from checkpoint:
 ```bash
-python -m ludo_rls.train_sb3 --load-path models/ppo_latest.zip --total-steps 500000
+python training/train_single_seat.py --load-path models_self/ppo_ludo_final.zip --total-steps 500000
 ```
 
 Classic environment training example:
 ```bash
-python -m ludo_rl.train_sb3 --total-steps 2000000 --n-envs 8 --max-turns 600 \
+python training/train_multi_seat.py --total-steps 2000000 --n-envs 8 --max-turns 600 \
     --checkpoint-freq 100000 --eval-freq 50000
 ```
 
