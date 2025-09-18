@@ -97,8 +97,7 @@ class LudoGymEnv(gym.Env):
             self.cfg,
             self.game,
             self.agent_color,
-            self.move_utils._roll_dice,
-            self.move_utils._make_strategy_context,
+            self.game.roll_dice,
         )
 
         # Now that all objects are created, set the proper observation space
@@ -239,8 +238,7 @@ class LudoGymEnv(gym.Env):
             self.cfg,
             self.game,
             self.agent_color,
-            self.move_utils._roll_dice,
-            self.move_utils._make_strategy_context,
+            self.game.roll_dice,
         )
 
         # Attach chosen opponent strategies

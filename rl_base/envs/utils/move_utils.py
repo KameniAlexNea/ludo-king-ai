@@ -65,22 +65,3 @@ class MoveUtils:
                 if i in valid_ids:
                     mask[i] = 1
         return mask
-
-    def _make_strategy_context(
-        self, player: Player, dice_value: int, valid_moves: List[ValidMove]
-    ):
-        # Basic context bridging existing strategies expecting a structure similar to tournaments
-        board_state = self.game.board.get_board_state_for_ai(player)
-        opponents = []
-        for p in self.game.players:
-            if p is player:
-                continue
-            opponents.append(p.get_game_state())
-        ctx = {
-            "player_state": player.get_game_state(),
-            "board": board_state,
-            "valid_moves": valid_moves,
-            "dice_value": dice_value,
-            "opponents": opponents,
-        }
-        return ctx

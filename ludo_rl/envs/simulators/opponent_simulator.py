@@ -18,13 +18,11 @@ class OpponentSimulator:
         game: LudoGame,
         agent_color: str,
         roll_dice_func,
-        make_strategy_context_func,
     ):
         self.cfg = cfg
         self.game = game
         self.agent_color = agent_color
         self._roll_dice = roll_dice_func
-        self._make_strategy_context = make_strategy_context_func
 
     def _simulate_single_opponent_turn(
         self, reward_components: Optional[List[float]] = None
