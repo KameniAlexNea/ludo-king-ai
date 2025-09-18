@@ -66,18 +66,15 @@ class LudoRLEnvSelfPlay(gym.Env):
         except Exception:
             self._frozen_policy = None
 
-    def _attach_strategies(
-        self, strategy_names: List[str] = None, strategy: Strategy = None
-    ):
+    def _attach_strategies(self, strategies: List[str]):
         colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
-        for i, color in enumerate(colors):
+        for strategy, color in zip(strategies, colors):
             player = self.game.get_player_from_color(color)
             try:
-                if strategy is not None:
+                if isinstance(strategy, Strategy):
                     player.set_strategy(strategy)
                 else:
-                    name = strategy_names[i] if strategy_names else "random"
-                    player.set_strategy(StrategyFactory.create_strategy(name))
+                    player.set_strategy(StrategyFactory.create_strategy(strategy))
             except Exception:
                 pass
 
@@ -106,13 +103,16 @@ class LudoRLEnvSelfPlay(gym.Env):
         if options and isinstance(options, dict) and "opponents" in options:
             self._attach_strategies(options["opponents"])
         else:
-            ob = self._opponent_builders[self.agent_color]
-            strat = FrozenPolicyStrategy(
-                policy=self._frozen_policy,
-                obs_builder=ob,
-                deterministic=True,
-            )
-            self._attach_strategies(strategy=strat)
+            strategies = [
+                FrozenPolicyStrategy(
+                    policy=self._frozen_policy,
+                    obs_builder=self._opponent_builders[color],
+                    deterministic=True,
+                )
+                for color in Colors.ALL_COLORS
+                if color != self.agent_color
+            ]
+            self._attach_strategies(strategies)
 
         self._pending_dice = None
         self._pending_valid = []
