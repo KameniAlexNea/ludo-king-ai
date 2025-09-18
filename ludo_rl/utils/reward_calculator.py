@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
 
 from ludo_engine.models import MoveResult
 
@@ -21,7 +20,13 @@ class RewardCalculator:
     """
 
     def compute(
-        self, res: MoveResult, illegal: bool, cfg: EnvConfig, game_over: bool
+        self,
+        res: MoveResult,
+        illegal: bool,
+        cfg: EnvConfig,
+        game_over: bool,
+        captured_by_opponents: int = 0,
+        extra_turn: bool = False,
     ) -> float:
         r = 0.0
 
@@ -37,6 +42,14 @@ class RewardCalculator:
 
         # Step penalty
         r += cfg.reward.time_penalty
+
+        # Opponent effects during the full turn (after agent acted)
+        if captured_by_opponents > 0:
+            r += cfg.reward.got_captured * int(captured_by_opponents)
+
+        # Agent bonuses
+        if extra_turn:
+            r += cfg.reward.extra_turn
 
         # Terminal outcomes
         if getattr(res, "game_won", False):

@@ -134,6 +134,16 @@ class LudoRLEnvBase(gym.Env):
             except Exception:
                 token_id = valid[0].token_id
             res = self.game.execute_move(p, token_id, dice)
+            res.captured_tokens
+            # Track captures on the agent caused by opponents
+            if getattr(res, "captured_tokens", None):
+                try:
+                    agent_color = self.agent_color
+                    for ct in res.captured_tokens:
+                        if ct.player_color == agent_color:
+                            self._captured_by_opponents += 1
+                except Exception:
+                    pass
             if not res.extra_turn:
                 self.game.next_turn()
         else:
@@ -178,6 +188,9 @@ class LudoRLEnvBase(gym.Env):
             res = self.game.execute_move(agent, tok_id, dice)
             extra = res.extra_turn
 
+        # Reset per-full-turn counters
+        self._captured_by_opponents = 0
+
         # opponent turns if no extra turn
         if not extra and not self.game.game_over:
             self.game.next_turn()
@@ -189,7 +202,12 @@ class LudoRLEnvBase(gym.Env):
 
         # rewards
         reward = self._reward_calc.compute(
-            res=res, illegal=illegal, cfg=self.cfg, game_over=self.game.game_over
+            res=res,
+            illegal=illegal,
+            cfg=self.cfg,
+            game_over=self.game.game_over,
+            captured_by_opponents=int(getattr(self, "_captured_by_opponents", 0)),
+            extra_turn=bool(extra),
         )
         terminated = bool(getattr(res, "game_won", False) or self.game.game_over)
 
