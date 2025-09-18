@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+from ludo_engine import Strategy, StrategyFactory
 from ludo_engine.core import LudoGame, PlayerColor
 from ludo_engine.models import Colors, GameConstants, MoveResult, ValidMove
 from sb3_contrib import MaskablePPO
@@ -65,6 +66,21 @@ class LudoRLEnvSelfPlay(gym.Env):
         except Exception:
             self._frozen_policy = None
 
+    def _attach_strategies(
+        self, strategy_names: List[str] = None, strategy: Strategy = None
+    ):
+        colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
+        for i, color in enumerate(colors):
+            player = self.game.get_player_from_color(color)
+            try:
+                if strategy is not None:
+                    player.set_strategy(strategy)
+                else:
+                    name = strategy_names[i] if strategy_names else "random"
+                    player.set_strategy(StrategyFactory.create_strategy(name))
+            except Exception:
+                pass
+
     # ---- gym api ----
     def reset(self, *, seed: Optional[int] = None, options: Optional[Dict] = None):
         if seed is not None:
@@ -87,19 +103,16 @@ class LudoRLEnvSelfPlay(gym.Env):
 
         # Snapshot current policy for this episode (used by opponents)
         self._snapshot_policy()
-        # Attach strategies for opponents so simulation matches classic env
-        for p in self.game.players:
-            if p.color.value != self.agent_color:
-                ob = self._opponent_builders[p.color.value]
-                strat = FrozenPolicyStrategy(
-                    policy=self._frozen_policy,
-                    obs_builder=ob,
-                    deterministic=True,
-                )
-                try:
-                    p.set_strategy(strat)
-                except Exception:
-                    pass
+        if options and isinstance(options, dict) and "opponents" in options:
+            self._attach_strategies(options["opponents"])
+        else:
+            ob = self._opponent_builders[self.agent_color]
+            strat = FrozenPolicyStrategy(
+                policy=self._frozen_policy,
+                obs_builder=ob,
+                deterministic=True,
+            )
+            self._attach_strategies(strategy=strat)
 
         self._pending_dice = None
         self._pending_valid = []
