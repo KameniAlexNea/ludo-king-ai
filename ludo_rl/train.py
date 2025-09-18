@@ -6,6 +6,7 @@ import os
 
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
+from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
@@ -40,6 +41,18 @@ def parse_args():
     p.add_argument("--model-dir", type=str, default=TrainConfig.model_dir)
     p.add_argument("--eval-freq", type=int, default=TrainConfig.eval_freq)
     p.add_argument("--eval-games", type=int, default=TrainConfig.eval_games)
+    p.add_argument(
+        "--checkpoint-freq",
+        type=int,
+        default=100_000,
+        help="Checkpoint every N steps; 0 disables",
+    )
+    p.add_argument(
+        "--checkpoint-prefix",
+        type=str,
+        default="ppo_ludo",
+        help="Checkpoint file prefix",
+    )
     p.add_argument(
         "--eval-baselines",
         type=str,
@@ -99,7 +112,7 @@ def main():
         ent_coef=args.ent_coef,
         tensorboard_log=args.logdir,
         verbose=1,
-        device="auto",
+        device="cpu",
     )
 
     # When using selfplay, inject the live model into envs so they can snapshot policy at reset
@@ -119,6 +132,18 @@ def main():
         verbose=1,
     )
     callbacks = [progress_cb, eval_cb]
+
+    # Add checkpointing if enabled
+    if args.checkpoint_freq and args.checkpoint_freq > 0:
+        ckpt_cb = CheckpointCallback(
+            save_freq=args.checkpoint_freq,
+            save_path=args.model_dir,
+            name_prefix=args.checkpoint_prefix,
+            save_replay_buffer=True,
+            save_vecnormalize=True,
+            verbose=1,
+        )
+        callbacks.append(ckpt_cb)
 
     model.learn(total_timesteps=args.total_steps, callback=callbacks)
     model.save(os.path.join(args.model_dir, "maskable_ppo_ludo_rl_final"))

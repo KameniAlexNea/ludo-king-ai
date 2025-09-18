@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from ludo_engine.models import MoveResult
 
 from ludo_rl.config import EnvConfig
