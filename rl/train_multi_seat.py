@@ -23,7 +23,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMoni
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
 from .callbacks.progress_curriculum import ProgressCurriculumCallback
-from .callbacks.tournament_callback import ClassicTournamentCallback
+from .callbacks.tournament_multi_seat_callback import ClassicTournamentCallback
 from .envs.ludo_env.ludo_env_multi_seat import EnvConfig, LudoGymEnv
 
 
