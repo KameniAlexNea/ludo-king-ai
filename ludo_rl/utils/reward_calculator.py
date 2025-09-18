@@ -31,9 +31,9 @@ class RewardCalculator:
         r = 0.0
 
         # Event rewards
-        if getattr(res, "captured_tokens", None):
+        if res.captured_tokens:
             r += cfg.reward.capture * len(res.captured_tokens)
-        if getattr(res, "finished_token", False):
+        if res.finished_token:
             r += cfg.reward.finish_token
 
         # Constraint penalties
@@ -52,7 +52,7 @@ class RewardCalculator:
             r += cfg.reward.extra_turn
 
         # Terminal outcomes
-        if getattr(res, "game_won", False):
+        if res.game_won:
             r += cfg.reward.win
         elif game_over:
             r += cfg.reward.lose
