@@ -16,6 +16,9 @@ class ObservationBuilder:
         self.agent_color = agent_color
         self.start_pos = BoardConstants.START_POSITIONS[self.agent_color]
         self.size = self.compute_size()
+        self.total_path = GameConstants.MAIN_BOARD_SIZE + (
+            GameConstants.FINISH_POSITION - BoardConstants.HOME_COLUMN_START
+        )
 
     def compute_size(self) -> int:
         base = 0
@@ -23,7 +26,6 @@ class ObservationBuilder:
         base += 12  # opponents token positions
         base += 4  # finished tokens per player
         base += 6  # dice one-hot
-        base += 1  # tokens at home count
         if self.cfg.obs.include_turn_index:
             base += 1
         return base
@@ -36,10 +38,32 @@ class ObservationBuilder:
             rank = 52 + (pos - BoardConstants.HOME_COLUMN_START)
         else:
             # shift so agent start is 0
-            p = pos - self.start_pos if pos >= self.start_pos else GameConstants.MAIN_BOARD_SIZE - self.start_pos + pos
+            p = (
+                pos - self.start_pos
+                if pos >= self.start_pos
+                else GameConstants.MAIN_BOARD_SIZE - self.start_pos + pos
+            )
             rank = p
         # ranks 0..57 -> [-1, 1]
         return (rank / 57.0) * 2.0 - 1.0
+
+    def token_progress(self, pos: int, start_pos: int) -> float:
+        if pos == GameConstants.HOME_POSITION:
+            return 0.0
+        if pos >= BoardConstants.HOME_COLUMN_START:
+            home_steps = (
+                min(GameConstants.FINISH_POSITION, pos)
+                - BoardConstants.HOME_COLUMN_START
+            )
+            return (GameConstants.MAIN_BOARD_SIZE + max(0, home_steps)) / float(
+                self.total_path
+            )
+        # on main board: forward distance from start to current pos
+        if pos >= start_pos:
+            steps = pos - start_pos
+        else:
+            steps = GameConstants.MAIN_BOARD_SIZE - start_pos + pos
+        return steps / float(self.total_path)
 
     def build(self, turn_counter: int, dice: int) -> np.ndarray:
         obs: List[float] = []
@@ -56,19 +80,19 @@ class ObservationBuilder:
             for t in p.tokens:
                 obs.append(self.normalize_pos(t.position))
 
-        # finished tokens per player
-        for p in self.game.players:
-            obs.append(float(p.get_finished_tokens_count()) / GameConstants.TOKENS_PER_PLAYER)
+        # average progress per player (smooth signal 0..1)
+        for player in self.game.players:
+            sp = BoardConstants.START_POSITIONS[player.color.value]
+            prog_sum = 0.0
+            for t in player.tokens:
+                prog_sum += self.token_progress(t.position, sp)
+            obs.append(prog_sum / float(GameConstants.TOKENS_PER_PLAYER))
 
         # dice one-hot (1..6)
         d = [0.0] * 6
         if 1 <= dice <= 6:
             d[dice - 1] = 1.0
         obs.extend(d)
-
-        # tokens at home
-        tokens_at_home = sum(1 for t in agent.tokens if t.position == GameConstants.HOME_POSITION)
-        obs.append(tokens_at_home / GameConstants.TOKENS_PER_PLAYER)
 
         if self.cfg.obs.include_turn_index:
             obs.append(min(1.0, turn_counter / float(self.cfg.max_turns)))
