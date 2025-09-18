@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 import torch
-from ludo_engine.constants import Colors, GameConstants
+from ludo_engine.models import Colors, GameConstants
 
 from ludo_rl.ppo_strategy import EnvConfig, PPOStrategy
 
