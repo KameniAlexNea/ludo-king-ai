@@ -12,6 +12,7 @@ from ludo_engine.models import Colors, GameConstants, MoveResult, ValidMove
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
 from ludo_rl.utils.move_utils import MoveUtils
+from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 
@@ -87,6 +88,19 @@ class LudoRLEnvSelfPlay(gym.Env):
 
         # Snapshot current policy for this episode (used by opponents)
         self._snapshot_policy()
+        # Attach strategies for opponents so simulation matches classic env
+        for p in self.game.players:
+            if p.color.value != self.agent_color:
+                ob = self._opponent_builders[p.color.value]
+                strat = FrozenPolicyStrategy(
+                    policy=self._frozen_policy,
+                    obs_builder=ob,
+                    deterministic=True,
+                )
+                try:
+                    p.set_strategy(strat)
+                except Exception:
+                    pass
 
         self._pending_dice = None
         self._pending_valid = []
@@ -123,30 +137,12 @@ class LudoRLEnvSelfPlay(gym.Env):
         dice = self.game.roll_dice()
         valid = self.game.get_valid_moves(p, dice)
         if valid:
-            # Build observation from this opponent's perspective
-            ob = self._opponent_builders.get(p.color.value)
-            if ob is None:
-                ob = ObservationBuilder(self.cfg, self.game, p.color.value)
-                self._opponent_builders[p.color.value] = ob
-            opp_obs = ob.build(self.turns, dice)
-            mask = MoveUtils.action_mask(valid)
-
-            # Use frozen model if available; else random valid
-            tok_id = None
-            if self._frozen_policy is not None:
-                try:
-                    action, _ = self._frozen_policy.predict(
-                        opp_obs[None, :], deterministic=True, action_masks=mask
-                    )
-                    tok_id = int(action)
-                    if tok_id not in [m.token_id for m in valid]:
-                        tok_id = None
-                except Exception:
-                    tok_id = None
-            if tok_id is None:
-                tok_id = random.choice([m.token_id for m in valid])
-
-            res = self.game.execute_move(p, tok_id, dice)
+            try:
+                ctx = self.game.get_ai_decision_context(dice)
+                token_id = p.make_strategic_decision(ctx)
+            except Exception:
+                token_id = valid[0].token_id
+            res = self.game.execute_move(p, token_id, dice)
             if not res.extra_turn:
                 self.game.next_turn()
         else:
