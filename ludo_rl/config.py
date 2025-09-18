@@ -65,16 +65,6 @@ class CurriculumConfig:
     boundaries: List[float] = field(default_factory=lambda: [0.25, 0.6, 0.9])
 
 
-@dataclass
-class SamplingConfig:
-    """Opponent sampling behavior.
-
-    p_uniform: Probability to ignore curriculum/weights and sample uniformly
-               from all candidates for diversity.
-    """
-
-    p_uniform: float = 0.4
-
 
 @dataclass
 class EnvConfig:
@@ -85,7 +75,6 @@ class EnvConfig:
     obs: ObservationConfig = field(default_factory=ObservationConfig)
     opponents: OpponentConfig = field(default_factory=OpponentConfig)
     curriculum: CurriculumConfig = field(default_factory=CurriculumConfig)
-    sampling: SamplingConfig = field(default_factory=SamplingConfig)
 
 
 @dataclass
