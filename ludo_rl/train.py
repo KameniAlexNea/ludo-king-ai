@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
-
+import copy
 import numpy as np
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
@@ -16,20 +16,11 @@ from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 
 # build per-rank env
 
-def make_env(rank: int, seed: int, cfg: EnvConfig):
+def make_env(rank: int, seed: int, base_cfg: EnvConfig):
     def _init():
+        cfg = copy.deepcopy(base_cfg)
+        cfg.seed = seed + rank
         env = LudoRLEnv(cfg)
-
-        def mask_fn(e):
-            return e.step(0)[-1]["action_mask"]  # Not used; we override via ActionMasker below
-
-        # Use ActionMasker with env's mask via info on step; but better: attach callable
-        def mask_fn2(env_inst):
-            return env_inst._pending_valid and np.array([vm.token_id in [m.token_id for m in env_inst._pending_valid] for vm in env_inst._pending_valid])
-
-        # Proper mask from env utility
-        def mask_fn3(env_inst):
-            return env_inst.action_space.contains(0) or env_inst._pending_valid
 
         # Minimal mask callback bridging env state to masker
         def mask_fn_final(env_inst):
