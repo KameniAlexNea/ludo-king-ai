@@ -5,8 +5,9 @@ from typing import Any, List, Optional
 from ludo_engine.core import LudoGame
 from ludo_engine.models import GameConstants
 
-from ..model import EnvConfig
 from rl.rl_base.envs.builders.observation_builder import ObservationBuilder
+
+from ..model import EnvConfig
 
 
 class OpponentSimulator:

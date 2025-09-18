@@ -5,8 +5,8 @@ from typing import Dict, List
 from ludo_engine.core import LudoGame, Player
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult
 
-from .probabilistic_calculator import ProbabilisticCalculator
 from ..model import BaseEnvConfig
+from .probabilistic_calculator import ProbabilisticCalculator
 
 
 class RewardCalculator:

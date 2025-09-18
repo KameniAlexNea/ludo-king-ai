@@ -31,13 +31,14 @@ from ludo_engine.core import LudoGame, PlayerColor
 from ludo_engine.models import GameConstants, MoveResult, ValidMove
 from stable_baselines3 import PPO
 
+from rl.rl_base.envs.builders.observation_builder import ObservationBuilder
+from rl.rl_base.envs.utils.move_utils import MoveUtils
+
 from .calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )
 from .model import EnvConfig
 from .simulators.opponent_simulator import OpponentSimulator
-from rl.rl_base.envs.builders.observation_builder import ObservationBuilder
-from rl.rl_base.envs.utils.move_utils import MoveUtils
 
 
 class LudoGymEnv(gym.Env):

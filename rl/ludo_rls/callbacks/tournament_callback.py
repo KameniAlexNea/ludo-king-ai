@@ -31,9 +31,10 @@ import numpy as np
 from ludo_engine.core import PlayerColor
 from ludo_engine.models import GameConstants
 
-from ..envs.model import EnvConfig
 from rl.rl_base.callbacks.base_tournament_callback import BaseTournamentCallback
 from rl.rl_base.envs.builders.observation_builder import ObservationBuilder
+
+from ..envs.model import EnvConfig
 
 
 def _soft_action_select(

@@ -8,8 +8,9 @@ from typing import Dict, List
 from ludo_engine import MoveResult, Player
 from ludo_engine.models import GameConstants
 
-from ..model import EnvConfig
 from rl.rl_base.envs.calculators.reward_calculator import RewardCalculator
+
+from ..model import EnvConfig
 
 
 class SimpleRewardCalculator(RewardCalculator):
