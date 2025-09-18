@@ -12,6 +12,7 @@ from ludo_engine.models import Colors, GameConstants, MoveResult
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
 from ludo_rl.utils.move_utils import MoveUtils
+from ludo_rl.utils.reward_calculator import RewardCalculator
 
 
 class LudoRLEnvBase(gym.Env):
@@ -38,6 +39,7 @@ class LudoRLEnvBase(gym.Env):
         self._pending_valid: List = []
         self.turns = 0
         self.illegal_actions = 0
+        self._reward_calc = RewardCalculator()
 
     # ---- hooks for subclasses -------------------------------------------------
     def on_reset_before_attach(self, options: Optional[Dict[str, Any]] = None) -> None:
@@ -186,22 +188,10 @@ class LudoRLEnvBase(gym.Env):
                 self._simulate_single_opponent()
 
         # rewards
-        reward = 0.0
-        if res.captured_tokens:
-            reward += self.cfg.reward.capture * len(res.captured_tokens)
-        if res.finished_token:
-            reward += self.cfg.reward.finish_token
-        if illegal:
-            reward += self.cfg.reward.illegal_action
-        reward += self.cfg.reward.time_penalty
-
-        terminated = False
-        if res.game_won:
-            reward += self.cfg.reward.win
-            terminated = True
-        elif self.game.game_over:
-            reward += self.cfg.reward.lose
-            terminated = True
+        reward = self._reward_calc.compute(
+            res=res, illegal=illegal, cfg=self.cfg, game_over=self.game.game_over
+        )
+        terminated = bool(getattr(res, "game_won", False) or self.game.game_over)
 
         self.turns += 1
         truncated = False
