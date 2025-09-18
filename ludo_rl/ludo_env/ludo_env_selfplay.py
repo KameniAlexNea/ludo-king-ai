@@ -8,14 +8,13 @@ import numpy as np
 from gymnasium import spaces
 from ludo_engine.core import LudoGame, PlayerColor
 from ludo_engine.models import Colors, GameConstants, MoveResult, ValidMove
-
-from ludo_rl.config import EnvConfig
-from ludo_rl.ludo_env.observation import ObservationBuilder
-from ludo_rl.utils.move_utils import MoveUtils
-from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 
+from ludo_rl.config import EnvConfig
+from ludo_rl.ludo_env.observation import ObservationBuilder
+from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
+from ludo_rl.utils.move_utils import MoveUtils
 
 
 class LudoRLEnvSelfPlay(gym.Env):

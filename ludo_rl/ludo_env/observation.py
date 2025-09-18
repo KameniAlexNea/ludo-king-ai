@@ -35,7 +35,9 @@ class ObservationBuilder:
             return -1.0
         if pos >= BoardConstants.HOME_COLUMN_START:
             # map 100..105 to 52..57
-            rank = GameConstants.MAIN_BOARD_SIZE + (pos - BoardConstants.HOME_COLUMN_START)
+            rank = GameConstants.MAIN_BOARD_SIZE + (
+                pos - BoardConstants.HOME_COLUMN_START
+            )
         else:
             # shift so agent start is 0
             p = (
@@ -45,7 +47,9 @@ class ObservationBuilder:
             )
             rank = p
         # ranks 0..57 -> [-1, 1]
-        return (rank / (GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)) * 2.0 - 1.0
+        return (
+            rank / (GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
+        ) * 2.0 - 1.0
 
     def token_progress(self, pos: int, start_pos: int) -> float:
         if pos == GameConstants.HOME_POSITION:

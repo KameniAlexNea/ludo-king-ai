@@ -8,6 +8,7 @@ import torch
 from ludo_engine.models import AIDecisionContext, GameConstants, ValidMove
 from ludo_engine.strategies.base import Strategy
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
+
 from ludo_rl.ludo_env.observation import ObservationBuilder
 
 
@@ -61,12 +62,7 @@ class FrozenPolicyStrategy(Strategy):
             try:
                 probs = dist.distribution.probs.squeeze(0).cpu().numpy()
             except Exception:
-                probs = (
-                    dist.distribution.logits.softmax(-1)
-                    .squeeze(0)
-                    .cpu()
-                    .numpy()
-                )
+                probs = dist.distribution.logits.softmax(-1).squeeze(0).cpu().numpy()
         mask = self._build_action_mask(valid_moves)
         masked = probs * mask
         if masked.sum() <= 0:
