@@ -10,6 +10,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMoni
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
 from ludo_rl.callbacks.curriculum import ProgressCallback
+from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
 from ludo_rl.config import EnvConfig, TrainConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 
@@ -43,6 +44,13 @@ def parse_args():
     p.add_argument("--logdir", type=str, default=TrainConfig.logdir)
     p.add_argument("--model-dir", type=str, default=TrainConfig.model_dir)
     p.add_argument("--eval-freq", type=int, default=TrainConfig.eval_freq)
+    p.add_argument("--eval-games", type=int, default=TrainConfig.eval_games)
+    p.add_argument(
+        "--eval-baselines",
+        type=str,
+        default=TrainConfig.eval_baselines,
+        help="Comma-separated list of opponent strategy names",
+    )
     p.add_argument("--learning-rate", type=float, default=TrainConfig.learning_rate)
     p.add_argument("--n-steps", type=int, default=TrainConfig.n_steps)
     p.add_argument("--batch-size", type=int, default=TrainConfig.batch_size)
@@ -88,8 +96,15 @@ def main():
     )
 
     progress_cb = ProgressCallback(total_timesteps=args.total_steps, update_freq=10_000)
+    eval_cb = SimpleBaselineEvalCallback(
+        baselines=[s.strip() for s in args.eval_baselines.split(",") if s.strip()],
+        n_games=args.eval_games,
+        eval_freq=args.eval_freq,
+        env_cfg=env_cfg,
+        verbose=1,
+    )
 
-    model.learn(total_timesteps=args.total_steps, callback=[progress_cb])
+    model.learn(total_timesteps=args.total_steps, callback=[progress_cb, eval_cb])
     model.save(os.path.join(args.model_dir, "maskable_ppo_ludo_rl_final"))
 
 

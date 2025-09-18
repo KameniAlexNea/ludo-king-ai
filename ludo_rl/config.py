@@ -89,3 +89,5 @@ class TrainConfig:
     logdir: str = "./training/logs"
     model_dir: str = "./training/models"
     max_turns: int = 500
+    eval_games: int = 60
+    eval_baselines: str = ",".join(OpponentConfig().candidates)

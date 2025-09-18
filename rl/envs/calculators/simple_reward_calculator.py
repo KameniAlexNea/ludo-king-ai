@@ -51,9 +51,13 @@ class SimpleRewardCalculator(RewardCalculator):
             Dict of reward components
         """
         if move_res is None:
-            illegal_penalty = self.cfg.reward_cfg.illegal_action if illegal_action else 0.0
+            illegal_penalty = (
+                self.cfg.reward_cfg.illegal_action if illegal_action else 0.0
+            )
             if self.is_single_seat and masked_autocorrect and illegal_action:
-                illegal_penalty *= getattr(self.cfg.reward_cfg, "illegal_masked_scale", 0.25)
+                illegal_penalty *= getattr(
+                    self.cfg.reward_cfg, "illegal_masked_scale", 0.25
+                )
 
             return {
                 "illegal": illegal_penalty,
@@ -92,7 +96,7 @@ class SimpleRewardCalculator(RewardCalculator):
             components["progress"] = progress_delta * rcfg.progress_scale
 
             # Multi-seat specific strategic bonuses
-            if self.is_multi_seat and hasattr(rcfg, 'home_column_entry_bonus'):
+            if self.is_multi_seat and hasattr(rcfg, "home_column_entry_bonus"):
                 agent_player = self.game.get_player_from_color(self.agent_color)
                 home_entry_pos = BoardConstants.HOME_COLUMN_ENTRIES[self.agent_color]
 
@@ -108,10 +112,18 @@ class SimpleRewardCalculator(RewardCalculator):
                         components["home_column_entry"] = rcfg.home_column_entry_bonus
 
                     # Critical position bonuses
-                    if moved_token.position in BoardConstants.STAR_SQUARES:  # Safe squares
-                        components["safe_square_bonus"] = getattr(rcfg, 'safe_square_bonus', 0.0)
-                    elif moved_token.position >= home_entry_pos + 1:  # Very close to home
-                        components["near_home_bonus"] = getattr(rcfg, 'near_home_bonus', 0.0)
+                    if (
+                        moved_token.position in BoardConstants.STAR_SQUARES
+                    ):  # Safe squares
+                        components["safe_square_bonus"] = getattr(
+                            rcfg, "safe_square_bonus", 0.0
+                        )
+                    elif (
+                        moved_token.position >= home_entry_pos + 1
+                    ):  # Very close to home
+                        components["near_home_bonus"] = getattr(
+                            rcfg, "near_home_bonus", 0.0
+                        )
 
         # Diversity bonuses with multi-seat scaling
         if diversity_bonus:
@@ -119,13 +131,23 @@ class SimpleRewardCalculator(RewardCalculator):
             tokens_at_home = sum(1 for t in agent_player.tokens if t.position < 0)
 
             # Inactivity penalty
-            penalty_scale = getattr(rcfg, 'diversity_penalty_scale', 1.0) if self.is_multi_seat else 1.0
-            inactivity_penalty = tokens_at_home * rcfg.inactivity_penalty * penalty_scale
+            penalty_scale = (
+                getattr(rcfg, "diversity_penalty_scale", 1.0)
+                if self.is_multi_seat
+                else 1.0
+            )
+            inactivity_penalty = (
+                tokens_at_home * rcfg.inactivity_penalty * penalty_scale
+            )
             components["inactivity"] = inactivity_penalty
 
             # Active token bonus
             active_tokens = GameConstants.TOKENS_PER_PLAYER - tokens_at_home
-            bonus_scale = getattr(rcfg, 'diversity_bonus_scale', 1.0) if self.is_multi_seat else 1.0
+            bonus_scale = (
+                getattr(rcfg, "diversity_bonus_scale", 1.0)
+                if self.is_multi_seat
+                else 1.0
+            )
             active_bonus = active_tokens * rcfg.active_token_bonus * bonus_scale
             components["active_bonus"] = active_bonus
 
@@ -158,6 +180,6 @@ class SimpleRewardCalculator(RewardCalculator):
         if self.is_single_seat and truncated:
             # Only treat as draw if nobody actually won
             if not any(p.has_won() for p in self.game.players):
-                return getattr(rcfg, 'draw_penalty', -2.0)
+                return getattr(rcfg, "draw_penalty", -2.0)
 
         return 0.0
