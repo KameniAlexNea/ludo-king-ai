@@ -18,9 +18,9 @@ from dotenv import load_dotenv
 from loguru import logger
 from ludo_engine import LudoGame, PlayerColor, StrategyFactory
 
-from ludo_stats.game_state_saver import GameStateSaver
+from ludo_tournament.game_state_saver import GameStateSaver
 from ludo_tournament import BaseTournament
-from rl.load_ppo_model_base import load_ppo_strategy, select_best_ppo_model
+from ludo_tournament.load_ppo_model_base import load_ppo_strategy, select_best_ppo_model
 
 load_dotenv()
 

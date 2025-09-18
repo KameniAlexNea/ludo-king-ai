@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 from ludo_engine import LudoGame
 
-from ludo_stats.game_state_saver import GameStateSaver
+from ludo_tournament.game_state_saver import GameStateSaver
 
 
 class BaseTournament:
