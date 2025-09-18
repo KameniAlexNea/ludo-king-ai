@@ -33,7 +33,7 @@ from ludo_engine.models import Colors, GameConstants, MoveResult
 from ludo_engine.strategies.strategy import StrategyFactory
 
 from ..builders.observation_builder import ObservationBuilder
-from ..calculators.simple_reward_calculator_multi_seat import (
+from ..calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )
 from ..models.model_multi_seat import EnvConfig

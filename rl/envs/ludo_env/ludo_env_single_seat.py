@@ -32,7 +32,7 @@ from ludo_engine.models import GameConstants, MoveResult, ValidMove
 from stable_baselines3 import PPO
 
 from ..builders.observation_builder import ObservationBuilder
-from ..calculators.simple_reward_calculator_single_seat import (
+from ..calculators.simple_reward_calculator import (
     SimpleRewardCalculator as RewardCalculator,
 )
 from ..models.model_single_seat import EnvConfig
