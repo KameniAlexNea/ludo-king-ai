@@ -41,13 +41,9 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig):
             mask = env_inst.move_utils.action_masks(pending)
             return mask.astype(bool)  # Convert to boolean for ActionMasker
 
-        # Only wrap if ActionMasker is available and algorithm requires it
-        try:
-            wrapped = ActionMasker(env, mask_fn)
-            return wrapped
-        except Exception:
-            return env
-        return env
+        # Always use ActionMasker for proper action masking
+        wrapped = ActionMasker(env, mask_fn)
+        return wrapped
 
     return _init
 
@@ -176,9 +172,9 @@ def main(args):
         eval_env.obs_rms = copy.deepcopy(vec_env.obs_rms)
     except Exception:
         pass
-    policy_kwargs = {
-        "net_arch": dict(pi=[512, 256, 128], vf=[512, 256, 128])
-    }  # Increased capacity
+    # policy_kwargs = {
+    #     "net_arch": dict(pi=[512, 256, 128], vf=[512, 256, 128])
+    # }  # Increased capacity
     if args.algorithm.lower() == "ppo":
         model = PPO(
             "MlpPolicy",
@@ -196,7 +192,7 @@ def main(args):
             max_grad_norm=0.5,
             tensorboard_log=args.logdir,
             device="auto",
-            policy_kwargs=policy_kwargs,
+            # policy_kwargs=policy_kwargs,
         )
     elif args.algorithm.lower() == "maskable_ppo":
         model = MaskablePPO(
@@ -215,7 +211,7 @@ def main(args):
             max_grad_norm=0.5,
             tensorboard_log=args.logdir,
             device="auto",
-            policy_kwargs=policy_kwargs,
+            # policy_kwargs=policy_kwargs,
         )
     elif args.algorithm.lower() == "ddpg":
         model = DDPG(
@@ -232,7 +228,7 @@ def main(args):
             gradient_steps=1,
             tensorboard_log=args.logdir,
             device="auto",
-            policy_kwargs=policy_kwargs,
+            # policy_kwargs=policy_kwargs,
         )
     else:
         raise ValueError(f"Unsupported algorithm: {args.algorithm}")

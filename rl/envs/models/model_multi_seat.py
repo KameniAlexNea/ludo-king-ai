@@ -61,8 +61,8 @@ class RewardConfig(BaseRewardConfig):
 
     # Clear boundaries (strong penalties for invalid actions)
     illegal_action: float = (
-        -50.0
-    )  # Invalid moves - very strong negative to prevent illegal actions
+        -5.0
+    )  # Invalid moves - reduced penalty to not dominate other rewards
     time_penalty: float = -0.001  # Reduced time penalty for less negative pressure
 
     # Advanced features (disabled by default for simplicity)
