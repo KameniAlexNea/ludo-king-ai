@@ -51,15 +51,15 @@ class OpponentSimulator:
             # Build temp observation from agent's perspective
             temp_obs = self.obs_builder._build_observation(turns, dice)
             action = self._policy_action(self._frozen_policy, temp_obs, valid_moves)
-            valid_ids = [m["token_id"] for m in valid_moves]
+            valid_ids = [m.token_id for m in valid_moves]
             if action not in valid_ids:
                 action = valid_ids[0]
             move_res = self.game.execute_move(current_player, action, dice)
             # Check for agent captures and add penalties
-            if reward_components and move_res.get("captured_tokens"):
+            if reward_components and move_res.captured_tokens:
                 agent_captured = False
-                for ct in move_res["captured_tokens"]:
-                    if ct.get("player_color") == self.agent_color:
+                for ct in move_res.captured_tokens:
+                    if ct.player_color == self.agent_color:
                         agent_captured = True
                         reward_components.append(self.cfg.reward_cfg.got_captured)
                 if agent_captured:
@@ -69,7 +69,7 @@ class OpponentSimulator:
                     )
                     if all_captured:
                         reward_components.append(self.cfg.reward_cfg.all_tokens_killed)
-            if not move_res.get("extra_turn") or self.game.game_over:
+            if not move_res.extra_turn or self.game.game_over:
                 if not self.game.game_over:
                     self.game.next_turn()
                 return

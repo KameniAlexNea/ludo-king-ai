@@ -25,6 +25,7 @@ import random
 from typing import Any, Dict, List, Optional
 
 import gymnasium as gym
+from ludo_engine.models import MoveResult, ValidMove
 import numpy as np
 from gymnasium import spaces
 from ludo_engine.core import LudoGame, PlayerColor
@@ -170,15 +171,15 @@ class LudoGymEnv(gym.Env):
         else:
             self._frozen_policy = None
 
-    def _policy_action(self, policy, obs: np.ndarray, valid_moves: List[Dict]) -> int:
+    def _policy_action(self, policy, obs: np.ndarray, valid_moves: List[ValidMove]) -> int:
         if not valid_moves:
             return -1
         mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
         for m in valid_moves:
-            mask[m["token_id"]] = 1
+            mask[m.token_id] = 1
         # Fallback random if no policy
         if policy is None:
-            legal_ids = [m["token_id"] for m in valid_moves]
+            legal_ids = [m.token_id for m in valid_moves]
             return self.rng.choice(legal_ids)
         obs_batch = obs[None, :]
         action, _ = policy.predict(obs_batch, deterministic=True)
@@ -233,13 +234,13 @@ class LudoGymEnv(gym.Env):
         # Handle no-move situation
         no_moves_available = len(valid_moves) == 0
         illegal = False
-        move_res: Dict[str, Any] = {}
+        move_res: MoveResult = None
         diversity_bonus_triggered = False
         token_positions_before: Optional[List[int]] = None
         masked_autocorrect = False
 
         if not no_moves_available:
-            valid_token_ids = [m["token_id"] for m in valid_moves]
+            valid_token_ids = [m.token_id for m in valid_moves]
             action = int(action)  # ensure plain int
             token_positions_before = [t.position for t in agent_player.tokens]
             if action not in valid_token_ids:
@@ -254,7 +255,7 @@ class LudoGymEnv(gym.Env):
 
             start_pos = agent_player.tokens[exec_token_id].position
             move_res = self.game.execute_move(agent_player, exec_token_id, dice_value)
-            move_res["start_position"] = start_pos
+            move_res.old_position = start_pos
 
             tok = agent_player.tokens[exec_token_id]
             flags_for_player = self._token_activation_flags[agent_player.color.value]
@@ -262,7 +263,7 @@ class LudoGymEnv(gym.Env):
                 diversity_bonus_triggered = True
                 flags_for_player[exec_token_id] = True
 
-            extra_turn = move_res.get("extra_turn", False)
+            extra_turn = move_res.extra_turn
         else:
             extra_turn = False  # skipped turn
 

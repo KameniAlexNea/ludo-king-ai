@@ -5,6 +5,7 @@ This inherits from the base calculator and customizes for the ludo_rls environme
 
 from typing import Dict, List
 
+from ludo_engine import Player
 from ludo_engine.models import GameConstants
 
 from ludo_rls.envs.model import EnvConfig
@@ -86,7 +87,7 @@ class SimpleRewardCalculator(RewardCalculator):
         return components
 
     def get_terminal_reward(
-        self, agent_player, opponents: list, truncated: bool = False
+        self, agent_player: Player, opponents: list, truncated: bool = False
     ) -> float:
         """Extended version that supports truncated parameter for ludo_rls.
 
@@ -107,5 +108,5 @@ class SimpleRewardCalculator(RewardCalculator):
         if truncated:
             # Only treat as draw if nobody actually won
             if not any(p.has_won() for p in self.game.players):
-                return getattr(rcfg, "draw_penalty", -2.0)
+                return rcfg.draw_penalty
         return 0.0
