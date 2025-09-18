@@ -6,11 +6,11 @@ from ludo_engine.core import PlayerColor
 def load_ppo_wrapper(env_kind):
     """Dynamically import the correct EnvConfig and PPOStrategy based on env_kind."""
     if env_kind == "classic":
-        from .envs.models.model_multi_seat import EnvConfig
-        from .strategies.ppo_strategy_multi_seat import PPOStrategy
+        from ..rl.envs.models.model_multi_seat import EnvConfig
+        from ..rl.strategies.ppo_strategy_multi_seat import PPOStrategy
     else:  # single-seat
-        from .envs.models.model_single_seat import EnvConfig
-        from .strategies.ppo_strategy_single_seat import PPOStrategy
+        from ..rl.envs.models.model_single_seat import EnvConfig
+        from ..rl.strategies.ppo_strategy_single_seat import PPOStrategy
     return EnvConfig, PPOStrategy
 
 
