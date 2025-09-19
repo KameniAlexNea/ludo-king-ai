@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+from loguru import logger
 from ludo_engine.core import LudoGame, PlayerColor
 from ludo_engine.models import Colors, GameConstants, MoveResult, ValidMove
 
@@ -13,7 +14,7 @@ from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
 from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.reward_calculator import RewardCalculator
-from loguru import logger
+
 
 class LudoRLEnvBase(gym.Env):
     metadata = {"render_modes": ["human"], "name": "LudoRLEnvBase-v0"}
@@ -41,8 +42,12 @@ class LudoRLEnvBase(gym.Env):
         self.illegal_actions = 0
         self._reward_calc = RewardCalculator()
         # Episode-level cumulative capture counters (agent perspective)
-        self._episode_captured_opponents = 0  # total opponent tokens captured by agent this episode
-        self._episode_captured_by_opponents = 0  # total agent tokens captured by opponents this episode
+        self._episode_captured_opponents = (
+            0  # total opponent tokens captured by agent this episode
+        )
+        self._episode_captured_by_opponents = (
+            0  # total agent tokens captured by opponents this episode
+        )
         self._captured_by_opponents = 0  # per-agent-turn counter
         # Opportunity instrumentation
         self._episode_capture_opportunities_available = 0
@@ -200,14 +205,24 @@ class LudoRLEnvBase(gym.Env):
             # Instrument opportunities before action application
             if self.cfg.track_opportunities:
                 # capture opportunities
-                cap_ops = sum(1 for m in valid if getattr(m, 'captures_opponent', False))
+                cap_ops = sum(
+                    1 for m in valid if getattr(m, "captures_opponent", False)
+                )
                 self._episode_capture_opportunities_available += cap_ops
                 # finish opportunities
-                fin_ops = sum(1 for m in valid if getattr(m, 'move_type', '') == 'FINISH' or getattr(m, 'captures_opponent', False) and getattr(m, 'token_id', -1) == -999)  # placeholder logic; adjust if finish flag exists elsewhere
+                fin_ops = sum(
+                    1
+                    for m in valid
+                    if getattr(m, "move_type", "") == "FINISH"
+                    or getattr(m, "captures_opponent", False)
+                    and getattr(m, "token_id", -1) == -999
+                )  # placeholder logic; adjust if finish flag exists elsewhere
                 # Better: check future state using m.captured_tokens & m.move_type; here assume move_type holds semantic
                 self._episode_finish_opportunities_available += fin_ops
                 # home exit ops (assume move_type == 'EXIT_HOME')
-                exit_ops = sum(1 for m in valid if getattr(m, 'move_type', '') == 'EXIT_HOME')
+                exit_ops = sum(
+                    1 for m in valid if getattr(m, "move_type", "") == "EXIT_HOME"
+                )
                 self._episode_home_exit_opportunities_available += exit_ops
             tok_id = action
             if action not in valid_ids:
@@ -225,11 +240,18 @@ class LudoRLEnvBase(gym.Env):
                         chosen = mv
                         break
                 if chosen is not None:
-                    if getattr(chosen, 'captures_opponent', False) and res.captured_tokens:
+                    if (
+                        getattr(chosen, "captures_opponent", False)
+                        and res.captured_tokens
+                    ):
                         self._episode_capture_opportunities_taken += 1
-                    if getattr(chosen, 'move_type', '') in ('FINISH', 'HOME_COLUMN_FINISH') or res.finished_token:
+                    if (
+                        getattr(chosen, "move_type", "")
+                        in ("FINISH", "HOME_COLUMN_FINISH")
+                        or res.finished_token
+                    ):
                         self._episode_finish_opportunities_taken += 1
-                    if getattr(chosen, 'move_type', '') == 'EXIT_HOME':
+                    if getattr(chosen, "move_type", "") == "EXIT_HOME":
                         self._episode_home_exit_opportunities_taken += 1
 
         # Reset per-full-turn counters (opponent captures on agent since last agent action)
@@ -296,11 +318,19 @@ class LudoRLEnvBase(gym.Env):
             "episode_captured_by_opponents": int(self._episode_captured_by_opponents),
             "finished_tokens": finished_tokens,
             # opportunity instrumentation
-            "episode_capture_ops_available": int(self._episode_capture_opportunities_available),
+            "episode_capture_ops_available": int(
+                self._episode_capture_opportunities_available
+            ),
             "episode_capture_ops_taken": int(self._episode_capture_opportunities_taken),
-            "episode_finish_ops_available": int(self._episode_finish_opportunities_available),
+            "episode_finish_ops_available": int(
+                self._episode_finish_opportunities_available
+            ),
             "episode_finish_ops_taken": int(self._episode_finish_opportunities_taken),
-            "episode_home_exit_ops_available": int(self._episode_home_exit_opportunities_available),
-            "episode_home_exit_ops_taken": int(self._episode_home_exit_opportunities_taken),
+            "episode_home_exit_ops_available": int(
+                self._episode_home_exit_opportunities_available
+            ),
+            "episode_home_exit_ops_taken": int(
+                self._episode_home_exit_opportunities_taken
+            ),
         }
         return obs, reward, terminated, truncated, info

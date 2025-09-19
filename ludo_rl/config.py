@@ -24,9 +24,13 @@ class RewardConfig:
     # Shaping toggles & extras
     enable_capture_shaping: bool = True
     capture_choice_bonus: float = 0.5  # added when a capturing move is chosen
-    decline_capture_penalty: float = -0.1  # penalty when capture available but not taken
+    decline_capture_penalty: float = (
+        -0.1
+    )  # penalty when capture available but not taken
     enable_progressive_finish: bool = True
-    finish_multipliers: List[float] = field(default_factory=lambda: [1.0, 1.1, 1.3, 1.8])
+    finish_multipliers: List[float] = field(
+        default_factory=lambda: [1.0, 1.1, 1.3, 1.8]
+    )
     # Scaling / annealing
     capture_reward_scale: float = 1.0  # can be annealed back toward 1.0
     finish_reward_scale: float = 1.0
@@ -108,7 +112,9 @@ class TrainConfig:
     # Imitation kickstart
     imitation_enabled: bool = False
     imitation_strategies: str = ",".join(OpponentConfig().evaluation_candidates)
-    imitation_steps: int = 50_000  # number of environment steps worth of samples to collect
+    imitation_steps: int = (
+        50_000  # number of environment steps worth of samples to collect
+    )
     imitation_batch_size: int = 1024
     imitation_epochs: int = 3
     imitation_entropy_boost: float = 0.01

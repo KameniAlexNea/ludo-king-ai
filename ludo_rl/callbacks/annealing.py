@@ -4,7 +4,7 @@ from typing import Optional
 
 from stable_baselines3.common.callbacks import BaseCallback
 
-from ludo_rl.config import TrainConfig, EnvConfig
+from ludo_rl.config import EnvConfig, TrainConfig
 
 
 class AnnealingCallback(BaseCallback):
@@ -30,10 +30,8 @@ class AnnealingCallback(BaseCallback):
         # Entropy annealing
         if self.train_cfg.entropy_anneal_steps > 0:
             frac = min(1.0, t / float(self.train_cfg.entropy_anneal_steps))
-            new_ent = (
-                self.train_cfg.entropy_coef_initial
-                + frac
-                * (self.train_cfg.entropy_coef_final - self.train_cfg.entropy_coef_initial)
+            new_ent = self.train_cfg.entropy_coef_initial + frac * (
+                self.train_cfg.entropy_coef_final - self.train_cfg.entropy_coef_initial
             )
             try:
                 if hasattr(self.model, "ent_coef"):
@@ -46,10 +44,9 @@ class AnnealingCallback(BaseCallback):
         # Capture reward scale annealing (env side)
         if self.train_cfg.capture_scale_anneal_steps > 0:
             frac_c = min(1.0, t / float(self.train_cfg.capture_scale_anneal_steps))
-            new_scale = (
-                self.train_cfg.capture_scale_initial
-                + frac_c
-                * (self.train_cfg.capture_scale_final - self.train_cfg.capture_scale_initial)
+            new_scale = self.train_cfg.capture_scale_initial + frac_c * (
+                self.train_cfg.capture_scale_final
+                - self.train_cfg.capture_scale_initial
             )
             try:
                 # Access underlying envs if vectorized

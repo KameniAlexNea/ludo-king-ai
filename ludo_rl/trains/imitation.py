@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import Iterable, List, Tuple
 
-from ludo_engine import PlayerColor
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, TensorDataset
-
+from ludo_engine.core import LudoGame, PlayerColor
+from ludo_engine.models import Colors
+from ludo_engine.strategies.strategy import StrategyFactory
 from sb3_contrib import MaskablePPO
+from torch.utils.data import DataLoader, TensorDataset
 
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.utils.move_utils import MoveUtils
-
 
 
 def collect_imitation_samples(
@@ -19,44 +19,112 @@ def collect_imitation_samples(
     strategies: List[str],
     steps_budget: int,
     multi_seat: bool = False,
+    shuffle_strategies: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Collect (obs, action, mask) triples using scripted strategies.
+    """Collect (obs, action, mask) triples from scripted self-play.
 
-    multi_seat: if True, rotate each color as 'agent' perspective (rebuilding obs_builder)
-    NOTE: Uses internal env attributes; intended only for pretrain bootstrap.
+    Strategy assignment:
+      - Each new game, assign strategies (cycled or shuffled) to all 4 players.
+      - If multi_seat=True, rotate agent seat across colors; else keep env.agent_color.
+
+    We simulate full games turn-by-turn, recording only turns where the acting player
+    matches the current agent seat. Observations are always built from that agent seat's
+    perspective using env.obs_builder.
     """
-    obs_list: List[np.ndarray] = []
-    act_list: List[int] = []
-    mask_list: List[np.ndarray] = []
-    step_counter = 0
-    while step_counter < steps_budget:
-        env.reset()
-        seat_colors = [env.agent_color] if not multi_seat else [PlayerColor.RED.value, PlayerColor.GREEN.value, PlayerColor.YELLOW.value, PlayerColor.BLUE.value]
-        for seat in seat_colors:
-            env.agent_color = seat
-            env.obs_builder = env.obs_builder.__class__(env.cfg, env.game, seat)
-            env._ensure_agent_turn()
-            env._pending_dice, env._pending_valid = env._roll_agent_dice()
-            if not env._pending_valid:
-                continue
-            obs = env.obs_builder.build(env.turns, env._pending_dice)
-            mask = MoveUtils.action_mask(env._pending_valid)
-            player = env.game.get_player_from_color(seat)
-            try:
-                ctx = env.game.get_ai_decision_context(env._pending_dice)
-                tok = player.make_strategic_decision(ctx)
-            except Exception:
-                tok = env._pending_valid[0].token_id
-            obs_list.append(obs)
-            act_list.append(tok)
-            mask_list.append(mask)
-            step_counter += 1
-            if step_counter >= steps_budget:
+
+    obs_buf: List[np.ndarray] = []
+    act_buf: List[int] = []
+    mask_buf: List[np.ndarray] = []
+
+    # Prepare a cycling iterator of strategy names for assignment
+    if not strategies:
+        raise ValueError(
+            "Must provide at least one strategy name for imitation collection"
+        )
+
+    strat_pool = list(strategies)
+    strat_index = 0
+
+    def next_four() -> List[str]:
+        nonlocal strat_index, strat_pool
+        if shuffle_strategies:
+            env.rng.shuffle(strat_pool)
+            strat_index = 0
+        # Cycle or slice first 4 (repeat if fewer provided)
+        chosen: List[str] = []
+        while len(chosen) < 4:
+            chosen.append(strat_pool[strat_index % len(strat_pool)])
+            strat_index += 1
+        return chosen[:4]
+
+    collected = 0
+    agent_color_cycle: Iterable[int]
+    if multi_seat:
+        agent_color_cycle = list(Colors.ALL_COLORS)
+    else:
+        agent_color_cycle = [env.agent_color]
+
+    # We'll cycle through agent colors outer loop if multi_seat
+    while collected < steps_budget:
+        for agent_col in agent_color_cycle:
+            if collected >= steps_budget:
                 break
+            # New game instance & re-bind into env
+            env.agent_color = agent_col
+            env.game = LudoGame(
+                [
+                    PlayerColor.RED,
+                    PlayerColor.GREEN,
+                    PlayerColor.YELLOW,
+                    PlayerColor.BLUE,
+                ]
+            )
+            env.obs_builder = env.obs_builder.__class__(
+                env.cfg, env.game, env.agent_color
+            )
+            # Assign strategies to all players
+            assigned = next_four()
+            players = env.game.players  # order matches colors above
+            for p_obj, strat_name in zip(players, assigned):
+                p_obj.set_strategy(StrategyFactory.create_strategy(strat_name))
+            # Simulate until enough samples or game over
+            turn_index = 0
+            while not env.game.game_over and collected < steps_budget:
+                current_player = env.game.get_current_player()
+                dice = env.game.roll_dice()
+                valid = env.game.get_valid_moves(current_player, dice)
+                if valid:
+                    try:
+                        ctx = env.game.get_ai_decision_context(dice)
+                        token_id = current_player.make_strategic_decision(ctx)
+                    except Exception:
+                        token_id = valid[0].token_id
+                    res = env.game.execute_move(current_player, token_id, dice)
+                    # Record only if this was the agent turn
+                    if current_player.color.value == env.agent_color:
+                        obs = env.obs_builder.build(turn_index, dice)
+                        mask = MoveUtils.action_mask(valid)
+                        obs_buf.append(obs)
+                        act_buf.append(token_id)
+                        mask_buf.append(mask)
+                        collected += 1
+                        if collected >= steps_budget:
+                            break
+                    if not res.extra_turn:
+                        env.game.next_turn()
+                else:
+                    env.game.next_turn()
+                turn_index += 1
+            # End game loop
+    # Convert buffers to arrays
+    if not obs_buf:
+        raise RuntimeError(
+            "No imitation samples collected; check strategy availability."
+        )
     return (
-        np.stack(obs_list, axis=0).astype(np.float32),
-        np.array(act_list, dtype=np.int64),
-        np.stack(mask_list, axis=0).astype(np.float32),
+        np.stack(obs_buf, axis=0).astype(np.float32),
+        np.array(act_buf, dtype=np.int64),
+        np.stack(mask_buf, axis=0).astype(np.float32),
     )
 
 

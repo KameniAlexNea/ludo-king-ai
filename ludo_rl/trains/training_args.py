@@ -1,7 +1,7 @@
-from ludo_rl.config import TrainConfig
 import argparse
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
+
+from ludo_rl.config import TrainConfig
 
 
 @dataclass
@@ -122,7 +122,10 @@ def parse_args() -> TrainingArgs:
         help="Final learning rate for linear anneal (initial is --learning-rate)",
     )
     p.add_argument(
-        "--lr-anneal-enabled", action="store_true", default=False, help="Enable linear LR annealing"
+        "--lr-anneal-enabled",
+        action="store_true",
+        default=False,
+        help="Enable linear LR annealing",
     )
     p.add_argument(
         "--anneal-log-freq",

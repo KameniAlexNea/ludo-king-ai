@@ -153,12 +153,20 @@ class SimpleBaselineEvalCallback(BaseCallback):
                     )
                     total_finished_tokens += int(info.get("finished_tokens", 0))
                     cumulative_reward += episode_reward
-                    total_cap_ops_avail += int(info.get("episode_capture_ops_available", 0))
+                    total_cap_ops_avail += int(
+                        info.get("episode_capture_ops_available", 0)
+                    )
                     total_cap_ops_taken += int(info.get("episode_capture_ops_taken", 0))
-                    total_fin_ops_avail += int(info.get("episode_finish_ops_available", 0))
+                    total_fin_ops_avail += int(
+                        info.get("episode_finish_ops_available", 0)
+                    )
                     total_fin_ops_taken += int(info.get("episode_finish_ops_taken", 0))
-                    total_exit_ops_avail += int(info.get("episode_home_exit_ops_available", 0))
-                    total_exit_ops_taken += int(info.get("episode_home_exit_ops_taken", 0))
+                    total_exit_ops_avail += int(
+                        info.get("episode_home_exit_ops_available", 0)
+                    )
+                    total_exit_ops_taken += int(
+                        info.get("episode_home_exit_ops_taken", 0)
+                    )
 
         win_rate = wins / float(self.n_games)
         avg_turns = float(np.mean(turns_list)) if turns_list else 0.0
@@ -168,13 +176,19 @@ class SimpleBaselineEvalCallback(BaseCallback):
         avg_reward = cumulative_reward / float(self.n_games)
         # Rates (guard divide-by-zero)
         capture_opportunity_rate = (
-            total_cap_ops_taken / total_cap_ops_avail if total_cap_ops_avail > 0 else 0.0
+            total_cap_ops_taken / total_cap_ops_avail
+            if total_cap_ops_avail > 0
+            else 0.0
         )
         finish_opportunity_rate = (
-            total_fin_ops_taken / total_fin_ops_avail if total_fin_ops_avail > 0 else 0.0
+            total_fin_ops_taken / total_fin_ops_avail
+            if total_fin_ops_avail > 0
+            else 0.0
         )
         exit_opportunity_rate = (
-            total_exit_ops_taken / total_exit_ops_avail if total_exit_ops_avail > 0 else 0.0
+            total_exit_ops_taken / total_exit_ops_avail
+            if total_exit_ops_avail > 0
+            else 0.0
         )
         # Log to TB if available
         try:
@@ -192,7 +206,8 @@ class SimpleBaselineEvalCallback(BaseCallback):
                 )
                 self.logger.record(self.log_prefix + "avg_episode_reward", avg_reward)
                 self.logger.record(
-                    self.log_prefix + "capture_opportunity_rate", capture_opportunity_rate
+                    self.log_prefix + "capture_opportunity_rate",
+                    capture_opportunity_rate,
                 )
                 self.logger.record(
                     self.log_prefix + "finish_opportunity_rate", finish_opportunity_rate
