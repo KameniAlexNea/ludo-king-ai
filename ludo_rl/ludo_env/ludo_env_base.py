@@ -7,7 +7,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from ludo_engine.core import LudoGame, PlayerColor
-from ludo_engine.models import Colors, GameConstants, MoveResult
+from ludo_engine.models import Colors, GameConstants, MoveResult, ValidMove
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
@@ -36,7 +36,7 @@ class LudoRLEnvBase(gym.Env):
         )
 
         self._pending_dice: Optional[int] = None
-        self._pending_valid: List = []
+        self._pending_valid: List[ValidMove] = []
         self.turns = 0
         self.illegal_actions = 0
         self._reward_calc = RewardCalculator()

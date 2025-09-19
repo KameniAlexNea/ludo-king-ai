@@ -17,8 +17,6 @@ from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.utils.move_utils import MoveUtils
 
-# build per-rank env
-
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic"):
     def _init():
@@ -136,7 +134,7 @@ def main():
     # Add checkpointing if enabled
     if args.checkpoint_freq and args.checkpoint_freq > 0:
         ckpt_cb = CheckpointCallback(
-            save_freq=args.checkpoint_freq,
+            save_freq=args.checkpoint_freq // args.n_envs,
             save_path=args.model_dir,
             name_prefix=args.checkpoint_prefix,
             save_replay_buffer=True,
