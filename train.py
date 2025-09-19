@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 import copy
 import os
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import TensorDataset
 
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
@@ -19,6 +19,8 @@ from ludo_rl.callbacks.curriculum import ProgressCallback
 from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
 from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.config import EnvConfig, TrainConfig
+from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
+from ludo_rl.trains.lr_utils import apply_linear_lr, linear_interp
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.utils.move_utils import MoveUtils
@@ -118,6 +120,15 @@ def parse_args():
         help="Final learning rate for linear anneal (initial is --learning-rate)",
     )
     p.add_argument(
+        "--lr-anneal-enabled", action="store_true", default=False, help="Enable linear LR annealing"
+    )
+    p.add_argument(
+        "--anneal-log-freq",
+        type=int,
+        default=50_000,
+        help="Log annealed values (entropy, capture scale, lr) every N env steps",
+    )
+    p.add_argument(
         "--env-type",
         type=str,
         default="classic",
@@ -127,85 +138,22 @@ def parse_args():
     return p.parse_args()
 
 
-def _linear_interp(start: float, end: float, frac: float) -> float:
-    return start + (end - start) * min(1.0, max(0.0, frac))
+def _maybe_log_anneal(step: int, freq: int, model, lr_val: float, train_cfg: TrainConfig):
+    if freq <= 0:
+        return
+    if step % freq == 0:
+        try:
+            from loguru import logger
+
+            ent = getattr(model, "ent_coef", None)
+            logger.info(
+                f"[Anneal] step={step} lr={lr_val:.6g} ent={ent} capture_scale={train_cfg.capture_scale_initial}->{train_cfg.capture_scale_final}"
+            )
+        except Exception:
+            pass
 
 
-def _collect_imitation_samples(
-    env: LudoRLEnv,
-    strategies: List[str],
-    steps_budget: int,
-    multi_seat: bool = False,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Collect (obs, action, mask) triples using scripted strategies.
-
-    multi_seat: if True, rotate each color as 'agent' perspective (rebuilding obs_builder)
-    """
-    obs_list: List[np.ndarray] = []
-    act_list: List[int] = []
-    mask_list: List[np.ndarray] = []
-    step_counter = 0
-    strat_cycle = 0
-    # Simple round-robin over provided strategies for attaching to opponents
-    while step_counter < steps_budget:
-        # Reset environment with selected opponent quadruple
-        opps = [s.strip() for s in strategies]
-        env.reset()
-        # If multi-seat imitation, iterate each of 4 colors once per env reset
-        seat_colors = [env.agent_color] if not multi_seat else list(env.game.colors)
-        for seat in seat_colors:
-            # Force agent perspective color
-            env.agent_color = seat
-            # Rebuild observation builder for seat
-            env.obs_builder = env.obs_builder.__class__(env.cfg, env.game, seat)
-            # Roll dice and get valid moves for that seat turn
-            env._ensure_agent_turn()
-            env._pending_dice, env._pending_valid = env._roll_agent_dice()
-            if not env._pending_valid:
-                continue
-            obs = env.obs_builder.build(env.turns, env._pending_dice)
-            mask = MoveUtils.action_mask(env._pending_valid)
-            # Make strategy decision using that player's current attached strategy
-            player = env.game.get_player_from_color(seat)
-            try:
-                ctx = env.game.get_ai_decision_context(env._pending_dice)
-                tok = player.make_strategic_decision(ctx)
-            except Exception:
-                tok = env._pending_valid[0].token_id
-            obs_list.append(obs)
-            act_list.append(tok)
-            mask_list.append(mask)
-            step_counter += 1
-            if step_counter >= steps_budget:
-                break
-        strat_cycle += 1
-    return (
-        np.stack(obs_list, axis=0).astype(np.float32),
-        np.array(act_list, dtype=np.int64),
-        np.stack(mask_list, axis=0).astype(np.float32),
-    )
-
-
-def _imitation_train(model: MaskablePPO, dataset: TensorDataset, epochs: int, batch_size: int):
-    policy = model.policy
-    optimizer = policy.optimizer  # reuse underlying optimizer
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    policy.train()
-    for _ in range(epochs):
-        for batch in loader:
-            obs_t, act_t, mask_t = batch
-            # Forward through policy (SB3 expects obs dict maybe; here plain tensor)
-            dist = policy.get_distribution(obs_t)
-            log_probs = dist.distribution.log_prob(act_t)
-            # Mask invalid actions: set loss high for actions chosen outside mask (if mask=0)
-            # We multiply log_probs by a validity indicator to only reinforce valid actions.
-            # valid_mask for taken actions: gather mask entries
-            valid_for_action = mask_t[torch.arange(mask_t.size(0)), act_t]
-            # Negative log likelihood only for valid actions; invalid ones get zero weight
-            loss = -(log_probs * valid_for_action).mean()
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+## extracted imitation & lr utilities to ludo_rl.trains
 
 
 def main():
@@ -290,11 +238,11 @@ def main():
         strat_list = [s.strip() for s in args.imitation_strategies.split(",") if s.strip()]
         # Single-seat samples
         base_env_for_imitation = LudoRLEnv(env_cfg)
-        obs_s, act_s, mask_s = _collect_imitation_samples(
+        obs_s, act_s, mask_s = collect_imitation_samples(
             base_env_for_imitation, strat_list, steps_budget=args.imitation_steps, multi_seat=False
         )
         # Multi-seat samples
-        obs_m, act_m, mask_m = _collect_imitation_samples(
+        obs_m, act_m, mask_m = collect_imitation_samples(
             base_env_for_imitation, strat_list, steps_budget=args.imitation_steps, multi_seat=True
         )
         obs_all = np.concatenate([obs_s, obs_m], axis=0)
@@ -311,7 +259,7 @@ def main():
         print(
             f"[Imitation] Training on {len(dataset)} samples (single+multi-seat) for {args.imitation_epochs} epochs"
         )
-        _imitation_train(
+        imitation_train(
             model,
             dataset,
             epochs=args.imitation_epochs,
@@ -321,6 +269,11 @@ def main():
         if isinstance(model.ent_coef, float):
             model.ent_coef = original_ent
         print("[Imitation] Completed pretraining phase.")
+        # After imitation, run a quick evaluation callback manually (one pass) to log baseline performance under TB
+        try:
+            eval_cb._run_eval()  # type: ignore
+        except Exception:
+            pass
 
     # Add checkpointing if enabled
     if args.checkpoint_freq and args.checkpoint_freq > 0:
@@ -336,25 +289,22 @@ def main():
 
     # Wrap learn with manual LR annealing by hooking into progress_cb logic via custom loop if needed.
     # Simpler: monkey patch progress callback to also adjust LR based on num_timesteps.
-    initial_lr = args.learning_rate
-    final_lr = args.lr_final
+    if args.lr_anneal_enabled:
+        initial_lr = args.learning_rate
+        final_lr = args.lr_final
+        original_on_step = progress_cb._on_step
 
-    original_on_step = progress_cb._on_step
+        def patched_on_step():
+            frac = (
+                model.num_timesteps / float(args.total_steps)
+                if args.total_steps > 0
+                else 1.0
+            )
+            lr_val = apply_linear_lr(model, initial_lr, final_lr, frac)
+            _maybe_log_anneal(model.num_timesteps, args.anneal_log_freq, model, lr_val, train_cfg)
+            return original_on_step()
 
-    def lr_wrapper():  # closes over model
-        frac = model.num_timesteps / float(args.total_steps) if args.total_steps > 0 else 1.0
-        new_lr = _linear_interp(initial_lr, final_lr, frac)
-        try:
-            for g in model.policy.optimizer.param_groups:
-                g["lr"] = new_lr
-        except Exception:
-            pass
-
-    def patched_on_step():
-        lr_wrapper()
-        return original_on_step()
-
-    progress_cb._on_step = patched_on_step  # type: ignore
+        progress_cb._on_step = patched_on_step  # type: ignore
 
     model.learn(total_timesteps=args.total_steps, callback=callbacks)
     model.save(os.path.join(args.model_dir, "maskable_ppo_ludo_rl_final"))
