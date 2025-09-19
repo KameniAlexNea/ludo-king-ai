@@ -176,6 +176,13 @@ def main():
             eval_cb._run_eval()  # type: ignore
         except Exception:
             pass
+        # Save post-imitation snapshot for curve comparison
+        try:
+            imitation_path = os.path.join(args.model_dir, "maskable_ppo_after_imitation")
+            model.save(imitation_path)
+            print(f"[Imitation] Saved post-imitation model to {imitation_path}.zip")
+        except Exception as e:
+            print(f"[Imitation] Warning: could not save post-imitation model: {e}")
 
     # Add checkpointing if enabled
     if args.checkpoint_freq and args.checkpoint_freq > 0:
