@@ -107,7 +107,7 @@ class TrainConfig:
     eval_baselines: str = ",".join(OpponentConfig().evaluation_candidates)
     # Imitation kickstart
     imitation_enabled: bool = False
-    imitation_strategies: str = "probabilistic,hybrid_prob,probabilistic_v3,cautious,probabilistic_v2"
+    imitation_strategies: str = ",".join(OpponentConfig().evaluation_candidates)
     imitation_steps: int = 50_000  # number of environment steps worth of samples to collect
     imitation_batch_size: int = 1024
     imitation_epochs: int = 3

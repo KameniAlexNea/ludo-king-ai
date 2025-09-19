@@ -1,7 +1,47 @@
 from ludo_rl.config import TrainConfig
 import argparse
+from dataclasses import dataclass, field
+from typing import Optional
 
-def parse_args():
+
+@dataclass
+class TrainingArgs:
+    total_steps: int = TrainConfig.total_steps
+    n_envs: int = TrainConfig.n_envs
+    logdir: str = TrainConfig.logdir
+    model_dir: str = TrainConfig.model_dir
+    eval_freq: int = TrainConfig.eval_freq
+    eval_games: int = TrainConfig.eval_games
+    checkpoint_freq: int = 100_000
+    checkpoint_prefix: str = "ppo_ludo"
+    eval_baselines: str = TrainConfig.eval_baselines
+    learning_rate: float = TrainConfig.learning_rate
+    n_steps: int = TrainConfig.n_steps
+    batch_size: int = TrainConfig.batch_size
+    ent_coef: float = TrainConfig.ent_coef
+    max_turns: int = TrainConfig.max_turns
+    # Imitation / kickstart
+    imitation_enabled: bool = False
+    imitation_strategies: str = TrainConfig.imitation_strategies
+    imitation_steps: int = TrainConfig.imitation_steps
+    imitation_batch_size: int = TrainConfig.imitation_batch_size
+    imitation_epochs: int = TrainConfig.imitation_epochs
+    imitation_entropy_boost: float = TrainConfig.imitation_entropy_boost
+    # Annealing overrides
+    entropy_coef_initial: float = TrainConfig.entropy_coef_initial
+    entropy_coef_final: float = TrainConfig.entropy_coef_final
+    entropy_anneal_steps: int = TrainConfig.entropy_anneal_steps
+    capture_scale_initial: float = TrainConfig.capture_scale_initial
+    capture_scale_final: float = TrainConfig.capture_scale_final
+    capture_scale_anneal_steps: int = TrainConfig.capture_scale_anneal_steps
+    # Learning rate annealing
+    lr_final: float = TrainConfig.learning_rate * 0.25
+    lr_anneal_enabled: bool = False
+    anneal_log_freq: int = 50_000
+    env_type: str = "classic"
+
+
+def parse_args() -> TrainingArgs:
     p = argparse.ArgumentParser()
     p.add_argument("--total-steps", type=int, default=TrainConfig.total_steps)
     p.add_argument("--n-envs", type=int, default=TrainConfig.n_envs)
@@ -97,4 +137,5 @@ def parse_args():
         choices=["classic", "selfplay"],
         help="Environment type",
     )
-    return p.parse_args()
+    args = p.parse_args()
+    return TrainingArgs(**vars(args))

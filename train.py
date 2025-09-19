@@ -24,7 +24,7 @@ from ludo_rl.trains.lr_utils import apply_linear_lr
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.utils.move_utils import MoveUtils
-from ludo_rl.trains.training_args import parse_args
+from ludo_rl.trains.training_args import TrainingArgs, parse_args
 
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic"):
@@ -59,7 +59,7 @@ def _maybe_log_anneal(step: int, freq: int, model, lr_val: float, train_cfg: Tra
 
 
 def main():
-    args = parse_args()
+    args: TrainingArgs = parse_args()
     os.makedirs(args.logdir, exist_ok=True)
     os.makedirs(args.model_dir, exist_ok=True)
 
