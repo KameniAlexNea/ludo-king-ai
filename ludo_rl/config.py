@@ -21,6 +21,15 @@ class RewardConfig:
     # Constraints
     illegal_action: float = -5.0
     time_penalty: float = -0.001
+    # Shaping toggles & extras
+    enable_capture_shaping: bool = True
+    capture_choice_bonus: float = 0.5  # added when a capturing move is chosen
+    decline_capture_penalty: float = -0.1  # penalty when capture available but not taken
+    enable_progressive_finish: bool = True
+    finish_multipliers: List[float] = field(default_factory=lambda: [1.0, 1.1, 1.3, 1.8])
+    # Scaling / annealing
+    capture_reward_scale: float = 1.0  # can be annealed back toward 1.0
+    finish_reward_scale: float = 1.0
 
 
 @dataclass
@@ -75,6 +84,9 @@ class EnvConfig:
     opponents: OpponentConfig = field(default_factory=OpponentConfig)
     curriculum: CurriculumConfig = field(default_factory=CurriculumConfig)
     debug_capture_logging: bool = True
+    # Instrumentation
+    track_opportunities: bool = True
+    log_opportunity_debug: bool = False
 
 
 @dataclass
@@ -93,3 +105,17 @@ class TrainConfig:
     max_turns: int = 500
     eval_games: int = 60
     eval_baselines: str = ",".join(OpponentConfig().evaluation_candidates)
+    # Imitation kickstart
+    imitation_enabled: bool = False
+    imitation_strategies: str = "probabilistic,hybrid_prob,probabilistic_v3,cautious,probabilistic_v2"
+    imitation_steps: int = 50_000  # number of environment steps worth of samples to collect
+    imitation_batch_size: int = 1024
+    imitation_epochs: int = 3
+    imitation_entropy_boost: float = 0.01
+    # Scheduling / annealing
+    entropy_coef_initial: float = 0.1
+    entropy_coef_final: float = 0.02
+    entropy_anneal_steps: int = 2_000_000
+    capture_scale_initial: float = 1.3
+    capture_scale_final: float = 1.0
+    capture_scale_anneal_steps: int = 1_500_000

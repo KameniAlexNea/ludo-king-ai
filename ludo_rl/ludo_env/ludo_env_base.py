@@ -44,6 +44,13 @@ class LudoRLEnvBase(gym.Env):
         self._episode_captured_opponents = 0  # total opponent tokens captured by agent this episode
         self._episode_captured_by_opponents = 0  # total agent tokens captured by opponents this episode
         self._captured_by_opponents = 0  # per-agent-turn counter
+        # Opportunity instrumentation
+        self._episode_capture_opportunities_available = 0
+        self._episode_capture_opportunities_taken = 0
+        self._episode_finish_opportunities_available = 0
+        self._episode_finish_opportunities_taken = 0
+        self._episode_home_exit_opportunities_available = 0
+        self._episode_home_exit_opportunities_taken = 0
 
     # ---- hooks for subclasses -------------------------------------------------
     def on_reset_before_attach(self, options: Optional[Dict[str, Any]] = None) -> None:
@@ -101,6 +108,12 @@ class LudoRLEnvBase(gym.Env):
         self._episode_captured_opponents = 0
         self._episode_captured_by_opponents = 0
         self._captured_by_opponents = 0  # per-agent-turn counter
+        self._episode_capture_opportunities_available = 0
+        self._episode_capture_opportunities_taken = 0
+        self._episode_finish_opportunities_available = 0
+        self._episode_finish_opportunities_taken = 0
+        self._episode_home_exit_opportunities_available = 0
+        self._episode_home_exit_opportunities_taken = 0
 
         # subclass-specific setup and attach opponent strategies
         self.on_reset_before_attach(options)
@@ -184,6 +197,18 @@ class LudoRLEnvBase(gym.Env):
         else:
             action = int(action)
             valid_ids = [m.token_id for m in valid]
+            # Instrument opportunities before action application
+            if self.cfg.track_opportunities:
+                # capture opportunities
+                cap_ops = sum(1 for m in valid if getattr(m, 'captures_opponent', False))
+                self._episode_capture_opportunities_available += cap_ops
+                # finish opportunities
+                fin_ops = sum(1 for m in valid if getattr(m, 'move_type', '') == 'FINISH' or getattr(m, 'captures_opponent', False) and getattr(m, 'token_id', -1) == -999)  # placeholder logic; adjust if finish flag exists elsewhere
+                # Better: check future state using m.captured_tokens & m.move_type; here assume move_type holds semantic
+                self._episode_finish_opportunities_available += fin_ops
+                # home exit ops (assume move_type == 'EXIT_HOME')
+                exit_ops = sum(1 for m in valid if getattr(m, 'move_type', '') == 'EXIT_HOME')
+                self._episode_home_exit_opportunities_available += exit_ops
             tok_id = action
             if action not in valid_ids:
                 illegal = True
@@ -191,6 +216,21 @@ class LudoRLEnvBase(gym.Env):
                 tok_id = self.rng.choice(valid_ids)
             res = self.game.execute_move(agent, tok_id, dice)
             extra = res.extra_turn
+            # After executing chosen move, mark taken opportunities
+            if self.cfg.track_opportunities and valid:
+                # Identify chosen move record
+                chosen = None
+                for mv in valid:
+                    if mv.token_id == tok_id:
+                        chosen = mv
+                        break
+                if chosen is not None:
+                    if getattr(chosen, 'captures_opponent', False) and res.captured_tokens:
+                        self._episode_capture_opportunities_taken += 1
+                    if getattr(chosen, 'move_type', '') in ('FINISH', 'HOME_COLUMN_FINISH') or res.finished_token:
+                        self._episode_finish_opportunities_taken += 1
+                    if getattr(chosen, 'move_type', '') == 'EXIT_HOME':
+                        self._episode_home_exit_opportunities_taken += 1
 
         # Reset per-full-turn counters (opponent captures on agent since last agent action)
         self._captured_by_opponents = 0
@@ -255,5 +295,12 @@ class LudoRLEnvBase(gym.Env):
             "episode_captured_opponents": int(self._episode_captured_opponents),
             "episode_captured_by_opponents": int(self._episode_captured_by_opponents),
             "finished_tokens": finished_tokens,
+            # opportunity instrumentation
+            "episode_capture_ops_available": int(self._episode_capture_opportunities_available),
+            "episode_capture_ops_taken": int(self._episode_capture_opportunities_taken),
+            "episode_finish_ops_available": int(self._episode_finish_opportunities_available),
+            "episode_finish_ops_taken": int(self._episode_finish_opportunities_taken),
+            "episode_home_exit_ops_available": int(self._episode_home_exit_opportunities_available),
+            "episode_home_exit_ops_taken": int(self._episode_home_exit_opportunities_taken),
         }
         return obs, reward, terminated, truncated, info

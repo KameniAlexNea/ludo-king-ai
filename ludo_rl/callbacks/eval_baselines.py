@@ -83,6 +83,13 @@ class SimpleBaselineEvalCallback(BaseCallback):
         total_defensive = 0  # times agent got captured
         total_finished_tokens = 0
         cumulative_reward = 0.0
+        # Opportunity instrumentation aggregates
+        total_cap_ops_avail = 0
+        total_cap_ops_taken = 0
+        total_fin_ops_avail = 0
+        total_fin_ops_taken = 0
+        total_exit_ops_avail = 0
+        total_exit_ops_taken = 0
 
         # Build a small pool of opponent triplets using permutations and sampling
         triplets = build_opponent_triplets(self.baselines, self.n_games)
@@ -146,6 +153,12 @@ class SimpleBaselineEvalCallback(BaseCallback):
                     )
                     total_finished_tokens += int(info.get("finished_tokens", 0))
                     cumulative_reward += episode_reward
+                    total_cap_ops_avail += int(info.get("episode_capture_ops_available", 0))
+                    total_cap_ops_taken += int(info.get("episode_capture_ops_taken", 0))
+                    total_fin_ops_avail += int(info.get("episode_finish_ops_available", 0))
+                    total_fin_ops_taken += int(info.get("episode_finish_ops_taken", 0))
+                    total_exit_ops_avail += int(info.get("episode_home_exit_ops_available", 0))
+                    total_exit_ops_taken += int(info.get("episode_home_exit_ops_taken", 0))
 
         win_rate = wins / float(self.n_games)
         avg_turns = float(np.mean(turns_list)) if turns_list else 0.0
@@ -153,6 +166,16 @@ class SimpleBaselineEvalCallback(BaseCallback):
         avg_defensive = total_defensive / float(self.n_games)
         avg_finished_tokens = total_finished_tokens / float(self.n_games)
         avg_reward = cumulative_reward / float(self.n_games)
+        # Rates (guard divide-by-zero)
+        capture_opportunity_rate = (
+            total_cap_ops_taken / total_cap_ops_avail if total_cap_ops_avail > 0 else 0.0
+        )
+        finish_opportunity_rate = (
+            total_fin_ops_taken / total_fin_ops_avail if total_fin_ops_avail > 0 else 0.0
+        )
+        exit_opportunity_rate = (
+            total_exit_ops_taken / total_exit_ops_avail if total_exit_ops_avail > 0 else 0.0
+        )
         # Log to TB if available
         try:
             if hasattr(self, "logger") and self.logger is not None:
@@ -168,9 +191,18 @@ class SimpleBaselineEvalCallback(BaseCallback):
                     self.log_prefix + "avg_finished_tokens", avg_finished_tokens
                 )
                 self.logger.record(self.log_prefix + "avg_episode_reward", avg_reward)
+                self.logger.record(
+                    self.log_prefix + "capture_opportunity_rate", capture_opportunity_rate
+                )
+                self.logger.record(
+                    self.log_prefix + "finish_opportunity_rate", finish_opportunity_rate
+                )
+                self.logger.record(
+                    self.log_prefix + "exit_opportunity_rate", exit_opportunity_rate
+                )
         except Exception:
             pass
         if self.verbose:
             logger.info(
-                f"[Eval] win_rate={win_rate:.3f} avg_turns={avg_turns:.1f} off_cap={avg_offensive:.2f} def_cap={avg_defensive:.2f} fin_tokens={avg_finished_tokens:.2f} avg_reward={avg_reward:.2f} over {self.n_games} games"
+                f"[Eval] win_rate={win_rate:.3f} avg_turns={avg_turns:.1f} off_cap={avg_offensive:.2f} def_cap={avg_defensive:.2f} fin_tokens={avg_finished_tokens:.2f} avg_reward={avg_reward:.2f} cap_rate={capture_opportunity_rate:.2f} fin_rate={finish_opportunity_rate:.2f} exit_rate={exit_opportunity_rate:.2f} over {self.n_games} games"
             )

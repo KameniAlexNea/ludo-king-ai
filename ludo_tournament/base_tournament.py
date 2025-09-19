@@ -280,7 +280,7 @@ class BaseTournament:
             "total_games": sum(
                 stats["games_played"] for stats in self.detailed_stats.values()
             )
-            // 4,
+            // 4,  # each game increments games_played for 4 players
             "results": dict(self.detailed_stats),
             "champion": champion,
         }

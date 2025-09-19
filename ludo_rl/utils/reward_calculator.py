@@ -31,9 +31,31 @@ class RewardCalculator:
 
         # Event rewards
         if res.captured_tokens:
-            r += cfg.reward.capture * len(res.captured_tokens)
+            capture_base = cfg.reward.capture * len(res.captured_tokens)
+            # Apply scaling (annealed externally by modifying cfg.reward.capture_reward_scale)
+            capture_base *= cfg.reward.capture_reward_scale
+            r += capture_base
+            # Optional: capture choice bonus if shaping enabled and multiple moves existed handled upstream
+            if cfg.reward.enable_capture_shaping:
+                r += cfg.reward.capture_choice_bonus
+        elif cfg.reward.enable_capture_shaping:
+            # If capture shaping enabled, we may want to penalize declining a capture opportunity.
+            # This requires the environment (or caller) to set a flag on MoveResult; fall back gracefully.
+            # We expect an attribute like `declined_capture` injected upstream when a capture was available but not taken.
+            declined = getattr(res, "declined_capture", False)
+            if declined:
+                r += cfg.reward.decline_capture_penalty
+
         if res.finished_token:
-            r += cfg.reward.finish_token
+            finish_val = cfg.reward.finish_token * cfg.reward.finish_reward_scale
+            if cfg.reward.enable_progressive_finish:
+                # Assume MoveResult may contain index of finished token order (0-based) as `finish_order_index`
+                order_idx = getattr(res, "finish_order_index", None)
+                if order_idx is not None:
+                    mults = cfg.reward.finish_multipliers
+                    if 0 <= order_idx < len(mults):
+                        finish_val *= mults[order_idx]
+            r += finish_val
 
         # Constraint penalties
         if illegal:
