@@ -206,10 +206,10 @@ class LudoRLEnvBase(gym.Env):
             illegal=illegal,
             cfg=self.cfg,
             game_over=self.game.game_over,
-            captured_by_opponents=int(getattr(self, "_captured_by_opponents", 0)),
+            captured_by_opponents=int(self._captured_by_opponents),
             extra_turn=bool(extra),
         )
-        terminated = bool(getattr(res, "game_won", False) or self.game.game_over)
+        terminated = res.game_won or self.game.game_over
 
         self.turns += 1
         truncated = False
@@ -226,9 +226,17 @@ class LudoRLEnvBase(gym.Env):
                     self._pending_dice, self._pending_valid = self._roll_agent_dice()
 
         obs = self.obs_builder.build(self.turns, self._pending_dice or 0)
+        # Compute simple extra stats for consumers (evaluation)
+        captured_opponents = len(res.captured_tokens)
+        captured_by_opponents = int(self._captured_by_opponents)
+        agent_player = self.game.get_player_from_color(self.agent_color)
+        finished_tokens = agent_player.get_finished_tokens_count()
         info = {
             "illegal_action": illegal,
             "illegal_actions_total": self.illegal_actions,
             "action_mask": MoveUtils.action_mask(self._pending_valid),
+            "captured_opponents": captured_opponents,
+            "captured_by_opponents": captured_by_opponents,
+            "finished_tokens": finished_tokens,
         }
         return obs, reward, terminated, truncated, info

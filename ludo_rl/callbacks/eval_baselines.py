@@ -79,6 +79,10 @@ class SimpleBaselineEvalCallback(BaseCallback):
     def _run_eval(self):
         wins = 0
         turns_list: List[int] = []
+        total_offensive = 0  # tokens the agent captured
+        total_defensive = 0  # times agent got captured
+        total_finished_tokens = 0
+        cumulative_reward = 0.0
 
         # Build a small pool of opponent triplets using permutations and sampling
         triplets = build_opponent_triplets(self.baselines, self.n_games)
@@ -100,6 +104,7 @@ class SimpleBaselineEvalCallback(BaseCallback):
 
             done = False
             total_turns = 0
+            episode_reward = 0.0
             while not done:
                 # Build action mask from pending valid moves
                 action_masks = MoveUtils.get_action_mask_for_env(base_env)
@@ -111,6 +116,7 @@ class SimpleBaselineEvalCallback(BaseCallback):
                 next_obs, reward, terminated, truncated, info = base_env.step(
                     int(action)
                 )
+                episode_reward += float(reward)
                 obs = self.eval_env.normalize_obs(next_obs)
                 total_turns += 1
                 done = bool(terminated or truncated)
@@ -124,17 +130,36 @@ class SimpleBaselineEvalCallback(BaseCallback):
                         won = reward > 0
                     wins += 1 if won else 0
                     turns_list.append(total_turns)
+                    # Aggregate stats from final info
+                    total_offensive += int(info.get("captured_opponents", 0))
+                    total_defensive += int(info.get("captured_by_opponents", 0))
+                    total_finished_tokens += int(info.get("finished_tokens", 0))
+                    cumulative_reward += episode_reward
 
         win_rate = wins / float(self.n_games)
         avg_turns = float(np.mean(turns_list)) if turns_list else 0.0
+        avg_offensive = total_offensive / float(self.n_games)
+        avg_defensive = total_defensive / float(self.n_games)
+        avg_finished_tokens = total_finished_tokens / float(self.n_games)
+        avg_reward = cumulative_reward / float(self.n_games)
         # Log to TB if available
         try:
             if hasattr(self, "logger") and self.logger is not None:
                 self.logger.record(self.log_prefix + "win_rate", win_rate)
                 self.logger.record(self.log_prefix + "avg_turns", avg_turns)
+                self.logger.record(
+                    self.log_prefix + "avg_offensive_captures", avg_offensive
+                )
+                self.logger.record(
+                    self.log_prefix + "avg_defensive_captures", avg_defensive
+                )
+                self.logger.record(
+                    self.log_prefix + "avg_finished_tokens", avg_finished_tokens
+                )
+                self.logger.record(self.log_prefix + "avg_episode_reward", avg_reward)
         except Exception:
             pass
         if self.verbose:
             logger.info(
-                f"[Eval] win_rate={win_rate:.3f} avg_turns={avg_turns:.1f} over {self.n_games} games"
+                f"[Eval] win_rate={win_rate:.3f} avg_turns={avg_turns:.1f} off_cap={avg_offensive:.2f} def_cap={avg_defensive:.2f} fin_tokens={avg_finished_tokens:.2f} avg_reward={avg_reward:.2f} over {self.n_games} games"
             )
