@@ -78,7 +78,7 @@ class EnvConfig:
 
 @dataclass
 class TrainConfig:
-    total_steps: int = 2_000_000
+    total_steps: int = 5_000_000
     n_envs: int = 8
     eval_freq: int = 100_000
     tournament_games: int = 240
