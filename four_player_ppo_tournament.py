@@ -15,7 +15,6 @@ from itertools import combinations
 
 import numpy as np
 from dotenv import load_dotenv
-from loguru import logger
 from ludo_engine import LudoGame, PlayerColor, StrategyFactory
 
 from ludo_tournament.game_state_saver import GameStateSaver
@@ -152,12 +151,12 @@ class FourPlayerPPOTournament(BaseTournament):
             return self.selected_strategies
         if os.getenv("SELECTED_STRATEGIES"):
             return list(os.getenv("SELECTED_STRATEGIES").split(","))
-        return StrategyFactory.get_available_strategies()
+        return [i for i in StrategyFactory.get_available_strategies() if "human" not in i]
 
     def run_tournament(self):
         """Execute PPO vs Strategies tournament."""
-        logger.info("🏆 PPO vs STRATEGIES TOURNAMENT 🏆")
-        logger.info("=" * 70)
+        print("🏆 PPO vs STRATEGIES TOURNAMENT 🏆")
+        print("=" * 70)
 
         self._display_participants()
         self._run_round_robin()
@@ -168,26 +167,26 @@ class FourPlayerPPOTournament(BaseTournament):
 
     def _display_participants(self):
         """Show tournament participants."""
-        logger.info("\n🤖 Tournament Participants:")
-        logger.info("-" * 50)
-        logger.info(f"PPO: {self.ppo_model.upper()}")
-        logger.info("\nStrategies:")
+        print("\n🤖 Tournament Participants:")
+        print("-" * 50)
+        print(f"PPO: {self.ppo_model.upper()}")
+        print("\nStrategies:")
 
         descriptions = StrategyFactory.get_strategy_descriptions()
         for i, strategy in enumerate(self.all_strategies, 1):
             desc = descriptions.get(strategy, "No description")
-            logger.info(f"{i}. {strategy.upper()}: {desc}")
+            print(f"{i}. {strategy.upper()}: {desc}")
 
-        logger.info("\n📋 Tournament Format:")
-        logger.info(f"   • {self.games_per_matchup} games per 4-player combination")
-        logger.info(f"   • {len(self.strategy_combinations)} unique combinations")
-        logger.info(f"   • Maximum {self.max_turns_per_game} turns per game")
-        logger.info("   • All combinations tournament with detailed analytics")
+        print("\n📋 Tournament Format:")
+        print(f"   • {self.games_per_matchup} games per 4-player combination")
+        print(f"   • {len(self.strategy_combinations)} unique combinations")
+        print(f"   • Maximum {self.max_turns_per_game} turns per game")
+        print("   • All combinations tournament with detailed analytics")
 
     def _run_round_robin(self):
         """Run tournament with PPO vs strategy combinations."""
-        logger.info("\n🎮 Tournament Execution:")
-        logger.info("=" * 70)
+        print("\n🎮 Tournament Execution:")
+        print("=" * 70)
 
         total_games = 0
         combination_results = []
@@ -197,11 +196,11 @@ class FourPlayerPPOTournament(BaseTournament):
             # Create combination: PPO + 3 strategies
             game_players = [self.ppo_model] + list(strategy_combo)
 
-            logger.info(
+            print(
                 f"\nCombination {combo_idx}/{len(self.strategy_combinations)}: "
                 f"{' vs '.join([p.upper() for p in game_players])}"
             )
-            logger.info("-" * 60)
+            print("-" * 60)
 
             combo_wins = {player: 0 for player in game_players}
 
@@ -211,7 +210,7 @@ class FourPlayerPPOTournament(BaseTournament):
                 random.shuffle(game_players)
 
                 if self.verbose_output:
-                    logger.info(
+                    print(
                         f"  Game {game_num + 1}: {' → '.join([p.upper() for p in game_players])}"
                     )
 
@@ -257,13 +256,13 @@ class FourPlayerPPOTournament(BaseTournament):
             combo_summary = ", ".join(
                 [f"{p.upper()}: {wins}" for p, wins in combo_wins.items()]
             )
-            logger.info(f"  Results: {combo_summary}")
+            print(f"  Results: {combo_summary}")
             combination_results.append((game_players, combo_wins))
 
         elapsed = time.time() - start_time
-        logger.info(f"\n⏱️  Tournament completed in {elapsed:.1f} seconds")
-        logger.info(f"📊 Total games played: {total_games}")
-        logger.info(f"🎯 Combinations tested: {len(self.strategy_combinations)}")
+        print(f"\n⏱️  Tournament completed in {elapsed:.1f} seconds")
+        print(f"📊 Total games played: {total_games}")
+        print(f"🎯 Combinations tested: {len(self.strategy_combinations)}")
 
         return combination_results
 
@@ -306,9 +305,9 @@ if __name__ == "__main__":
     # Set random seed
     run_game_with_seed(args.seed)
 
-    logger.info("🎯 LUDO PPO vs STRATEGIES TOURNAMENT 🎯")
-    logger.info("=" * 70)
-    logger.info("Starting comprehensive PPO vs Strategies tournament...")
+    print("🎯 LUDO PPO vs STRATEGIES TOURNAMENT 🎯")
+    print("=" * 70)
+    print("Starting comprehensive PPO vs Strategies tournament...")
 
     # Run main tournament
     tournament = FourPlayerPPOTournament(args)
