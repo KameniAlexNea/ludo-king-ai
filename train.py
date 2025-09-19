@@ -20,10 +20,11 @@ from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
 from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.config import EnvConfig, TrainConfig
 from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
-from ludo_rl.trains.lr_utils import apply_linear_lr, linear_interp
+from ludo_rl.trains.lr_utils import apply_linear_lr
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.utils.move_utils import MoveUtils
+from ludo_rl.trains.training_args import parse_args
 
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic"):
@@ -37,105 +38,6 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic
         return ActionMasker(env, MoveUtils.get_action_mask_for_env)
 
     return _init
-
-
-def parse_args():
-    p = argparse.ArgumentParser()
-    p.add_argument("--total-steps", type=int, default=TrainConfig.total_steps)
-    p.add_argument("--n-envs", type=int, default=TrainConfig.n_envs)
-    p.add_argument("--logdir", type=str, default=TrainConfig.logdir)
-    p.add_argument("--model-dir", type=str, default=TrainConfig.model_dir)
-    p.add_argument("--eval-freq", type=int, default=TrainConfig.eval_freq)
-    p.add_argument("--eval-games", type=int, default=TrainConfig.eval_games)
-    p.add_argument(
-        "--checkpoint-freq",
-        type=int,
-        default=100_000,
-        help="Checkpoint every N steps; 0 disables",
-    )
-    p.add_argument(
-        "--checkpoint-prefix",
-        type=str,
-        default="ppo_ludo",
-        help="Checkpoint file prefix",
-    )
-    p.add_argument(
-        "--eval-baselines",
-        type=str,
-        default=TrainConfig.eval_baselines,
-        help="Comma-separated list of opponent strategy names",
-    )
-    p.add_argument("--learning-rate", type=float, default=TrainConfig.learning_rate)
-    p.add_argument("--n-steps", type=int, default=TrainConfig.n_steps)
-    p.add_argument("--batch-size", type=int, default=TrainConfig.batch_size)
-    p.add_argument("--ent-coef", type=float, default=TrainConfig.ent_coef)
-    p.add_argument("--max-turns", type=int, default=TrainConfig.max_turns)
-    # Imitation / kickstart
-    p.add_argument("--imitation-enabled", action="store_true", default=False)
-    p.add_argument(
-        "--imitation-strategies",
-        type=str,
-        default=TrainConfig.imitation_strategies,
-        help="Comma-separated scripted strategies to imitate",
-    )
-    p.add_argument("--imitation-steps", type=int, default=TrainConfig.imitation_steps)
-    p.add_argument(
-        "--imitation-batch-size", type=int, default=TrainConfig.imitation_batch_size
-    )
-    p.add_argument("--imitation-epochs", type=int, default=TrainConfig.imitation_epochs)
-    p.add_argument(
-        "--imitation-entropy-boost",
-        type=float,
-        default=TrainConfig.imitation_entropy_boost,
-        help="Temporary entropy bonus added to ent_coef during imitation phase",
-    )
-    # Annealing overrides
-    p.add_argument(
-        "--entropy-coef-initial", type=float, default=TrainConfig.entropy_coef_initial
-    )
-    p.add_argument(
-        "--entropy-coef-final", type=float, default=TrainConfig.entropy_coef_final
-    )
-    p.add_argument(
-        "--entropy-anneal-steps", type=int, default=TrainConfig.entropy_anneal_steps
-    )
-    p.add_argument(
-        "--capture-scale-initial",
-        type=float,
-        default=TrainConfig.capture_scale_initial,
-    )
-    p.add_argument(
-        "--capture-scale-final", type=float, default=TrainConfig.capture_scale_final
-    )
-    p.add_argument(
-        "--capture-scale-anneal-steps",
-        type=int,
-        default=TrainConfig.capture_scale_anneal_steps,
-    )
-    # Learning rate annealing
-    p.add_argument(
-        "--lr-final",
-        type=float,
-        default=TrainConfig.learning_rate * 0.25,
-        help="Final learning rate for linear anneal (initial is --learning-rate)",
-    )
-    p.add_argument(
-        "--lr-anneal-enabled", action="store_true", default=False, help="Enable linear LR annealing"
-    )
-    p.add_argument(
-        "--anneal-log-freq",
-        type=int,
-        default=50_000,
-        help="Log annealed values (entropy, capture scale, lr) every N env steps",
-    )
-    p.add_argument(
-        "--env-type",
-        type=str,
-        default="classic",
-        choices=["classic", "selfplay"],
-        help="Environment type",
-    )
-    return p.parse_args()
 
 
 def _maybe_log_anneal(step: int, freq: int, model, lr_val: float, train_cfg: TrainConfig):
