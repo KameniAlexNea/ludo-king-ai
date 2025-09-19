@@ -52,7 +52,7 @@ def parse_args() -> TrainingArgs:
     p.add_argument(
         "--checkpoint-freq",
         type=int,
-        default=100_000,
+        default=TrainConfig.eval_freq,
         help="Checkpoint every N steps; 0 disables",
     )
     p.add_argument(
@@ -141,4 +141,6 @@ def parse_args() -> TrainingArgs:
         help="Environment type",
     )
     args = p.parse_args()
-    return TrainingArgs(**vars(args))
+    args = TrainingArgs(**vars(args))
+    print(args)
+    return args
