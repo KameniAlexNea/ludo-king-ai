@@ -131,8 +131,19 @@ class SimpleBaselineEvalCallback(BaseCallback):
                     wins += 1 if won else 0
                     turns_list.append(total_turns)
                     # Aggregate stats from final info
-                    total_offensive += int(info.get("captured_opponents", 0))
-                    total_defensive += int(info.get("captured_by_opponents", 0))
+                    # Use cumulative episode stats if provided (fallback to last-step stats)
+                    total_offensive += int(
+                        info.get(
+                            "episode_captured_opponents",
+                            info.get("captured_opponents", 0),
+                        )
+                    )
+                    total_defensive += int(
+                        info.get(
+                            "episode_captured_by_opponents",
+                            info.get("captured_by_opponents", 0),
+                        )
+                    )
                     total_finished_tokens += int(info.get("finished_tokens", 0))
                     cumulative_reward += episode_reward
 

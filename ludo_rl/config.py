@@ -74,6 +74,7 @@ class EnvConfig:
     obs: ObservationConfig = field(default_factory=ObservationConfig)
     opponents: OpponentConfig = field(default_factory=OpponentConfig)
     curriculum: CurriculumConfig = field(default_factory=CurriculumConfig)
+    debug_capture_logging: bool = True
 
 
 @dataclass
