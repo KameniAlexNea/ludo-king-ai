@@ -202,28 +202,35 @@ class LudoRLEnvBase(gym.Env):
         else:
             action = int(action)
             valid_ids = [m.token_id for m in valid]
-            # Instrument opportunities before action application
+            pre_fin_ops = 0
+            pre_exit_ops = 0
             if self.cfg.track_opportunities:
-                # capture opportunities
-                cap_ops = sum(
-                    1 for m in valid if getattr(m, "captures_opponent", False)
-                )
+                # capture opportunities (each move that would capture at least one opponent)
+                cap_ops = sum(1 for m in valid if getattr(m, "captures_opponent", False))
                 self._episode_capture_opportunities_available += cap_ops
-                # finish opportunities
-                fin_ops = sum(
-                    1
-                    for m in valid
-                    if getattr(m, "move_type", "") == "FINISH"
-                    or getattr(m, "captures_opponent", False)
-                    and getattr(m, "token_id", -1) == -999
-                )  # placeholder logic; adjust if finish flag exists elsewhere
-                # Better: check future state using m.captured_tokens & m.move_type; here assume move_type holds semantic
-                self._episode_finish_opportunities_available += fin_ops
-                # home exit ops (assume move_type == 'EXIT_HOME')
-                exit_ops = sum(
-                    1 for m in valid if getattr(m, "move_type", "") == "EXIT_HOME"
+                # finish opportunities: any move whose resulting position equals FINISH_POSITION
+                pre_fin_ops = 0
+                for m in valid:
+                    tgt = getattr(m, "new_position", None)
+                    if tgt == GameConstants.FINISH_POSITION:
+                        pre_fin_ops += 1
+                self._episode_finish_opportunities_available += pre_fin_ops
+                # home exit opportunities still by move_type
+                pre_exit_ops = sum(
+                    1 for m in valid if getattr(m, "move_type", "").lower() == "exit_home"
                 )
-                self._episode_home_exit_opportunities_available += exit_ops
+                self._episode_home_exit_opportunities_available += pre_exit_ops
+                if (
+                    self.cfg.debug_capture_logging
+                    and self.turns < 100
+                ):
+                    try:
+                        mt_list = [getattr(m, "move_type", "") for m in valid]
+                        logger.debug(
+                            f"[OppDebug] turn={self.turns} dice={dice} move_types={mt_list} fin_by_pos_avail+={pre_fin_ops} exit_avail+={pre_exit_ops} cap_avail+={cap_ops}"
+                        )
+                    except Exception:
+                        pass
             tok_id = action
             if action not in valid_ids:
                 illegal = True
@@ -231,28 +238,28 @@ class LudoRLEnvBase(gym.Env):
                 tok_id = self.rng.choice(valid_ids)
             res = self.game.execute_move(agent, tok_id, dice)
             extra = res.extra_turn
-            # After executing chosen move, mark taken opportunities
             if self.cfg.track_opportunities and valid:
-                # Identify chosen move record
                 chosen = None
                 for mv in valid:
                     if mv.token_id == tok_id:
                         chosen = mv
                         break
                 if chosen is not None:
-                    if (
-                        getattr(chosen, "captures_opponent", False)
-                        and res.captured_tokens
-                    ):
+                    if getattr(chosen, "captures_opponent", False):
                         self._episode_capture_opportunities_taken += 1
-                    if (
-                        getattr(chosen, "move_type", "")
-                        in ("FINISH", "HOME_COLUMN_FINISH")
-                        or res.finished_token
-                    ):
+                    # Determine if the executed move actually finished a token via position comparison
+                    finished_flag = (
+                        res.finished_token
+                        or res.new_position == GameConstants.FINISH_POSITION
+                    )
+                    if finished_flag:
                         self._episode_finish_opportunities_taken += 1
-                    if getattr(chosen, "move_type", "") == "EXIT_HOME":
+                        if pre_fin_ops == 0:  # retroactive availability if not pre-counted
+                            self._episode_finish_opportunities_available += 1
+                    if getattr(chosen, "move_type", "").lower() == "exit_home":
                         self._episode_home_exit_opportunities_taken += 1
+                        if pre_exit_ops == 0:
+                            self._episode_home_exit_opportunities_available += 1
 
         # Reset per-full-turn counters (opponent captures on agent since last agent action)
         self._captured_by_opponents = 0
