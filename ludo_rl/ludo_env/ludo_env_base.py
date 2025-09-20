@@ -24,7 +24,7 @@ class LudoRLEnvBase(gym.Env):
         self.cfg = cfg
         self.rng = random.Random(cfg.seed)
 
-        self.agent_color = Colors.RED
+        self.agent_color = PlayerColor.RED
         self._episode = 0
 
         self.game = LudoGame(
@@ -100,7 +100,7 @@ class LudoRLEnvBase(gym.Env):
             random.seed(seed)
             np.random.seed(seed)
         if self.cfg.randomize_agent:
-            self.agent_color = self.rng.choice(list(Colors.ALL_COLORS))
+            self.agent_color = self.rng.choice([PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE])
         self.game = LudoGame(
             [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
         )
@@ -137,7 +137,7 @@ class LudoRLEnvBase(gym.Env):
     def _ensure_agent_turn(self):
         while (
             not self.game.game_over
-            and self.game.get_current_player().color.value != self.agent_color
+            and self.game.get_current_player().color != self.agent_color
         ):
             self._simulate_single_opponent()
 
@@ -148,7 +148,7 @@ class LudoRLEnvBase(gym.Env):
 
     def _simulate_single_opponent(self):
         p = self.game.get_current_player()
-        if p.color.value == self.agent_color:
+        if p.color == self.agent_color:
             return
         dice = self.game.roll_dice()
         valid = self.game.get_valid_moves(p, dice)
@@ -269,7 +269,7 @@ class LudoRLEnvBase(gym.Env):
             self.game.next_turn()
             while (
                 not self.game.game_over
-                and self.game.get_current_player().color.value != self.agent_color
+                and self.game.get_current_player().color != self.agent_color
             ):
                 self._simulate_single_opponent()
 
