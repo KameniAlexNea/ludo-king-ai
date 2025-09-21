@@ -17,8 +17,8 @@ import numpy as np
 from dotenv import load_dotenv
 from ludo_engine import LudoGame, PlayerColor, StrategyFactory
 
-from ludo_tournament.game_state_saver import GameStateSaver
 from ludo_tournament import BaseTournament
+from ludo_tournament.game_state_saver import GameStateSaver
 from ludo_tournament.load_ppo_model_base import load_ppo_strategy, select_best_ppo_model
 
 load_dotenv()
@@ -151,7 +151,9 @@ class FourPlayerPPOTournament(BaseTournament):
             return self.selected_strategies
         if os.getenv("SELECTED_STRATEGIES"):
             return list(os.getenv("SELECTED_STRATEGIES").split(","))
-        return [i for i in StrategyFactory.get_available_strategies() if "human" not in i]
+        return [
+            i for i in StrategyFactory.get_available_strategies() if "human" not in i
+        ]
 
     def run_tournament(self):
         """Execute PPO vs Strategies tournament."""

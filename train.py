@@ -1,30 +1,27 @@
 from __future__ import annotations
 
-import argparse
 import copy
 import os
-from typing import List
 
 import numpy as np
 import torch
-from torch.utils.data import TensorDataset
-
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
+from torch.utils.data import TensorDataset
 
+from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.callbacks.curriculum import ProgressCallback
 from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
-from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.config import EnvConfig, TrainConfig
-from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
-from ludo_rl.trains.lr_utils import apply_linear_lr
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
-from ludo_rl.utils.move_utils import MoveUtils
+from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
+from ludo_rl.trains.lr_utils import apply_linear_lr
 from ludo_rl.trains.training_args import TrainingArgs, parse_args
+from ludo_rl.utils.move_utils import MoveUtils
 
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic"):
@@ -40,7 +37,9 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic
     return _init
 
 
-def _maybe_log_anneal(step: int, freq: int, model, lr_val: float, train_cfg: TrainConfig):
+def _maybe_log_anneal(
+    step: int, freq: int, model, lr_val: float, train_cfg: TrainConfig
+):
     if freq <= 0:
         return
     if step % freq == 0:
@@ -53,9 +52,6 @@ def _maybe_log_anneal(step: int, freq: int, model, lr_val: float, train_cfg: Tra
             )
         except Exception:
             pass
-
-
-## extracted imitation & lr utilities to ludo_rl.trains
 
 
 def main():
@@ -96,7 +92,7 @@ def main():
         ent_coef=args.ent_coef,
         tensorboard_log=args.logdir,
         verbose=1,
-        device="cpu",
+        device="auto",
     )
 
     # When using selfplay, inject the live model into envs so they can snapshot policy at reset
@@ -137,24 +133,36 @@ def main():
     # Optional imitation kickstart
     if args.imitation_enabled:
         print("[Imitation] Collecting scripted policy samples...")
-        strat_list = [s.strip() for s in args.imitation_strategies.split(",") if s.strip()]
+        strat_list = [
+            s.strip() for s in args.imitation_strategies.split(",") if s.strip()
+        ]
         # Single-seat samples
         base_env_for_imitation = LudoRLEnv(env_cfg)
         obs_s, act_s, mask_s = collect_imitation_samples(
-            base_env_for_imitation, strat_list, steps_budget=args.imitation_steps, multi_seat=False
+            base_env_for_imitation,
+            strat_list,
+            steps_budget=args.imitation_steps,
+            multi_seat=False,
         )
         # Multi-seat samples
         obs_m, act_m, mask_m = collect_imitation_samples(
-            base_env_for_imitation, strat_list, steps_budget=args.imitation_steps, multi_seat=True
+            base_env_for_imitation,
+            strat_list,
+            steps_budget=args.imitation_steps,
+            multi_seat=True,
         )
         obs_all = np.concatenate([obs_s, obs_m], axis=0)
         act_all = np.concatenate([act_s, act_m], axis=0)
         mask_all = np.concatenate([mask_s, mask_m], axis=0)
         dataset = TensorDataset(
-            torch.from_numpy(obs_all), torch.from_numpy(act_all), torch.from_numpy(mask_all)
+            torch.from_numpy(obs_all),
+            torch.from_numpy(act_all),
+            torch.from_numpy(mask_all),
         )
         # Temporary entropy boost
-        original_ent = model.ent_coef if isinstance(model.ent_coef, float) else args.ent_coef
+        original_ent = (
+            model.ent_coef if isinstance(model.ent_coef, float) else args.ent_coef
+        )
         boosted_ent = original_ent + args.imitation_entropy_boost
         if isinstance(model.ent_coef, float):
             model.ent_coef = boosted_ent
@@ -178,7 +186,9 @@ def main():
             pass
         # Save post-imitation snapshot for curve comparison
         try:
-            imitation_path = os.path.join(args.model_dir, "maskable_ppo_after_imitation")
+            imitation_path = os.path.join(
+                args.model_dir, "maskable_ppo_after_imitation"
+            )
             model.save(imitation_path)
             print(f"[Imitation] Saved post-imitation model to {imitation_path}.zip")
         except Exception as e:
@@ -210,7 +220,9 @@ def main():
                 else 1.0
             )
             lr_val = apply_linear_lr(model, initial_lr, final_lr, frac)
-            _maybe_log_anneal(model.num_timesteps, args.anneal_log_freq, model, lr_val, train_cfg)
+            _maybe_log_anneal(
+                model.num_timesteps, args.anneal_log_freq, model, lr_val, train_cfg
+            )
             return original_on_step()
 
         progress_cb._on_step = patched_on_step  # type: ignore

@@ -22,18 +22,20 @@ from typing import List, Optional, Tuple
 
 from ludo_engine.core import LudoGame, PlayerColor
 from ludo_engine.models import ALL_COLORS
+from sb3_contrib import MaskablePPO
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
 from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
-from sb3_contrib import MaskablePPO
 
 _STEP_PATTERN = re.compile(r"(?:^|_)(\d+)(?:_|$)")
 
 
 def _list_model_files(models_dir: str) -> List[str]:
     return [
-        f for f in os.listdir(models_dir) if f.endswith(".zip") and not f.startswith(".")
+        f
+        for f in os.listdir(models_dir)
+        if f.endswith(".zip") and not f.startswith(".")
     ]
 
 
@@ -176,6 +178,7 @@ def load_ppo_strategy(
         deterministic=deterministic,
     )
     return strategy
+
 
 __all__ = [
     "select_best_ppo_model",

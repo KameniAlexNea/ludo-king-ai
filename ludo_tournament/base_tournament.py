@@ -215,9 +215,7 @@ class BaseTournament:
         print("=" * 70)
 
         # Performance metrics
-        print(
-            f"\n{'Model':<20} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}"
-        )
+        print(f"\n{'Model':<20} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}")
         print("-" * 60)
 
         for participant in participants:

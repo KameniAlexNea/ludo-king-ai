@@ -4,6 +4,7 @@ from typing import Iterable, List, Tuple
 
 import numpy as np
 import torch
+from ludo_engine import PlayerColor
 from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS
 from ludo_engine.strategies.strategy import StrategyFactory
@@ -35,6 +36,7 @@ def collect_imitation_samples(
     obs_buf: List[np.ndarray] = []
     act_buf: List[int] = []
     mask_buf: List[np.ndarray] = []
+    max_steps = 250
 
     # Prepare a cycling iterator of strategy names for assignment
     if not strategies:
@@ -58,7 +60,7 @@ def collect_imitation_samples(
         return chosen[:4]
 
     collected = 0
-    agent_color_cycle: Iterable[int]
+    agent_color_cycle: Iterable[PlayerColor]
     if multi_seat:
         agent_color_cycle = ALL_COLORS
     else:
@@ -82,7 +84,11 @@ def collect_imitation_samples(
                 p_obj.set_strategy(StrategyFactory.create_strategy(strat_name))
             # Simulate until enough samples or game over
             turn_index = 0
-            while not env.game.game_over and collected < steps_budget:
+            while (
+                not env.game.game_over
+                and collected < steps_budget
+                and turn_index < max_steps
+            ):
                 current_player = env.game.get_current_player()
                 dice = env.game.roll_dice()
                 valid = env.game.get_valid_moves(current_player, dice)
@@ -126,6 +132,7 @@ def imitation_train(
 ) -> None:
     curr_device = model.device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"[Imitation] Training on device: {device}")
     policy = model.policy
     policy.to(device)
     optimizer = policy.optimizer
