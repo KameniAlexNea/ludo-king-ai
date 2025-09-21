@@ -126,17 +126,24 @@ def collect_imitation_samples(
 def imitation_train(
     model: MaskablePPO, dataset: TensorDataset, epochs: int, batch_size: int
 ) -> None:
+    curr_device = model.device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     policy = model.policy
+    policy.to(device)
     optimizer = policy.optimizer
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     policy.train()
     for _ in range(epochs):
         for batch in loader:
             obs_t, act_t, mask_t = batch
+            obs_t = obs_t.to(device)
+            act_t = act_t.to(device)
+            mask_t = mask_t.to(device)
             dist = policy.get_distribution(obs_t)
-            log_probs = dist.distribution.log_prob(act_t)
-            valid_for_action = mask_t[torch.arange(mask_t.size(0)), act_t]
-            loss = -(log_probs * valid_for_action).mean()
+            log_probs: torch.Tensor = dist.distribution.log_prob(act_t)
+            valid_for_action: torch.Tensor = mask_t[torch.arange(mask_t.size(0), device=device), act_t]
+            loss: torch.Tensor = -(log_probs * valid_for_action).mean()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+    model.policy.to(curr_device)
