@@ -22,6 +22,7 @@ from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
 from ludo_rl.trains.lr_utils import apply_linear_lr
 from ludo_rl.trains.training_args import TrainingArgs, parse_args
 from ludo_rl.utils.move_utils import MoveUtils
+from loguru import logger
 
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic"):
@@ -44,8 +45,6 @@ def _maybe_log_anneal(
         return
     if step % freq == 0:
         try:
-            from loguru import logger
-
             ent = getattr(model, "ent_coef", None)
             logger.info(
                 f"[Anneal] step={step} lr={lr_val:.6g} ent={ent} capture_scale={train_cfg.capture_scale_initial}->{train_cfg.capture_scale_final}"
@@ -132,7 +131,7 @@ def main():
 
     # Optional imitation kickstart
     if args.imitation_enabled:
-        print("[Imitation] Collecting scripted policy samples...")
+        logger.info("[Imitation] Collecting scripted policy samples...")
         strat_list = [
             s.strip() for s in args.imitation_strategies.split(",") if s.strip()
         ]
@@ -166,7 +165,7 @@ def main():
         boosted_ent = original_ent + args.imitation_entropy_boost
         if isinstance(model.ent_coef, float):
             model.ent_coef = boosted_ent
-        print(
+        logger.info(
             f"[Imitation] Training on {len(dataset)} samples (single+multi-seat) for {args.imitation_epochs} epochs"
         )
         imitation_train(
@@ -178,7 +177,7 @@ def main():
         # Restore entropy coef (annealing callback will handle future schedule)
         if isinstance(model.ent_coef, float):
             model.ent_coef = original_ent
-        print("[Imitation] Completed pretraining phase.")
+        logger.info("[Imitation] Completed pretraining phase.")
         # After imitation, run a quick evaluation callback manually (one pass) to log baseline performance under TB
         try:
             eval_cb._run_eval()  # type: ignore
@@ -190,9 +189,9 @@ def main():
                 args.model_dir, "maskable_ppo_after_imitation"
             )
             model.save(imitation_path)
-            print(f"[Imitation] Saved post-imitation model to {imitation_path}.zip")
+            logger.info(f"[Imitation] Saved post-imitation model to {imitation_path}.zip")
         except Exception as e:
-            print(f"[Imitation] Warning: could not save post-imitation model: {e}")
+            logger.info(f"[Imitation] Warning: could not save post-imitation model: {e}")
 
     # Add checkpointing if enabled
     if args.checkpoint_freq and args.checkpoint_freq > 0:

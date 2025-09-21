@@ -10,7 +10,7 @@ from ludo_engine.models import ALL_COLORS
 from ludo_engine.strategies.strategy import StrategyFactory
 from sb3_contrib import MaskablePPO
 from torch.utils.data import DataLoader, TensorDataset
-
+from loguru import logger
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.utils.move_utils import MoveUtils
 
@@ -32,6 +32,8 @@ def collect_imitation_samples(
     matches the current agent seat. Observations are always built from that agent seat's
     perspective using env.obs_builder.
     """
+
+    logger.info(f"[Imitation] Starting collection of {steps_budget} samples, multi_seat={multi_seat}")
 
     obs_buf: List[np.ndarray] = []
     act_buf: List[int] = []
@@ -100,13 +102,15 @@ def collect_imitation_samples(
                         token_id = valid[0].token_id
                     res = env.game.execute_move(current_player, token_id, dice)
                     # Record only if this was the agent turn
-                    if current_player.color.value == env.agent_color:
+                    if current_player.color == env.agent_color:
                         obs = env.obs_builder.build(turn_index, dice)
                         mask = MoveUtils.action_mask(valid)
                         obs_buf.append(obs)
                         act_buf.append(token_id)
                         mask_buf.append(mask)
                         collected += 1
+                        if collected % 1000 == 0:
+                            logger.info(f"[Imitation] Collected {collected}/{steps_budget} samples")
                         if collected >= steps_budget:
                             break
                     if not res.extra_turn:
@@ -115,6 +119,7 @@ def collect_imitation_samples(
                     env.game.next_turn()
                 turn_index += 1
             # End game loop
+    logger.info(f"[Imitation] Collection completed with {len(obs_buf)} samples")
     # Convert buffers to arrays
     if not obs_buf:
         raise RuntimeError(
@@ -132,13 +137,15 @@ def imitation_train(
 ) -> None:
     curr_device = model.device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[Imitation] Training on device: {device}")
+    logger.info(f"[Imitation] Training on device: {device}")
+    logger.info(f"[Imitation] Starting training for {epochs} epochs with batch_size={batch_size}")
     policy = model.policy
     policy.to(device)
     optimizer = policy.optimizer
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     policy.train()
     for _ in range(epochs):
+        logger.info(f"[Imitation] Epoch {_+1}/{epochs}")
         for batch in loader:
             obs_t, act_t, mask_t = batch
             obs_t = obs_t.to(device)
@@ -153,4 +160,5 @@ def imitation_train(
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+    logger.info("[Imitation] Training completed")
     model.policy.to(curr_device)

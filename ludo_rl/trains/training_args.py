@@ -1,5 +1,5 @@
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from ludo_rl.config import TrainConfig
 
@@ -142,5 +142,5 @@ def parse_args() -> TrainingArgs:
     )
     args = p.parse_args()
     args = TrainingArgs(**vars(args))
-    print(args)
+    print(asdict(args))
     return args

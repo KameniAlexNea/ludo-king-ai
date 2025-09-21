@@ -135,8 +135,8 @@ def build_frozen_strategy(
 
     You can reuse the same loaded model across many games by calling this per game.
     """
-    cfg = env_cfg or EnvConfig(agent_color=agent_color.value)
-    obs_builder = ObservationBuilder(cfg, game, agent_color.value)
+    cfg = env_cfg or EnvConfig()
+    obs_builder = ObservationBuilder(cfg, game, agent_color)
     # The StrategyFactory expects a strategy instance with .decide()
     strat = FrozenPolicyStrategy(model.policy, obs_builder, deterministic=deterministic)
     # Adjust its public name if desired
