@@ -5,6 +5,7 @@ from typing import Optional
 from stable_baselines3.common.callbacks import BaseCallback
 
 from ludo_rl.config import EnvConfig, TrainConfig
+from sb3_contrib import MaskablePPO
 
 
 class AnnealingCallback(BaseCallback):

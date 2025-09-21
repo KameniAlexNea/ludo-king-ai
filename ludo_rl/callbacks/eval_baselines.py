@@ -117,7 +117,7 @@ class SimpleBaselineEvalCallback(BaseCallback):
                 action_masks = MoveUtils.get_action_mask_for_env(base_env)
 
                 action, _ = self.model.predict(
-                    obs, deterministic=False, action_masks=action_masks
+                    obs, deterministic=True, action_masks=action_masks
                 )
                 # Step base env directly and keep obs normalized via VecNormalize
                 next_obs, reward, terminated, truncated, info = base_env.step(
@@ -193,7 +193,7 @@ class SimpleBaselineEvalCallback(BaseCallback):
         )
         # Log to TB if available
         try:
-            if hasattr(self, "logger") and self.logger is not None:
+            if self.logger is not None:
                 self.logger.record(self.log_prefix + "win_rate", win_rate)
                 self.logger.record(self.log_prefix + "avg_turns", avg_turns)
                 self.logger.record(

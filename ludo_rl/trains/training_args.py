@@ -1,5 +1,6 @@
 import argparse
 from dataclasses import asdict, dataclass
+from typing import Literal
 
 from ludo_rl.config import TrainConfig
 
@@ -38,7 +39,11 @@ class TrainingArgs:
     lr_final: float = TrainConfig.learning_rate * 0.25
     lr_anneal_enabled: bool = False
     anneal_log_freq: int = 50_000
-    env_type: str = "classic"
+    env_type: Literal["classic", "selfplay"] = "classic"
+
+    def __post_init__(self):
+        if self.env_type == "selfplay":
+            self.n_envs = 1
 
 
 def parse_args() -> TrainingArgs:

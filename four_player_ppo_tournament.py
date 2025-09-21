@@ -50,7 +50,7 @@ def parse_arguments():
     parser.add_argument(
         "--models-dir",
         type=str,
-        default="./models",
+        default="./training/models",
         help="Directory containing PPO model files",
     )
 
@@ -101,7 +101,7 @@ class FourPlayerPPOTournament(BaseTournament):
         self.max_turns_per_game = args.max_turns
         self.games_per_matchup = args.games_per_matchup
         self.tournament_seed = args.seed
-        self.models_dir = args.models_dir
+        self.models_dir: str = args.models_dir
         self.verbose_output = not args.quiet
         self.output_dir = args.output_dir
         self.selected_strategies = args.strategies
@@ -117,7 +117,15 @@ class FourPlayerPPOTournament(BaseTournament):
         )
 
         # Resolve model name & path
-        self.ppo_model = select_best_ppo_model(self.models_dir, self.model_preference)
+        if not os.path.isdir(self.models_dir):
+            if os.path.isfile(self.models_dir):
+                models_dir = os.path.dirname(self.models_dir)
+                self.ppo_model = os.path.basename(self.models_dir).replace(".zip", "")
+                self.models_dir = models_dir
+            else:
+                raise ValueError(f"Models directory '{self.models_dir}' does not exist")
+        else:
+            self.ppo_model = select_best_ppo_model(self.models_dir, self.model_preference)
         self.ppo_model_path = os.path.join(self.models_dir, f"{self.ppo_model}.zip")
 
         # PPO policy will be accessed via PPOStrategyClass wrapper uniformly.
