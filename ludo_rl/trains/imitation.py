@@ -4,13 +4,14 @@ from typing import Iterable, List, Tuple
 
 import numpy as np
 import torch
+from loguru import logger
 from ludo_engine import PlayerColor
 from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS
 from ludo_engine.strategies.strategy import StrategyFactory
 from sb3_contrib import MaskablePPO
 from torch.utils.data import DataLoader, TensorDataset
-from loguru import logger
+
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.utils.move_utils import MoveUtils
 
@@ -33,7 +34,9 @@ def collect_imitation_samples(
     perspective using env.obs_builder.
     """
 
-    logger.info(f"[Imitation] Starting collection of {steps_budget} samples, multi_seat={multi_seat}")
+    logger.info(
+        f"[Imitation] Starting collection of {steps_budget} samples, multi_seat={multi_seat}"
+    )
 
     obs_buf: List[np.ndarray] = []
     act_buf: List[int] = []
@@ -109,8 +112,10 @@ def collect_imitation_samples(
                         act_buf.append(token_id)
                         mask_buf.append(mask)
                         collected += 1
-                        if collected % 1000 == 0:
-                            logger.info(f"[Imitation] Collected {collected}/{steps_budget} samples")
+                        if collected % 10000 == 0:
+                            logger.info(
+                                f"[Imitation] Collected {collected}/{steps_budget} samples"
+                            )
                         if collected >= steps_budget:
                             break
                     if not res.extra_turn:
@@ -138,14 +143,19 @@ def imitation_train(
     curr_device = model.device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"[Imitation] Training on device: {device}")
-    logger.info(f"[Imitation] Starting training for {epochs} epochs with batch_size={batch_size}")
+    logger.info(
+        f"[Imitation] Starting training for {epochs} epochs with batch_size={batch_size}"
+    )
     policy = model.policy
     policy.to(device)
     optimizer = policy.optimizer
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     policy.train()
+    loss = None
     for _ in range(epochs):
-        logger.info(f"[Imitation] Epoch {_+1}/{epochs}")
+        logger.info(
+            f"[Imitation] Epoch {_ + 1}/{epochs} Loss: {loss.item() if loss is not None else 'N/A'}"
+        )
         for batch in loader:
             obs_t, act_t, mask_t = batch
             obs_t = obs_t.to(device)

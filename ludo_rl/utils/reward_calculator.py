@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from ludo_engine.models import GameConstants, MoveResult
+from typing import Optional
+
+from ludo_engine.core import Player
+from ludo_engine.models import GameConstants, MoveResult, PlayerColor
 
 from ludo_rl.config import EnvConfig
 
@@ -25,7 +28,9 @@ class RewardCalculator:
         cfg: EnvConfig,
         game_over: bool,
         captured_by_opponents: int = 0,
-        extra_turn: bool = False,
+        extra_turn: bool = 0,
+        winner: Optional[Player] = None,
+        agent_color: Optional[PlayerColor] = None,
     ) -> float:
         r = 0.0
 
@@ -63,9 +68,12 @@ class RewardCalculator:
             r += cfg.reward.extra_turn
 
         # Terminal outcomes
-        if res.game_won:
-            r += cfg.reward.win
+        if winner is not None and agent_color is not None:
+            if winner.color == agent_color:
+                r += cfg.reward.win
+            else:
+                r += cfg.reward.lose
         elif game_over:
-            r += cfg.reward.lose
+            r += cfg.reward.draw
 
         return r

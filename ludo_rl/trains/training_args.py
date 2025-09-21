@@ -1,5 +1,5 @@
 import argparse
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 from ludo_rl.config import TrainConfig
 

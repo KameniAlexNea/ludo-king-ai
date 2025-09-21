@@ -9,6 +9,7 @@ class RewardConfig:
     # Terminal
     win: float = 100.0
     lose: float = -100.0
+    draw: float = 10.0
     finish_token: float = 10.0
     # Events
     capture: float = 8.0

@@ -130,8 +130,9 @@ class SimpleBaselineEvalCallback(BaseCallback):
                 if done:
                     try:
                         won = (
-                            base_env.game.game_over
-                            and base_env.game.winner == base_env.agent_color
+                            base_env.game.winner is not None
+                            and base_env.game.game_over
+                            and base_env.game.winner.color == base_env.agent_color
                         )
                     except Exception:
                         won = reward > 0
