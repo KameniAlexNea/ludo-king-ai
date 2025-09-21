@@ -4,7 +4,7 @@ from typing import Iterable, List, Tuple
 
 import numpy as np
 import torch
-from ludo_engine.core import LudoGame, PlayerColor
+from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS
 from ludo_engine.strategies.strategy import StrategyFactory
 from sb3_contrib import MaskablePPO
@@ -71,9 +71,7 @@ def collect_imitation_samples(
                 break
             # New game instance & re-bind into env
             env.agent_color = agent_col
-            env.game = LudoGame(
-                ALL_COLORS
-            )
+            env.game = LudoGame(ALL_COLORS)
             env.obs_builder = env.obs_builder.__class__(
                 env.cfg, env.game, env.agent_color
             )
@@ -141,7 +139,9 @@ def imitation_train(
             mask_t = mask_t.to(device)
             dist = policy.get_distribution(obs_t)
             log_probs: torch.Tensor = dist.distribution.log_prob(act_t)
-            valid_for_action: torch.Tensor = mask_t[torch.arange(mask_t.size(0), device=device), act_t]
+            valid_for_action: torch.Tensor = mask_t[
+                torch.arange(mask_t.size(0), device=device), act_t
+            ]
             loss: torch.Tensor = -(log_probs * valid_for_action).mean()
             optimizer.zero_grad()
             loss.backward()

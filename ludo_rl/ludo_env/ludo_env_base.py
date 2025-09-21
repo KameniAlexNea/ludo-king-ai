@@ -8,7 +8,13 @@ import numpy as np
 from gymnasium import spaces
 from loguru import logger
 from ludo_engine.core import LudoGame, PlayerColor
-from ludo_engine.models import GameConstants, MoveResult, ValidMove, ALL_COLORS, MoveType
+from ludo_engine.models import (
+    ALL_COLORS,
+    GameConstants,
+    MoveResult,
+    MoveType,
+    ValidMove,
+)
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
@@ -27,9 +33,7 @@ class LudoRLEnvBase(gym.Env):
         self.agent_color = PlayerColor.RED
         self._episode = 0
 
-        self.game = LudoGame(
-            ALL_COLORS
-        )
+        self.game = LudoGame(ALL_COLORS)
         self.obs_builder = ObservationBuilder(cfg, self.game, self.agent_color)
         self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
         self.observation_space = spaces.Box(
@@ -218,10 +222,7 @@ class LudoRLEnvBase(gym.Env):
                     1 for m in valid if m.move_type == MoveType.EXIT_HOME
                 )
                 self._episode_home_exit_opportunities_available += pre_exit_ops
-                if (
-                    self.cfg.debug_capture_logging
-                    and self.turns < 100
-                ):
+                if self.cfg.debug_capture_logging and self.turns < 100:
                     try:
                         mt_list = [m.move_type for m in valid]
                         logger.debug(
@@ -252,7 +253,9 @@ class LudoRLEnvBase(gym.Env):
                     )
                     if finished_flag:
                         self._episode_finish_opportunities_taken += 1
-                        if pre_fin_ops == 0:  # retroactive availability if not pre-counted
+                        if (
+                            pre_fin_ops == 0
+                        ):  # retroactive availability if not pre-counted
                             self._episode_finish_opportunities_available += 1
                     if chosen.move_type == MoveType.EXIT_HOME:
                         self._episode_home_exit_opportunities_taken += 1

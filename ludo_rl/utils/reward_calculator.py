@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ludo_engine.models import MoveResult, GameConstants
+from ludo_engine.models import GameConstants, MoveResult
 
 from ludo_rl.config import EnvConfig
 
