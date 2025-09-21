@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, Tuple
 
 from ludo_engine.core import LudoGame
-from ludo_engine.models import BoardConstants, Colors, GameConstants, MoveResult
+from ludo_engine.models import BoardConstants, PlayerColor, GameConstants, MoveResult
 
 from ludo_rl.config import RewardConfig
 
@@ -45,15 +45,15 @@ class RiskOpportunityCalculator:
             return GameConstants.MAIN_BOARD_SIZE - from_pos + opp_pos
 
     @staticmethod
-    def _iter_opponent_positions(game: LudoGame, agent_color: Colors) -> Iterable[int]:
+    def _iter_opponent_positions(game: LudoGame, agent_color: PlayerColor) -> Iterable[int]:
         for p in game.players:
-            if p.color.value == agent_color:
+            if p.color == agent_color:
                 continue
             for t in p.tokens:
                 yield t.position
 
     def _risk_score(
-        self, game: LudoGame, agent_color: Colors, target_pos: int, w: SimpleROWeights
+        self, game: LudoGame, agent_color: PlayerColor, target_pos: int, w: SimpleROWeights
     ) -> float:
         if target_pos is None or target_pos < 0:
             return 0.0
@@ -97,7 +97,7 @@ class RiskOpportunityCalculator:
     def compute(
         self,
         game: LudoGame,
-        agent_color: Colors,
+        agent_color: PlayerColor,
         move: MoveResult,
         *,
         weights: SimpleROWeights | None = None,

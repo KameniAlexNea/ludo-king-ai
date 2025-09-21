@@ -8,7 +8,7 @@ import numpy as np
 from gymnasium import spaces
 from loguru import logger
 from ludo_engine.core import LudoGame, PlayerColor
-from ludo_engine.models import Colors, GameConstants, MoveResult, ValidMove
+from ludo_engine.models import GameConstants, MoveResult, ValidMove, ALL_COLORS, MoveType
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
@@ -28,7 +28,7 @@ class LudoRLEnvBase(gym.Env):
         self._episode = 0
 
         self.game = LudoGame(
-            [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
+            ALL_COLORS
         )
         self.obs_builder = ObservationBuilder(cfg, self.game, self.agent_color)
         self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
@@ -80,7 +80,7 @@ class LudoRLEnvBase(gym.Env):
             Strategy = object  # type: ignore
             StrategyFactory = None  # type: ignore
 
-        colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
+        colors = [c for c in ALL_COLORS if c != self.agent_color]
         for strat, color in zip(strategies, colors):
             player = self.game.get_player_from_color(color)
             try:
@@ -100,10 +100,8 @@ class LudoRLEnvBase(gym.Env):
             random.seed(seed)
             np.random.seed(seed)
         if self.cfg.randomize_agent:
-            self.agent_color = self.rng.choice([PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE])
-        self.game = LudoGame(
-            [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
-        )
+            self.agent_color = self.rng.choice(ALL_COLORS)
+        self.game = LudoGame(ALL_COLORS)
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
 
         self._pending_dice = None
@@ -187,7 +185,7 @@ class LudoRLEnvBase(gym.Env):
             # no moves, lose turn
             res = MoveResult(
                 success=True,
-                player_color=agent.color.value,
+                player_color=agent.color,
                 token_id=0,
                 dice_value=dice,
                 old_position=-1,
@@ -206,18 +204,18 @@ class LudoRLEnvBase(gym.Env):
             pre_exit_ops = 0
             if self.cfg.track_opportunities:
                 # capture opportunities (each move that would capture at least one opponent)
-                cap_ops = sum(1 for m in valid if getattr(m, "captures_opponent", False))
+                cap_ops = sum(1 for m in valid if m.captures_opponent)
                 self._episode_capture_opportunities_available += cap_ops
                 # finish opportunities: any move whose resulting position equals FINISH_POSITION
                 pre_fin_ops = 0
                 for m in valid:
-                    tgt = getattr(m, "new_position", None)
+                    tgt = m.target_position
                     if tgt == GameConstants.FINISH_POSITION:
                         pre_fin_ops += 1
                 self._episode_finish_opportunities_available += pre_fin_ops
                 # home exit opportunities still by move_type
                 pre_exit_ops = sum(
-                    1 for m in valid if getattr(m, "move_type", "").lower() == "exit_home"
+                    1 for m in valid if m.move_type == MoveType.EXIT_HOME
                 )
                 self._episode_home_exit_opportunities_available += pre_exit_ops
                 if (
@@ -225,7 +223,7 @@ class LudoRLEnvBase(gym.Env):
                     and self.turns < 100
                 ):
                     try:
-                        mt_list = [getattr(m, "move_type", "") for m in valid]
+                        mt_list = [m.move_type for m in valid]
                         logger.debug(
                             f"[OppDebug] turn={self.turns} dice={dice} move_types={mt_list} fin_by_pos_avail+={pre_fin_ops} exit_avail+={pre_exit_ops} cap_avail+={cap_ops}"
                         )
@@ -245,7 +243,7 @@ class LudoRLEnvBase(gym.Env):
                         chosen = mv
                         break
                 if chosen is not None:
-                    if getattr(chosen, "captures_opponent", False):
+                    if chosen.captures_opponent:
                         self._episode_capture_opportunities_taken += 1
                     # Determine if the executed move actually finished a token via position comparison
                     finished_flag = (
@@ -256,7 +254,7 @@ class LudoRLEnvBase(gym.Env):
                         self._episode_finish_opportunities_taken += 1
                         if pre_fin_ops == 0:  # retroactive availability if not pre-counted
                             self._episode_finish_opportunities_available += 1
-                    if getattr(chosen, "move_type", "").lower() == "exit_home":
+                    if chosen.move_type == MoveType.EXIT_HOME:
                         self._episode_home_exit_opportunities_taken += 1
                         if pre_exit_ops == 0:
                             self._episode_home_exit_opportunities_available += 1

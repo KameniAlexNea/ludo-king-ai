@@ -21,17 +21,12 @@ import re
 from typing import List, Optional, Tuple
 
 from ludo_engine.core import LudoGame, PlayerColor
-from loguru import logger
+from ludo_engine.models import ALL_COLORS
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
 from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
-
-try:
-    from sb3_contrib.ppo_mask import MaskablePPO  # type: ignore
-except Exception:  # pragma: no cover
-    # Fallback import path (older sb3-contrib versions)
-    from sb3_contrib import MaskablePPO  # type: ignore
+from sb3_contrib import MaskablePPO
 
 _STEP_PATTERN = re.compile(r"(?:^|_)(\d+)(?:_|$)")
 
@@ -127,7 +122,7 @@ def load_ppo_policy(
 
 
 def build_frozen_strategy(
-    model: "MaskablePPO",
+    model: MaskablePPO,
     game: LudoGame,
     agent_color: PlayerColor = PlayerColor.RED,
     env_cfg: Optional[EnvConfig] = None,
@@ -171,7 +166,7 @@ def load_ppo_strategy(
         #     "No game instance provided to load_ppo_strategy; creating a temporary LudoGame.\n"
         #     "Attach a proper strategy built via build_frozen_strategy(model, actual_game, ...) for real matches."
         # )
-        game = LudoGame([PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE])
+        game = LudoGame(ALL_COLORS)
     strategy = build_frozen_strategy(
         model=model,
         game=game,

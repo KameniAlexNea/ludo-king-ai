@@ -5,7 +5,7 @@ from typing import Iterable, List, Tuple
 import numpy as np
 import torch
 from ludo_engine.core import LudoGame, PlayerColor
-from ludo_engine.models import Colors
+from ludo_engine.models import ALL_COLORS
 from ludo_engine.strategies.strategy import StrategyFactory
 from sb3_contrib import MaskablePPO
 from torch.utils.data import DataLoader, TensorDataset
@@ -60,7 +60,7 @@ def collect_imitation_samples(
     collected = 0
     agent_color_cycle: Iterable[int]
     if multi_seat:
-        agent_color_cycle = list(Colors.ALL_COLORS)
+        agent_color_cycle = ALL_COLORS
     else:
         agent_color_cycle = [env.agent_color]
 
@@ -72,12 +72,7 @@ def collect_imitation_samples(
             # New game instance & re-bind into env
             env.agent_color = agent_col
             env.game = LudoGame(
-                [
-                    PlayerColor.RED,
-                    PlayerColor.GREEN,
-                    PlayerColor.YELLOW,
-                    PlayerColor.BLUE,
-                ]
+                ALL_COLORS
             )
             env.obs_builder = env.obs_builder.__class__(
                 env.cfg, env.game, env.agent_color

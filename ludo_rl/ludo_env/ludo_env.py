@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from ludo_engine.models import Colors
+from ludo_engine.models import ALL_COLORS
 from ludo_engine.strategies.strategy import StrategyFactory
 
 from ludo_rl.config import EnvConfig
@@ -31,7 +31,7 @@ class LudoRLEnv(LudoRLEnvBase):
             strategies = options["opponents"]
         else:
             strategies = self._sample_opponents()
-        colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
+        colors = [c for c in ALL_COLORS if c != self.agent_color]
         for name, color in zip(strategies, colors):
             player = self.game.get_player_from_color(color)
             try:
