@@ -287,9 +287,6 @@ class LudoRLEnvBase(gym.Env):
         # rewards
         terminated = res.game_won or self.game.game_over
 
-        # Get winner for reward calculation
-        winner = getattr(self.game, "winner", None) if self.game.game_over else None
-
         reward = self._reward_calc.compute(
             res=res,
             illegal=illegal,
@@ -297,7 +294,7 @@ class LudoRLEnvBase(gym.Env):
             game_over=self.game.game_over,
             captured_by_opponents=int(self._captured_by_opponents),
             extra_turn=bool(extra),
-            winner=winner,
+            winner=self.game.winner,
             agent_color=self.agent_color,
             home_tokens=len(
                 [
