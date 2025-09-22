@@ -107,6 +107,8 @@ def main():
         eval_freq=args.eval_freq,
         env_cfg=env_cfg,
         verbose=1,
+        eval_env=eval_env,
+        best_model_save_path=args.model_dir,
     )
     callbacks = [progress_cb, eval_cb]
 

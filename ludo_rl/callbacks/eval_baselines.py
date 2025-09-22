@@ -4,17 +4,16 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 from loguru import logger
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
-from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
+from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
+from ludo_rl.ludo_env.ludo_env_base import StepInfo
 from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.opponents import build_opponent_triplets
 
 
-class SimpleBaselineEvalCallback(BaseCallback):
+class SimpleBaselineEvalCallback(MaskableEvalCallback):
     """Periodically evaluate the current policy vs fixed baselines.
 
     Plays 1v3 games where the agent always sits in one seat and the other 3
@@ -36,32 +35,35 @@ class SimpleBaselineEvalCallback(BaseCallback):
         log_prefix: str = "eval/",
         verbose: int = 0,
         env_cfg: Optional[EnvConfig] = None,
+        eval_env=None,  # Use provided eval_env from train.py
+        best_model_save_path: Optional[str] = None,
     ):
-        super().__init__(verbose=verbose)
         self.baselines = list(baselines)
         self.n_games = int(n_games)
         self.eval_freq = int(eval_freq)
         self.log_prefix = log_prefix.rstrip("/") + "/"
         self.env_cfg = env_cfg or EnvConfig()
 
-        # Build eval env (1 process) and wrap
-        def _make_eval():
-            return LudoRLEnv(self.env_cfg)
+        if eval_env is None:
+            raise ValueError("eval_env must be provided")
 
-        self.eval_env = DummyVecEnv([_make_eval])
-        self.eval_env = VecMonitor(self.eval_env)
-        # We'll set VecNormalize and tie obs_rms in _on_training_start
-        self.eval_env = VecNormalize(
-            self.eval_env, training=False, norm_obs=True, norm_reward=False
+        self.eval_env = eval_env
+        self.best_model_save_path = best_model_save_path
+        self.best_win_rate = -np.inf
+
+        # Initialize parent with eval_env and other parameters
+        super().__init__(
+            eval_env=self.eval_env,
+            n_eval_episodes=1,  # Not used since we override evaluation
+            eval_freq=self.eval_freq,
+            log_path=None,  # We handle logging ourselves
+            best_model_save_path=None,  # We handle best model saving ourselves
+            deterministic=True,
+            render=False,
+            verbose=verbose,
+            warn=True,
+            use_masking=True,  # Enable masking for Ludo
         )
-
-    def _on_training_start(self) -> None:
-        # Share normalization stats if training env has them
-        try:
-            if hasattr(self.model.env, "obs_rms"):
-                self.eval_env.obs_rms = self.model.env.obs_rms
-        except Exception:
-            pass
 
     def _on_step(self) -> bool:
         # Evaluate every eval_freq steps
@@ -69,37 +71,32 @@ class SimpleBaselineEvalCallback(BaseCallback):
             return True
         if self.num_timesteps == 0 or (self.num_timesteps % self.eval_freq) != 0:
             return True
+
+        # Sync training and eval env normalization (from parent)
+        if self.model.get_vec_normalize_env() is not None:
+            try:
+                from stable_baselines3.common.callbacks import sync_envs_normalization
+                sync_envs_normalization(self.training_env, self.eval_env)
+            except AttributeError as e:
+                raise AssertionError(
+                    "Training and eval env are not wrapped the same way, "
+                    "see https://stable-baselines3.readthedocs.io/en/master/guide/callbacks.html#evalcallback "
+                    "and warning above."
+                ) from e
+
         try:
             self._run_eval()
         except Exception as e:
             if self.verbose:
-                print(f"[Eval] Error during evaluation: {e}")
+                logger.error(f"[Eval] Error during evaluation: {e}")
         return True
 
     def _run_eval(self):
         wins = 0
         turns_list: List[int] = []
-        total_offensive = 0  # tokens the agent captured
-        total_defensive = 0  # times agent got captured
-        total_finished_tokens = 0
-        cumulative_reward = 0.0
-        # Opportunity instrumentation aggregates
-        total_cap_ops_avail = 0
-        total_cap_ops_taken = 0
-        total_fin_ops_avail = 0
-        total_fin_ops_taken = 0
-        total_exit_ops_avail = 0
-        total_exit_ops_taken = 0
 
         # Build a small pool of opponent triplets using permutations and sampling
         triplets = build_opponent_triplets(self.baselines, self.n_games)
-
-        # Share obs_rms again in case it changed
-        try:
-            if hasattr(self.model.env, "obs_rms"):
-                self.eval_env.obs_rms = self.model.env.obs_rms
-        except Exception:
-            pass
 
         # Evaluate games
         for opp in triplets:
@@ -138,87 +135,37 @@ class SimpleBaselineEvalCallback(BaseCallback):
                         won = reward > 0
                     wins += 1 if won else 0
                     turns_list.append(total_turns)
-                    # Aggregate stats from final info
-                    # Use cumulative episode stats if provided (fallback to last-step stats)
-                    total_offensive += int(
-                        info.get(
-                            "episode_captured_opponents",
-                            info.get("captured_opponents", 0),
-                        )
-                    )
-                    total_defensive += int(
-                        info.get(
-                            "episode_captured_by_opponents",
-                            info.get("captured_by_opponents", 0),
-                        )
-                    )
-                    total_finished_tokens += int(info.get("finished_tokens", 0))
-                    cumulative_reward += episode_reward
-                    total_cap_ops_avail += int(
-                        info.get("episode_capture_ops_available", 0)
-                    )
-                    total_cap_ops_taken += int(info.get("episode_capture_ops_taken", 0))
-                    total_fin_ops_avail += int(
-                        info.get("episode_finish_ops_available", 0)
-                    )
-                    total_fin_ops_taken += int(info.get("episode_finish_ops_taken", 0))
-                    total_exit_ops_avail += int(
-                        info.get("episode_home_exit_ops_available", 0)
-                    )
-                    total_exit_ops_taken += int(
-                        info.get("episode_home_exit_ops_taken", 0)
-                    )
+                    # Convert info dict to StepInfo dataclass for type safety
+                    step_info = StepInfo(**info)
+                    # Use record_mean for automatic TensorBoard averaging
+                    self.logger.record_mean(self.log_prefix + "avg_offensive_captures", step_info.episode_captured_opponents)
+                    self.logger.record_mean(self.log_prefix + "avg_defensive_captures", step_info.episode_captured_by_opponents)
+                    self.logger.record_mean(self.log_prefix + "avg_finished_tokens", step_info.finished_tokens)
+                    self.logger.record_mean(self.log_prefix + "avg_episode_reward", episode_reward)
+                    # Record opportunity rates per game for averaging
+                    cap_rate = (step_info.episode_capture_ops_taken / step_info.episode_capture_ops_available 
+                              if step_info.episode_capture_ops_available > 0 else 0.0)
+                    fin_rate = (step_info.episode_finish_ops_taken / step_info.episode_finish_ops_available 
+                              if step_info.episode_finish_ops_available > 0 else 0.0)
+                    exit_rate = (step_info.episode_home_exit_ops_taken / step_info.episode_home_exit_ops_available 
+                               if step_info.episode_home_exit_ops_available > 0 else 0.0)
+                    self.logger.record_mean(self.log_prefix + "capture_opportunity_rate", cap_rate)
+                    self.logger.record_mean(self.log_prefix + "finish_opportunity_rate", fin_rate)
+                    self.logger.record_mean(self.log_prefix + "exit_opportunity_rate", exit_rate)
 
         win_rate = wins / float(self.n_games)
         avg_turns = float(np.mean(turns_list)) if turns_list else 0.0
-        avg_offensive = total_offensive / float(self.n_games)
-        avg_defensive = total_defensive / float(self.n_games)
-        avg_finished_tokens = total_finished_tokens / float(self.n_games)
-        avg_reward = cumulative_reward / float(self.n_games)
-        # Rates (guard divide-by-zero)
-        capture_opportunity_rate = (
-            total_cap_ops_taken / total_cap_ops_avail
-            if total_cap_ops_avail > 0
-            else 0.0
-        )
-        finish_opportunity_rate = (
-            total_fin_ops_taken / total_fin_ops_avail
-            if total_fin_ops_avail > 0
-            else 0.0
-        )
-        exit_opportunity_rate = (
-            total_exit_ops_taken / total_exit_ops_avail
-            if total_exit_ops_avail > 0
-            else 0.0
-        )
+
         # Log to TB if available
-        try:
-            if self.logger is not None:
-                self.logger.record(self.log_prefix + "win_rate", win_rate)
-                self.logger.record(self.log_prefix + "avg_turns", avg_turns)
-                self.logger.record(
-                    self.log_prefix + "avg_offensive_captures", avg_offensive
-                )
-                self.logger.record(
-                    self.log_prefix + "avg_defensive_captures", avg_defensive
-                )
-                self.logger.record(
-                    self.log_prefix + "avg_finished_tokens", avg_finished_tokens
-                )
-                self.logger.record(self.log_prefix + "avg_episode_reward", avg_reward)
-                self.logger.record(
-                    self.log_prefix + "capture_opportunity_rate",
-                    capture_opportunity_rate,
-                )
-                self.logger.record(
-                    self.log_prefix + "finish_opportunity_rate", finish_opportunity_rate
-                )
-                self.logger.record(
-                    self.log_prefix + "exit_opportunity_rate", exit_opportunity_rate
-                )
-        except Exception:
-            pass
-        if self.verbose:
-            logger.info(
-                f"[Eval] win_rate={win_rate:.3f} avg_turns={avg_turns:.1f} off_cap={avg_offensive:.2f} def_cap={avg_defensive:.2f} fin_tokens={avg_finished_tokens:.2f} avg_reward={avg_reward:.2f} cap_rate={capture_opportunity_rate:.2f} fin_rate={finish_opportunity_rate:.2f} exit_rate={exit_opportunity_rate:.2f} over {self.n_games} games"
-            )
+        self.logger.record(self.log_prefix + "win_rate", win_rate)
+        self.logger.record(self.log_prefix + "avg_turns", avg_turns)
+
+        # Save best model if win_rate improved
+        if win_rate > self.best_win_rate:
+            if self.verbose:
+                print(f"New best win rate: {win_rate:.3f}!")
+            if self.best_model_save_path is not None:
+                import os
+                os.makedirs(self.best_model_save_path, exist_ok=True)
+                self.model.save(os.path.join(self.best_model_save_path, "best_model"))
+            self.best_win_rate = win_rate

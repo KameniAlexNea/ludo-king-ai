@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from stable_baselines3.common.callbacks import BaseCallback
 from sb3_contrib.common.maskable.callbacks import *
+from stable_baselines3.common.callbacks import EveryNTimesteps, EvalCallback
 
 
-class ProgressCallback(BaseCallback):
+class ProgressCallback(EvalCallback):
     def __init__(
         self, total_timesteps: int, update_freq: int = 10_000, verbose: int = 0
     ):
