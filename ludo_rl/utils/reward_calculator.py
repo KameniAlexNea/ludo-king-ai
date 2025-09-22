@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ludo_engine.core import Player
-from ludo_engine.models import GameConstants, MoveResult, PlayerColor
+from ludo_engine.models import GameConstants, MoveResult, PlayerColor, BoardConstants
 
 from ludo_rl.config import EnvConfig
 
@@ -31,6 +31,7 @@ class RewardCalculator:
         extra_turn: bool = 0,
         winner: Optional[Player] = None,
         agent_color: Optional[PlayerColor] = None,
+        home_tokens: int = 0,
     ) -> float:
         r = 0.0
 
@@ -62,6 +63,11 @@ class RewardCalculator:
         # Opponent effects during the full turn (after agent acted)
         if captured_by_opponents > 0:
             r += cfg.reward.got_captured * int(captured_by_opponents)
+            if home_tokens == 0:
+                r += cfg.reward.all_captured
+
+        if res.old_position == GameConstants.HOME_POSITION and res.new_position != res.old_position:
+            r += cfg.reward.exit_start
 
         # Agent bonuses
         if extra_turn:

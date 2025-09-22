@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 
 @dataclass
@@ -14,6 +14,8 @@ class RewardConfig:
     # Events
     capture: float = 8.0
     got_captured: float = -8.0
+    all_captured: float = -20.0
+    exit_start: float = 2.0
     extra_turn: float = 3.0
     # Shaping
     progress_scale: float = 0.05
@@ -132,7 +134,7 @@ class TrainConfig:
     lr_final: float = 2.5e-5  # learning_rate * 0.25
     lr_anneal_enabled: bool = False
     anneal_log_freq: int = 50_000
-    env_type: str = "classic"
+    env_type: Literal["classic", "selfplay", "hybrid"] = "classic"
     hybrid_switch_rate: float = 0.55
 
     def __post_init__(self):
