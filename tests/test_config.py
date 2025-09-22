@@ -1,5 +1,13 @@
 import unittest
-from ludo_rl.config import RewardConfig, ObservationConfig, OpponentConfig, CurriculumConfig, EnvConfig, TrainConfig
+
+from ludo_rl.config import (
+    CurriculumConfig,
+    EnvConfig,
+    ObservationConfig,
+    OpponentConfig,
+    RewardConfig,
+    TrainConfig,
+)
 
 
 class TestRewardConfig(unittest.TestCase):
@@ -61,5 +69,5 @@ class TestTrainConfig(unittest.TestCase):
         self.assertEqual(cfg.n_envs, 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

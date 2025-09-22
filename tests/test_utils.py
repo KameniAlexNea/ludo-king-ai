@@ -1,13 +1,14 @@
 import unittest
-import numpy as np
 from unittest.mock import Mock, patch
 
+import numpy as np
+from ludo_engine.models import GameConstants
+
+from ludo_rl.config import EnvConfig
 from ludo_rl.utils.move_utils import MoveUtils
-from ludo_rl.utils.opponents import sample_opponents, build_opponent_triplets
+from ludo_rl.utils.opponents import build_opponent_triplets, sample_opponents
 from ludo_rl.utils.reward_calculator import RewardCalculator
 from ludo_rl.utils.risk_opportunity import RiskOpportunityCalculator, SimpleROWeights
-from ludo_rl.config import EnvConfig
-from ludo_engine.models import ValidMove, GameConstants
 
 
 class TestMoveUtils(unittest.TestCase):
@@ -32,7 +33,7 @@ class TestMoveUtils(unittest.TestCase):
     def test_get_action_mask_for_env_exception(self):
         env = Mock()
         env._pending_valid = None
-        with patch.object(MoveUtils, 'action_mask', side_effect=Exception):
+        with patch.object(MoveUtils, "action_mask", side_effect=Exception):
             mask = MoveUtils.get_action_mask_for_env(env)
             expected = np.ones(GameConstants.TOKENS_PER_PLAYER, dtype=bool)
             np.testing.assert_array_equal(mask, expected)
@@ -114,7 +115,11 @@ class TestRewardCalculator(unittest.TestCase):
         illegal = False
         game_over = False
         reward = self.calc.compute(res, illegal, self.cfg, game_over)
-        expected = self.cfg.reward.capture + self.cfg.reward.capture_choice_bonus + self.cfg.reward.time_penalty
+        expected = (
+            self.cfg.reward.capture
+            + self.cfg.reward.capture_choice_bonus
+            + self.cfg.reward.time_penalty
+        )
         self.assertAlmostEqual(reward, expected, places=3)
 
     def test_compute_illegal_action(self):
@@ -131,6 +136,7 @@ class TestRewardCalculator(unittest.TestCase):
 
     def test_compute_win(self):
         from ludo_engine.models import PlayerColor
+
         res = Mock()
         res.captured_tokens = []
         res.finished_token = False
@@ -141,12 +147,15 @@ class TestRewardCalculator(unittest.TestCase):
         winner = Mock()
         winner.color = PlayerColor.RED
         agent_color = PlayerColor.RED
-        reward = self.calc.compute(res, illegal, self.cfg, game_over, winner=winner, agent_color=agent_color)
+        reward = self.calc.compute(
+            res, illegal, self.cfg, game_over, winner=winner, agent_color=agent_color
+        )
         expected = self.cfg.reward.win + self.cfg.reward.time_penalty
         self.assertEqual(reward, expected)
 
     def test_compute_lose(self):
         from ludo_engine.models import PlayerColor
+
         res = Mock()
         res.captured_tokens = []
         res.finished_token = False
@@ -157,7 +166,9 @@ class TestRewardCalculator(unittest.TestCase):
         winner = Mock()
         winner.color = PlayerColor.BLUE
         agent_color = PlayerColor.RED
-        reward = self.calc.compute(res, illegal, self.cfg, game_over, winner=winner, agent_color=agent_color)
+        reward = self.calc.compute(
+            res, illegal, self.cfg, game_over, winner=winner, agent_color=agent_color
+        )
         expected = self.cfg.reward.lose + self.cfg.reward.time_penalty
         self.assertEqual(reward, expected)
 
@@ -170,7 +181,10 @@ class TestRewardCalculator(unittest.TestCase):
         illegal = False
         game_over = False
         reward = self.calc.compute(res, illegal, self.cfg, game_over)
-        expected = self.cfg.reward.finish_token * self.cfg.reward.finish_reward_scale + self.cfg.reward.time_penalty
+        expected = (
+            self.cfg.reward.finish_token * self.cfg.reward.finish_reward_scale
+            + self.cfg.reward.time_penalty
+        )
         self.assertEqual(reward, expected)
 
     def test_compute_captured_by_opponents(self):
@@ -181,7 +195,9 @@ class TestRewardCalculator(unittest.TestCase):
         res.old_position = 0
         illegal = False
         game_over = False
-        reward = self.calc.compute(res, illegal, self.cfg, game_over, captured_by_opponents=2, home_tokens=1)
+        reward = self.calc.compute(
+            res, illegal, self.cfg, game_over, captured_by_opponents=2, home_tokens=1
+        )
         expected = self.cfg.reward.got_captured * 2 + self.cfg.reward.time_penalty
         self.assertEqual(reward, expected)
 
@@ -220,8 +236,10 @@ class TestRiskOpportunityCalculator(unittest.TestCase):
         # weights can be None, but compute uses default
         self.assertIsNone(calc.weights)
 
-    @patch('ludo_rl.utils.risk_opportunity.RiskOpportunityCalculator._iter_opponent_positions')
-    @patch('ludo_rl.utils.risk_opportunity.RiskOpportunityCalculator._forward_distance')
+    @patch(
+        "ludo_rl.utils.risk_opportunity.RiskOpportunityCalculator._iter_opponent_positions"
+    )
+    @patch("ludo_rl.utils.risk_opportunity.RiskOpportunityCalculator._forward_distance")
     def test_risk_score_no_threats(self, mock_forward, mock_iter):
         mock_iter.return_value = []
         game = Mock()
@@ -267,8 +285,8 @@ class TestRiskOpportunityCalculator(unittest.TestCase):
         result = self.calc.compute(game, agent_color, move, return_breakdown=True)
         self.assertIsInstance(result, tuple)
         score, breakdown = result
-        self.assertIn('opportunity', breakdown)
-        self.assertIn('risk', breakdown)
+        self.assertIn("opportunity", breakdown)
+        self.assertIn("risk", breakdown)
 
     def test_opportunity_score_finish_token(self):
         move = Mock()
@@ -298,7 +316,10 @@ class TestRiskOpportunityCalculator(unittest.TestCase):
         move.extra_turn = False
         old_pos = 0
         new_pos = 8  # Assume safe
-        with patch('ludo_rl.utils.risk_opportunity.BoardConstants.is_safe_position', return_value=True):
+        with patch(
+            "ludo_rl.utils.risk_opportunity.BoardConstants.is_safe_position",
+            return_value=True,
+        ):
             score = self.calc._opportunity_score(move, old_pos, new_pos, self.weights)
             self.assertIsInstance(score, float)
 
@@ -307,11 +328,16 @@ class TestRiskOpportunityCalculator(unittest.TestCase):
         agent_color = Mock()
         target_pos = 10
         # Mock opponent positions
-        with patch.object(self.calc, '_iter_opponent_positions', return_value=[5, 15]):
-            with patch('ludo_rl.utils.risk_opportunity.RiskOpportunityCalculator._forward_distance', side_effect=[5, 1]):
-                score = self.calc._risk_score(game, agent_color, target_pos, self.weights)
+        with patch.object(self.calc, "_iter_opponent_positions", return_value=[5, 15]):
+            with patch(
+                "ludo_rl.utils.risk_opportunity.RiskOpportunityCalculator._forward_distance",
+                side_effect=[5, 1],
+            ):
+                score = self.calc._risk_score(
+                    game, agent_color, target_pos, self.weights
+                )
                 self.assertIsInstance(score, float)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

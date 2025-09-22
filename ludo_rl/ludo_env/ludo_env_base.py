@@ -299,6 +299,15 @@ class LudoRLEnvBase(gym.Env):
             extra_turn=bool(extra),
             winner=winner,
             agent_color=self.agent_color,
+            home_tokens=len(
+                [
+                    i
+                    for i in self.game.get_player_from_color(
+                        self.agent_color
+                    ).player_positions()
+                    if i == GameConstants.HOME_POSITION
+                ]
+            ),
         )
 
         self.turns += 1

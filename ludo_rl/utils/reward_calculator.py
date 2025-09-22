@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ludo_engine.core import Player
-from ludo_engine.models import GameConstants, MoveResult, PlayerColor, BoardConstants
+from ludo_engine.models import GameConstants, MoveResult, PlayerColor
 
 from ludo_rl.config import EnvConfig
 
@@ -66,7 +66,10 @@ class RewardCalculator:
             if home_tokens == 0:
                 r += cfg.reward.all_captured
 
-        if res.old_position == GameConstants.HOME_POSITION and res.new_position != res.old_position:
+        if (
+            res.old_position == GameConstants.HOME_POSITION
+            and res.new_position != res.old_position
+        ):
             r += cfg.reward.exit_start
 
         # Agent bonuses

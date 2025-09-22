@@ -1,12 +1,13 @@
 import unittest
-import numpy as np
 from unittest.mock import Mock, patch
 
-from ludo_rl.ludo_env.observation import ObservationBuilder
-from ludo_rl.ludo_env.ludo_env_base import LudoRLEnvBase
-from ludo_rl.config import EnvConfig
+import numpy as np
 from ludo_engine.core import LudoGame
-from ludo_engine.models import PlayerColor, ALL_COLORS
+from ludo_engine.models import ALL_COLORS, PlayerColor
+
+from ludo_rl.config import EnvConfig
+from ludo_rl.ludo_env.ludo_env_base import LudoRLEnvBase
+from ludo_rl.ludo_env.observation import ObservationBuilder
 
 
 class MockLudoRLEnvBase(LudoRLEnvBase):
@@ -57,17 +58,17 @@ class TestLudoRLEnvBase(unittest.TestCase):
         self.assertIsInstance(self.env.game, LudoGame)
         self.assertIsInstance(self.env.obs_builder, ObservationBuilder)
 
-    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._ensure_agent_turn')
-    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_agent_dice')
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._ensure_agent_turn")
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_agent_dice")
     def test_reset(self, mock_roll, mock_ensure):
         mock_roll.return_value = (3, [])
         obs, info = self.env.reset()
         self.assertIsInstance(obs, np.ndarray)
-        self.assertIn('episode', info)
+        self.assertIn("episode", info)
         mock_ensure.assert_called_once()
         mock_roll.assert_called_once()
 
-    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_single_opponent')
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_single_opponent")
     def test_ensure_agent_turn(self, mock_simulate):
         # Mock game to have agent as current player
         self.env.game.get_current_player = Mock()
@@ -82,9 +83,9 @@ class TestLudoRLEnvBase(unittest.TestCase):
         self.assertTrue(terminated)
         self.assertEqual(reward, 0.0)
 
-    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_agent_dice')
-    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_single_opponent')
-    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._ensure_agent_turn')
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_agent_dice")
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_single_opponent")
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._ensure_agent_turn")
     def test_step_no_valid_moves(self, mock_ensure, mock_simulate, mock_roll):
         self.env._pending_dice = 1
         self.env._pending_valid = []  # No valid moves
@@ -96,8 +97,8 @@ class TestLudoRLEnvBase(unittest.TestCase):
         mock_roll.return_value = (1, [])
         obs, reward, terminated, truncated, info = self.env.step(0)
         self.assertIsInstance(obs, np.ndarray)
-        self.assertIn('illegal_action', info)
+        self.assertIn("illegal_action", info)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

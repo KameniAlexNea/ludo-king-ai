@@ -1,11 +1,11 @@
-import unittest
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock
-
-from ludo_rl.trains.lr_utils import linear_interp, apply_linear_lr
-from ludo_rl.trains.training_args import parse_args
-from ludo_rl.config import TrainConfig
 import argparse
+import unittest
+from unittest.mock import Mock, patch
+
+
+from ludo_rl.config import TrainConfig
+from ludo_rl.trains.lr_utils import apply_linear_lr, linear_interp
+from ludo_rl.trains.training_args import parse_args
 
 
 class TestLrUtils(unittest.TestCase):
@@ -19,17 +19,17 @@ class TestLrUtils(unittest.TestCase):
         result = linear_interp(0.0, 1.0, -0.5)
         self.assertEqual(result, 0.0)
 
-    @patch('sb3_contrib.MaskablePPO')
+    @patch("sb3_contrib.MaskablePPO")
     def test_apply_linear_lr(self, mock_ppo):
         model = Mock()
-        model.policy.optimizer.param_groups = [{'lr': 0.1}]
+        model.policy.optimizer.param_groups = [{"lr": 0.1}]
         new_lr = apply_linear_lr(model, 0.1, 0.01, 0.5)
         self.assertEqual(new_lr, 0.055)
-        self.assertEqual(model.policy.optimizer.param_groups[0]['lr'], 0.055)
+        self.assertEqual(model.policy.optimizer.param_groups[0]["lr"], 0.055)
 
 
 class TestTrainingArgs(unittest.TestCase):
-    @patch('argparse.ArgumentParser.parse_args')
+    @patch("argparse.ArgumentParser.parse_args")
     def test_parse_args_default(self, mock_parse):
         mock_parse.return_value = argparse.Namespace(
             total_steps=10000,
@@ -62,13 +62,13 @@ class TestTrainingArgs(unittest.TestCase):
             lr_anneal_enabled=False,
             anneal_log_freq=1000,
             env_type="classic",
-            hybrid_switch_rate=0.1
+            hybrid_switch_rate=0.1,
         )
         config = parse_args()
         self.assertIsInstance(config, TrainConfig)
         self.assertEqual(config.total_steps, 10000)
 
-    @patch('argparse.ArgumentParser.parse_args')
+    @patch("argparse.ArgumentParser.parse_args")
     def test_parse_args_custom(self, mock_parse):
         mock_parse.return_value = argparse.Namespace(
             total_steps=20000,
@@ -101,7 +101,7 @@ class TestTrainingArgs(unittest.TestCase):
             lr_anneal_enabled=True,
             anneal_log_freq=2000,
             env_type="hybrid",
-            hybrid_switch_rate=0.2
+            hybrid_switch_rate=0.2,
         )
         config = parse_args()
         self.assertEqual(config.total_steps, 20000)
@@ -109,5 +109,5 @@ class TestTrainingArgs(unittest.TestCase):
         self.assertEqual(config.env_type, "hybrid")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

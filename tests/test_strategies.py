@@ -1,10 +1,11 @@
 import unittest
-import numpy as np
 from unittest.mock import Mock, patch
 
-from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
-from ludo_engine.models import AIDecisionContext, ValidMove, GameConstants
+import numpy as np
+from ludo_engine.models import AIDecisionContext
+
 from ludo_rl.ludo_env.observation import ObservationBuilder
+from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
 
 
 class TestFrozenPolicyStrategy(unittest.TestCase):
@@ -13,7 +14,9 @@ class TestFrozenPolicyStrategy(unittest.TestCase):
         self.policy = Mock()
 
     def test_init(self):
-        strategy = FrozenPolicyStrategy(self.policy, self.obs_builder, deterministic=True)
+        strategy = FrozenPolicyStrategy(
+            self.policy, self.obs_builder, deterministic=True
+        )
         self.assertEqual(strategy.policy, self.policy)
         self.assertEqual(strategy.obs_builder, self.obs_builder)
         self.assertTrue(strategy.deterministic)
@@ -28,15 +31,17 @@ class TestFrozenPolicyStrategy(unittest.TestCase):
         strategy = FrozenPolicyStrategy(None, self.obs_builder)
         context = Mock(spec=AIDecisionContext)
         context.valid_moves = [Mock(token_id=1), Mock(token_id=3)]
-        with patch('random.choice') as mock_choice:
+        with patch("random.choice") as mock_choice:
             mock_choice.return_value = Mock(token_id=1)
             result = strategy.decide(context)
             self.assertEqual(result, 1)
 
-    @patch('torch.as_tensor')
-    @patch('torch.no_grad')
+    @patch("torch.as_tensor")
+    @patch("torch.no_grad")
     def test_decide_with_policy_deterministic(self, mock_no_grad, mock_tensor):
-        strategy = FrozenPolicyStrategy(self.policy, self.obs_builder, deterministic=True)
+        strategy = FrozenPolicyStrategy(
+            self.policy, self.obs_builder, deterministic=True
+        )
         context = Mock(spec=AIDecisionContext)
         context.valid_moves = [Mock(token_id=0)]
         context.current_situation = Mock()
@@ -47,16 +52,20 @@ class TestFrozenPolicyStrategy(unittest.TestCase):
         mock_tensor.return_value = Mock()
 
         dist = Mock()
-        dist.distribution.probs.squeeze.return_value.cpu.return_value.numpy.return_value = np.array([0.1, 0.9, 0.0, 0.0])
+        dist.distribution.probs.squeeze.return_value.cpu.return_value.numpy.return_value = np.array(
+            [0.1, 0.9, 0.0, 0.0]
+        )
         self.policy.get_distribution.return_value = dist
 
         result = strategy.decide(context)
         self.assertEqual(result, 0)  # argmax of masked probs
 
-    @patch('torch.as_tensor')
-    @patch('torch.no_grad')
+    @patch("torch.as_tensor")
+    @patch("torch.no_grad")
     def test_decide_with_policy_stochastic(self, mock_no_grad, mock_tensor):
-        strategy = FrozenPolicyStrategy(self.policy, self.obs_builder, deterministic=False)
+        strategy = FrozenPolicyStrategy(
+            self.policy, self.obs_builder, deterministic=False
+        )
         context = Mock(spec=AIDecisionContext)
         context.valid_moves = [Mock(token_id=0)]
         context.current_situation = Mock()
@@ -67,14 +76,16 @@ class TestFrozenPolicyStrategy(unittest.TestCase):
         mock_tensor.return_value = Mock()
 
         dist = Mock()
-        dist.distribution.probs.squeeze.return_value.cpu.return_value.numpy.return_value = np.array([0.1, 0.9, 0.0, 0.0])
+        dist.distribution.probs.squeeze.return_value.cpu.return_value.numpy.return_value = np.array(
+            [0.1, 0.9, 0.0, 0.0]
+        )
         self.policy.get_distribution.return_value = dist
 
-        with patch('numpy.random.choice') as mock_choice:
+        with patch("numpy.random.choice") as mock_choice:
             mock_choice.return_value = 1
             result = strategy.decide(context)
             self.assertEqual(result, 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
