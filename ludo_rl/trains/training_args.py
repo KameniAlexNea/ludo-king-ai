@@ -1,52 +1,10 @@
 import argparse
-from dataclasses import asdict, dataclass
-from typing import Literal
+from dataclasses import asdict
 
 from ludo_rl.config import TrainConfig
 
 
-@dataclass
-class TrainingArgs:
-    total_steps: int = TrainConfig.total_steps
-    n_envs: int = TrainConfig.n_envs
-    logdir: str = TrainConfig.logdir
-    model_dir: str = TrainConfig.model_dir
-    eval_freq: int = TrainConfig.eval_freq
-    eval_games: int = TrainConfig.eval_games
-    checkpoint_freq: int = 100_000
-    checkpoint_prefix: str = "ppo_ludo"
-    eval_baselines: str = TrainConfig.eval_baselines
-    learning_rate: float = TrainConfig.learning_rate
-    n_steps: int = TrainConfig.n_steps
-    batch_size: int = TrainConfig.batch_size
-    ent_coef: float = TrainConfig.ent_coef
-    max_turns: int = TrainConfig.max_turns
-    # Imitation / kickstart
-    imitation_enabled: bool = False
-    imitation_strategies: str = TrainConfig.imitation_strategies
-    imitation_steps: int = TrainConfig.imitation_steps
-    imitation_batch_size: int = TrainConfig.imitation_batch_size
-    imitation_epochs: int = TrainConfig.imitation_epochs
-    imitation_entropy_boost: float = TrainConfig.imitation_entropy_boost
-    # Annealing overrides
-    entropy_coef_initial: float = TrainConfig.entropy_coef_initial
-    entropy_coef_final: float = TrainConfig.entropy_coef_final
-    entropy_anneal_steps: int = TrainConfig.entropy_anneal_steps
-    capture_scale_initial: float = TrainConfig.capture_scale_initial
-    capture_scale_final: float = TrainConfig.capture_scale_final
-    capture_scale_anneal_steps: int = TrainConfig.capture_scale_anneal_steps
-    # Learning rate annealing
-    lr_final: float = TrainConfig.learning_rate * 0.25
-    lr_anneal_enabled: bool = False
-    anneal_log_freq: int = 50_000
-    env_type: Literal["classic", "selfplay"] = "classic"
-
-    def __post_init__(self):
-        if self.env_type == "selfplay":
-            self.n_envs = 1
-
-
-def parse_args() -> TrainingArgs:
+def parse_args() -> TrainConfig:
     p = argparse.ArgumentParser()
     p.add_argument("--total-steps", type=int, default=TrainConfig.total_steps)
     p.add_argument("--n-envs", type=int, default=TrainConfig.n_envs)
@@ -63,7 +21,7 @@ def parse_args() -> TrainingArgs:
     p.add_argument(
         "--checkpoint-prefix",
         type=str,
-        default="ppo_ludo",
+        default=TrainConfig.checkpoint_prefix,
         help="Checkpoint file prefix",
     )
     p.add_argument(
@@ -78,7 +36,11 @@ def parse_args() -> TrainingArgs:
     p.add_argument("--ent-coef", type=float, default=TrainConfig.ent_coef)
     p.add_argument("--max-turns", type=int, default=TrainConfig.max_turns)
     # Imitation / kickstart
-    p.add_argument("--imitation-enabled", action="store_true", default=False)
+    p.add_argument(
+        "--imitation-enabled",
+        action="store_true",
+        default=TrainConfig.imitation_enabled,
+    )
     p.add_argument(
         "--imitation-strategies",
         type=str,
@@ -129,23 +91,23 @@ def parse_args() -> TrainingArgs:
     p.add_argument(
         "--lr-anneal-enabled",
         action="store_true",
-        default=False,
+        default=TrainConfig.lr_anneal_enabled,
         help="Enable linear LR annealing",
     )
     p.add_argument(
         "--anneal-log-freq",
         type=int,
-        default=50_000,
+        default=TrainConfig.anneal_log_freq,
         help="Log annealed values (entropy, capture scale, lr) every N env steps",
     )
     p.add_argument(
         "--env-type",
         type=str,
-        default="classic",
+        default=TrainConfig.env_type,
         choices=["classic", "selfplay", "hybrid"],
         help="Environment type",
     )
     args = p.parse_args()
-    args = TrainingArgs(**vars(args))
+    args = TrainConfig(**vars(args))
     print(asdict(args))
     return args

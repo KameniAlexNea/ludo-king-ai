@@ -22,7 +22,7 @@ from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
 from ludo_rl.trains.lr_utils import apply_linear_lr
-from ludo_rl.trains.training_args import TrainingArgs, parse_args
+from ludo_rl.trains.training_args import parse_args
 from ludo_rl.utils.move_utils import MoveUtils
 from loguru import logger
 
@@ -58,7 +58,7 @@ def _maybe_log_anneal(
 
 
 def main():
-    args: TrainingArgs = parse_args()
+    args: TrainConfig = parse_args()
     os.makedirs(args.logdir, exist_ok=True)
     os.makedirs(args.model_dir, exist_ok=True)
 
@@ -117,20 +117,7 @@ def main():
     callbacks = [progress_cb, eval_cb]
 
     # Annealing callback (entropy + capture scale + learning rate). We'll wrap learning rate logic here by updating optimizer lr.
-    train_cfg = TrainConfig(
-        total_steps=args.total_steps,
-        n_envs=args.n_envs,
-        eval_freq=args.eval_freq,
-        learning_rate=args.learning_rate,
-        ent_coef=args.ent_coef,
-        entropy_coef_initial=args.entropy_coef_initial,
-        entropy_coef_final=args.entropy_coef_final,
-        entropy_anneal_steps=args.entropy_anneal_steps,
-        capture_scale_initial=args.capture_scale_initial,
-        capture_scale_final=args.capture_scale_final,
-        capture_scale_anneal_steps=args.capture_scale_anneal_steps,
-    )
-    anneal_cb = AnnealingCallback(train_cfg)
+    anneal_cb = AnnealingCallback(args)
     callbacks.append(anneal_cb)
 
     # Hybrid switch callback if using hybrid env
@@ -230,7 +217,7 @@ def main():
             )
             lr_val = apply_linear_lr(model, initial_lr, final_lr, frac)
             _maybe_log_anneal(
-                model.num_timesteps, args.anneal_log_freq, model, lr_val, train_cfg
+                model.num_timesteps, args.anneal_log_freq, model, lr_val, args
             )
             return original_on_step()
 

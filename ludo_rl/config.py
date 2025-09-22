@@ -126,3 +126,14 @@ class TrainConfig:
     capture_scale_initial: float = 1.3
     capture_scale_final: float = 1.0
     capture_scale_anneal_steps: int = 1_500_000
+    # Additional training options
+    checkpoint_freq: int = 100_000
+    checkpoint_prefix: str = "ppo_ludo"
+    lr_final: float = 2.5e-5  # learning_rate * 0.25
+    lr_anneal_enabled: bool = False
+    anneal_log_freq: int = 50_000
+    env_type: str = "classic"
+
+    def __post_init__(self):
+        if self.env_type == "selfplay":
+            self.n_envs = 1
