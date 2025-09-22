@@ -65,7 +65,9 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
             self._opponent_builders = {}
             for c in ALL_COLORS:
                 if c != self.agent_color:
-                    self._opponent_builders[c] = ObservationBuilder(self.cfg, self.game, c)
+                    self._opponent_builders[c] = ObservationBuilder(
+                        self.cfg, self.game, c
+                    )
             # Snapshot current policy for this episode (used by opponents)
             self._snapshot_policy()
         # For classic mode, no special setup needed here
@@ -95,6 +97,7 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
                 player = self.game.get_player_from_color(color)
                 try:
                     from ludo_engine.strategies.strategy import StrategyFactory
+
                     player.set_strategy(StrategyFactory.create_strategy(name))
                 except Exception:
                     pass

@@ -16,7 +16,9 @@ class HybridSwitchCallback(BaseCallback):
                 # Switch all envs to classic mode
                 self.training_env.set_attr("switch_to_classic", True)
                 if self.verbose:
-                    print(f"[HybridSwitch] Switched to classic mode at step {self.num_timesteps}")
+                    print(
+                        f"[HybridSwitch] Switched to classic mode at step {self.num_timesteps}"
+                    )
             except Exception as e:
                 if self.verbose:
                     print(f"[HybridSwitch] Error switching modes: {e}")

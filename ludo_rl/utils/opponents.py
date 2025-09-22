@@ -1,5 +1,5 @@
-import random
 import itertools
+import random
 from typing import List, Optional, Union
 
 import numpy as np
