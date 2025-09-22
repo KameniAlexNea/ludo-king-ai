@@ -107,6 +107,12 @@ def parse_args() -> TrainConfig:
         choices=["classic", "selfplay", "hybrid"],
         help="Environment type",
     )
+    p.add_argument(
+        "--hybrid-switch-rate",
+        type=float,
+        default=TrainConfig.hybrid_switch_rate,
+        help="Switch rate for hybrid environment",
+    )
     args = p.parse_args()
     args = TrainConfig(**vars(args))
     print(asdict(args))

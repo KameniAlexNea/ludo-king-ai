@@ -122,7 +122,7 @@ def main():
 
     # Hybrid switch callback if using hybrid env
     if args.env_type == "hybrid":
-        switch_step = args.total_steps // 2  # Switch halfway through training
+        switch_step = int(args.total_steps * args.hybrid_switch_rate)  # Switch halfway through training
         hybrid_cb = HybridSwitchCallback(switch_step, verbose=1)
         callbacks.append(hybrid_cb)
 

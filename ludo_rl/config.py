@@ -133,6 +133,7 @@ class TrainConfig:
     lr_anneal_enabled: bool = False
     anneal_log_freq: int = 50_000
     env_type: str = "classic"
+    hybrid_switch_rate: float = 0.55
 
     def __post_init__(self):
         if self.env_type == "selfplay":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from loguru import logger
 from stable_baselines3.common.callbacks import BaseCallback
 
 
@@ -16,10 +17,10 @@ class HybridSwitchCallback(BaseCallback):
                 # Switch all envs to classic mode
                 self.training_env.set_attr("switch_to_classic", True)
                 if self.verbose:
-                    print(
+                    logger.info(
                         f"[HybridSwitch] Switched to classic mode at step {self.num_timesteps}"
                     )
             except Exception as e:
                 if self.verbose:
-                    print(f"[HybridSwitch] Error switching modes: {e}")
+                    logger.error(f"[HybridSwitch] Error switching modes: {e}")
         return True
