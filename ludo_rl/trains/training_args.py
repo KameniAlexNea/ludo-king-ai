@@ -142,7 +142,7 @@ def parse_args() -> TrainingArgs:
         "--env-type",
         type=str,
         default="classic",
-        choices=["classic", "selfplay"],
+        choices=["classic", "selfplay", "hybrid"],
         help="Environment type",
     )
     args = p.parse_args()

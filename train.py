@@ -15,9 +15,11 @@ from torch.utils.data import TensorDataset
 from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.callbacks.curriculum import ProgressCallback
 from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
+from ludo_rl.callbacks.hybrid_switch import HybridSwitchCallback
 from ludo_rl.config import EnvConfig, TrainConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
+from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
 from ludo_rl.trains.lr_utils import apply_linear_lr
 from ludo_rl.trains.training_args import TrainingArgs, parse_args
@@ -31,6 +33,8 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic
         cfg.seed = seed + rank
         if env_type == "selfplay":
             env = LudoRLEnvSelfPlay(cfg)
+        elif env_type == "hybrid":
+            env = LudoRLEnvHybrid(cfg)
         else:
             env = LudoRLEnv(cfg)
         return ActionMasker(env, MoveUtils.get_action_mask_for_env)
@@ -94,8 +98,8 @@ def main():
         device="auto",
     )
 
-    # When using selfplay, inject the live model into envs so they can snapshot policy at reset
-    if args.env_type == "selfplay":
+    # When using selfplay or hybrid, inject the live model into envs so they can snapshot policy at reset
+    if args.env_type in ["selfplay", "hybrid"]:
         try:
             venv.env_method("set_model", model)
         except Exception:
@@ -128,6 +132,12 @@ def main():
     )
     anneal_cb = AnnealingCallback(train_cfg)
     callbacks.append(anneal_cb)
+
+    # Hybrid switch callback if using hybrid env
+    if args.env_type == "hybrid":
+        switch_step = args.total_steps // 2  # Switch halfway through training
+        hybrid_cb = HybridSwitchCallback(switch_step, verbose=1)
+        callbacks.append(hybrid_cb)
 
     # Optional imitation kickstart
     if args.imitation_enabled:
