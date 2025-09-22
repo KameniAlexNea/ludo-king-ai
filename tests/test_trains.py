@@ -2,7 +2,6 @@ import argparse
 import unittest
 from unittest.mock import Mock, patch
 
-
 from ludo_rl.config import TrainConfig
 from ludo_rl.trains.lr_utils import apply_linear_lr, linear_interp
 from ludo_rl.trains.training_args import parse_args

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Optional
 
 import numpy as np
@@ -38,7 +37,7 @@ class FrozenPolicyStrategy(Strategy):
         for mv in valid_moves:
             tid = mv.token_id
             if isinstance(tid, int) and 0 <= tid < GameConstants.TOKENS_PER_PLAYER:
-                mask[tid] = 1.0
+                mask[tid] = 1
         return mask
 
     def decide(self, game_context: AIDecisionContext) -> int:  # type: ignore[override]
@@ -48,7 +47,7 @@ class FrozenPolicyStrategy(Strategy):
 
         # If no policy was provided, pick a random valid move
         if self.policy is None:
-            return random.choice(valid_moves).token_id
+            raise ValueError("Policy is None, cannot decide action.")
 
         # Build observation from the episode game (via builder) using turn and dice from context
         turn_count = game_context.current_situation.turn_count
@@ -57,19 +56,8 @@ class FrozenPolicyStrategy(Strategy):
 
         # Compute distribution from policy, derive probs, and apply mask
         obs_tensor = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
-        with torch.no_grad():
-            dist = self.policy.get_distribution(obs_tensor)  # type: ignore[attr-defined]
-            try:
-                probs = dist.distribution.probs.squeeze(0).cpu().numpy()
-            except Exception:
-                probs = dist.distribution.logits.softmax(-1).squeeze(0).cpu().numpy()
         mask = self._build_action_mask(valid_moves)
-        masked = probs * mask
-        if masked.sum() <= 0:
-            # degenerate fallback - pick random valid action
-            valid_indices = [i for i, m in enumerate(mask) if m]
-            return int(np.random.choice(valid_indices)) if valid_indices else 0
-        if self.deterministic:
-            return int(np.argmax(masked))
-        masked /= masked.sum()
-        return int(np.random.choice(len(masked), p=masked))
+        with torch.no_grad():
+            dist = self.policy.get_distribution(obs_tensor, mask)  # type: ignore[attr-defined]
+            token_id = dist.get_actions(deterministic=self.deterministic).item()
+        return token_id

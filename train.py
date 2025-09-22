@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
 import torch
@@ -21,7 +22,6 @@ from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
-from ludo_rl.trains.lr_utils import apply_linear_lr
 from ludo_rl.trains.training_args import parse_args
 from ludo_rl.utils.move_utils import MoveUtils
 from loguru import logger
@@ -40,21 +40,6 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic
         return ActionMasker(env, MoveUtils.get_action_mask_for_env)
 
     return _init
-
-
-def _maybe_log_anneal(
-    step: int, freq: int, model, lr_val: float, train_cfg: TrainConfig
-):
-    if freq <= 0:
-        return
-    if step % freq == 0:
-        try:
-            ent = getattr(model, "ent_coef", None)
-            logger.info(
-                f"[Anneal] step={step} lr={lr_val:.6g} ent={ent} capture_scale={train_cfg.capture_scale_initial}->{train_cfg.capture_scale_final}"
-            )
-        except Exception:
-            pass
 
 
 def main():

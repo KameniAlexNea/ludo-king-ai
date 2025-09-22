@@ -48,6 +48,12 @@ def select_best_ppo_model(
       - If `explicit` provided and exists, return it.
       - Else follow preference chain (best|final|steps) with fallbacks.
     """
+    if os.path.isfile(models_dir):
+        # If a file was provided, assume it's the model path and return its basename
+        base = os.path.basename(models_dir)
+        if base.endswith(".zip"):
+            return base[:-4]
+        return base
     if not os.path.isdir(models_dir):
         raise FileNotFoundError(f"Models directory '{models_dir}' not found")
 
@@ -113,6 +119,8 @@ def load_ppo_policy(
 ):
     """Load a MaskablePPO model and return (model, basename)."""
     model_name = select_best_ppo_model(models_dir, model_preference, explicit)
+    if not os.path.isdir(models_dir):
+        models_dir = os.path.dirname(models_dir)
     model_path = os.path.join(models_dir, f"{model_name}.zip")
     if not os.path.isfile(model_path):
         raise FileNotFoundError(f"Model file '{model_path}' not found")
