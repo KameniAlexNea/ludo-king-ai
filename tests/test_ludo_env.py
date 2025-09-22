@@ -3,9 +3,15 @@ import numpy as np
 from unittest.mock import Mock, patch
 
 from ludo_rl.ludo_env.observation import ObservationBuilder
+from ludo_rl.ludo_env.ludo_env_base import LudoRLEnvBase
 from ludo_rl.config import EnvConfig
 from ludo_engine.core import LudoGame
 from ludo_engine.models import PlayerColor, ALL_COLORS
+
+
+class MockLudoRLEnvBase(LudoRLEnvBase):
+    def attach_opponents(self, options=None):
+        pass  # Mock implementation
 
 
 class TestObservationBuilder(unittest.TestCase):
@@ -38,6 +44,59 @@ class TestObservationBuilder(unittest.TestCase):
         self.assertIsInstance(obs, np.ndarray)
         self.assertEqual(obs.dtype, np.float32)
         self.assertEqual(len(obs), self.builder.size)
+
+
+class TestLudoRLEnvBase(unittest.TestCase):
+    def setUp(self):
+        self.cfg = EnvConfig()
+        self.env = MockLudoRLEnvBase(self.cfg)
+
+    def test_init(self):
+        self.assertEqual(self.env.cfg, self.cfg)
+        self.assertEqual(self.env.agent_color, PlayerColor.RED)
+        self.assertIsInstance(self.env.game, LudoGame)
+        self.assertIsInstance(self.env.obs_builder, ObservationBuilder)
+
+    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._ensure_agent_turn')
+    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_agent_dice')
+    def test_reset(self, mock_roll, mock_ensure):
+        mock_roll.return_value = (3, [])
+        obs, info = self.env.reset()
+        self.assertIsInstance(obs, np.ndarray)
+        self.assertIn('episode', info)
+        mock_ensure.assert_called_once()
+        mock_roll.assert_called_once()
+
+    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_single_opponent')
+    def test_ensure_agent_turn(self, mock_simulate):
+        # Mock game to have agent as current player
+        self.env.game.get_current_player = Mock()
+        self.env.game.get_current_player.return_value.color = self.env.agent_color
+        self.env._ensure_agent_turn()
+        # Should not simulate since it's agent's turn
+        mock_simulate.assert_not_called()
+
+    def test_step_game_over(self):
+        self.env.game.game_over = True
+        obs, reward, terminated, truncated, info = self.env.step(0)
+        self.assertTrue(terminated)
+        self.assertEqual(reward, 0.0)
+
+    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_agent_dice')
+    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_single_opponent')
+    @patch('ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._ensure_agent_turn')
+    def test_step_no_valid_moves(self, mock_ensure, mock_simulate, mock_roll):
+        self.env._pending_dice = 1
+        self.env._pending_valid = []  # No valid moves
+        # Mock current player to be agent to prevent opponent simulation loop
+        mock_player = Mock()
+        mock_player.color = self.env.agent_color
+        self.env.game.get_current_player = Mock(return_value=mock_player)
+        # Mock roll to prevent calling at end
+        mock_roll.return_value = (1, [])
+        obs, reward, terminated, truncated, info = self.env.step(0)
+        self.assertIsInstance(obs, np.ndarray)
+        self.assertIn('illegal_action', info)
 
 
 if __name__ == '__main__':

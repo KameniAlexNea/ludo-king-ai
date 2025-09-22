@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import Mock, patch
 
+import numpy as np
+
 from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.callbacks.curriculum import ProgressCallback
 from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
@@ -83,14 +85,32 @@ class TestSimpleBaselineEvalCallback(unittest.TestCase):
         result = self.callback._on_step()
         self.assertTrue(result)
 
-    @patch('stable_baselines3.common.callbacks.BaseCallback._on_step')
-    @patch('ludo_rl.callbacks.eval_baselines.SimpleBaselineEvalCallback._run_eval')
-    def test_on_step_eval(self, mock_run_eval, mock_super_on_step):
-        mock_super_on_step.return_value = True
-        self.callback.num_timesteps = 1000
-        result = self.callback._on_step()
-        self.assertTrue(result)
-        mock_run_eval.assert_called_once()
+    @patch('ludo_rl.callbacks.eval_baselines.build_opponent_triplets')
+    @patch('ludo_rl.callbacks.eval_baselines.MoveUtils.get_action_mask_for_env')
+    def test_run_eval(self, mock_get_action_mask, mock_build_triplets):
+        # Mock triplets
+        mock_build_triplets.return_value = [["opp1", "opp2", "opp3"]]
+        # Mock action mask
+        mock_get_action_mask.return_value = [1, 0, 0, 0]  # Some mask
+        # Mock model predict
+        self.callback.model = Mock()
+        self.callback.model.predict.return_value = (0, None)  # action 0
+        # Mock logger on model
+        self.callback.model.logger = Mock()
+        # Mock eval_env
+        mock_base_env = Mock()
+        mock_base_env.reset.return_value = (np.array([0.0]), {})
+        mock_base_env.step.return_value = (np.array([0.0]), 1.0, True, False, {"finished_tokens": 4, "captured_opponents": 2, "captured_by_opponents": 1, "episode_capture_ops_available": 5, "episode_capture_ops_taken": 3, "episode_finish_ops_available": 4, "episode_finish_ops_taken": 2, "episode_home_exit_ops_available": 3, "episode_home_exit_ops_taken": 1})
+        mock_base_env.game.winner = Mock()
+        mock_base_env.game.winner.color = "red"
+        mock_base_env.game.game_over = True
+        mock_base_env.agent_color = "red"
+        self.callback.eval_env.envs = [mock_base_env]
+        self.callback.eval_env.normalize_obs = Mock(return_value=np.array([0.0]))
+        # Run eval
+        self.callback._run_eval()
+        # Assert logger was called
+        self.callback.model.logger.record.assert_called()
 
 
 class TestHybridSwitchCallback(unittest.TestCase):
