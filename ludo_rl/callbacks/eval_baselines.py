@@ -79,6 +79,17 @@ class SimpleBaselineEvalCallback(BaseCallback):
     def _run_eval(self):
         wins = 0
         turns_list: List[int] = []
+        total_offensive = 0  # tokens the agent captured
+        total_defensive = 0  # times agent got captured
+        total_finished_tokens = 0
+        cumulative_reward = 0.0
+        # Opportunity instrumentation aggregates
+        total_cap_ops_avail = 0
+        total_cap_ops_taken = 0
+        total_fin_ops_avail = 0
+        total_fin_ops_taken = 0
+        total_exit_ops_avail = 0
+        total_exit_ops_taken = 0
 
         # Build a small pool of opponent triplets using permutations and sampling
         triplets = build_opponent_triplets(self.baselines, self.n_games)
@@ -100,41 +111,114 @@ class SimpleBaselineEvalCallback(BaseCallback):
 
             done = False
             total_turns = 0
+            episode_reward = 0.0
             while not done:
                 # Build action mask from pending valid moves
                 action_masks = MoveUtils.get_action_mask_for_env(base_env)
 
                 action, _ = self.model.predict(
-                    obs, deterministic=False, action_masks=action_masks
+                    obs, deterministic=True, action_masks=action_masks
                 )
                 # Step base env directly and keep obs normalized via VecNormalize
                 next_obs, reward, terminated, truncated, info = base_env.step(
                     int(action)
                 )
+                episode_reward += float(reward)
                 obs = self.eval_env.normalize_obs(next_obs)
                 total_turns += 1
                 done = bool(terminated or truncated)
                 if done:
                     try:
                         won = (
-                            base_env.game.game_over
-                            and base_env.game.winner == base_env.agent_color
+                            base_env.game.winner is not None
+                            and base_env.game.game_over
+                            and base_env.game.winner.color == base_env.agent_color
                         )
                     except Exception:
                         won = reward > 0
                     wins += 1 if won else 0
                     turns_list.append(total_turns)
+                    # Aggregate stats from final info
+                    # Use cumulative episode stats if provided (fallback to last-step stats)
+                    total_offensive += int(
+                        info.get(
+                            "episode_captured_opponents",
+                            info.get("captured_opponents", 0),
+                        )
+                    )
+                    total_defensive += int(
+                        info.get(
+                            "episode_captured_by_opponents",
+                            info.get("captured_by_opponents", 0),
+                        )
+                    )
+                    total_finished_tokens += int(info.get("finished_tokens", 0))
+                    cumulative_reward += episode_reward
+                    total_cap_ops_avail += int(
+                        info.get("episode_capture_ops_available", 0)
+                    )
+                    total_cap_ops_taken += int(info.get("episode_capture_ops_taken", 0))
+                    total_fin_ops_avail += int(
+                        info.get("episode_finish_ops_available", 0)
+                    )
+                    total_fin_ops_taken += int(info.get("episode_finish_ops_taken", 0))
+                    total_exit_ops_avail += int(
+                        info.get("episode_home_exit_ops_available", 0)
+                    )
+                    total_exit_ops_taken += int(
+                        info.get("episode_home_exit_ops_taken", 0)
+                    )
 
         win_rate = wins / float(self.n_games)
         avg_turns = float(np.mean(turns_list)) if turns_list else 0.0
+        avg_offensive = total_offensive / float(self.n_games)
+        avg_defensive = total_defensive / float(self.n_games)
+        avg_finished_tokens = total_finished_tokens / float(self.n_games)
+        avg_reward = cumulative_reward / float(self.n_games)
+        # Rates (guard divide-by-zero)
+        capture_opportunity_rate = (
+            total_cap_ops_taken / total_cap_ops_avail
+            if total_cap_ops_avail > 0
+            else 0.0
+        )
+        finish_opportunity_rate = (
+            total_fin_ops_taken / total_fin_ops_avail
+            if total_fin_ops_avail > 0
+            else 0.0
+        )
+        exit_opportunity_rate = (
+            total_exit_ops_taken / total_exit_ops_avail
+            if total_exit_ops_avail > 0
+            else 0.0
+        )
         # Log to TB if available
         try:
-            if hasattr(self, "logger") and self.logger is not None:
+            if self.logger is not None:
                 self.logger.record(self.log_prefix + "win_rate", win_rate)
                 self.logger.record(self.log_prefix + "avg_turns", avg_turns)
+                self.logger.record(
+                    self.log_prefix + "avg_offensive_captures", avg_offensive
+                )
+                self.logger.record(
+                    self.log_prefix + "avg_defensive_captures", avg_defensive
+                )
+                self.logger.record(
+                    self.log_prefix + "avg_finished_tokens", avg_finished_tokens
+                )
+                self.logger.record(self.log_prefix + "avg_episode_reward", avg_reward)
+                self.logger.record(
+                    self.log_prefix + "capture_opportunity_rate",
+                    capture_opportunity_rate,
+                )
+                self.logger.record(
+                    self.log_prefix + "finish_opportunity_rate", finish_opportunity_rate
+                )
+                self.logger.record(
+                    self.log_prefix + "exit_opportunity_rate", exit_opportunity_rate
+                )
         except Exception:
             pass
         if self.verbose:
             logger.info(
-                f"[Eval] win_rate={win_rate:.3f} avg_turns={avg_turns:.1f} over {self.n_games} games"
+                f"[Eval] win_rate={win_rate:.3f} avg_turns={avg_turns:.1f} off_cap={avg_offensive:.2f} def_cap={avg_defensive:.2f} fin_tokens={avg_finished_tokens:.2f} avg_reward={avg_reward:.2f} cap_rate={capture_opportunity_rate:.2f} fin_rate={finish_opportunity_rate:.2f} exit_rate={exit_opportunity_rate:.2f} over {self.n_games} games"
             )

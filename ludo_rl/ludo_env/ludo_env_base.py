@@ -6,8 +6,15 @@ from typing import Any, Dict, List, Optional
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+from loguru import logger
 from ludo_engine.core import LudoGame, PlayerColor
-from ludo_engine.models import Colors, GameConstants, MoveResult
+from ludo_engine.models import (
+    ALL_COLORS,
+    GameConstants,
+    MoveResult,
+    MoveType,
+    ValidMove,
+)
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
@@ -23,12 +30,10 @@ class LudoRLEnvBase(gym.Env):
         self.cfg = cfg
         self.rng = random.Random(cfg.seed)
 
-        self.agent_color = Colors.RED
+        self.agent_color = PlayerColor.RED
         self._episode = 0
 
-        self.game = LudoGame(
-            [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
-        )
+        self.game = LudoGame(ALL_COLORS)
         self.obs_builder = ObservationBuilder(cfg, self.game, self.agent_color)
         self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
         self.observation_space = spaces.Box(
@@ -36,10 +41,25 @@ class LudoRLEnvBase(gym.Env):
         )
 
         self._pending_dice: Optional[int] = None
-        self._pending_valid: List = []
+        self._pending_valid: List[ValidMove] = []
         self.turns = 0
         self.illegal_actions = 0
         self._reward_calc = RewardCalculator()
+        # Episode-level cumulative capture counters (agent perspective)
+        self._episode_captured_opponents = (
+            0  # total opponent tokens captured by agent this episode
+        )
+        self._episode_captured_by_opponents = (
+            0  # total agent tokens captured by opponents this episode
+        )
+        self._captured_by_opponents = 0  # per-agent-turn counter
+        # Opportunity instrumentation
+        self._episode_capture_opportunities_available = 0
+        self._episode_capture_opportunities_taken = 0
+        self._episode_finish_opportunities_available = 0
+        self._episode_finish_opportunities_taken = 0
+        self._episode_home_exit_opportunities_available = 0
+        self._episode_home_exit_opportunities_taken = 0
 
     # ---- hooks for subclasses -------------------------------------------------
     def on_reset_before_attach(self, options: Optional[Dict[str, Any]] = None) -> None:
@@ -64,7 +84,7 @@ class LudoRLEnvBase(gym.Env):
             Strategy = object  # type: ignore
             StrategyFactory = None  # type: ignore
 
-        colors = [c for c in Colors.ALL_COLORS if c != self.agent_color]
+        colors = [c for c in ALL_COLORS if c != self.agent_color]
         for strat, color in zip(strategies, colors):
             player = self.game.get_player_from_color(color)
             try:
@@ -84,16 +104,23 @@ class LudoRLEnvBase(gym.Env):
             random.seed(seed)
             np.random.seed(seed)
         if self.cfg.randomize_agent:
-            self.agent_color = self.rng.choice(list(Colors.ALL_COLORS))
-        self.game = LudoGame(
-            [PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE]
-        )
+            self.agent_color = self.rng.choice(ALL_COLORS)
+        self.game = LudoGame(ALL_COLORS)
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
 
         self._pending_dice = None
         self._pending_valid = []
         self.turns = 0
         self.illegal_actions = 0
+        self._episode_captured_opponents = 0
+        self._episode_captured_by_opponents = 0
+        self._captured_by_opponents = 0  # per-agent-turn counter
+        self._episode_capture_opportunities_available = 0
+        self._episode_capture_opportunities_taken = 0
+        self._episode_finish_opportunities_available = 0
+        self._episode_finish_opportunities_taken = 0
+        self._episode_home_exit_opportunities_available = 0
+        self._episode_home_exit_opportunities_taken = 0
 
         # subclass-specific setup and attach opponent strategies
         self.on_reset_before_attach(options)
@@ -112,7 +139,7 @@ class LudoRLEnvBase(gym.Env):
     def _ensure_agent_turn(self):
         while (
             not self.game.game_over
-            and self.game.get_current_player().color.value != self.agent_color
+            and self.game.get_current_player().color != self.agent_color
         ):
             self._simulate_single_opponent()
 
@@ -123,7 +150,7 @@ class LudoRLEnvBase(gym.Env):
 
     def _simulate_single_opponent(self):
         p = self.game.get_current_player()
-        if p.color.value == self.agent_color:
+        if p.color == self.agent_color:
             return
         dice = self.game.roll_dice()
         valid = self.game.get_valid_moves(p, dice)
@@ -134,16 +161,13 @@ class LudoRLEnvBase(gym.Env):
             except Exception:
                 token_id = valid[0].token_id
             res = self.game.execute_move(p, token_id, dice)
-            res.captured_tokens
             # Track captures on the agent caused by opponents
-            if getattr(res, "captured_tokens", None):
-                try:
-                    agent_color = self.agent_color
-                    for ct in res.captured_tokens:
-                        if ct.player_color == agent_color:
-                            self._captured_by_opponents += 1
-                except Exception:
-                    pass
+            if res.captured_tokens:
+                agent_color = self.agent_color
+                for ct in res.captured_tokens:
+                    if ct.player_color == agent_color:
+                        self._captured_by_opponents += 1
+                        self._episode_captured_by_opponents += 1
             if not res.extra_turn:
                 self.game.next_turn()
         else:
@@ -165,7 +189,7 @@ class LudoRLEnvBase(gym.Env):
             # no moves, lose turn
             res = MoveResult(
                 success=True,
-                player_color=agent.color.value,
+                player_color=agent.color,
                 token_id=0,
                 dice_value=dice,
                 old_position=-1,
@@ -180,6 +204,32 @@ class LudoRLEnvBase(gym.Env):
         else:
             action = int(action)
             valid_ids = [m.token_id for m in valid]
+            pre_fin_ops = 0
+            pre_exit_ops = 0
+            if self.cfg.track_opportunities:
+                # capture opportunities (each move that would capture at least one opponent)
+                cap_ops = sum(1 for m in valid if m.captures_opponent)
+                self._episode_capture_opportunities_available += cap_ops
+                # finish opportunities: any move whose resulting position equals FINISH_POSITION
+                pre_fin_ops = 0
+                for m in valid:
+                    tgt = m.target_position
+                    if tgt == GameConstants.FINISH_POSITION:
+                        pre_fin_ops += 1
+                self._episode_finish_opportunities_available += pre_fin_ops
+                # home exit opportunities still by move_type
+                pre_exit_ops = sum(
+                    1 for m in valid if m.move_type == MoveType.EXIT_HOME
+                )
+                self._episode_home_exit_opportunities_available += pre_exit_ops
+                if self.cfg.debug_capture_logging and self.turns < 100:
+                    try:
+                        mt_list = [m.move_type for m in valid]
+                        logger.debug(
+                            f"[OppDebug] turn={self.turns} dice={dice} move_types={mt_list} fin_by_pos_avail+={pre_fin_ops} exit_avail+={pre_exit_ops} cap_avail+={cap_ops}"
+                        )
+                    except Exception:
+                        pass
             tok_id = action
             if action not in valid_ids:
                 illegal = True
@@ -187,8 +237,32 @@ class LudoRLEnvBase(gym.Env):
                 tok_id = self.rng.choice(valid_ids)
             res = self.game.execute_move(agent, tok_id, dice)
             extra = res.extra_turn
+            if self.cfg.track_opportunities and valid:
+                chosen = None
+                for mv in valid:
+                    if mv.token_id == tok_id:
+                        chosen = mv
+                        break
+                if chosen is not None:
+                    if chosen.captures_opponent:
+                        self._episode_capture_opportunities_taken += 1
+                    # Determine if the executed move actually finished a token via position comparison
+                    finished_flag = (
+                        res.finished_token
+                        or res.new_position == GameConstants.FINISH_POSITION
+                    )
+                    if finished_flag:
+                        self._episode_finish_opportunities_taken += 1
+                        if (
+                            pre_fin_ops == 0
+                        ):  # retroactive availability if not pre-counted
+                            self._episode_finish_opportunities_available += 1
+                    if chosen.move_type == MoveType.EXIT_HOME:
+                        self._episode_home_exit_opportunities_taken += 1
+                        if pre_exit_ops == 0:
+                            self._episode_home_exit_opportunities_available += 1
 
-        # Reset per-full-turn counters
+        # Reset per-full-turn counters (opponent captures on agent since last agent action)
         self._captured_by_opponents = 0
 
         # opponent turns if no extra turn
@@ -196,20 +270,45 @@ class LudoRLEnvBase(gym.Env):
             self.game.next_turn()
             while (
                 not self.game.game_over
-                and self.game.get_current_player().color.value != self.agent_color
+                and self.game.get_current_player().color != self.agent_color
             ):
                 self._simulate_single_opponent()
 
+        # Track offensive captures for agent move
+        self._episode_captured_opponents += len(res.captured_tokens)
+        # Optional debug logging
+        if self.cfg.debug_capture_logging and res.captured_tokens:
+            offensive = len(res.captured_tokens)
+            defensive = self._captured_by_opponents
+            logger.debug(
+                f"[CaptureEvent] turn={self.turns} dice={dice} offensive={offensive} defensive_inc={defensive} cumulative_off={self._episode_captured_opponents} cumulative_def={self._episode_captured_by_opponents}"
+            )
+
         # rewards
+        terminated = res.game_won or self.game.game_over
+
+        # Get winner for reward calculation
+        winner = getattr(self.game, "winner", None) if self.game.game_over else None
+
         reward = self._reward_calc.compute(
             res=res,
             illegal=illegal,
             cfg=self.cfg,
             game_over=self.game.game_over,
-            captured_by_opponents=int(getattr(self, "_captured_by_opponents", 0)),
+            captured_by_opponents=int(self._captured_by_opponents),
             extra_turn=bool(extra),
+            winner=winner,
+            agent_color=self.agent_color,
+            home_tokens=len(
+                [
+                    i
+                    for i in self.game.get_player_from_color(
+                        self.agent_color
+                    ).player_positions()
+                    if i == GameConstants.HOME_POSITION
+                ]
+            ),
         )
-        terminated = bool(getattr(res, "game_won", False) or self.game.game_over)
 
         self.turns += 1
         truncated = False
@@ -226,9 +325,35 @@ class LudoRLEnvBase(gym.Env):
                     self._pending_dice, self._pending_valid = self._roll_agent_dice()
 
         obs = self.obs_builder.build(self.turns, self._pending_dice or 0)
+        # Compute simple extra stats for consumers (evaluation)
+        captured_opponents = len(res.captured_tokens)
+        captured_by_opponents = int(self._captured_by_opponents)
+        agent_player = self.game.get_player_from_color(self.agent_color)
+        finished_tokens = agent_player.get_finished_tokens_count()
         info = {
             "illegal_action": illegal,
             "illegal_actions_total": self.illegal_actions,
             "action_mask": MoveUtils.action_mask(self._pending_valid),
+            "captured_opponents": captured_opponents,
+            "captured_by_opponents": captured_by_opponents,
+            # cumulative episode-level stats (useful for evaluation)
+            "episode_captured_opponents": int(self._episode_captured_opponents),
+            "episode_captured_by_opponents": int(self._episode_captured_by_opponents),
+            "finished_tokens": finished_tokens,
+            # opportunity instrumentation
+            "episode_capture_ops_available": int(
+                self._episode_capture_opportunities_available
+            ),
+            "episode_capture_ops_taken": int(self._episode_capture_opportunities_taken),
+            "episode_finish_ops_available": int(
+                self._episode_finish_opportunities_available
+            ),
+            "episode_finish_ops_taken": int(self._episode_finish_opportunities_taken),
+            "episode_home_exit_ops_available": int(
+                self._episode_home_exit_opportunities_available
+            ),
+            "episode_home_exit_ops_taken": int(
+                self._episode_home_exit_opportunities_taken
+            ),
         }
         return obs, reward, terminated, truncated, info

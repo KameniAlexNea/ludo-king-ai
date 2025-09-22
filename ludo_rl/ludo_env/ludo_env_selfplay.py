@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
-from ludo_engine.models import Colors
+from ludo_engine.models import ALL_COLORS
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 
@@ -45,7 +45,7 @@ class LudoRLEnvSelfPlay(LudoRLEnvBase):
     def on_reset_before_attach(self, options: Optional[Dict] = None) -> None:
         # Build per-opponent observation builders for strategy perspectives
         self._opponent_builders = {}
-        for c in Colors.ALL_COLORS:
+        for c in ALL_COLORS:
             if c != self.agent_color:
                 self._opponent_builders[c] = ObservationBuilder(self.cfg, self.game, c)
         # Snapshot current policy for this episode (used by opponents)
@@ -64,7 +64,7 @@ class LudoRLEnvSelfPlay(LudoRLEnvBase):
                 obs_builder=self._opponent_builders[color],
                 deterministic=True,
             )
-            for color in Colors.ALL_COLORS
+            for color in ALL_COLORS
             if color != self.agent_color
         ]
         self._attach_strategies_mixed(strategies)

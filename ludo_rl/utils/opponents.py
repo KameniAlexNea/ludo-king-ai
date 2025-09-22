@@ -1,18 +1,27 @@
-def sample_opponents(
-    opponent_names: list[str], progress: float, boundaries: list[float], rgn
-) -> list[str]:
-    """Sample 3 opponent strategies using a single, simple weighted scheme.
+import itertools
+import random
+from typing import List, Optional, Union
 
-    - Every strategy has a base weight (derived from the benchmark order).
-    - A level multiplier (by training progress) boosts or dampens categories.
-    - We always compute weights for ALL available candidates and sample 3
-        without replacement proportional to those weights.
+import numpy as np
+
+
+def sample_opponents(
+    opponent_names: List[str],
+    progress: Optional[float],
+    boundaries: List[float],
+    rgn: Union[random.Random, np.random.Generator],
+) -> List[str]:
+    """Sample 3 opponent strategies using a weighted scheme.
+
+    - Each strategy has a base weight (derived from benchmark order).
+    - Multipliers adjust weights based on training progress.
+    - Always compute weights for all candidates and sample 3 without replacement.
     """
     candidates = list(opponent_names)
     if len(candidates) <= 3:
         return candidates
 
-    # Base weights from benchmark ranking (stronger => higher base)
+    # Base weights from benchmark ranking
     base_w = {
         "probabilistic_v2": 12.0,
         "probabilistic_v3": 11.0,
@@ -28,13 +37,13 @@ def sample_opponents(
         "weighted_random": 2.0,
     }
 
-    # Category for level multipliers
+    # Categories for multipliers
     easy = {"random", "weighted_random", "optimist"}
     medium = {"winner", "defensive", "balanced"}
     hard = {"cautious", "killer", "hybrid_prob", "probabilistic"}
     elite = {"probabilistic_v2", "probabilistic_v3"}
 
-    # Progress-based multipliers (simple and monotonic)
+    # Progress multipliers
     p = 0.0 if progress is None else float(progress)
     b = boundaries
     if p < b[0]:
@@ -57,20 +66,20 @@ def sample_opponents(
             return "elite"
         return "medium"
 
-    # Compute final weights for all available candidates
-    weights: list[float] = []
+    # Compute final weights
+    weights: List[float] = []
     for s in candidates:
         w0 = base_w.get(s, 1.0)
         w = w0 * mult.get(cat(s), 1.0)
         weights.append(max(1e-6, float(w)))
 
     # Weighted sample 3 without replacement
-    chosen: list[str] = []
+    chosen: List[str] = []
     cand = candidates[:]
     wts = weights[:]
     for _ in range(3):
         total = sum(wts)
-        r = rgn.random() * total
+        r = rgn.random() * total if hasattr(rgn, "random") else rgn.uniform(0, total)
         cum = 0.0
         idx = 0
         for i, w in enumerate(wts):
@@ -83,29 +92,29 @@ def sample_opponents(
     return chosen
 
 
-def build_opponent_triplets(baselines: list[str], n_games: int) -> list[list[str]]:
+def build_opponent_triplets(baselines: List[str], n_games: int) -> List[List[str]]:
     """Build a list of opponent triplets for evaluation games.
 
     Generates permutations of the provided baselines to create diverse 3-opponent combinations,
     then repeats or truncates to reach the desired number of games.
     """
-    import itertools
+    from itertools import cycle, islice
 
-    uniq = list(dict.fromkeys(baselines))  # deduplicate keeping order
-    triplets = []
+    uniq = list(dict.fromkeys(baselines))  # deduplicate, keep order
+    triplets: List[List[str]] = []
+
     if len(uniq) >= 3:
         for comb in itertools.combinations(uniq, 3):
             for perm in itertools.permutations(comb, 3):
                 triplets.append(list(perm))
-    else:
-        # If fewer than 3 provided, pad with repeats to reach 3
+    elif len(uniq) > 0:
+        # If fewer than 3, pad with repeats
         pad = (uniq * 3)[:3]
         triplets = [pad]
+    else:
+        # Fallback if nothing provided
+        triplets = [["random", "random", "random"]]
 
-    # Repeat or truncate to reach n_games size
-    if len(triplets) == 0:
-        triplets = [(["random", "random", "random"])]
-    while len(triplets) < n_games:
-        triplets.extend(triplets)
-    triplets = triplets[:n_games]
+    # Cycle through triplets to reach exactly n_games
+    triplets = list(islice(cycle(triplets), n_games))
     return triplets

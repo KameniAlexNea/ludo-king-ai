@@ -4,13 +4,13 @@ from typing import List
 
 import numpy as np
 from ludo_engine.core import LudoGame
-from ludo_engine.models import BoardConstants, GameConstants
+from ludo_engine.models import BoardConstants, GameConstants, PlayerColor
 
 from ludo_rl.config import EnvConfig
 
 
 class ObservationBuilder:
-    def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: str):
+    def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: PlayerColor):
         self.cfg = cfg
         self.game = game
         self.agent_color = agent_color
@@ -79,14 +79,14 @@ class ObservationBuilder:
 
         # opponents tokens
         for p in self.game.players:
-            if p.color.value == self.agent_color:
+            if p.color == self.agent_color:
                 continue
             for t in p.tokens:
                 obs.append(self.normalize_pos(t.position))
 
         # average progress per player (smooth signal 0..1)
         for player in self.game.players:
-            sp = BoardConstants.START_POSITIONS[player.color.value]
+            sp = BoardConstants.START_POSITIONS[player.color]
             prog_sum = 0.0
             for t in player.tokens:
                 prog_sum += self.token_progress(t.position, sp)

@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, Tuple
 
 from ludo_engine.core import LudoGame
-from ludo_engine.models import BoardConstants, Colors, GameConstants, MoveResult
+from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
+
 from ludo_rl.config import RewardConfig
 
 
@@ -21,6 +22,7 @@ class SimpleROWeights(RewardConfig):
     leave_home: float = 1.0
     safe_square: float = 0.5
     risk_per_threat: float = 1.5  # subtract per opponent that can capture next turn
+
 
 class RiskOpportunityCalculator:
     """Simple risk + opportunity heuristic as a class (like RewardCalculator).
@@ -43,14 +45,22 @@ class RiskOpportunityCalculator:
             return GameConstants.MAIN_BOARD_SIZE - from_pos + opp_pos
 
     @staticmethod
-    def _iter_opponent_positions(game: LudoGame, agent_color: Colors) -> Iterable[int]:
+    def _iter_opponent_positions(
+        game: LudoGame, agent_color: PlayerColor
+    ) -> Iterable[int]:
         for p in game.players:
-            if p.color.value == agent_color:
+            if p.color == agent_color:
                 continue
             for t in p.tokens:
                 yield t.position
 
-    def _risk_score(self, game: LudoGame, agent_color: Colors, target_pos: int, w: SimpleROWeights) -> float:
+    def _risk_score(
+        self,
+        game: LudoGame,
+        agent_color: PlayerColor,
+        target_pos: int,
+        w: SimpleROWeights,
+    ) -> float:
         if target_pos is None or target_pos < 0:
             return 0.0
         if BoardConstants.is_safe_position(target_pos):
@@ -65,7 +75,9 @@ class RiskOpportunityCalculator:
                 threats += 1
         return float(threats) * w.risk_per_threat
 
-    def _opportunity_score(self, move: MoveResult, old_pos: int, new_pos: int, w: SimpleROWeights) -> float:
+    def _opportunity_score(
+        self, move: MoveResult, old_pos: int, new_pos: int, w: SimpleROWeights
+    ) -> float:
         score = 0.0
         if move.captured_tokens:
             score += w.capture * len(move.captured_tokens)
@@ -75,9 +87,15 @@ class RiskOpportunityCalculator:
             score += w.extra_turn
         if (old_pos is None or old_pos < 0) and (new_pos is not None and new_pos >= 0):
             score += w.leave_home
-        if new_pos is not None and new_pos >= 0 and BoardConstants.is_safe_position(new_pos):
+        if (
+            new_pos is not None
+            and new_pos >= 0
+            and BoardConstants.is_safe_position(new_pos)
+        ):
             score += w.safe_square
-        if (old_pos is not None and old_pos >= 0) and (new_pos is not None and new_pos >= 0):
+        if (old_pos is not None and old_pos >= 0) and (
+            new_pos is not None and new_pos >= 0
+        ):
             steps = min(6, self._forward_distance(old_pos, new_pos))  # type: ignore
             score += steps * w.progress_per_step
         return score
@@ -85,7 +103,7 @@ class RiskOpportunityCalculator:
     def compute(
         self,
         game: LudoGame,
-        agent_color: Colors,
+        agent_color: PlayerColor,
         move: MoveResult,
         *,
         weights: SimpleROWeights | None = None,

@@ -7,10 +7,9 @@ Shared functionality for different tournament types.
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
-from loguru import logger
 from ludo_engine import LudoGame
 
-from ludo_stats.game_state_saver import GameStateSaver
+from ludo_tournament.game_state_saver import GameStateSaver
 
 
 class BaseTournament:
@@ -67,9 +66,8 @@ class BaseTournament:
             dice_value = game.roll_dice()
 
             context = game.get_ai_decision_context(dice_value)
-            context["dice_value"] = dice_value
 
-            if context["valid_moves"]:
+            if context.valid_moves:
                 selected_token = current_player.make_strategic_decision(context)
                 move_result = game.execute_move(
                     current_player, selected_token, dice_value
@@ -83,8 +81,8 @@ class BaseTournament:
 
                 game_results["player_stats"][strategy_name]["moves_made"] += 1
 
-                if move_result.get("captured_tokens"):
-                    captures = len(move_result["captured_tokens"])
+                if move_result.captured_tokens:
+                    captures = len(move_result.captured_tokens)
                     game_results["player_stats"][strategy_name]["tokens_captured"] += (
                         captures
                     )
@@ -92,22 +90,22 @@ class BaseTournament:
                         f"Turn {turn_count}: {strategy_name} captured {captures} token(s)"
                     )
 
-                if move_result.get("token_finished"):
+                if move_result.finished_token:
                     game_results["player_stats"][strategy_name]["tokens_finished"] += 1
                     game_results["game_events"].append(
                         f"Turn {turn_count}: {strategy_name} finished a token"
                     )
 
-                if move_result.get("game_won"):
+                if move_result.game_won:
                     game_results["winner"] = current_player
                     game_results["turns_played"] = turn_count
                     if verbose_output:
-                        logger.info(
+                        print(
                             f"  Game {game_number}: {strategy_name.upper()} WINS! ({turn_count} turns)"
                         )
                     break
 
-                if not move_result.get("extra_turn", False):
+                if not move_result.extra_turn:
                     game.next_turn()
             else:
                 game.next_turn()
@@ -117,7 +115,7 @@ class BaseTournament:
 
         if not game_results["winner"]:
             if verbose_output:
-                logger.info(f"  Game {game_number}: DRAW (time limit reached)")
+                print(f"  Game {game_number}: DRAW (time limit reached)")
             game_results["turns_played"] = turn_count
 
         # Save game states if state saver is available
@@ -160,8 +158,8 @@ class BaseTournament:
         self, participants: List[str], title: str = "FINAL TOURNAMENT STANDINGS"
     ) -> List[Dict[str, Any]]:
         """Display comprehensive tournament results."""
-        logger.info(f"\n🏆 {title} 🏆")
-        logger.info("=" * 70)
+        print(f"\n🏆 {title} 🏆")
+        print("=" * 70)
 
         # Calculate standings for all participants that played
         standings = []
@@ -189,10 +187,10 @@ class BaseTournament:
         standings.sort(key=lambda x: (x["win_rate"], x["wins"]), reverse=True)
 
         # Display standings table
-        logger.info(
+        print(
             f"{'Rank':<4} {'Model':<20} {'Wins':<6} {'Games':<7} {'Win Rate':<10} {'Avg Turns':<10}"
         )
-        logger.info("-" * 75)
+        print("-" * 75)
 
         for rank, entry in enumerate(standings, 1):
             medal = (
@@ -204,7 +202,7 @@ class BaseTournament:
                 if rank == 3
                 else "  "
             )
-            logger.info(
+            print(
                 f"{rank:<4} {entry['model'].upper():<20} {entry['wins']:<6} {entry['games']:<7} "
                 f"{entry['win_rate']:<9.1f}% {entry['avg_turns']:<9.1f} {medal}"
             )
@@ -213,14 +211,12 @@ class BaseTournament:
 
     def _display_detailed_analysis(self, participants: List[str]) -> None:
         """Show detailed strategic analysis."""
-        logger.info("\n📊 DETAILED PERFORMANCE ANALYSIS 📊")
-        logger.info("=" * 70)
+        print("\n📊 DETAILED PERFORMANCE ANALYSIS 📊")
+        print("=" * 70)
 
         # Performance metrics
-        logger.info(
-            f"\n{'Model':<20} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}"
-        )
-        logger.info("-" * 60)
+        print(f"\n{'Model':<20} {'Captures':<10} {'Finished':<10} {'Efficiency':<12}")
+        print("-" * 60)
 
         for participant in participants:
             if participant in self.detailed_stats:
@@ -230,13 +226,13 @@ class BaseTournament:
                     if stats["games_played"] > 0
                     else 0
                 )
-                logger.info(
+                print(
                     f"{participant.upper():<20} {stats['tokens_captured']:<10} {stats['tokens_finished']:<10} {efficiency:<11.2f}"
                 )
 
         # Head-to-head analysis (only show models with significant interactions)
-        logger.info("\n🥊 HEAD-TO-HEAD ANALYSIS 🥊")
-        logger.info("-" * 50)
+        print("\n🥊 HEAD-TO-HEAD ANALYSIS 🥊")
+        print("-" * 50)
 
         for participant in participants:
             if participant in self.detailed_stats:
@@ -244,11 +240,11 @@ class BaseTournament:
                 has_interactions = any(record["games"] > 0 for record in h2h.values())
 
                 if has_interactions:
-                    logger.info(f"\n{participant.upper()} vs Others:")
+                    print(f"\n{participant.upper()} vs Others:")
                     for opponent, record in h2h.items():
                         if record["games"] > 0:
                             win_rate = (record["wins"] / record["games"]) * 100
-                            logger.info(
+                            print(
                                 f"  vs {opponent.upper():<18}: {record['wins']}/{record['games']} ({win_rate:.1f}%)"
                             )
 
@@ -282,7 +278,7 @@ class BaseTournament:
             "total_games": sum(
                 stats["games_played"] for stats in self.detailed_stats.values()
             )
-            // 4,
+            // 4,  # each game increments games_played for 4 players
             "results": dict(self.detailed_stats),
             "champion": champion,
         }

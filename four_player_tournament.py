@@ -14,8 +14,8 @@ from dotenv import load_dotenv
 from loguru import logger
 from ludo_engine import LudoGame, PlayerColor, StrategyFactory
 
-from ludo_stats.game_state_saver import GameStateSaver
 from ludo_tournament import BaseTournament
+from ludo_tournament.game_state_saver import GameStateSaver
 
 # Load environment configuration
 load_dotenv()
