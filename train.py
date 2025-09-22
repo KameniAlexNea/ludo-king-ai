@@ -86,10 +86,18 @@ def main():
     except Exception:
         pass
 
+    # Set up learning rate (use callable for annealing)
+    if args.lr_anneal_enabled:
+        def lr_schedule(progress: float) -> float:
+            return args.learning_rate + progress * (args.lr_final - args.learning_rate)
+        learning_rate = lr_schedule
+    else:
+        learning_rate = args.learning_rate
+
     model = MaskablePPO(
         "MlpPolicy",
         venv,
-        learning_rate=args.learning_rate,
+        learning_rate=learning_rate,
         n_steps=args.n_steps,
         batch_size=args.batch_size,
         ent_coef=args.ent_coef,
@@ -102,7 +110,8 @@ def main():
     if args.env_type in ["selfplay", "hybrid"]:
         try:
             venv.env_method("set_model", model)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to inject model into environments for {args.env_type} training: {e}")
             # Some VecEnv types may require accessing the underlying attribute
             pass
 
@@ -156,12 +165,9 @@ def main():
             torch.from_numpy(mask_all),
         )
         # Temporary entropy boost
-        original_ent = (
-            model.ent_coef if isinstance(model.ent_coef, float) else args.ent_coef
-        )
+        original_ent = float(model.ent_coef)
         boosted_ent = original_ent + args.imitation_entropy_boost
-        if isinstance(model.ent_coef, float):
-            model.ent_coef = boosted_ent
+        model.ent_coef = boosted_ent
         logger.info(
             f"[Imitation] Training on {len(dataset)} samples (single+multi-seat) for {args.imitation_epochs} epochs"
         )
@@ -172,8 +178,7 @@ def main():
             batch_size=args.imitation_batch_size,
         )
         # Restore entropy coef (annealing callback will handle future schedule)
-        if isinstance(model.ent_coef, float):
-            model.ent_coef = original_ent
+        model.ent_coef = original_ent
         logger.info("[Imitation] Completed pretraining phase.")
         # After imitation, run a quick evaluation callback manually (one pass) to log baseline performance under TB
         try:
@@ -201,27 +206,6 @@ def main():
             verbose=1,
         )
         callbacks.append(ckpt_cb)
-
-    # Wrap learn with manual LR annealing by hooking into progress_cb logic via custom loop if needed.
-    # Simpler: monkey patch progress callback to also adjust LR based on num_timesteps.
-    if args.lr_anneal_enabled:
-        initial_lr = args.learning_rate
-        final_lr = args.lr_final
-        original_on_step = progress_cb._on_step
-
-        def patched_on_step():
-            frac = (
-                model.num_timesteps / float(args.total_steps)
-                if args.total_steps > 0
-                else 1.0
-            )
-            lr_val = apply_linear_lr(model, initial_lr, final_lr, frac)
-            _maybe_log_anneal(
-                model.num_timesteps, args.anneal_log_freq, model, lr_val, args
-            )
-            return original_on_step()
-
-        progress_cb._on_step = patched_on_step  # type: ignore
 
     model.learn(total_timesteps=args.total_steps, callback=callbacks)
     model.save(os.path.join(args.model_dir, "maskable_ppo_ludo_rl_final"))

@@ -66,8 +66,9 @@ class FrozenPolicyStrategy(Strategy):
         mask = self._build_action_mask(valid_moves)
         masked = probs * mask
         if masked.sum() <= 0:
-            # degenerate fallback
-            return int(np.argmax(mask))
+            # degenerate fallback - pick random valid action
+            valid_indices = [i for i, m in enumerate(mask) if m]
+            return int(np.random.choice(valid_indices)) if valid_indices else 0
         if self.deterministic:
             return int(np.argmax(masked))
         masked /= masked.sum()
