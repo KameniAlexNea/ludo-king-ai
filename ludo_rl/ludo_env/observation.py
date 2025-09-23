@@ -2,7 +2,7 @@ from typing import List
 
 import numpy as np
 from ludo_engine.core import LudoGame
-from ludo_engine.models import BoardConstants, GameConstants, PlayerColor
+from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
 
 from ludo_rl.config import EnvConfig
 
@@ -21,8 +21,10 @@ class ObservationBuilder:
     def compute_size(self) -> int:
         base = 0
         base += 4  # agent token positions
+        base += 4  # agent color one-hot
         base += 12  # opponents token positions
-        base += 4  # finished tokens per player
+        base += 16  # token progresses (4 players * 4)
+        base += 16  # token safety flags (4 players * 4)
         base += 6  # dice one-hot
         if self.cfg.obs.include_turn_index:
             base += 1
@@ -51,7 +53,7 @@ class ObservationBuilder:
 
     def token_progress(self, pos: int, start_pos: int) -> float:
         if pos == GameConstants.HOME_POSITION:
-            return 0.0
+            return 0.
         if pos >= BoardConstants.HOME_COLUMN_START:
             home_steps = (
                 min(GameConstants.FINISH_POSITION, pos)
@@ -70,25 +72,25 @@ class ObservationBuilder:
     def build(self, turn_counter: int, dice: int) -> np.ndarray:
         obs: List[float] = []
 
-        # agent tokens
-        agent = self.game.get_player_from_color(self.agent_color)
-        for t in agent.tokens:
-            obs.append(self.normalize_pos(t.position))
+        # agent color one-hot
+        color_onehot = [0.0] * 4
+        color_onehot[ALL_COLORS.index(self.agent_color)] = 1.0
+        obs.extend(color_onehot)
 
-        # opponents tokens
+        # agent and opponents tokens
         for p in self.game.players:
-            if p.color == self.agent_color:
-                continue
             for t in p.tokens:
                 obs.append(self.normalize_pos(t.position))
 
-        # average progress per player (smooth signal 0..1)
+        # token progresses and safety flags
         for player in self.game.players:
-            sp = BoardConstants.START_POSITIONS[player.color]
-            prog_sum = 0.0
             for t in player.tokens:
-                prog_sum += self.token_progress(t.position, sp)
-            obs.append(prog_sum / float(GameConstants.TOKENS_PER_PLAYER))
+                obs.append(
+                    self.token_progress(
+                        t.position, BoardConstants.START_POSITIONS[player.color]
+                    )
+                )
+                obs.append(self.is_vulnerable(t.position))
 
         # dice one-hot (1..6)
         d = [0.0] * 6
@@ -100,3 +102,8 @@ class ObservationBuilder:
             obs.append(min(1.0, turn_counter / float(self.cfg.max_turns)))
 
         return np.asarray(obs, dtype=np.float32)
+
+    def is_vulnerable(self, pos: int) -> bool:
+        return not (
+            pos == GameConstants.HOME_POSITION or BoardConstants.is_safe_position(pos)
+        )

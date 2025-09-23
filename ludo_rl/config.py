@@ -5,18 +5,18 @@ from typing import List, Literal, Optional
 @dataclass
 class RewardConfig:
     # Terminal
-    win: float = 10.0
+    win: float = 20.0
     lose: float = -10.0
     draw: float = 0.0
-    finish_token: float = 1.0
+    finish_token: float = 2.0
     # Events
     capture: float = 0.8
-    got_captured: float = -0.8
+    got_captured: float = -1.0
     all_captured: float = -2.0
-    exit_start: float = 0.2
+    exit_start: float = 1.0
     extra_turn: float = 0.3
     # Shaping
-    progress_scale: float = 0.05
+    progress_scale: float = 0.03
     active_token_bonus: float = 0.001
     inactivity_penalty: float = -0.002
     # Constraints
@@ -30,7 +30,7 @@ class RewardConfig:
     )  # penalty when capture available but not taken
     enable_progressive_finish: bool = True
     finish_multipliers: List[float] = field(
-        default_factory=lambda: [1.0, 1.1, 1.3, 1.8]
+        default_factory=lambda: [1.2, 1.4, 1.7, 2.2]
     )
     # Scaling / annealing
     capture_reward_scale: float = 1.0  # can be annealed back toward 1.0
@@ -47,6 +47,9 @@ class ObservationConfig:
 class OpponentConfig:
     candidates: List[str] = field(
         default_factory=lambda: [
+            "random",
+            "weighted_random",
+            "optimist",
             "probabilistic_v2",
             "probabilistic_v3",
             "probabilistic",
@@ -56,9 +59,6 @@ class OpponentConfig:
             "defensive",
             "balanced",
             "winner",
-            "optimist",
-            "random",
-            "weighted_random",
         ]
     )
     evaluation_candidates: List[str] = field(
@@ -76,7 +76,7 @@ class OpponentConfig:
 @dataclass
 class CurriculumConfig:
     enabled: bool = True
-    boundaries: List[float] = field(default_factory=lambda: [0.5, 0.75, 0.9])
+    boundaries: List[float] = field(default_factory=lambda: [0.1, 0.4, 0.7])
 
 
 @dataclass
@@ -96,15 +96,16 @@ class EnvConfig:
 
 @dataclass
 class TrainConfig:
-    total_steps: int = 5_000_000
+    total_steps: int = 20_000_000
     n_envs: int = 8
-    eval_freq: int = 100_000
+    eval_freq: int = 200_000
     tournament_games: int = 240
     algorithm: str = "maskable_ppo"
-    learning_rate: float = 1e-4
+    learning_rate: float = 3e-4
+    lr_final: float = 8e-5
     n_steps: int = 2048
     batch_size: int = 512
-    ent_coef: float = 10.0
+    ent_coef: float = 0.2
     logdir: str = "./training/logs"
     model_dir: str = "./training/models"
     max_turns: int = 500
@@ -117,7 +118,7 @@ class TrainConfig:
         50_000  # number of environment steps worth of samples to collect
     )
     imitation_batch_size: int = 1024
-    imitation_epochs: int = 3
+    imitation_epochs: int = 5
     imitation_entropy_boost: float = 0.01
     # Scheduling / annealing
     use_entropy_annealing: bool = False
@@ -130,7 +131,6 @@ class TrainConfig:
     # Additional training options
     checkpoint_freq: int = 100_000
     checkpoint_prefix: str = "ppo_ludo"
-    lr_final: float = 2.5e-5  # learning_rate * 0.25
     lr_anneal_enabled: bool = False
     anneal_log_freq: int = 50_000
     env_type: Literal["classic", "selfplay", "hybrid"] = "classic"
