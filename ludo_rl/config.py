@@ -104,11 +104,11 @@ class TrainConfig:
     learning_rate: float = 1e-4
     n_steps: int = 2048
     batch_size: int = 512
-    ent_coef: float = 0.1
+    ent_coef: float = 0.5
     logdir: str = "./training/logs"
     model_dir: str = "./training/models"
     max_turns: int = 500
-    eval_games: int = 60
+    eval_games: int = 240
     eval_baselines: str = ",".join(OpponentConfig().evaluation_candidates)
     # Imitation kickstart
     imitation_enabled: bool = False
@@ -120,11 +120,11 @@ class TrainConfig:
     imitation_epochs: int = 3
     imitation_entropy_boost: float = 0.01
     # Scheduling / annealing
-    entropy_coef_initial: float = 0.1
-    entropy_coef_final: float = 0.02
-    entropy_anneal_steps: int = 2_000_000
+    entropy_coef_initial: float = 0.5
+    entropy_coef_final: float = 0.1
+    entropy_anneal_steps: int = 3_000_000
     capture_scale_initial: float = 1.3
-    capture_scale_final: float = 1.0
+    capture_scale_final: float = 1.1
     capture_scale_anneal_steps: int = 1_500_000
     # Additional training options
     checkpoint_freq: int = 100_000

@@ -69,8 +69,8 @@ def main():
 
     # Set up learning rate (use callable for annealing)
     if args.lr_anneal_enabled:
-        def lr_schedule(progress: float) -> float:
-            return args.learning_rate + progress * (args.lr_final - args.learning_rate)
+        def lr_schedule(progress_remaining: float) -> float:
+            return args.lr_final + progress_remaining * (args.learning_rate - args.lr_final)
         learning_rate = lr_schedule
     else:
         learning_rate = args.learning_rate
