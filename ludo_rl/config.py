@@ -76,7 +76,7 @@ class OpponentConfig:
 @dataclass
 class CurriculumConfig:
     enabled: bool = True
-    boundaries: List[float] = field(default_factory=lambda: [0.25, 0.6, 0.9])
+    boundaries: List[float] = field(default_factory=lambda: [0.5, 0.75, 0.9])
 
 
 @dataclass
@@ -104,7 +104,7 @@ class TrainConfig:
     learning_rate: float = 1e-4
     n_steps: int = 2048
     batch_size: int = 512
-    ent_coef: float = 0.5
+    ent_coef: float = 5.0
     logdir: str = "./training/logs"
     model_dir: str = "./training/models"
     max_turns: int = 500
@@ -120,8 +120,9 @@ class TrainConfig:
     imitation_epochs: int = 3
     imitation_entropy_boost: float = 0.01
     # Scheduling / annealing
+    use_entropy_annealing: bool = False
     entropy_coef_initial: float = 0.5
-    entropy_coef_final: float = 0.1
+    entropy_coef_final: float = 0.3
     entropy_anneal_steps: int = 3_000_000
     capture_scale_initial: float = 1.3
     capture_scale_final: float = 1.1

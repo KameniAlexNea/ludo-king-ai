@@ -83,6 +83,12 @@ def parse_args() -> TrainConfig:
     )
     # Learning rate annealing
     p.add_argument(
+        "--use-entropy-annealing",
+        action="store_true",
+        default=TrainConfig.use_entropy_annealing,
+        help="Use entropy annealing if True",
+    )
+    p.add_argument(
         "--lr-final",
         type=float,
         default=TrainConfig.learning_rate * 0.25,

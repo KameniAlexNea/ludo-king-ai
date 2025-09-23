@@ -109,8 +109,10 @@ def main():
     callbacks = [progress_cb, eval_cb]
 
     # Annealing callback (entropy + capture scale + learning rate). We'll wrap learning rate logic here by updating optimizer lr.
-    anneal_cb = AnnealingCallback(args)
-    callbacks.append(anneal_cb)
+    if args.use_entropy_annealing:
+        logger.info("[Annealing] Using entropy annealing during training.")
+        anneal_cb = AnnealingCallback(args)
+        callbacks.append(anneal_cb)
 
     # Hybrid switch callback if using hybrid env
     if args.env_type == "hybrid":
