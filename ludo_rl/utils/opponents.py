@@ -47,13 +47,13 @@ def sample_opponents(
     p = 0.0 if progress is None else float(progress)
     b = boundaries
     if p < b[0]:
-        mult = {"easy": 1.5, "medium": 1.0, "hard": 0.6, "elite": 0.4}
+        mult = {"easy": 3.0, "medium": 1.0, "hard": 0.3, "elite": 0.1}
     elif p < b[1]:
-        mult = {"easy": 1.2, "medium": 1.1, "hard": 0.9, "elite": 0.6}
+        mult = {"easy": 2.0, "medium": 1.0, "hard": 0.6, "elite": 0.4}
     elif p < b[2]:
-        mult = {"easy": 0.8, "medium": 1.0, "hard": 1.2, "elite": 1.4}
+        mult = {"easy": 0.6, "medium": 1.0, "hard": 1.4, "elite": 2.0}
     else:
-        mult = {"easy": 0.5, "medium": 0.9, "hard": 1.3, "elite": 1.6}
+        mult = {"easy": 0.3, "medium": 0.8, "hard": 1.5, "elite": 2.5}
 
     def cat(name: str) -> str:
         if name in easy:
