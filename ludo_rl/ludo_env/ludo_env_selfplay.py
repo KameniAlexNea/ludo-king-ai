@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Dict, Optional
 
 from ludo_engine.models import ALL_COLORS

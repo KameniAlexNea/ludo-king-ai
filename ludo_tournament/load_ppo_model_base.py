@@ -14,8 +14,6 @@ If you need to attach the PPO policy to multiple games, call
 `build_frozen_strategy`.
 """
 
-from __future__ import annotations
-
 import os
 import re
 from typing import List, Optional, Tuple

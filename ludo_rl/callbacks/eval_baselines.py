@@ -1,17 +1,17 @@
-from __future__ import annotations
-
-from typing import List, Optional, Sequence
 import os
+from typing import List, Optional, Sequence
+
 import numpy as np
 from loguru import logger
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
+from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_base import StepInfo
 from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.opponents import build_opponent_triplets
-from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
+
 
 class SimpleBaselineEvalCallback(MaskableEvalCallback):
     """Periodically evaluate the current policy vs fixed baselines.
@@ -35,7 +35,7 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         log_prefix: str = "eval/",
         verbose: int = 0,
         env_cfg: Optional[EnvConfig] = None,
-        eval_env: VecNormalize=None,
+        eval_env: VecNormalize = None,
         best_model_save_path: Optional[str] = None,
     ):
         self.baselines = list(baselines)
@@ -76,6 +76,7 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         if self.model.get_vec_normalize_env() is not None:
             try:
                 from stable_baselines3.common.callbacks import sync_envs_normalization
+
                 sync_envs_normalization(self.training_env, self.eval_env)
             except AttributeError as e:
                 raise AssertionError(
@@ -138,20 +139,49 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
                     # Convert info dict to StepInfo dataclass for type safety
                     step_info = StepInfo(**info)
                     # Use record_mean for automatic TensorBoard averaging
-                    self.logger.record_mean(self.log_prefix + "avg_offensive_captures", step_info.episode_captured_opponents)
-                    self.logger.record_mean(self.log_prefix + "avg_defensive_captures", step_info.episode_captured_by_opponents)
-                    self.logger.record_mean(self.log_prefix + "avg_finished_tokens", step_info.finished_tokens)
-                    self.logger.record_mean(self.log_prefix + "avg_episode_reward", episode_reward)
+                    self.logger.record_mean(
+                        self.log_prefix + "avg_offensive_captures",
+                        step_info.episode_captured_opponents,
+                    )
+                    self.logger.record_mean(
+                        self.log_prefix + "avg_defensive_captures",
+                        step_info.episode_captured_by_opponents,
+                    )
+                    self.logger.record_mean(
+                        self.log_prefix + "avg_finished_tokens",
+                        step_info.finished_tokens,
+                    )
+                    self.logger.record_mean(
+                        self.log_prefix + "avg_episode_reward", episode_reward
+                    )
                     # Record opportunity rates per game for averaging
-                    cap_rate = (step_info.episode_capture_ops_taken / step_info.episode_capture_ops_available 
-                              if step_info.episode_capture_ops_available > 0 else 0.0)
-                    fin_rate = (step_info.episode_finish_ops_taken / step_info.episode_finish_ops_available 
-                              if step_info.episode_finish_ops_available > 0 else 0.0)
-                    exit_rate = (step_info.episode_home_exit_ops_taken / step_info.episode_home_exit_ops_available 
-                               if step_info.episode_home_exit_ops_available > 0 else 0.0)
-                    self.logger.record_mean(self.log_prefix + "capture_opportunity_rate", cap_rate)
-                    self.logger.record_mean(self.log_prefix + "finish_opportunity_rate", fin_rate)
-                    self.logger.record_mean(self.log_prefix + "exit_opportunity_rate", exit_rate)
+                    cap_rate = (
+                        step_info.episode_capture_ops_taken
+                        / step_info.episode_capture_ops_available
+                        if step_info.episode_capture_ops_available > 0
+                        else 0.0
+                    )
+                    fin_rate = (
+                        step_info.episode_finish_ops_taken
+                        / step_info.episode_finish_ops_available
+                        if step_info.episode_finish_ops_available > 0
+                        else 0.0
+                    )
+                    exit_rate = (
+                        step_info.episode_home_exit_ops_taken
+                        / step_info.episode_home_exit_ops_available
+                        if step_info.episode_home_exit_ops_available > 0
+                        else 0.0
+                    )
+                    self.logger.record_mean(
+                        self.log_prefix + "capture_opportunity_rate", cap_rate
+                    )
+                    self.logger.record_mean(
+                        self.log_prefix + "finish_opportunity_rate", fin_rate
+                    )
+                    self.logger.record_mean(
+                        self.log_prefix + "exit_opportunity_rate", exit_rate
+                    )
 
         win_rate = wins / float(self.n_games)
         avg_turns = float(np.mean(turns_list)) if turns_list else 0.0

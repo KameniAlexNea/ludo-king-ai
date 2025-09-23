@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import random
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -8,7 +6,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from loguru import logger
-from ludo_engine.core import LudoGame, PlayerColor, Player
+from ludo_engine.core import LudoGame, Player, PlayerColor
 from ludo_engine.models import (
     ALL_COLORS,
     GameConstants,
@@ -16,7 +14,6 @@ from ludo_engine.models import (
     MoveType,
     ValidMove,
 )
-
 from ludo_engine.strategies.base import Strategy  # type: ignore
 from ludo_engine.strategies.strategy import StrategyFactory  # type: ignore
 
@@ -29,6 +26,7 @@ from ludo_rl.utils.reward_calculator import RewardCalculator
 @dataclass
 class EpisodeStats:
     """Tracks episode-level statistics."""
+
     captured_opponents: int = 0
     captured_by_opponents: int = 0
     capture_ops_available: int = 0
@@ -42,6 +40,7 @@ class EpisodeStats:
 @dataclass
 class StepInfo:
     """Information returned from a step."""
+
     illegal_action: bool
     illegal_actions_total: int
     action_mask: np.ndarray
@@ -316,22 +315,30 @@ class LudoRLEnvBase(gym.Env):
         self.episode_stats.capture_ops_available += capture_ops
 
         # Finish opportunities
-        finish_ops = sum(1 for move in valid_moves
-                        if move.target_position == GameConstants.FINISH_POSITION)
+        finish_ops = sum(
+            1
+            for move in valid_moves
+            if move.target_position == GameConstants.FINISH_POSITION
+        )
         self.episode_stats.finish_ops_available += finish_ops
 
         # Home exit opportunities
-        exit_ops = sum(1 for move in valid_moves if move.move_type == MoveType.EXIT_HOME)
+        exit_ops = sum(
+            1 for move in valid_moves if move.move_type == MoveType.EXIT_HOME
+        )
         self.episode_stats.home_exit_ops_available += exit_ops
 
         # Debug logging
         if self.cfg.debug_capture_logging and self.current_turn < 100:
             self._log_opportunity_debug(valid_moves, finish_ops, exit_ops, capture_ops)
 
-    def _track_opportunities_after_move(self, move_result: MoveResult,
-                                      valid_moves: List[ValidMove], action: int) -> None:
+    def _track_opportunities_after_move(
+        self, move_result: MoveResult, valid_moves: List[ValidMove], action: int
+    ) -> None:
         """Track taken opportunities after executing a move."""
-        chosen_move = next((move for move in valid_moves if move.token_id == action), None)
+        chosen_move = next(
+            (move for move in valid_moves if move.token_id == action), None
+        )
         if chosen_move is None:
             return
 
@@ -340,8 +347,10 @@ class LudoRLEnvBase(gym.Env):
             self.episode_stats.capture_ops_taken += 1
 
         # Track finish opportunity taken
-        finished_token = (move_result.finished_token or
-                         move_result.new_position == GameConstants.FINISH_POSITION)
+        finished_token = (
+            move_result.finished_token
+            or move_result.new_position == GameConstants.FINISH_POSITION
+        )
         if finished_token:
             self.episode_stats.finish_ops_taken += 1
 
@@ -349,8 +358,13 @@ class LudoRLEnvBase(gym.Env):
         if chosen_move.move_type == MoveType.EXIT_HOME:
             self.episode_stats.home_exit_ops_taken += 1
 
-    def _log_opportunity_debug(self, valid_moves: List[ValidMove],
-                             finish_ops: int, exit_ops: int, capture_ops: int) -> None:
+    def _log_opportunity_debug(
+        self,
+        valid_moves: List[ValidMove],
+        finish_ops: int,
+        exit_ops: int,
+        capture_ops: int,
+    ) -> None:
         """Log debug information about opportunities."""
         try:
             move_types = [move.move_type for move in valid_moves]
@@ -386,8 +400,11 @@ class LudoRLEnvBase(gym.Env):
 
             # Track captures on agent
             if move_result.captured_tokens:
-                agent_tokens_captured = sum(1 for token in move_result.captured_tokens
-                                          if token.player_color == self.agent_color)
+                agent_tokens_captured = sum(
+                    1
+                    for token in move_result.captured_tokens
+                    if token.player_color == self.agent_color
+                )
                 self.captured_by_opponents_this_turn += agent_tokens_captured
                 self.episode_stats.captured_by_opponents += agent_tokens_captured
 
@@ -396,7 +413,9 @@ class LudoRLEnvBase(gym.Env):
         else:
             self.game.next_turn()
 
-    def _get_opponent_action(self, player: Player, dice: int, valid_moves: List[ValidMove]) -> int:
+    def _get_opponent_action(
+        self, player: Player, dice: int, valid_moves: List[ValidMove]
+    ) -> int:
         """Get the action for an opponent player."""
         try:
             context = self.game.get_ai_decision_context(dice)
@@ -404,7 +423,9 @@ class LudoRLEnvBase(gym.Env):
         except Exception:
             return self.rng.choice(valid_moves).token_id
 
-    def _calculate_reward(self, move_result: Optional[MoveResult], is_illegal: bool) -> float:
+    def _calculate_reward(
+        self, move_result: Optional[MoveResult], is_illegal: bool
+    ) -> float:
         """Calculate the reward for the current step."""
         if move_result is None:
             # No valid moves case
@@ -425,8 +446,11 @@ class LudoRLEnvBase(gym.Env):
     def _count_home_tokens(self) -> int:
         """Count how many of the agent's tokens are still at home."""
         agent_player = self.game.get_player_from_color(self.agent_color)
-        return sum(1 for pos in agent_player.player_positions()
-                  if pos == GameConstants.HOME_POSITION)
+        return sum(
+            1
+            for pos in agent_player.player_positions()
+            if pos == GameConstants.HOME_POSITION
+        )
 
     def _check_termination(self, move_result: Optional[MoveResult]) -> bool:
         """Check if the episode should terminate."""
@@ -456,7 +480,9 @@ class LudoRLEnvBase(gym.Env):
         """Build observation for terminal states."""
         return self.obs_builder.build(self.current_turn, 0)
 
-    def _build_step_info(self, move_result: Optional[MoveResult], is_illegal: bool) -> StepInfo:
+    def _build_step_info(
+        self, move_result: Optional[MoveResult], is_illegal: bool
+    ) -> StepInfo:
         """Build the info dataclass for the step."""
         captured_opponents = len(move_result.captured_tokens) if move_result else 0
 

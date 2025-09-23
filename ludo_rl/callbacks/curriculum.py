@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-from sb3_contrib.common.maskable.callbacks import *
 from stable_baselines3.common.callbacks import BaseCallback
 
 

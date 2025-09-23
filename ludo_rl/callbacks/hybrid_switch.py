@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from loguru import logger
 from stable_baselines3.common.callbacks import BaseCallback
 
