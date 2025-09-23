@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import List, Optional, Sequence
-
+import os
 import numpy as np
 from loguru import logger
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
@@ -11,7 +11,7 @@ from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_base import StepInfo
 from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.opponents import build_opponent_triplets
-
+from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
 class SimpleBaselineEvalCallback(MaskableEvalCallback):
     """Periodically evaluate the current policy vs fixed baselines.
@@ -35,7 +35,7 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         log_prefix: str = "eval/",
         verbose: int = 0,
         env_cfg: Optional[EnvConfig] = None,
-        eval_env=None,  # Use provided eval_env from train.py
+        eval_env: VecNormalize=None,
         best_model_save_path: Optional[str] = None,
     ):
         self.baselines = list(baselines)
@@ -165,7 +165,6 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
             if self.verbose:
                 print(f"New best win rate: {win_rate:.3f}!")
             if self.best_model_save_path is not None:
-                import os
                 os.makedirs(self.best_model_save_path, exist_ok=True)
                 self.model.save(os.path.join(self.best_model_save_path, "best_model"))
             self.best_win_rate = win_rate

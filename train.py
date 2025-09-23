@@ -66,10 +66,6 @@ def main():
     eval_env = DummyVecEnv([make_env(999, 1337, env_cfg, "classic")])
     eval_env = VecMonitor(eval_env)
     eval_env = VecNormalize(eval_env, training=False, norm_obs=True, norm_reward=False)
-    try:
-        eval_env.obs_rms = venv.obs_rms
-    except Exception:
-        pass
 
     # Set up learning rate (use callable for annealing)
     if args.lr_anneal_enabled:

@@ -98,6 +98,8 @@ class LudoRLEnvBase(gym.Env):
             low=-1.0, high=1.0, shape=(1,), dtype=np.float32
         )
 
+        self._initialize_game_state()
+
     # ---- hooks for subclasses -------------------------------------------------
     def on_reset_before_attach(self, options: Optional[Dict[str, Any]] = None) -> None:
         """Subclass hook before attaching opponents; game and obs_builder are initialized."""
