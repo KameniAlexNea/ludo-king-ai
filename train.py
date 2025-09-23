@@ -60,12 +60,12 @@ def main():
         )
 
     venv = VecMonitor(venv)
-    venv = VecNormalize(venv, norm_reward=False)
+    venv = VecNormalize(venv, norm_reward=True)
 
     # Separate eval env with same wrappers (always classic for evaluation vs baselines)
     eval_env = DummyVecEnv([make_env(999, 1337, env_cfg, "classic")])
     eval_env = VecMonitor(eval_env)
-    eval_env = VecNormalize(eval_env, training=False, norm_obs=True, norm_reward=False)
+    eval_env = VecNormalize(eval_env, training=False, norm_obs=True, norm_reward=True)
 
     # Set up learning rate (use callable for annealing)
     if args.lr_anneal_enabled:
@@ -82,9 +82,11 @@ def main():
         n_steps=args.n_steps,
         batch_size=args.batch_size,
         ent_coef=args.ent_coef,
+        vf_coef=0.25,
         tensorboard_log=args.logdir,
         verbose=1,
         device="auto",
+        policy_kwargs={"net_arch": [128, 128]},
     )
 
     # When using selfplay or hybrid, inject the live model into envs so they can snapshot policy at reset

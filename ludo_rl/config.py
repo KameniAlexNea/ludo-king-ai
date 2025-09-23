@@ -5,28 +5,28 @@ from typing import List, Literal, Optional
 @dataclass
 class RewardConfig:
     # Terminal
-    win: float = 100.0
-    lose: float = -100.0
-    draw: float = 10.0
-    finish_token: float = 10.0
+    win: float = 10.0
+    lose: float = -10.0
+    draw: float = 0.0
+    finish_token: float = 1.0
     # Events
-    capture: float = 8.0
-    got_captured: float = -8.0
-    all_captured: float = -20.0
-    exit_start: float = 2.0
-    extra_turn: float = 3.0
+    capture: float = 0.8
+    got_captured: float = -0.8
+    all_captured: float = -2.0
+    exit_start: float = 0.2
+    extra_turn: float = 0.3
     # Shaping
     progress_scale: float = 0.05
-    active_token_bonus: float = 0.1
-    inactivity_penalty: float = -0.02
+    active_token_bonus: float = 0.001
+    inactivity_penalty: float = -0.002
     # Constraints
-    illegal_action: float = -5.0
+    illegal_action: float = -0.5
     time_penalty: float = -0.001
     # Shaping toggles & extras
     enable_capture_shaping: bool = True
-    capture_choice_bonus: float = 0.5  # added when a capturing move is chosen
+    capture_choice_bonus: float = 0.05  # added when a capturing move is chosen
     decline_capture_penalty: float = (
-        -0.1
+        -0.01
     )  # penalty when capture available but not taken
     enable_progressive_finish: bool = True
     finish_multipliers: List[float] = field(
@@ -104,7 +104,7 @@ class TrainConfig:
     learning_rate: float = 1e-4
     n_steps: int = 2048
     batch_size: int = 512
-    ent_coef: float = 5.0
+    ent_coef: float = 10.0
     logdir: str = "./training/logs"
     model_dir: str = "./training/models"
     max_turns: int = 500
