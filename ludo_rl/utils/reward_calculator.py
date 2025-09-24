@@ -1,7 +1,7 @@
 from typing import Optional
 
 from ludo_engine.core import Player
-from ludo_engine.models import GameConstants, MoveResult, PlayerColor, BoardConstants
+from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
 from ludo_rl.config import EnvConfig
 
@@ -10,9 +10,7 @@ def token_progress(pos: int, start_pos: int) -> float:
     if pos == GameConstants.HOME_POSITION:
         return 0.0
     if pos >= GameConstants.HOME_COLUMN_START:
-        home_steps = (
-            pos - GameConstants.HOME_COLUMN_START + 1
-        )
+        home_steps = pos - GameConstants.HOME_COLUMN_START + 1
         return (GameConstants.MAIN_BOARD_SIZE + home_steps) / float(
             GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
         )
@@ -61,7 +59,9 @@ class RewardCalculator:
                 r += cfg.reward.progress_scale * delta
 
         # Safe zone reward
-        if not BoardConstants.is_safe_position(res.old_position) and BoardConstants.is_safe_position(res.new_position):
+        if not BoardConstants.is_safe_position(
+            res.old_position
+        ) and BoardConstants.is_safe_position(res.new_position):
             r += cfg.reward.safe_zone_reward
 
         # Event rewards

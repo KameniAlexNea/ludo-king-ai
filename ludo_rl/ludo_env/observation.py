@@ -16,7 +16,9 @@ class ObservationBuilder:
         self.start_pos = BoardConstants.START_POSITIONS[self.agent_color]
         self.size = self.compute_size()
         self.total_path = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
-        self.agent_player = next(p for p in self.game.players if p.color == self.agent_color)
+        self.agent_player = next(
+            p for p in self.game.players if p.color == self.agent_color
+        )
 
     def compute_size(self) -> int:
         base = 0
@@ -66,11 +68,7 @@ class ObservationBuilder:
 
         # token progresses and safety flags (only agent)
         for t in self.agent_player.tokens:
-            obs.append(
-                token_progress(
-                    t.position, self.start_pos
-                )
-            )
+            obs.append(token_progress(t.position, self.start_pos))
             obs.append(self.is_vulnerable(t.position))
 
         # dice one-hot (1..6)
