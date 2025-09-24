@@ -1,9 +1,27 @@
 from typing import Optional
 
 from ludo_engine.core import Player
-from ludo_engine.models import GameConstants, MoveResult, PlayerColor
+from ludo_engine.models import GameConstants, MoveResult, PlayerColor, BoardConstants
 
 from ludo_rl.config import EnvConfig
+
+
+def token_progress(pos: int, start_pos: int) -> float:
+    if pos == GameConstants.HOME_POSITION:
+        return 0.0
+    if pos >= GameConstants.HOME_COLUMN_START:
+        home_steps = (
+            pos - GameConstants.HOME_COLUMN_START + 1
+        )
+        return (GameConstants.MAIN_BOARD_SIZE + home_steps) / float(
+            GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+        )
+    # on main board: forward distance from start to current pos
+    if pos >= start_pos:
+        steps = pos - start_pos
+    else:
+        steps = GameConstants.MAIN_BOARD_SIZE - start_pos + pos
+    return steps / float(GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
 
 
 class RewardCalculator:
@@ -32,6 +50,19 @@ class RewardCalculator:
         home_tokens: int = 0,
     ) -> float:
         r = 0.0
+
+        # Progress reward
+        if agent_color is not None:
+            start_pos = BoardConstants.START_POSITIONS[agent_color]
+            progress_old = token_progress(res.old_position, start_pos)
+            progress_new = token_progress(res.new_position, start_pos)
+            delta = progress_new - progress_old
+            if delta > 0:
+                r += cfg.reward.progress_scale * delta
+
+        # Safe zone reward
+        if not BoardConstants.is_safe_position(res.old_position) and BoardConstants.is_safe_position(res.new_position):
+            r += cfg.reward.safe_zone_reward
 
         # Event rewards
         if res.captured_tokens:

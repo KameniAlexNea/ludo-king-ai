@@ -5,6 +5,7 @@ from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
 
 from ludo_rl.config import EnvConfig
+from ludo_rl.utils.reward_calculator import token_progress
 
 
 class ObservationBuilder:
@@ -14,17 +15,16 @@ class ObservationBuilder:
         self.agent_color = agent_color
         self.start_pos = BoardConstants.START_POSITIONS[self.agent_color]
         self.size = self.compute_size()
-        self.total_path = GameConstants.MAIN_BOARD_SIZE + (
-            GameConstants.FINISH_POSITION - BoardConstants.HOME_COLUMN_START
-        )
+        self.total_path = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+        self.agent_player = next(p for p in self.game.players if p.color == self.agent_color)
 
     def compute_size(self) -> int:
         base = 0
         base += 4  # agent token positions
         base += 4  # agent color one-hot
         base += 12  # opponents token positions
-        base += 16  # token progresses (4 players * 4)
-        base += 16  # token safety flags (4 players * 4)
+        base += 4  # agent token progresses
+        base += 4  # agent token safety flags
         base += 6  # dice one-hot
         if self.cfg.obs.include_turn_index:
             base += 1
@@ -51,24 +51,6 @@ class ObservationBuilder:
             rank / (GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
         ) * 2.0 - 1.0
 
-    def token_progress(self, pos: int, start_pos: int) -> float:
-        if pos == GameConstants.HOME_POSITION:
-            return 0.
-        if pos >= BoardConstants.HOME_COLUMN_START:
-            home_steps = (
-                min(GameConstants.FINISH_POSITION, pos)
-                - BoardConstants.HOME_COLUMN_START
-            )
-            return (GameConstants.MAIN_BOARD_SIZE + max(0, home_steps)) / float(
-                self.total_path
-            )
-        # on main board: forward distance from start to current pos
-        if pos >= start_pos:
-            steps = pos - start_pos
-        else:
-            steps = GameConstants.MAIN_BOARD_SIZE - start_pos + pos
-        return steps / float(self.total_path)
-
     def build(self, turn_counter: int, dice: int) -> np.ndarray:
         obs: List[float] = []
 
@@ -82,15 +64,14 @@ class ObservationBuilder:
             for t in p.tokens:
                 obs.append(self.normalize_pos(t.position))
 
-        # token progresses and safety flags
-        for player in self.game.players:
-            for t in player.tokens:
-                obs.append(
-                    self.token_progress(
-                        t.position, BoardConstants.START_POSITIONS[player.color]
-                    )
+        # token progresses and safety flags (only agent)
+        for t in self.agent_player.tokens:
+            obs.append(
+                token_progress(
+                    t.position, self.start_pos
                 )
-                obs.append(self.is_vulnerable(t.position))
+            )
+            obs.append(self.is_vulnerable(t.position))
 
         # dice one-hot (1..6)
         d = [0.0] * 6

@@ -8,15 +8,16 @@ class RewardConfig:
     win: float = 20.0
     lose: float = -10.0
     draw: float = 0.0
-    finish_token: float = 2.0
+    finish_token: float = 10.0
     # Events
     capture: float = 0.8
     got_captured: float = -1.0
     all_captured: float = -2.0
-    exit_start: float = 1.0
+    exit_start: float = 5.0
     extra_turn: float = 0.3
     # Shaping
-    progress_scale: float = 0.03
+    progress_scale: float = 0.1
+    safe_zone_reward: float = 1.0
     active_token_bonus: float = 0.001
     inactivity_penalty: float = -0.002
     # Constraints
