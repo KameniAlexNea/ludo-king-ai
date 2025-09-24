@@ -242,6 +242,8 @@ class FourPlayerPPOTournament(BaseTournament):
                             player_name,
                             colour,
                             self.model_preference,
+                            game=game,
+                            max_turns=self.max_turns_per_game,
                         )
                     else:
                         strategy = StrategyFactory.create_strategy(player_name)

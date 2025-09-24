@@ -159,6 +159,7 @@ def load_ppo_strategy(
     game: Optional[LudoGame] = None,
     deterministic: bool = True,
     device: str = "cpu",
+    max_turns=500,
 ):
     """Backward-compatible loader that returns a FrozenPolicyStrategy.
 
@@ -179,7 +180,7 @@ def load_ppo_strategy(
         model=model,
         game=game,
         agent_color=agent_color,
-        env_cfg=EnvConfig(max_turns=500, seed=42),
+        env_cfg=EnvConfig(max_turns=max_turns, seed=42),
         player_name=player_name,
         deterministic=deterministic,
     )
