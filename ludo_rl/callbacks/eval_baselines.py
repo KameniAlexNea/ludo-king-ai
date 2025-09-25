@@ -10,7 +10,7 @@ from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_base import StepInfo
 from ludo_rl.utils.move_utils import MoveUtils
-from ludo_rl.utils.opponents import build_opponent_triplets
+from ludo_rl.utils.opponents import build_opponent_combinations
 
 
 class SimpleBaselineEvalCallback(MaskableEvalCallback):
@@ -49,7 +49,8 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
 
         self.eval_env = eval_env
         self.best_model_save_path = best_model_save_path
-        self.best_win_rate = -np.inf
+        # Track best win rate per player-count setup (e.g., 2,3,4)
+        self.best_win_rate = {}
 
         # Initialize parent with eval_env and other parameters
         super().__init__(
@@ -93,127 +94,149 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         return True
 
     def _run_eval(self):
-        wins = 0
-        turns_list: List[int] = []
+        # Decide which player-count setups to evaluate. If env is fixed, only
+        # evaluate that setup; otherwise evaluate all allowed counts.
+        if self.env_cfg.fixed_num_players is not None:
+            setups = [self.env_cfg.fixed_num_players]
+        else:
+            setups = list(self.env_cfg.allowed_player_counts)
 
-        # Build a small pool of opponent triplets using permutations and sampling
-        triplets = build_opponent_triplets(self.baselines, self.n_games)
+        # Evaluate separately for each setup and log/save results per-setup
+        for setup in setups:
+            wins = 0
+            turns_list: List[int] = []
 
-        # Evaluate games
-        for opp in triplets:
-            # Work directly with the underlying base env for precise control
-            base_env: LudoRLEnv = self.eval_env.envs[0]
-            obs, _ = base_env.reset(options={"opponents": opp})
-            # Normalize initial obs using shared VecNormalize stats
-            obs = self.eval_env.normalize_obs(obs)
+            # Build a small pool of opponent combinations using permutations and sampling
+            triplets = build_opponent_combinations(self.baselines, self.n_games, setup)
 
-            done = False
-            total_turns = 0
-            episode_reward = 0.0
-            # Accumulate per-step reward breakdown into episode totals
-            episode_breakdown: dict = {}
-            while not done:
-                # Build action mask from pending valid moves
-                action_masks = MoveUtils.get_action_mask_for_env(base_env)
-
-                action, _ = self.model.predict(
-                    obs, deterministic=True, action_masks=action_masks
+            # Evaluate games for this setup
+            for opp in triplets:
+                # Work directly with the underlying base env for precise control
+                base_env: LudoRLEnv = self.eval_env.envs[0]
+                # Force the player-count for this eval run and the opponents
+                obs, _ = base_env.reset(
+                    options={"opponents": opp, "fixed_num_players": setup}
                 )
-                # Step base env directly and keep obs normalized via VecNormalize
-                next_obs, reward, terminated, truncated, info = base_env.step(
-                    int(action)
-                )
-                # accumulate step-level breakdown if present
-                br = info.get("reward_breakdown") if isinstance(info, dict) else None
-                if br:
-                    for k, v in br.items():
-                        episode_breakdown[k] = episode_breakdown.get(k, 0.0) + float(v)
-                episode_reward += float(reward)
-                obs = self.eval_env.normalize_obs(next_obs)
-                total_turns += 1
-                done = bool(terminated or truncated)
-                if done:
-                    try:
-                        won = (
-                            base_env.game.winner is not None
-                            and base_env.game.game_over
-                            and base_env.game.winner.color == base_env.agent_color
+                # Normalize initial obs using shared VecNormalize stats
+                obs = self.eval_env.normalize_obs(obs)
+
+                done = False
+                total_turns = 0
+                episode_reward = 0.0
+                # Accumulate per-step reward breakdown into episode totals
+                episode_breakdown: dict = {}
+                while not done:
+                    # Build action mask from pending valid moves
+                    action_masks = MoveUtils.get_action_mask_for_env(base_env)
+
+                    action, _ = self.model.predict(
+                        obs, deterministic=True, action_masks=action_masks
+                    )
+                    # Step base env directly and keep obs normalized via VecNormalize
+                    next_obs, reward, terminated, truncated, info = base_env.step(
+                        int(action)
+                    )
+                    # accumulate step-level breakdown if present
+                    br = (
+                        info.get("reward_breakdown") if isinstance(info, dict) else None
+                    )
+                    if br:
+                        for k, v in br.items():
+                            episode_breakdown[k] = episode_breakdown.get(
+                                k, 0.0
+                            ) + float(v)
+                    episode_reward += float(reward)
+                    obs = self.eval_env.normalize_obs(next_obs)
+                    total_turns += 1
+                    done = bool(terminated or truncated)
+                    if done:
+                        try:
+                            won = (
+                                base_env.game.winner is not None
+                                and base_env.game.game_over
+                                and base_env.game.winner.color == base_env.agent_color
+                            )
+                        except Exception:
+                            won = reward > 0
+                        wins += 1 if won else 0
+                        turns_list.append(total_turns)
+                        # Pop reward_breakdown from info before building StepInfo
+                        if isinstance(info, dict) and "reward_breakdown" in info:
+                            info.pop("reward_breakdown")
+                        # Convert info dict to StepInfo dataclass for type safety
+                        step_info = StepInfo(**info)
+
+                        # Setup-specific prefix for TensorBoard keys
+                        prefix = f"{self.log_prefix}setup_{setup}/"
+
+                        # Use record_mean for automatic TensorBoard averaging
+                        self.logger.record_mean(
+                            prefix + "avg_offensive_captures",
+                            step_info.episode_captured_opponents,
                         )
-                    except Exception:
-                        won = reward > 0
-                    wins += 1 if won else 0
-                    turns_list.append(total_turns)
-                    # Pop reward_breakdown from info before building StepInfo
-                    if isinstance(info, dict) and "reward_breakdown" in info:
-                        info.pop("reward_breakdown")
-                    # Convert info dict to StepInfo dataclass for type safety
-                    step_info = StepInfo(**info)
-                    # Use record_mean for automatic TensorBoard averaging
-                    self.logger.record_mean(
-                        self.log_prefix + "avg_offensive_captures",
-                        step_info.episode_captured_opponents,
-                    )
-                    self.logger.record_mean(
-                        self.log_prefix + "avg_defensive_captures",
-                        step_info.episode_captured_by_opponents,
-                    )
-                    self.logger.record_mean(
-                        self.log_prefix + "avg_finished_tokens",
-                        step_info.finished_tokens,
-                    )
-                    self.logger.record_mean(
-                        self.log_prefix + "avg_episode_reward", episode_reward
-                    )
-                    # Record opportunity rates per game for averaging
-                    cap_rate = (
-                        step_info.episode_capture_ops_taken
-                        / step_info.episode_capture_ops_available
-                        if step_info.episode_capture_ops_available > 0
-                        else 0.0
-                    )
-                    fin_rate = (
-                        step_info.episode_finish_ops_taken
-                        / step_info.episode_finish_ops_available
-                        if step_info.episode_finish_ops_available > 0
-                        else 0.0
-                    )
-                    exit_rate = (
-                        step_info.episode_home_exit_ops_taken
-                        / step_info.episode_home_exit_ops_available
-                        if step_info.episode_home_exit_ops_available > 0
-                        else 0.0
-                    )
-                    self.logger.record_mean(
-                        self.log_prefix + "capture_opportunity_rate", cap_rate
-                    )
-                    self.logger.record_mean(
-                        self.log_prefix + "finish_opportunity_rate", fin_rate
-                    )
-                    self.logger.record_mean(
-                        self.log_prefix + "exit_opportunity_rate", exit_rate
-                    )
-                    # Log reward breakdown components if available
-                    if episode_breakdown:
-                        for key, val in episode_breakdown.items():
-                            try:
-                                self.logger.record_mean(
-                                    f"{self.log_prefix}reward_breakdown/{key}", float(val)
-                                )
-                            except Exception:
-                                pass
+                        self.logger.record_mean(
+                            prefix + "avg_defensive_captures",
+                            step_info.episode_captured_by_opponents,
+                        )
+                        self.logger.record_mean(
+                            prefix + "avg_finished_tokens",
+                            step_info.finished_tokens,
+                        )
+                        self.logger.record_mean(
+                            prefix + "avg_episode_reward", episode_reward
+                        )
+                        # Record opportunity rates per game for averaging
+                        cap_rate = (
+                            step_info.episode_capture_ops_taken
+                            / step_info.episode_capture_ops_available
+                            if step_info.episode_capture_ops_available > 0
+                            else 0.0
+                        )
+                        fin_rate = (
+                            step_info.episode_finish_ops_taken
+                            / step_info.episode_finish_ops_available
+                            if step_info.episode_finish_ops_available > 0
+                            else 0.0
+                        )
+                        exit_rate = (
+                            step_info.episode_home_exit_ops_taken
+                            / step_info.episode_home_exit_ops_available
+                            if step_info.episode_home_exit_ops_available > 0
+                            else 0.0
+                        )
+                        self.logger.record_mean(
+                            prefix + "capture_opportunity_rate", cap_rate
+                        )
+                        self.logger.record_mean(
+                            prefix + "finish_opportunity_rate", fin_rate
+                        )
+                        self.logger.record_mean(
+                            prefix + "exit_opportunity_rate", exit_rate
+                        )
+                        # Log reward breakdown components if available
+                        if episode_breakdown:
+                            for key, val in episode_breakdown.items():
+                                try:
+                                    self.logger.record_mean(
+                                        f"{prefix}reward_breakdown/{key}", float(val)
+                                    )
+                                except Exception:
+                                    pass
 
-        win_rate = wins / float(self.n_games)
-        avg_turns = float(np.mean(turns_list)) if turns_list else 0.0
+            win_rate = wins / float(self.n_games)
+            avg_turns = float(np.mean(turns_list)) if turns_list else 0.0
 
-        # Log to TB if available
-        self.logger.record(self.log_prefix + "win_rate", win_rate)
-        self.logger.record(self.log_prefix + "avg_turns", avg_turns)
+            # Log to TB if available (setup-specific keys)
+            self.logger.record(f"{self.log_prefix}setup_{setup}/win_rate", win_rate)
+            self.logger.record(f"{self.log_prefix}setup_{setup}/avg_turns", avg_turns)
 
-        # Save best model if win_rate improved
-        if win_rate > self.best_win_rate:
-            if self.verbose:
-                print(f"New best win rate: {win_rate:.3f}!")
-            if self.best_model_save_path is not None:
-                os.makedirs(self.best_model_save_path, exist_ok=True)
-                self.model.save(os.path.join(self.best_model_save_path, "best_model"))
-            self.best_win_rate = win_rate
+            # Save best model if win_rate improved for this setup
+            prev_best = self.best_win_rate.get(setup, -np.inf)
+            if win_rate > prev_best:
+                if self.verbose:
+                    print(f"New best win rate for setup {setup}: {win_rate:.3f}!")
+                if self.best_model_save_path is not None:
+                    save_dir = os.path.join(self.best_model_save_path, f"setup_{setup}")
+                    os.makedirs(save_dir, exist_ok=True)
+                    self.model.save(os.path.join(save_dir, "best_model"))
+                self.best_win_rate[setup] = win_rate

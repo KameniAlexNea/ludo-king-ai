@@ -96,6 +96,11 @@ class EnvConfig:
     max_turns: int = 500
     seed: Optional[int] = None
     randomize_agent: bool = True
+    # If set, forces env to use this many players (e.g., 2 or 4). If None, a
+    # player count will be sampled per-reset from `allowed_player_counts`.
+    fixed_num_players: Optional[int] = None
+    # Allowed player counts to sample from when `fixed_num_players` is None.
+    allowed_player_counts: List[int] = field(default_factory=lambda: [2, 4])
     reward: RewardConfig = field(default_factory=RewardConfig)
     obs: ObservationConfig = field(default_factory=ObservationConfig)
     opponents: OpponentConfig = field(default_factory=OpponentConfig)

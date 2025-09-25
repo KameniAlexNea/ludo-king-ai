@@ -29,7 +29,8 @@ class LudoRLEnv(LudoRLEnvBase):
             strategies = options["opponents"]
         else:
             strategies = self._sample_opponents()
-        colors = [c for c in ALL_COLORS if c != self.agent_color]
+        # Derive opponent colors from the current game player order (skip agent)
+        colors = [p.color for p in self.game.players if p.color != self.agent_color]
         for name, color in zip(strategies, colors):
             player = self.game.get_player_from_color(color)
             try:

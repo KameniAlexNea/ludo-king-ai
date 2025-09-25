@@ -1,7 +1,7 @@
 import itertools
 import random
 from typing import List, Optional, Union
-
+from itertools import cycle, islice
 import numpy as np
 
 
@@ -92,29 +92,28 @@ def sample_opponents(
     return chosen
 
 
-def build_opponent_triplets(baselines: List[str], n_games: int) -> List[List[str]]:
-    """Build a list of opponent triplets for evaluation games.
-
-    Generates permutations of the provided baselines to create diverse 3-opponent combinations,
-    then repeats or truncates to reach the desired number of games.
+def build_opponent_combinations(baselines: List[str], n_games: int, n_comb: int = 3) -> List[List[str]]:
     """
-    from itertools import cycle, islice
+    Selects random opponent combinations.
 
-    uniq = list(dict.fromkeys(baselines))  # deduplicate, keep order
-    triplets: List[List[str]] = []
+    Args:
+        baselines (List[str]): List of available opponents.
+        n_games (int): Number of games (number of combinations to generate).
+        n_comb (int): Number of opponents per combination. Default is 3.
 
-    if len(uniq) >= 3:
-        for comb in itertools.combinations(uniq, 3):
-            for perm in itertools.permutations(comb, 3):
-                triplets.append(list(perm))
-    elif len(uniq) > 0:
-        # If fewer than 3, pad with repeats
-        pad = (uniq * 3)[:3]
-        triplets = [pad]
-    else:
-        # Fallback if nothing provided
-        triplets = [["random", "random", "random"]]
+    Returns:
+        List[List[str]]: A list of opponent groups.
+    """
+    if not baselines:
+        return []
 
-    # Cycle through triplets to reach exactly n_games
-    triplets = list(islice(cycle(triplets), n_games))
-    return triplets
+    combinations = []
+    for _ in range(n_games):
+        # sample with replacement if baselines < n_comb, otherwise without replacement
+        if len(baselines) < n_comb:
+            opponents = random.choices(baselines, k=n_comb)
+        else:
+            opponents = random.sample(baselines, k=n_comb)
+        combinations.append(opponents)
+
+    return combinations

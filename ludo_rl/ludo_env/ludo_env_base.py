@@ -115,8 +115,7 @@ class LudoRLEnvBase(gym.Env):
     # ---- helpers --------------------------------------------------------------
     def _attach_strategies_mixed(self, strategies: List) -> None:
         """Attach strategies to non-agent players. Items can be Strategy instances or names."""
-
-        colors = [c for c in ALL_COLORS if c != self.agent_color]
+        colors = [p.color for p in self.game.players if p.color != self.agent_color]
         for strat, color in zip(strategies, colors):
             player = self.game.get_player_from_color(color)
             try:
@@ -133,7 +132,13 @@ class LudoRLEnvBase(gym.Env):
     ):
         """Reset the environment for a new episode."""
         self._setup_random_seed(seed)
+        # Allow callers to temporarily force a player count for this reset
+        orig_fixed = getattr(self.cfg, "fixed_num_players", None)
+        if options and isinstance(options, dict) and "fixed_num_players" in options:
+            self.cfg.fixed_num_players = options["fixed_num_players"]
         self._initialize_game_state()
+        # restore original fixed_num_players so the env.cfg is unchanged across resets
+        self.cfg.fixed_num_players = orig_fixed
         self._reset_episode_stats()
 
         # Subclass-specific setup and opponent attachment
@@ -162,7 +167,39 @@ class LudoRLEnvBase(gym.Env):
         if self.cfg.randomize_agent:
             self.agent_color = self.rng.choice(ALL_COLORS)
 
-        self.game = LudoGame(ALL_COLORS)
+        # determine number of players for this episode
+        if self.cfg.fixed_num_players is not None:
+            num_players = int(self.cfg.fixed_num_players)
+        else:
+            num_players = int(self.rng.choice(self.cfg.allowed_player_counts))
+
+        # build chosen_colors according to requested groupings:
+        # 2 players -> agent and opposite (index + 2)
+        # 3 players -> agent and next two clockwise (index, index+1, index+2)
+        # 4 players -> all colors rotated so agent is first
+        start_idx = ALL_COLORS.index(self.agent_color)
+        if num_players == 2:
+            chosen_colors = [
+                ALL_COLORS[start_idx],
+                ALL_COLORS[(start_idx + 2) % len(ALL_COLORS)],
+            ]
+        elif num_players == 3:
+            chosen_colors = [
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)] for i in range(3)
+            ]
+        elif num_players >= len(ALL_COLORS):
+            # default to full set rotated so agent is first
+            chosen_colors = [
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)] for i in range(len(ALL_COLORS))
+            ]
+        else:
+            # fallback: take the first num_players clockwise including agent
+            chosen_colors = [
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)] for i in range(num_players)
+            ]
+
+        # create game with selected colors (agent will be first in the game's player order)
+        self.game = LudoGame(chosen_colors)
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
 
         # Update observation space with correct size
