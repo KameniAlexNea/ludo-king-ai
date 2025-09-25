@@ -86,7 +86,7 @@ def main():
         tensorboard_log=args.logdir,
         verbose=1,
         device="auto",
-        policy_kwargs={"net_arch": [256, 128]},
+        gamma=0.995,
     )
 
     # When using selfplay or hybrid, inject the live model into envs so they can snapshot policy at reset

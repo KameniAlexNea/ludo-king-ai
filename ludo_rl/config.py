@@ -50,7 +50,9 @@ class RewardConfig:
 @dataclass
 class ObservationConfig:
     include_turn_index: bool = True
-    include_dice_one_hot: bool = True
+    # Encoding choices: prefer normalized floats by default for compactness.
+    include_dice_one_hot: bool = False
+    include_color_one_hot: bool = False
 
 
 @dataclass
