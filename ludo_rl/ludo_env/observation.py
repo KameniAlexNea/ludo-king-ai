@@ -86,10 +86,10 @@ class ObservationBuilder:
         for t in self.agent_player.tokens:
             obs.append(self.normalize_pos(t.position))
 
-        # For opponents, use ALL_COLORS order to get deterministic slots relative to colors
-        for color in ALL_COLORS:
-            if color == self.agent_color:
-                continue
+        # For opponents, iterate colors in seat-relative order starting after agent
+        start_idx = ALL_COLORS.index(self.agent_color)
+        ordered = ALL_COLORS[start_idx + 1 :] + ALL_COLORS[:start_idx]
+        for color in ordered:
             # find player with this color in the current game (may be absent in 2-player)
             if color in self.present_colors:
                 p = self.game.get_player_from_color(color)
