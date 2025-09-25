@@ -110,6 +110,8 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
             done = False
             total_turns = 0
             episode_reward = 0.0
+            # Accumulate per-step reward breakdown into episode totals
+            episode_breakdown: dict = {}
             while not done:
                 # Build action mask from pending valid moves
                 action_masks = MoveUtils.get_action_mask_for_env(base_env)
@@ -121,6 +123,11 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
                 next_obs, reward, terminated, truncated, info = base_env.step(
                     int(action)
                 )
+                # accumulate step-level breakdown if present
+                br = info.get("reward_breakdown") if isinstance(info, dict) else None
+                if br:
+                    for k, v in br.items():
+                        episode_breakdown[k] = episode_breakdown.get(k, 0.0) + float(v)
                 episode_reward += float(reward)
                 obs = self.eval_env.normalize_obs(next_obs)
                 total_turns += 1
@@ -136,6 +143,9 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
                         won = reward > 0
                     wins += 1 if won else 0
                     turns_list.append(total_turns)
+                    # Pop reward_breakdown from info before building StepInfo
+                    if isinstance(info, dict) and "reward_breakdown" in info:
+                        info.pop("reward_breakdown")
                     # Convert info dict to StepInfo dataclass for type safety
                     step_info = StepInfo(**info)
                     # Use record_mean for automatic TensorBoard averaging
@@ -182,6 +192,15 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
                     self.logger.record_mean(
                         self.log_prefix + "exit_opportunity_rate", exit_rate
                     )
+                    # Log reward breakdown components if available
+                    if episode_breakdown:
+                        for key, val in episode_breakdown.items():
+                            try:
+                                self.logger.record_mean(
+                                    f"{self.log_prefix}reward_breakdown/{key}", float(val)
+                                )
+                            except Exception:
+                                pass
 
         win_rate = wins / float(self.n_games)
         avg_turns = float(np.mean(turns_list)) if turns_list else 0.0

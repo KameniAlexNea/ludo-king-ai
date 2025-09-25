@@ -2,7 +2,7 @@
 
 import copy
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
 import torch
@@ -82,7 +82,7 @@ def main():
         n_steps=args.n_steps,
         batch_size=args.batch_size,
         ent_coef=args.ent_coef,
-        vf_coef=0.5,
+        vf_coef=args.vf_coef,
         tensorboard_log=args.logdir,
         verbose=1,
         device="auto",

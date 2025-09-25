@@ -231,7 +231,7 @@ class LudoRLEnvBase(gym.Env):
             self._handle_opponent_turns()
 
         # Calculate reward and check termination
-        reward = self._calculate_reward(move_result, is_illegal)
+        reward, reward_breakdown = self._calculate_reward(move_result, is_illegal)
         terminated = self._check_termination(move_result)
         truncated = self._check_truncation()
 
@@ -258,7 +258,14 @@ class LudoRLEnvBase(gym.Env):
         obs = self._build_observation()
         step_info = self._build_step_info(move_result, is_illegal)
 
-        return obs, reward, terminated, truncated, step_info.__dict__
+        info_dict = step_info.__dict__
+        # Attach reward breakdown totals for diagnostic logging
+        try:
+            info_dict["reward_breakdown"] = reward_breakdown
+        except Exception:
+            info_dict["reward_breakdown"] = {}
+
+        return obs, reward, terminated, truncated, info_dict
 
     def _execute_agent_action(self, action: int) -> Optional[MoveResult]:
         """Execute the agent's chosen action and return the result."""
@@ -431,7 +438,7 @@ class LudoRLEnvBase(gym.Env):
             # No valid moves case
             move_result = self._create_no_move_result(self.pending_dice)
 
-        return self.reward_calc.compute(
+        return self.reward_calc.compute_with_breakdown(
             res=move_result,
             illegal=is_illegal,
             cfg=self.cfg,

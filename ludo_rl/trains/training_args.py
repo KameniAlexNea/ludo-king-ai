@@ -34,6 +34,7 @@ def parse_args() -> TrainConfig:
     p.add_argument("--n-steps", type=int, default=TrainConfig.n_steps)
     p.add_argument("--batch-size", type=int, default=TrainConfig.batch_size)
     p.add_argument("--ent-coef", type=float, default=TrainConfig.ent_coef)
+    p.add_argument("--vf-coef", type=float, default=TrainConfig.vf_coef)
     p.add_argument("--max-turns", type=int, default=TrainConfig.max_turns)
     # Imitation / kickstart
     p.add_argument(

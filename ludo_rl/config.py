@@ -5,29 +5,38 @@ from typing import List, Literal, Optional
 @dataclass
 class RewardConfig:
     # Terminal
-    win: float = 20.0
-    lose: float = -10.0
+    # Terminal (win-focused preset)
+    win: float = 50.0
+    lose: float = -20.0
     draw: float = 0.0
-    finish_token: float = 10.0
+    # Reduce heavy shaping on finishing tokens
+    finish_token: float = 6.0
     # Events
-    capture: float = 0.8
-    got_captured: float = -1.0
-    all_captured: float = -2.0
-    exit_start: float = 5.0
-    extra_turn: float = 0.3
+    # Per-capture reward reduced (to avoid overvaluing captures vs finishing)
+    capture: float = 0.4
+    # Being captured is penalized more strongly to discourage unsafe play
+    got_captured: float = -3.0
+    all_captured: float = -6.0
+    # Reward for leaving home (reduced). Will be given only when another token
+    # is already active (diversity exit reward).
+    exit_start: float = 1.0
+    extra_turn: float = 0.1
     # Shaping
-    progress_scale: float = 0.1
-    safe_zone_reward: float = 1.0
+    # Reduce shaping so terminal win matters more
+    # Reduce shaping so terminal win matters more
+    progress_scale: float = 0.01
+    safe_zone_reward: float = 0.1
     active_token_bonus: float = 0.001
-    inactivity_penalty: float = -0.002
+    inactivity_penalty: float = -0.005
     # Constraints
-    illegal_action: float = -0.5
-    time_penalty: float = -0.001
+    illegal_action: float = -1.0
+    # Slightly stronger time penalty to discourage long-running episodes
+    time_penalty: float = -0.002
     # Shaping toggles & extras
     enable_capture_shaping: bool = True
-    capture_choice_bonus: float = 0.05  # added when a capturing move is chosen
+    capture_choice_bonus: float = 0.005  # small extra for explicit capture choice
     decline_capture_penalty: float = (
-        -0.01
+        -0.02
     )  # penalty when capture available but not taken
     enable_progressive_finish: bool = True
     finish_multipliers: List[float] = field(
@@ -107,6 +116,7 @@ class TrainConfig:
     n_steps: int = 2048
     batch_size: int = 512
     ent_coef: float = 0.2
+    vf_coef: float = 0.5
     logdir: str = "./training/logs"
     model_dir: str = "./training/models"
     max_turns: int = 500
