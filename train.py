@@ -169,7 +169,7 @@ def main():
         logger.info("[Imitation] Completed pretraining phase.")
         # After imitation, run a quick evaluation callback manually (one pass) to log baseline performance under TB
         try:
-            eval_cb._run_eval()  # type: ignore
+            eval_cb.on_step()  # type: ignore
         except Exception:
             pass
         # Save post-imitation snapshot for curve comparison

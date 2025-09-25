@@ -132,9 +132,17 @@ class LudoRLEnvBase(gym.Env):
     ):
         """Reset the environment for a new episode."""
         self._setup_random_seed(seed)
+        
+        # Merge attributes set by set_attr into options
+        options = options or {}
+        if hasattr(self, 'opponents') and self.opponents is not None:
+            options['opponents'] = self.opponents
+        if hasattr(self, 'fixed_num_players') and self.fixed_num_players is not None:
+            options['fixed_num_players'] = self.fixed_num_players
+        
         # Allow callers to temporarily force a player count for this reset
         orig_fixed = getattr(self.cfg, "fixed_num_players", None)
-        if options and isinstance(options, dict) and "fixed_num_players" in options:
+        if "fixed_num_players" in options:
             self.cfg.fixed_num_players = options["fixed_num_players"]
         self._initialize_game_state()
         # restore original fixed_num_players so the env.cfg is unchanged across resets
