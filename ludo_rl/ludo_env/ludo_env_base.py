@@ -568,3 +568,19 @@ class LudoRLEnvBase(gym.Env):
             episode_home_exit_ops_available=self.episode_stats.home_exit_ops_available,
             episode_home_exit_ops_taken=self.episode_stats.home_exit_ops_taken,
         )
+
+    # ---- action masking API for MaskablePPO/SubprocVecEnv -----------------
+    def action_masks(self) -> list:
+        """Return a boolean mask of valid actions for the current agent turn.
+
+        This implements the environment-side action masking API expected by
+        MaskablePPO when using SubprocVecEnv (ActionMasker wrapper cannot be
+        used across subprocesses). The mask length must match `action_space.n`.
+        """
+        try:
+            mask = MoveUtils.action_mask(self.pending_valid_moves)
+            # ensure a plain Python list of bools
+            return [bool(x) for x in mask]
+        except Exception:
+            # If anything goes wrong, fall back to allowing all actions
+            return [True] * int(self.action_space.n)

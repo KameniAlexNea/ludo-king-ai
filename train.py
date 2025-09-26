@@ -37,7 +37,11 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic
             env = LudoRLEnvHybrid(cfg)
         else:
             env = LudoRLEnv(cfg)
-        return ActionMasker(env, MoveUtils.get_action_mask_for_env)
+        # Return raw env here. The caller will wrap with ActionMasker only for
+        # single-process environments (DummyVecEnv). When using SubprocVecEnv
+        # we rely on the env.action_masks() API implemented on the envs so
+        # MaskablePPO can access masks across subprocess boundaries.
+        return env
 
     return _init
 
@@ -54,7 +58,7 @@ def main():
         env_cfg.fixed_num_players = 4
 
     if args.n_envs == 1:
-        venv = DummyVecEnv([make_env(0, 42, env_cfg, args.env_type)])
+        venv = DummyVecEnv([lambda: ActionMasker(make_env(0, 42, env_cfg, args.env_type)(), MoveUtils.get_action_mask_for_env)])
     else:
         venv = SubprocVecEnv(
             [
@@ -67,7 +71,9 @@ def main():
     venv = VecNormalize(venv, norm_reward=False)
 
     # Separate eval env with same wrappers (always classic for evaluation vs baselines)
-    eval_env = DummyVecEnv([make_env(999, 1337, env_cfg, "classic")])
+    # For evaluation we prefer single-process env for deterministic mask wrapping
+    eval_raw = make_env(999, 1337, env_cfg, "classic")()
+    eval_env = DummyVecEnv([lambda: ActionMasker(eval_raw, MoveUtils.get_action_mask_for_env)])
     eval_env = VecMonitor(eval_env)
     eval_env = VecNormalize(eval_env, training=False, norm_obs=True, norm_reward=False)
 
