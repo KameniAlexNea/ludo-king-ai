@@ -200,12 +200,14 @@ class LudoRLEnvBase(gym.Env):
         elif num_players >= len(ALL_COLORS):
             # default to full set rotated so agent is first
             chosen_colors = [
-                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)] for i in range(len(ALL_COLORS))
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)]
+                for i in range(len(ALL_COLORS))
             ]
         else:
             # fallback: take the first num_players clockwise including agent
             chosen_colors = [
-                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)] for i in range(num_players)
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)]
+                for i in range(num_players)
             ]
 
         # create game with selected colors (agent will be first in the game's player order)

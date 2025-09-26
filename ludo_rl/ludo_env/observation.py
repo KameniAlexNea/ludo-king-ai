@@ -180,9 +180,15 @@ class ObservationBuilder:
             if p == GameConstants.HOME_POSITION:
                 return 0
             if p >= BoardConstants.HOME_COLUMN_START:
-                rank = GameConstants.MAIN_BOARD_SIZE + (p - BoardConstants.HOME_COLUMN_START)
+                rank = GameConstants.MAIN_BOARD_SIZE + (
+                    p - BoardConstants.HOME_COLUMN_START
+                )
             else:
-                q = p - self.start_pos if p >= self.start_pos else GameConstants.MAIN_BOARD_SIZE - self.start_pos + p
+                q = (
+                    p - self.start_pos
+                    if p >= self.start_pos
+                    else GameConstants.MAIN_BOARD_SIZE - self.start_pos + p
+                )
                 rank = q
             return 1 + int(rank)
 

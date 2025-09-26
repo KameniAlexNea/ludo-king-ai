@@ -87,7 +87,7 @@ def main():
 
             policy_kwargs = {
                 "features_extractor_class": MultiDiscreteFeatureExtractor,
-                "features_extractor_kwargs": {"embed_dim": 8},
+                "features_extractor_kwargs": {"embed_dim": args.embed_dim},
             }
     except Exception:
         # If feature extractor import fails, fall back to default

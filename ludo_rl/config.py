@@ -151,6 +151,8 @@ class TrainConfig:
     anneal_log_freq: int = 50_000
     env_type: Literal["classic", "selfplay", "hybrid"] = "classic"
     hybrid_switch_rate: float = 0.55
+    # embedding dimension for discrete observation extractor
+    embed_dim: int = 8
 
     def __post_init__(self):
         if self.env_type in ["selfplay", "hybrid"]:

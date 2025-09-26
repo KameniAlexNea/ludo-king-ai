@@ -120,6 +120,12 @@ def parse_args() -> TrainConfig:
         default=TrainConfig.hybrid_switch_rate,
         help="Switch rate for hybrid environment",
     )
+    p.add_argument(
+        "--embed_dim",
+        type=int,
+        default=TrainConfig.embed_dim,
+        help="Embedding dimension for discrete observation extractor",
+    )
     args = p.parse_args()
     args = TrainConfig(**vars(args))
     print(asdict(args))
