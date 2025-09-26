@@ -30,10 +30,15 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
         self.model: MaskablePPO = None
         self._frozen_policy: MaskableActorCriticPolicy = None
         self._opponent_builders: Dict[str, ObservationBuilder] = {}
+        self.obs_normalizer = None
 
     def set_model(self, model: MaskablePPO) -> None:
         """Inject the live model for self-play opponents."""
         self.model = model
+
+    def set_obs_normalizer(self, obs_normalizer) -> None:
+        """Inject the observation normalizer for frozen policy strategies."""
+        self.obs_normalizer = obs_normalizer
 
     def switch_to_classic(self) -> None:
         """Switch from self-play to classic opponent sampling mode."""
@@ -84,6 +89,7 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
                     policy=self._frozen_policy,
                     obs_builder=self._opponent_builders[color],
                     deterministic=True,
+                    obs_normalizer=self.obs_normalizer,
                 )
                 for color in ALL_COLORS
                 if color != self.agent_color

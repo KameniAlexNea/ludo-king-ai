@@ -93,10 +93,9 @@ def main():
     if args.env_type in ["selfplay", "hybrid"]:
         try:
             venv.env_method("set_model", model)
+            venv.env_method("set_obs_normalizer", venv)
         except Exception as e:
-            logger.warning(f"Failed to inject model into environments for {args.env_type} training: {e}")
-            # Some VecEnv types may require accessing the underlying attribute
-            pass
+            raise RuntimeError(f"Failed to inject model and obs_normalizer into environments for {args.env_type} training: {e}") from e
 
     progress_cb = ProgressCallback(total_timesteps=args.total_steps, update_freq=10_000)
     eval_cb = SimpleBaselineEvalCallback(

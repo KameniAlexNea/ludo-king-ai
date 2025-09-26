@@ -6,7 +6,10 @@ from ludo_engine.models import GameConstants, ValidMove
 
 class MoveUtils:
     @staticmethod
-    def action_mask(valid_moves: List[ValidMove] | None) -> np.ndarray:
+    def action_mask(valid_moves: List[ValidMove]) -> np.ndarray:
+        """Create an action mask from a list of valid moves."""
+        if valid_moves is None:
+            raise ValueError("valid_moves is None, cannot create action mask.")
         mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
         if valid_moves:
             valid = {m.token_id for m in valid_moves}
