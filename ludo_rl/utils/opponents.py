@@ -9,15 +9,16 @@ def sample_opponents(
     progress: Optional[float],
     boundaries: List[float],
     rgn: Union[random.Random, np.random.Generator],
+    num_opponents: int = 3,
 ) -> List[str]:
-    """Sample 3 opponent strategies using a weighted scheme.
+    """Sample opponent strategies using a weighted scheme.
 
     - Each strategy has a base weight (derived from benchmark order).
     - Multipliers adjust weights based on training progress.
-    - Always compute weights for all candidates and sample 3 without replacement.
+    - Sample `num_opponents` strategies without replacement.
     """
     candidates = list(opponent_names)
-    if len(candidates) <= 3:
+    if len(candidates) <= num_opponents:
         return candidates
 
     # Base weights from benchmark ranking
@@ -72,11 +73,11 @@ def sample_opponents(
         w = w0 * mult.get(cat(s), 1.0)
         weights.append(max(1e-6, float(w)))
 
-    # Weighted sample 3 without replacement
+    # Weighted sample without replacement
     chosen: List[str] = []
     cand = candidates[:]
     wts = weights[:]
-    for _ in range(3):
+    for _ in range(num_opponents):
         total = sum(wts)
         r = rgn.random() * total if hasattr(rgn, "random") else rgn.uniform(0, total)
         cum = 0.0

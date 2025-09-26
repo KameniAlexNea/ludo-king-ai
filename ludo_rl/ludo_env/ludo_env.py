@@ -15,19 +15,22 @@ class LudoRLEnv(LudoRLEnvBase):
         self._progress: Optional[float] = None
 
     # ---- opponent sampling ----
-    def _sample_opponents(self) -> List[str]:
+    def _sample_opponents(self, num_opponents: int) -> List[str]:
         return sample_opponents(
             self.cfg.opponents.candidates,
             self._progress,
             self.cfg.curriculum.boundaries,
             self.rng,
+            num_opponents,
         )
 
     def attach_opponents(self, options: Optional[Dict[str, Any]] = None) -> None:
         if options and isinstance(options, dict) and "opponents" in options:
             strategies = options["opponents"]
         else:
-            strategies = self._sample_opponents()
+            # Derive opponent colors from the current game player order (skip agent)
+            colors = [p.color for p in self.game.players if p.color != self.agent_color]
+            strategies = self._sample_opponents(len(colors))
         # Derive opponent colors from the current game player order (skip agent)
         colors = [p.color for p in self.game.players if p.color != self.agent_color]
         if len(strategies) != len(colors):

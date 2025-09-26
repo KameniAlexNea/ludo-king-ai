@@ -155,5 +155,5 @@ class TrainConfig:
     hybrid_switch_rate: float = 0.55
 
     def __post_init__(self):
-        if self.env_type == "selfplay":
+        if self.env_type in ["selfplay", "hybrid"]:
             self.n_envs = 1

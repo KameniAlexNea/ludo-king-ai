@@ -40,6 +40,15 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
         """Inject the observation normalizer for frozen policy strategies."""
         self.obs_normalizer = obs_normalizer
 
+    def _sample_opponents(self, num_opponents: int) -> List[str]:
+        return sample_opponents(
+            self.cfg.opponents.candidates,
+            self._progress,
+            self.cfg.curriculum.boundaries,
+            self.rng,
+            num_opponents,
+        )
+
     def switch_to_classic(self) -> None:
         """Switch from self-play to classic opponent sampling mode."""
         self.mode = "classic"
@@ -96,8 +105,9 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
             ]
             self._attach_strategies_mixed(strategies)
         else:  # classic mode
-            strategies = self._sample_opponents()
-            colors = [c for c in ALL_COLORS if c != self.agent_color]
+            # Derive opponent colors from the current game player order (skip agent)
+            colors = [p.color for p in self.game.players if p.color != self.agent_color]
+            strategies = self._sample_opponents(len(colors))
             if len(strategies) != len(colors):
                 raise ValueError(
                     f"Number of strategies ({len(strategies)}) must match number of opponent colors ({len(colors)})"

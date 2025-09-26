@@ -48,6 +48,10 @@ def main():
     os.makedirs(args.model_dir, exist_ok=True)
 
     env_cfg = EnvConfig(max_turns=args.max_turns)
+    
+    # For selfplay and hybrid, force 4 players since they require specific opponent setups
+    if args.env_type in ["selfplay", "hybrid"]:
+        env_cfg.fixed_num_players = 4
 
     if args.n_envs == 1:
         venv = DummyVecEnv([make_env(0, 42, env_cfg, args.env_type)])
