@@ -124,7 +124,9 @@ class LudoRLEnvBase(gym.Env):
                 elif StrategyFactory is not None:
                     player.set_strategy(StrategyFactory.create_strategy(strat))
             except Exception as e:
-                raise RuntimeError(f"Failed to set strategy for player {color}: {e}") from e
+                raise RuntimeError(
+                    f"Failed to set strategy for player {color}: {e}"
+                ) from e
 
     # ---- gym api --------------------------------------------------------------
     def reset(
@@ -132,14 +134,14 @@ class LudoRLEnvBase(gym.Env):
     ):
         """Reset the environment for a new episode."""
         self._setup_random_seed(seed)
-        
+
         # Merge attributes set by set_attr into options
         options = options or {}
-        if hasattr(self, 'opponents') and self.opponents is not None:
-            options['opponents'] = self.opponents
-        if hasattr(self, 'fixed_num_players') and self.fixed_num_players is not None:
-            options['fixed_num_players'] = self.fixed_num_players
-        
+        if hasattr(self, "opponents") and self.opponents is not None:
+            options["opponents"] = self.opponents
+        if hasattr(self, "fixed_num_players") and self.fixed_num_players is not None:
+            options["fixed_num_players"] = self.fixed_num_players
+
         # Allow callers to temporarily force a player count for this reset
         orig_fixed = getattr(self.cfg, "fixed_num_players", None)
         if "fixed_num_players" in options:
@@ -198,12 +200,14 @@ class LudoRLEnvBase(gym.Env):
         elif num_players >= len(ALL_COLORS):
             # default to full set rotated so agent is first
             chosen_colors = [
-                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)] for i in range(len(ALL_COLORS))
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)]
+                for i in range(len(ALL_COLORS))
             ]
         else:
             # fallback: take the first num_players clockwise including agent
             chosen_colors = [
-                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)] for i in range(num_players)
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)]
+                for i in range(num_players)
             ]
 
         # create game with selected colors (agent will be first in the game's player order)

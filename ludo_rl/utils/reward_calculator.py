@@ -2,7 +2,7 @@ from typing import Optional
 
 from ludo_engine.core import Player
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
-from loguru import logger
+
 from ludo_rl.config import EnvConfig
 
 
@@ -105,7 +105,9 @@ class RewardCalculator:
                 r += val
 
         # Safe zone reward
-        if not BoardConstants.is_safe_position(res.old_position) and BoardConstants.is_safe_position(res.new_position):
+        if not BoardConstants.is_safe_position(
+            res.old_position
+        ) and BoardConstants.is_safe_position(res.new_position):
             val = cfg.reward.safe_zone_reward
             breakdown["safe_zone"] += val
             r += val
@@ -146,7 +148,10 @@ class RewardCalculator:
 
         # Home exit reward: only grant if agent already has at least one other
         # token active on the board (i.e. home_tokens < TOKENS_PER_PLAYER - 1).
-        if res.old_position == GameConstants.HOME_POSITION and res.new_position != res.old_position:
+        if (
+            res.old_position == GameConstants.HOME_POSITION
+            and res.new_position != res.old_position
+        ):
             tokens_per_player = GameConstants.TOKENS_PER_PLAYER
             # home_tokens counts how many are still at home; reward exit only
             # when there's another token already out (diversity/backup token).

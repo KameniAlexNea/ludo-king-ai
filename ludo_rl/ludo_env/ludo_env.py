@@ -1,6 +1,5 @@
 from typing import Any, Dict, List, Optional
 
-from ludo_engine.models import ALL_COLORS
 from ludo_engine.strategies.strategy import StrategyFactory
 
 from ludo_rl.config import EnvConfig
@@ -32,8 +31,10 @@ class LudoRLEnv(LudoRLEnvBase):
         # Derive opponent colors from the current game player order (skip agent)
         colors = [p.color for p in self.game.players if p.color != self.agent_color]
         if len(strategies) != len(colors):
-            raise ValueError(f"Number of strategies ({len(strategies)}) must match number of opponent colors ({len(colors)})")
-        
+            raise ValueError(
+                f"Number of strategies ({len(strategies)}) must match number of opponent colors ({len(colors)})"
+            )
+
         for name, color in zip(strategies, colors):
             player = self.game.get_player_from_color(color)
             player.set_strategy(StrategyFactory.create_strategy(name))

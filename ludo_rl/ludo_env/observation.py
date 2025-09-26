@@ -35,7 +35,7 @@ class ObservationBuilder:
         # opponents token positions: (max_players - 1) * tokens_per_player
         base += (max_players - 1) * tokens_per_player
         # binary active flag for each opponent (1/0)
-        base += (max_players - 1)
+        base += max_players - 1
         base += 4  # agent token progresses
         base += 4  # agent token safety flags
         # dice encoding: either one-hot (6) or 1 scalar

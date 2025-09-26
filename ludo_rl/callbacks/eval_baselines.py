@@ -1,4 +1,3 @@
-import os
 from typing import Optional, Sequence
 
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback

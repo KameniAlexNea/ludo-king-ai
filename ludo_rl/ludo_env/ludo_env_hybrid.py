@@ -93,8 +93,10 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
             strategies = self._sample_opponents()
             colors = [c for c in ALL_COLORS if c != self.agent_color]
             if len(strategies) != len(colors):
-                raise ValueError(f"Number of strategies ({len(strategies)}) must match number of opponent colors ({len(colors)})")
-            
+                raise ValueError(
+                    f"Number of strategies ({len(strategies)}) must match number of opponent colors ({len(colors)})"
+                )
+
             for name, color in zip(strategies, colors):
                 player = self.game.get_player_from_color(color)
                 player.set_strategy(StrategyFactory.create_strategy(name))

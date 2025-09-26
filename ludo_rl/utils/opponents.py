@@ -1,7 +1,6 @@
-import itertools
 import random
 from typing import List, Optional, Union
-from itertools import cycle, islice
+
 import numpy as np
 
 
@@ -92,7 +91,9 @@ def sample_opponents(
     return chosen
 
 
-def build_opponent_combinations(baselines: List[str], n_games: int, n_comb: int = 3) -> List[List[str]]:
+def build_opponent_combinations(
+    baselines: List[str], n_games: int, n_comb: int = 3
+) -> List[List[str]]:
     """
     Selects random opponent combinations.
 

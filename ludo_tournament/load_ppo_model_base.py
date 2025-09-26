@@ -27,8 +27,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecNormali
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
-from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
+from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.ludo_env.observation import ObservationBuilder
 from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
 from ludo_rl.utils.move_utils import MoveUtils
@@ -45,7 +45,9 @@ def _create_env_for_vecnormalize(env_cfg: EnvConfig, env_kind: str = "classic"):
     elif env_kind == "classic":
         env = LudoRLEnv(env_cfg)
     else:
-        raise ValueError(f"Invalid env_kind '{env_kind}'. Must be 'classic', 'selfplay', or 'hybrid'")
+        raise ValueError(
+            f"Invalid env_kind '{env_kind}'. Must be 'classic', 'selfplay', or 'hybrid'"
+        )
     return ActionMasker(env, MoveUtils.get_action_mask_for_env)
 
 
@@ -138,8 +140,10 @@ def load_ppo_policy(
 ) -> Tuple[MaskablePPO, str, Optional[VecNormalize]]:
     """Load a MaskablePPO model and its VecNormalize stats, return (model, basename, vec_normalize)."""
     if env_kind not in ["classic", "selfplay", "hybrid"]:
-        raise ValueError(f"Invalid env_kind '{env_kind}'. Must be 'classic', 'selfplay', or 'hybrid'")
-    
+        raise ValueError(
+            f"Invalid env_kind '{env_kind}'. Must be 'classic', 'selfplay', or 'hybrid'"
+        )
+
     model_name = select_best_ppo_model(models_dir, model_preference, explicit)
     if not os.path.isdir(models_dir):
         models_dir = os.path.dirname(models_dir)
@@ -156,13 +160,13 @@ def load_ppo_policy(
 
     # Try to load VecNormalize stats
     vec_normalize = None
-    
+
     # Find all VecNormalize files
     vecnormalize_files = glob.glob(os.path.join(models_dir, "*vecnormalize*_steps.pkl"))
-    
+
     if not vecnormalize_files:
         raise FileNotFoundError(f"No VecNormalize files found in {models_dir}")
-    
+
     # Check if model name contains steps
     if "_" in model_name and any(char.isdigit() for char in model_name):
         # Extract steps from model name (simple approach)
@@ -174,32 +178,41 @@ def load_ppo_policy(
                 break
         if not steps:
             raise ValueError(f"Could not extract steps from model name '{model_name}'")
-        
+
         # Look for exact match
         target_file = f"ppo_ludo_vecnormalize_{steps}_steps.pkl"
         vecnormalize_path = os.path.join(models_dir, target_file)
         if not os.path.exists(vecnormalize_path):
             available_files = [os.path.basename(f) for f in vecnormalize_files]
-            raise FileNotFoundError(f"VecNormalize file '{target_file}' not found for model '{model_name}'. Available: {available_files}")
+            raise FileNotFoundError(
+                f"VecNormalize file '{target_file}' not found for model '{model_name}'. Available: {available_files}"
+            )
     else:
         # For non-step models, use highest step file
         try:
-            vecnormalize_path = max(vecnormalize_files, key=lambda x: int(os.path.basename(x).split("_")[-2]))
+            vecnormalize_path = max(
+                vecnormalize_files,
+                key=lambda x: int(os.path.basename(x).split("_")[-2]),
+            )
         except (ValueError, IndexError) as e:
             raise RuntimeError(f"Failed to find highest step VecNormalize file: {e}")
-    
+
     # Load VecNormalize
     try:
         env_cfg = EnvConfig()
-        dummy_env = DummyVecEnv([lambda: _create_env_for_vecnormalize(env_cfg, env_kind)])
+        dummy_env = DummyVecEnv(
+            [lambda: _create_env_for_vecnormalize(env_cfg, env_kind)]
+        )
         dummy_env = VecMonitor(dummy_env)
-        
+
         vec_normalize = VecNormalize.load(vecnormalize_path, dummy_env)
         vec_normalize.training = False
         vec_normalize.norm_reward = False
         dummy_env.close()
     except Exception as e:
-        raise RuntimeError(f"Failed to load VecNormalize from '{vecnormalize_path}': {e}")
+        raise RuntimeError(
+            f"Failed to load VecNormalize from '{vecnormalize_path}': {e}"
+        )
 
     return model, model_name, vec_normalize
 
@@ -244,10 +257,15 @@ def load_ppo_strategy(
 ):
     """Load PPO strategy with proper VecNormalize handling."""
     if env_kind not in ["classic", "selfplay", "hybrid"]:
-        raise ValueError(f"Invalid env_kind '{env_kind}'. Must be 'classic', 'selfplay', or 'hybrid'")
+        raise ValueError(
+            f"Invalid env_kind '{env_kind}'. Must be 'classic', 'selfplay', or 'hybrid'"
+        )
     # Load model and normalization stats
     model, model_name, vec_normalize = load_ppo_policy(
-        models_dir=models_dir, model_preference=model_preference, device=device, env_kind=env_kind
+        models_dir=models_dir,
+        model_preference=model_preference,
+        device=device,
+        env_kind=env_kind,
     )
 
     if game is None:
