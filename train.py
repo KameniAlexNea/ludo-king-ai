@@ -176,6 +176,7 @@ def main():
         logger.info("[Imitation] Completed pretraining phase.")
         # After imitation, run a quick evaluation callback manually (one pass) to log baseline performance under TB
         try:
+            eval_cb.model = model  # Set the model on the callback
             eval_cb.on_step()  # type: ignore
         except Exception as e:
             logger.warning(f"[Imitation] Failed to run post-imitation evaluation: {e}")

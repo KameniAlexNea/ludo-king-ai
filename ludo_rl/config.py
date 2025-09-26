@@ -6,45 +6,41 @@ from typing import List, Literal, Optional
 class RewardConfig:
     # Terminal
     # Terminal (win-focused preset)
-    win: float = 50.0
-    lose: float = -20.0
-    draw: float = 0.0
+    win: float = 100.0  # Increased from 50.0
+    lose: float = -40.0  # Increased penalty from -20.0
+    draw: float = -10.0  # Small penalty for draws
     # Reduce heavy shaping on finishing tokens
-    finish_token: float = 6.0
+    finish_token: float = 10.0  # Increased from 6.0
     # Events
-    # Per-capture reward reduced (to avoid overvaluing captures vs finishing)
-    capture: float = 0.4
+    # Per-capture reward increased
+    capture: float = 1.0  # Increased from 0.4
     # Being captured is penalized more strongly to discourage unsafe play
-    got_captured: float = -3.0
-    all_captured: float = -6.0
-    # Reward for leaving home (reduced). Will be given only when another token
-    # is already active (diversity exit reward).
-    exit_start: float = 1.0
-    extra_turn: float = 0.1
+    got_captured: float = -5.0  # Increased from -3.0
+    all_captured: float = -10.0  # Increased from -6.0
+    # Reward for leaving home increased
+    exit_start: float = 2.0  # Increased from 1.0
+    extra_turn: float = 0.5  # Increased from 0.1
     # Shaping
-    # Reduce shaping so terminal win matters more
-    # Reduce shaping so terminal win matters more
-    progress_scale: float = 0.01
-    safe_zone_reward: float = 0.1
-    active_token_bonus: float = 0.001
-    inactivity_penalty: float = -0.005
+    # Increase shaping to make rewards denser
+    progress_scale: float = 0.1  # Increased from 0.01
+    safe_zone_reward: float = 1.0  # Increased from 0.1
+    active_token_bonus: float = 0.01  # Increased from 0.001
+    inactivity_penalty: float = -0.01  # Increased from -0.005
     # Constraints
-    illegal_action: float = -1.0
-    # Slightly stronger time penalty to discourage long-running episodes
-    time_penalty: float = -0.002
+    illegal_action: float = -2.0  # Increased from -1.0
+    # Reduce time penalty to encourage longer games if needed, but keep small
+    time_penalty: float = -0.001  # Reduced from -0.002
     # Shaping toggles & extras
     enable_capture_shaping: bool = True
-    capture_choice_bonus: float = 0.005  # small extra for explicit capture choice
-    decline_capture_penalty: float = (
-        -0.02
-    )  # penalty when capture available but not taken
+    capture_choice_bonus: float = 0.01  # Increased from 0.005
+    decline_capture_penalty: float = -0.05  # Increased from -0.02
     enable_progressive_finish: bool = True
     finish_multipliers: List[float] = field(
         default_factory=lambda: [1.2, 1.4, 1.7, 2.2]
     )
     # Scaling / annealing
-    capture_reward_scale: float = 1.0  # can be annealed back toward 1.0
-    finish_reward_scale: float = 1.0
+    capture_reward_scale: float = 1.5  # Increased from 1.0
+    finish_reward_scale: float = 1.5  # Increased from 1.0
 
 
 @dataclass
