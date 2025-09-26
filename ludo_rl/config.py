@@ -7,8 +7,8 @@ class RewardConfig:
     # Terminal
     # Terminal (win-focused preset)
     win: float = 100.0  # Increased from 50.0
-    lose: float = -40.0  # Increased penalty from -20.0
-    draw: float = -10.0  # Small penalty for draws
+    lose: float = -100.0  # Increased penalty from -20.0
+    draw: float = -20.0  # Small penalty for draws
     # Reduce heavy shaping on finishing tokens
     finish_token: float = 10.0  # Increased from 6.0
     # Events
