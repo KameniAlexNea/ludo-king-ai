@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 import random
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from loguru import logger
-from ludo_engine.core import LudoGame, PlayerColor
+from ludo_engine.core import LudoGame, Player, PlayerColor
 from ludo_engine.models import (
     ALL_COLORS,
     GameConstants,
@@ -15,6 +14,8 @@ from ludo_engine.models import (
     MoveType,
     ValidMove,
 )
+from ludo_engine.strategies.base import Strategy  # type: ignore
+from ludo_engine.strategies.strategy import StrategyFactory  # type: ignore
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
@@ -22,7 +23,43 @@ from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.reward_calculator import RewardCalculator
 
 
+@dataclass
+class EpisodeStats:
+    """Tracks episode-level statistics."""
+
+    captured_opponents: int = 0
+    captured_by_opponents: int = 0
+    capture_ops_available: int = 0
+    capture_ops_taken: int = 0
+    finish_ops_available: int = 0
+    finish_ops_taken: int = 0
+    home_exit_ops_available: int = 0
+    home_exit_ops_taken: int = 0
+
+
+@dataclass
+class StepInfo:
+    """Information returned from a step."""
+
+    illegal_action: bool
+    illegal_actions_total: int
+    action_mask: np.ndarray
+    captured_opponents: int
+    captured_by_opponents: int
+    episode_captured_opponents: int
+    episode_captured_by_opponents: int
+    finished_tokens: int
+    episode_capture_ops_available: int
+    episode_capture_ops_taken: int
+    episode_finish_ops_available: int
+    episode_finish_ops_taken: int
+    episode_home_exit_ops_available: int
+    episode_home_exit_ops_taken: int
+
+
 class LudoRLEnvBase(gym.Env):
+    """Base Ludo RL environment with action masking support."""
+
     metadata = {"render_modes": ["human"], "name": "LudoRLEnvBase-v0"}
 
     def __init__(self, cfg: EnvConfig):
@@ -30,36 +67,37 @@ class LudoRLEnvBase(gym.Env):
         self.cfg = cfg
         self.rng = random.Random(cfg.seed)
 
+        # Core game state
         self.agent_color = PlayerColor.RED
-        self._episode = 0
+        self.game: Optional[LudoGame] = None
+        self.obs_builder: Optional[ObservationBuilder] = None
 
-        self.game = LudoGame(ALL_COLORS)
-        self.obs_builder = ObservationBuilder(cfg, self.game, self.agent_color)
+        # Action and observation spaces
         self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
+        # Observation space size will be set after obs_builder initialization
+
+        # Turn state
+        self.pending_dice: Optional[int] = None
+        self.pending_valid_moves: List[ValidMove] = []
+
+        # Episode tracking
+        self.episode_count = 0
+        self.current_turn = 0
+        self.illegal_actions = 0
+
+        # Statistics
+        self.episode_stats = EpisodeStats()
+        self.captured_by_opponents_this_turn = 0
+
+        # Components
+        self.reward_calc = RewardCalculator()
+
+        # Initialize spaces (will be updated on reset)
         self.observation_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32
+            low=-1.0, high=1.0, shape=(1,), dtype=np.float32
         )
 
-        self._pending_dice: Optional[int] = None
-        self._pending_valid: List[ValidMove] = []
-        self.turns = 0
-        self.illegal_actions = 0
-        self._reward_calc = RewardCalculator()
-        # Episode-level cumulative capture counters (agent perspective)
-        self._episode_captured_opponents = (
-            0  # total opponent tokens captured by agent this episode
-        )
-        self._episode_captured_by_opponents = (
-            0  # total agent tokens captured by opponents this episode
-        )
-        self._captured_by_opponents = 0  # per-agent-turn counter
-        # Opportunity instrumentation
-        self._episode_capture_opportunities_available = 0
-        self._episode_capture_opportunities_taken = 0
-        self._episode_finish_opportunities_available = 0
-        self._episode_finish_opportunities_taken = 0
-        self._episode_home_exit_opportunities_available = 0
-        self._episode_home_exit_opportunities_taken = 0
+        self._initialize_game_state()
 
     # ---- hooks for subclasses -------------------------------------------------
     def on_reset_before_attach(self, options: Optional[Dict[str, Any]] = None) -> None:
@@ -77,14 +115,7 @@ class LudoRLEnvBase(gym.Env):
     # ---- helpers --------------------------------------------------------------
     def _attach_strategies_mixed(self, strategies: List) -> None:
         """Attach strategies to non-agent players. Items can be Strategy instances or names."""
-        try:
-            from ludo_engine.strategies.base import Strategy  # type: ignore
-            from ludo_engine.strategies.strategy import StrategyFactory  # type: ignore
-        except Exception:
-            Strategy = object  # type: ignore
-            StrategyFactory = None  # type: ignore
-
-        colors = [c for c in ALL_COLORS if c != self.agent_color]
+        colors = [p.color for p in self.game.players if p.color != self.agent_color]
         for strat, color in zip(strategies, colors):
             player = self.game.get_player_from_color(color)
             try:
@@ -92,268 +123,441 @@ class LudoRLEnvBase(gym.Env):
                     player.set_strategy(strat)
                 elif StrategyFactory is not None:
                     player.set_strategy(StrategyFactory.create_strategy(strat))
-            except Exception:
-                pass
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to set strategy for player {color}: {e}"
+                ) from e
 
     # ---- gym api --------------------------------------------------------------
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
     ):
+        """Reset the environment for a new episode."""
+        self._setup_random_seed(seed)
+
+        # Merge attributes set by set_attr into options
+        options = options or {}
+        if hasattr(self, "opponents") and self.opponents is not None:
+            options["opponents"] = self.opponents
+        if hasattr(self, "fixed_num_players") and self.fixed_num_players is not None:
+            options["fixed_num_players"] = self.fixed_num_players
+
+        # Allow callers to temporarily force a player count for this reset
+        orig_fixed = getattr(self.cfg, "fixed_num_players", None)
+        if "fixed_num_players" in options:
+            self.cfg.fixed_num_players = options["fixed_num_players"]
+        self._initialize_game_state()
+        # restore original fixed_num_players so the env.cfg is unchanged across resets
+        self.cfg.fixed_num_players = orig_fixed
+        self._reset_episode_stats()
+
+        # Subclass-specific setup and opponent attachment
+        self.on_reset_before_attach(options)
+        self.attach_opponents(options)
+
+        # Start the first agent turn
+        self._advance_to_agent_turn()
+        self._roll_dice_for_agent()
+
+        obs = self._build_observation()
+        info = self._build_reset_info()
+
+        self.episode_count += 1
+        return obs, info
+
+    def _setup_random_seed(self, seed: Optional[int]) -> None:
+        """Set up random seeds for reproducibility."""
         if seed is not None:
             self.rng.seed(seed)
             random.seed(seed)
             np.random.seed(seed)
+
+    def _initialize_game_state(self) -> None:
+        """Initialize the game and agent color."""
         if self.cfg.randomize_agent:
             self.agent_color = self.rng.choice(ALL_COLORS)
-        self.game = LudoGame(ALL_COLORS)
+
+        # determine number of players for this episode
+        if self.cfg.fixed_num_players is not None:
+            num_players = int(self.cfg.fixed_num_players)
+        else:
+            num_players = int(self.rng.choice(self.cfg.allowed_player_counts))
+
+        # build chosen_colors according to requested groupings:
+        # 2 players -> agent and opposite (index + 2)
+        # 3 players -> agent and next two clockwise (index, index+1, index+2)
+        # 4 players -> all colors rotated so agent is first
+        start_idx = ALL_COLORS.index(self.agent_color)
+        if num_players == 2:
+            chosen_colors = [
+                ALL_COLORS[start_idx],
+                ALL_COLORS[(start_idx + 2) % len(ALL_COLORS)],
+            ]
+        elif num_players == 3:
+            chosen_colors = [
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)] for i in range(3)
+            ]
+        elif num_players >= len(ALL_COLORS):
+            # default to full set rotated so agent is first
+            chosen_colors = [
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)]
+                for i in range(len(ALL_COLORS))
+            ]
+        else:
+            # fallback: take the first num_players clockwise including agent
+            chosen_colors = [
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)]
+                for i in range(num_players)
+            ]
+
+        # create game with selected colors (agent will be first in the game's player order)
+        self.game = LudoGame(chosen_colors)
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
 
-        self._pending_dice = None
-        self._pending_valid = []
-        self.turns = 0
+        # Update observation space with correct size
+        self.observation_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32
+        )
+
+    def _reset_episode_stats(self) -> None:
+        """Reset all episode-level statistics and counters."""
+        self.current_turn = 0
         self.illegal_actions = 0
-        self._episode_captured_opponents = 0
-        self._episode_captured_by_opponents = 0
-        self._captured_by_opponents = 0  # per-agent-turn counter
-        self._episode_capture_opportunities_available = 0
-        self._episode_capture_opportunities_taken = 0
-        self._episode_finish_opportunities_available = 0
-        self._episode_finish_opportunities_taken = 0
-        self._episode_home_exit_opportunities_available = 0
-        self._episode_home_exit_opportunities_taken = 0
+        self.episode_stats = EpisodeStats()
+        self.captured_by_opponents_this_turn = 0
+        self.pending_dice = None
+        self.pending_valid_moves = []
 
-        # subclass-specific setup and attach opponent strategies
-        self.on_reset_before_attach(options)
-        self.attach_opponents(options)
-
-        # advance to agent turn and roll dice
-        self._ensure_agent_turn()
-        self._pending_dice, self._pending_valid = self._roll_agent_dice()
-        obs = self.obs_builder.build(self.turns, self._pending_dice)
-
-        info = {"episode": self._episode}
-        info.update(self.extra_reset_info())
-        self._episode += 1
-        return obs, info
-
-    def _ensure_agent_turn(self):
+    def _advance_to_agent_turn(self) -> None:
+        """Advance the game until it's the agent's turn."""
         while (
             not self.game.game_over
             and self.game.get_current_player().color != self.agent_color
         ):
-            self._simulate_single_opponent()
+            self._simulate_opponent_turn()
+
+    def _roll_dice_for_agent(self) -> None:
+        """Roll dice and get valid moves for the agent."""
+        self.pending_dice = self.game.roll_dice()
+        self.pending_valid_moves = self.game.get_valid_moves(
+            self.game.get_current_player(), self.pending_dice
+        )
+
+    def _build_observation(self) -> np.ndarray:
+        """Build the current observation."""
+        dice_value = self.pending_dice or 0
+        return self.obs_builder.build(self.current_turn, dice_value)
+
+    def _build_reset_info(self) -> Dict[str, Any]:
+        """Build info dictionary for reset."""
+        info = {"episode": self.episode_count}
+        info.update(self.extra_reset_info())
+        return info
+
+    def _ensure_agent_turn(self):
+        """Legacy method for backward compatibility."""
+        self._advance_to_agent_turn()
 
     def _roll_agent_dice(self):
-        dice = self.game.roll_dice()
-        valid = self.game.get_valid_moves(self.game.get_current_player(), dice)
-        return dice, valid
+        """Legacy method for backward compatibility."""
+        return self.pending_dice, self.pending_valid_moves
 
     def _simulate_single_opponent(self):
-        p = self.game.get_current_player()
-        if p.color == self.agent_color:
+        """Legacy method for backward compatibility."""
+        self._simulate_opponent_turn()
+
+    def step(self, action: int):
+        """Execute one step in the environment."""
+        if self.game.game_over:
+            return self._build_terminal_observation(), 0.0, True, False, {}
+
+        # Execute the agent's action
+        move_result = self._execute_agent_action(action)
+        is_illegal = move_result is None
+
+        # Handle opponent turns if no extra turn
+        if not (move_result and move_result.extra_turn) and not self.game.game_over:
+            self._handle_opponent_turns()
+
+        # Calculate reward and check termination
+        reward, reward_breakdown = self._calculate_reward(move_result, is_illegal)
+        terminated = self._check_termination(move_result)
+        truncated = self._check_truncation()
+
+        # Prepare next state
+        if not terminated and not truncated and not self.game.game_over:
+            self._prepare_next_agent_turn(move_result)
+
+        # Update episode statistics
+        if move_result:
+            self.episode_stats.captured_opponents += len(move_result.captured_tokens)
+
+            # Debug logging for captures
+            if self.cfg.debug_capture_logging and move_result.captured_tokens:
+                logger.debug(
+                    f"[CaptureEvent] turn={self.current_turn} dice={self.pending_dice} "
+                    f"offensive={len(move_result.captured_tokens)} "
+                    f"defensive_inc={self.captured_by_opponents_this_turn} "
+                    f"cumulative_off={self.episode_stats.captured_opponents} "
+                    f"cumulative_def={self.episode_stats.captured_by_opponents}"
+                )
+
+        self.current_turn += 1
+
+        obs = self._build_observation()
+        step_info = self._build_step_info(move_result, is_illegal)
+
+        info_dict = step_info.__dict__
+        # Attach reward breakdown totals for diagnostic logging
+        try:
+            info_dict["reward_breakdown"] = reward_breakdown
+        except Exception:
+            info_dict["reward_breakdown"] = {}
+
+        return obs, reward, terminated, truncated, info_dict
+
+    def _execute_agent_action(self, action: int) -> Optional[MoveResult]:
+        """Execute the agent's chosen action and return the result."""
+        agent = self.game.get_current_player()
+        dice = self.pending_dice
+        valid_moves = self.pending_valid_moves
+
+        if not valid_moves:
+            # No valid moves available
+            return self._create_no_move_result(dice)
+
+        # Validate and execute the action
+        action = int(action)
+        valid_token_ids = [move.token_id for move in valid_moves]
+
+        if action not in valid_token_ids:
+            self.illegal_actions += 1
+            action = self.rng.choice(valid_token_ids)  # Choose random valid action
+
+        # Track opportunities before move
+        if self.cfg.track_opportunities:
+            self._track_opportunities_before_move(valid_moves)
+
+        # Execute the move
+        move_result = self.game.execute_move(agent, action, dice)
+
+        # Track opportunities after move
+        if self.cfg.track_opportunities and valid_moves:
+            self._track_opportunities_after_move(move_result, valid_moves, action)
+
+        return move_result
+
+    def _create_no_move_result(self, dice: int) -> MoveResult:
+        """Create a move result for when no valid moves are available."""
+        agent = self.game.get_current_player()
+        return MoveResult(
+            success=True,
+            player_color=agent.color,
+            token_id=0,
+            dice_value=dice,
+            old_position=-1,
+            new_position=-1,
+            captured_tokens=[],
+            finished_token=False,
+            extra_turn=False,
+            error=None,
+            game_won=False,
+        )
+
+    def _track_opportunities_before_move(self, valid_moves: List[ValidMove]) -> None:
+        """Track available opportunities before executing a move."""
+        # Capture opportunities
+        capture_ops = sum(1 for move in valid_moves if move.captures_opponent)
+        self.episode_stats.capture_ops_available += capture_ops
+
+        # Finish opportunities
+        finish_ops = sum(
+            1
+            for move in valid_moves
+            if move.target_position == GameConstants.FINISH_POSITION
+        )
+        self.episode_stats.finish_ops_available += finish_ops
+
+        # Home exit opportunities
+        exit_ops = sum(
+            1 for move in valid_moves if move.move_type == MoveType.EXIT_HOME
+        )
+        self.episode_stats.home_exit_ops_available += exit_ops
+
+        # Debug logging
+        if self.cfg.debug_capture_logging and self.current_turn < 100:
+            self._log_opportunity_debug(valid_moves, finish_ops, exit_ops, capture_ops)
+
+    def _track_opportunities_after_move(
+        self, move_result: MoveResult, valid_moves: List[ValidMove], action: int
+    ) -> None:
+        """Track taken opportunities after executing a move."""
+        chosen_move = next(
+            (move for move in valid_moves if move.token_id == action), None
+        )
+        if chosen_move is None:
             return
+
+        # Track capture opportunity taken
+        if chosen_move.captures_opponent:
+            self.episode_stats.capture_ops_taken += 1
+
+        # Track finish opportunity taken
+        finished_token = (
+            move_result.finished_token
+            or move_result.new_position == GameConstants.FINISH_POSITION
+        )
+        if finished_token:
+            self.episode_stats.finish_ops_taken += 1
+
+        # Track home exit opportunity taken
+        if chosen_move.move_type == MoveType.EXIT_HOME:
+            self.episode_stats.home_exit_ops_taken += 1
+
+    def _log_opportunity_debug(
+        self,
+        valid_moves: List[ValidMove],
+        finish_ops: int,
+        exit_ops: int,
+        capture_ops: int,
+    ) -> None:
+        """Log debug information about opportunities."""
+        try:
+            move_types = [move.move_type for move in valid_moves]
+            logger.debug(
+                f"[OppDebug] turn={self.current_turn} dice={self.pending_dice} "
+                f"move_types={move_types} fin_by_pos_avail+={finish_ops} "
+                f"exit_avail+={exit_ops} cap_avail+={capture_ops}"
+            )
+        except Exception:
+            pass
+
+    def _handle_opponent_turns(self) -> None:
+        """Handle all opponent turns until it's the agent's turn again."""
+        self.game.next_turn()
+        while (
+            not self.game.game_over
+            and self.game.get_current_player().color != self.agent_color
+        ):
+            self._simulate_opponent_turn()
+
+    def _simulate_opponent_turn(self) -> None:
+        """Simulate a single opponent turn."""
+        player = self.game.get_current_player()
+        if player.color == self.agent_color:
+            return
+
         dice = self.game.roll_dice()
-        valid = self.game.get_valid_moves(p, dice)
-        if valid:
-            try:
-                ctx = self.game.get_ai_decision_context(dice)
-                token_id = p.make_strategic_decision(ctx)
-            except Exception:
-                token_id = valid[0].token_id
-            res = self.game.execute_move(p, token_id, dice)
-            # Track captures on the agent caused by opponents
-            if res.captured_tokens:
-                agent_color = self.agent_color
-                for ct in res.captured_tokens:
-                    if ct.player_color == agent_color:
-                        self._captured_by_opponents += 1
-                        self._episode_captured_by_opponents += 1
-            if not res.extra_turn:
+        valid_moves = self.game.get_valid_moves(player, dice)
+
+        if valid_moves:
+            token_id = self._get_opponent_action(player, dice, valid_moves)
+            move_result = self.game.execute_move(player, token_id, dice)
+
+            # Track captures on agent
+            if move_result.captured_tokens:
+                agent_tokens_captured = sum(
+                    1
+                    for token in move_result.captured_tokens
+                    if token.player_color == self.agent_color
+                )
+                self.captured_by_opponents_this_turn += agent_tokens_captured
+                self.episode_stats.captured_by_opponents += agent_tokens_captured
+
+            if not move_result.extra_turn:
                 self.game.next_turn()
         else:
             self.game.next_turn()
 
-    def step(self, action: int):
-        if self.game.game_over:
-            obs = self.obs_builder.build(self.turns, 0)
-            return obs, 0.0, True, False, {}
+    def _get_opponent_action(
+        self, player: Player, dice: int, valid_moves: List[ValidMove]
+    ) -> int:
+        """Get the action for an opponent player."""
+        try:
+            context = self.game.get_ai_decision_context(dice)
+            return player.make_strategic_decision(context)
+        except Exception:
+            return self.rng.choice(valid_moves).token_id
 
-        illegal = False
-        agent = self.game.get_current_player()
-        if self._pending_dice is None:
-            self._pending_dice, self._pending_valid = self._roll_agent_dice()
-        dice = self._pending_dice
-        valid = self._pending_valid
+    def _calculate_reward(
+        self, move_result: Optional[MoveResult], is_illegal: bool
+    ) -> float:
+        """Calculate the reward for the current step."""
+        if move_result is None:
+            # No valid moves case
+            move_result = self._create_no_move_result(self.pending_dice)
 
-        if not valid:
-            # no moves, lose turn
-            res = MoveResult(
-                success=True,
-                player_color=agent.color,
-                token_id=0,
-                dice_value=dice,
-                old_position=-1,
-                new_position=-1,
-                captured_tokens=[],
-                finished_token=False,
-                extra_turn=False,
-                error=None,
-                game_won=False,
-            )
-            extra = False
-        else:
-            action = int(action)
-            valid_ids = [m.token_id for m in valid]
-            pre_fin_ops = 0
-            pre_exit_ops = 0
-            if self.cfg.track_opportunities:
-                # capture opportunities (each move that would capture at least one opponent)
-                cap_ops = sum(1 for m in valid if m.captures_opponent)
-                self._episode_capture_opportunities_available += cap_ops
-                # finish opportunities: any move whose resulting position equals FINISH_POSITION
-                pre_fin_ops = 0
-                for m in valid:
-                    tgt = m.target_position
-                    if tgt == GameConstants.FINISH_POSITION:
-                        pre_fin_ops += 1
-                self._episode_finish_opportunities_available += pre_fin_ops
-                # home exit opportunities still by move_type
-                pre_exit_ops = sum(
-                    1 for m in valid if m.move_type == MoveType.EXIT_HOME
-                )
-                self._episode_home_exit_opportunities_available += pre_exit_ops
-                if self.cfg.debug_capture_logging and self.turns < 100:
-                    try:
-                        mt_list = [m.move_type for m in valid]
-                        logger.debug(
-                            f"[OppDebug] turn={self.turns} dice={dice} move_types={mt_list} fin_by_pos_avail+={pre_fin_ops} exit_avail+={pre_exit_ops} cap_avail+={cap_ops}"
-                        )
-                    except Exception:
-                        pass
-            tok_id = action
-            if action not in valid_ids:
-                illegal = True
-                self.illegal_actions += 1
-                tok_id = self.rng.choice(valid_ids)
-            res = self.game.execute_move(agent, tok_id, dice)
-            extra = res.extra_turn
-            if self.cfg.track_opportunities and valid:
-                chosen = None
-                for mv in valid:
-                    if mv.token_id == tok_id:
-                        chosen = mv
-                        break
-                if chosen is not None:
-                    if chosen.captures_opponent:
-                        self._episode_capture_opportunities_taken += 1
-                    # Determine if the executed move actually finished a token via position comparison
-                    finished_flag = (
-                        res.finished_token
-                        or res.new_position == GameConstants.FINISH_POSITION
-                    )
-                    if finished_flag:
-                        self._episode_finish_opportunities_taken += 1
-                        if (
-                            pre_fin_ops == 0
-                        ):  # retroactive availability if not pre-counted
-                            self._episode_finish_opportunities_available += 1
-                    if chosen.move_type == MoveType.EXIT_HOME:
-                        self._episode_home_exit_opportunities_taken += 1
-                        if pre_exit_ops == 0:
-                            self._episode_home_exit_opportunities_available += 1
-
-        # Reset per-full-turn counters (opponent captures on agent since last agent action)
-        self._captured_by_opponents = 0
-
-        # opponent turns if no extra turn
-        if not extra and not self.game.game_over:
-            self.game.next_turn()
-            while (
-                not self.game.game_over
-                and self.game.get_current_player().color != self.agent_color
-            ):
-                self._simulate_single_opponent()
-
-        # Track offensive captures for agent move
-        self._episode_captured_opponents += len(res.captured_tokens)
-        # Optional debug logging
-        if self.cfg.debug_capture_logging and res.captured_tokens:
-            offensive = len(res.captured_tokens)
-            defensive = self._captured_by_opponents
-            logger.debug(
-                f"[CaptureEvent] turn={self.turns} dice={dice} offensive={offensive} defensive_inc={defensive} cumulative_off={self._episode_captured_opponents} cumulative_def={self._episode_captured_by_opponents}"
-            )
-
-        # rewards
-        terminated = res.game_won or self.game.game_over
-
-        # Get winner for reward calculation
-        winner = getattr(self.game, "winner", None) if self.game.game_over else None
-
-        reward = self._reward_calc.compute(
-            res=res,
-            illegal=illegal,
+        return self.reward_calc.compute_with_breakdown(
+            res=move_result,
+            illegal=is_illegal,
             cfg=self.cfg,
             game_over=self.game.game_over,
-            captured_by_opponents=int(self._captured_by_opponents),
-            extra_turn=bool(extra),
-            winner=winner,
+            captured_by_opponents=self.captured_by_opponents_this_turn,
+            extra_turn=bool(move_result.extra_turn),
+            winner=self.game.winner,
             agent_color=self.agent_color,
-            home_tokens=len(
-                [
-                    i
-                    for i in self.game.get_player_from_color(
-                        self.agent_color
-                    ).player_positions()
-                    if i == GameConstants.HOME_POSITION
-                ]
-            ),
+            home_tokens=self._count_home_tokens(),
         )
 
-        self.turns += 1
-        truncated = False
-        if self.turns >= self.cfg.max_turns and not terminated:
-            truncated = True
+    def _count_home_tokens(self) -> int:
+        """Count how many of the agent's tokens are still at home."""
+        agent_player = self.game.get_player_from_color(self.agent_color)
+        return sum(
+            1
+            for pos in agent_player.player_positions()
+            if pos == GameConstants.HOME_POSITION
+        )
 
-        # prepare next dice
-        if not terminated and not truncated and not self.game.game_over:
-            if extra:
-                self._pending_dice, self._pending_valid = self._roll_agent_dice()
-            else:
-                self._ensure_agent_turn()
-                if not self.game.game_over:
-                    self._pending_dice, self._pending_valid = self._roll_agent_dice()
+    def _check_termination(self, move_result: Optional[MoveResult]) -> bool:
+        """Check if the episode should terminate."""
+        if move_result is None:
+            return False
+        return move_result.game_won or self.game.game_over
 
-        obs = self.obs_builder.build(self.turns, self._pending_dice or 0)
-        # Compute simple extra stats for consumers (evaluation)
-        captured_opponents = len(res.captured_tokens)
-        captured_by_opponents = int(self._captured_by_opponents)
+    def _check_truncation(self) -> bool:
+        """Check if the episode should be truncated due to max turns."""
+        return self.current_turn >= self.cfg.max_turns and not self.game.game_over
+
+    def _prepare_next_agent_turn(self, move_result: Optional[MoveResult]) -> None:
+        """Prepare the state for the next agent turn."""
+        has_extra_turn = move_result and move_result.extra_turn
+
+        if has_extra_turn:
+            self._roll_dice_for_agent()
+        else:
+            self._advance_to_agent_turn()
+            if not self.game.game_over:
+                self._roll_dice_for_agent()
+
+        # Reset per-turn counters
+        self.captured_by_opponents_this_turn = 0
+
+    def _build_terminal_observation(self) -> np.ndarray:
+        """Build observation for terminal states."""
+        return self.obs_builder.build(self.current_turn, 0)
+
+    def _build_step_info(
+        self, move_result: Optional[MoveResult], is_illegal: bool
+    ) -> StepInfo:
+        """Build the info dataclass for the step."""
+        captured_opponents = len(move_result.captured_tokens) if move_result else 0
+
         agent_player = self.game.get_player_from_color(self.agent_color)
         finished_tokens = agent_player.get_finished_tokens_count()
-        info = {
-            "illegal_action": illegal,
-            "illegal_actions_total": self.illegal_actions,
-            "action_mask": MoveUtils.action_mask(self._pending_valid),
-            "captured_opponents": captured_opponents,
-            "captured_by_opponents": captured_by_opponents,
-            # cumulative episode-level stats (useful for evaluation)
-            "episode_captured_opponents": int(self._episode_captured_opponents),
-            "episode_captured_by_opponents": int(self._episode_captured_by_opponents),
-            "finished_tokens": finished_tokens,
-            # opportunity instrumentation
-            "episode_capture_ops_available": int(
-                self._episode_capture_opportunities_available
-            ),
-            "episode_capture_ops_taken": int(self._episode_capture_opportunities_taken),
-            "episode_finish_ops_available": int(
-                self._episode_finish_opportunities_available
-            ),
-            "episode_finish_ops_taken": int(self._episode_finish_opportunities_taken),
-            "episode_home_exit_ops_available": int(
-                self._episode_home_exit_opportunities_available
-            ),
-            "episode_home_exit_ops_taken": int(
-                self._episode_home_exit_opportunities_taken
-            ),
-        }
-        return obs, reward, terminated, truncated, info
+
+        return StepInfo(
+            illegal_action=is_illegal,
+            illegal_actions_total=self.illegal_actions,
+            action_mask=MoveUtils.action_mask(self.pending_valid_moves),
+            captured_opponents=captured_opponents,
+            captured_by_opponents=self.captured_by_opponents_this_turn,
+            episode_captured_opponents=self.episode_stats.captured_opponents,
+            episode_captured_by_opponents=self.episode_stats.captured_by_opponents,
+            finished_tokens=finished_tokens,
+            episode_capture_ops_available=self.episode_stats.capture_ops_available,
+            episode_capture_ops_taken=self.episode_stats.capture_ops_taken,
+            episode_finish_ops_available=self.episode_stats.finish_ops_available,
+            episode_finish_ops_taken=self.episode_stats.finish_ops_taken,
+            episode_home_exit_ops_available=self.episode_stats.home_exit_ops_available,
+            episode_home_exit_ops_taken=self.episode_stats.home_exit_ops_taken,
+        )

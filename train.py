@@ -1,7 +1,8 @@
-from __future__ import annotations
+
 
 import copy
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
 import torch
@@ -21,7 +22,6 @@ from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
-from ludo_rl.trains.lr_utils import apply_linear_lr
 from ludo_rl.trains.training_args import parse_args
 from ludo_rl.utils.move_utils import MoveUtils
 from loguru import logger
@@ -42,27 +42,16 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic
     return _init
 
 
-def _maybe_log_anneal(
-    step: int, freq: int, model, lr_val: float, train_cfg: TrainConfig
-):
-    if freq <= 0:
-        return
-    if step % freq == 0:
-        try:
-            ent = getattr(model, "ent_coef", None)
-            logger.info(
-                f"[Anneal] step={step} lr={lr_val:.6g} ent={ent} capture_scale={train_cfg.capture_scale_initial}->{train_cfg.capture_scale_final}"
-            )
-        except Exception:
-            pass
-
-
 def main():
     args: TrainConfig = parse_args()
     os.makedirs(args.logdir, exist_ok=True)
     os.makedirs(args.model_dir, exist_ok=True)
 
     env_cfg = EnvConfig(max_turns=args.max_turns)
+    
+    # For selfplay and hybrid, force 4 players since they require specific opponent setups
+    if args.env_type in ["selfplay", "hybrid"]:
+        env_cfg.fixed_num_players = 4
 
     if args.n_envs == 1:
         venv = DummyVecEnv([make_env(0, 42, env_cfg, args.env_type)])
@@ -81,30 +70,36 @@ def main():
     eval_env = DummyVecEnv([make_env(999, 1337, env_cfg, "classic")])
     eval_env = VecMonitor(eval_env)
     eval_env = VecNormalize(eval_env, training=False, norm_obs=True, norm_reward=False)
-    try:
-        eval_env.obs_rms = venv.obs_rms
-    except Exception:
-        pass
+
+    # Set up learning rate (use callable for annealing)
+    if args.lr_anneal_enabled:
+        def lr_schedule(progress_remaining: float) -> float:
+            return args.lr_final + progress_remaining * (args.learning_rate - args.lr_final)
+        learning_rate = lr_schedule
+    else:
+        learning_rate = args.learning_rate
 
     model = MaskablePPO(
         "MlpPolicy",
         venv,
-        learning_rate=args.learning_rate,
+        learning_rate=learning_rate,
         n_steps=args.n_steps,
         batch_size=args.batch_size,
         ent_coef=args.ent_coef,
+        vf_coef=args.vf_coef,
         tensorboard_log=args.logdir,
         verbose=1,
         device="auto",
+        gamma=0.995,
     )
 
     # When using selfplay or hybrid, inject the live model into envs so they can snapshot policy at reset
     if args.env_type in ["selfplay", "hybrid"]:
         try:
             venv.env_method("set_model", model)
-        except Exception:
-            # Some VecEnv types may require accessing the underlying attribute
-            pass
+            venv.env_method("set_obs_normalizer", venv)
+        except Exception as e:
+            raise RuntimeError(f"Failed to inject model and obs_normalizer into environments for {args.env_type} training: {e}") from e
 
     progress_cb = ProgressCallback(total_timesteps=args.total_steps, update_freq=10_000)
     eval_cb = SimpleBaselineEvalCallback(
@@ -113,12 +108,16 @@ def main():
         eval_freq=args.eval_freq,
         env_cfg=env_cfg,
         verbose=1,
+        eval_env=eval_env,
+        best_model_save_path=args.model_dir,
     )
     callbacks = [progress_cb, eval_cb]
 
     # Annealing callback (entropy + capture scale + learning rate). We'll wrap learning rate logic here by updating optimizer lr.
-    anneal_cb = AnnealingCallback(args)
-    callbacks.append(anneal_cb)
+    if args.use_entropy_annealing:
+        logger.info("[Annealing] Using entropy annealing during training.")
+        anneal_cb = AnnealingCallback(args)
+        callbacks.append(anneal_cb)
 
     # Hybrid switch callback if using hybrid env
     if args.env_type == "hybrid":
@@ -140,6 +139,8 @@ def main():
             steps_budget=args.imitation_steps,
             multi_seat=False,
         )
+        # Normalize observations to match training data distribution
+        obs_s = np.array([eval_env.normalize_obs(obs) for obs in obs_s])
         # Multi-seat samples
         obs_m, act_m, mask_m = collect_imitation_samples(
             base_env_for_imitation,
@@ -147,6 +148,8 @@ def main():
             steps_budget=args.imitation_steps,
             multi_seat=True,
         )
+        # Normalize observations to match training data distribution
+        obs_m = np.array([eval_env.normalize_obs(obs) for obs in obs_m])
         obs_all = np.concatenate([obs_s, obs_m], axis=0)
         act_all = np.concatenate([act_s, act_m], axis=0)
         mask_all = np.concatenate([mask_s, mask_m], axis=0)
@@ -156,12 +159,9 @@ def main():
             torch.from_numpy(mask_all),
         )
         # Temporary entropy boost
-        original_ent = (
-            model.ent_coef if isinstance(model.ent_coef, float) else args.ent_coef
-        )
+        original_ent = float(model.ent_coef)
         boosted_ent = original_ent + args.imitation_entropy_boost
-        if isinstance(model.ent_coef, float):
-            model.ent_coef = boosted_ent
+        model.ent_coef = boosted_ent
         logger.info(
             f"[Imitation] Training on {len(dataset)} samples (single+multi-seat) for {args.imitation_epochs} epochs"
         )
@@ -172,23 +172,24 @@ def main():
             batch_size=args.imitation_batch_size,
         )
         # Restore entropy coef (annealing callback will handle future schedule)
-        if isinstance(model.ent_coef, float):
-            model.ent_coef = original_ent
+        model.ent_coef = original_ent
         logger.info("[Imitation] Completed pretraining phase.")
         # After imitation, run a quick evaluation callback manually (one pass) to log baseline performance under TB
         try:
-            eval_cb._run_eval()  # type: ignore
-        except Exception:
-            pass
+            eval_cb.model = model  # Set the model on the callback
+            eval_cb.on_step()  # type: ignore
+        except Exception as e:
+            logger.warning(f"[Imitation] Failed to run post-imitation evaluation: {e}")
+            # Non-critical, continue training
         # Save post-imitation snapshot for curve comparison
+        imitation_path = os.path.join(
+            args.model_dir, "maskable_ppo_after_imitation"
+        )
         try:
-            imitation_path = os.path.join(
-                args.model_dir, "maskable_ppo_after_imitation"
-            )
             model.save(imitation_path)
             logger.info(f"[Imitation] Saved post-imitation model to {imitation_path}.zip")
         except Exception as e:
-            logger.info(f"[Imitation] Warning: could not save post-imitation model: {e}")
+            raise RuntimeError(f"[Imitation] Failed to save post-imitation model to {imitation_path}: {e}") from e
 
     # Add checkpointing if enabled
     if args.checkpoint_freq and args.checkpoint_freq > 0:
@@ -202,29 +203,14 @@ def main():
         )
         callbacks.append(ckpt_cb)
 
-    # Wrap learn with manual LR annealing by hooking into progress_cb logic via custom loop if needed.
-    # Simpler: monkey patch progress callback to also adjust LR based on num_timesteps.
-    if args.lr_anneal_enabled:
-        initial_lr = args.learning_rate
-        final_lr = args.lr_final
-        original_on_step = progress_cb._on_step
-
-        def patched_on_step():
-            frac = (
-                model.num_timesteps / float(args.total_steps)
-                if args.total_steps > 0
-                else 1.0
-            )
-            lr_val = apply_linear_lr(model, initial_lr, final_lr, frac)
-            _maybe_log_anneal(
-                model.num_timesteps, args.anneal_log_freq, model, lr_val, args
-            )
-            return original_on_step()
-
-        progress_cb._on_step = patched_on_step  # type: ignore
-
     model.learn(total_timesteps=args.total_steps, callback=callbacks)
-    model.save(os.path.join(args.model_dir, "maskable_ppo_ludo_rl_final"))
+    
+    final_model_path = os.path.join(args.model_dir, "maskable_ppo_ludo_rl_final")
+    try:
+        model.save(final_model_path)
+        logger.info(f"Training completed. Final model saved to {final_model_path}.zip")
+    except Exception as e:
+        raise RuntimeError(f"Failed to save final model to {final_model_path}: {e}") from e
 
 
 if __name__ == "__main__":

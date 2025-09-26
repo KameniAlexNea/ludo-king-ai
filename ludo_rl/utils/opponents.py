@@ -1,4 +1,3 @@
-import itertools
 import random
 from typing import List, Optional, Union
 
@@ -10,15 +9,16 @@ def sample_opponents(
     progress: Optional[float],
     boundaries: List[float],
     rgn: Union[random.Random, np.random.Generator],
+    num_opponents: int = 3,
 ) -> List[str]:
-    """Sample 3 opponent strategies using a weighted scheme.
+    """Sample opponent strategies using a weighted scheme.
 
     - Each strategy has a base weight (derived from benchmark order).
     - Multipliers adjust weights based on training progress.
-    - Always compute weights for all candidates and sample 3 without replacement.
+    - Sample `num_opponents` strategies without replacement.
     """
     candidates = list(opponent_names)
-    if len(candidates) <= 3:
+    if len(candidates) <= num_opponents:
         return candidates
 
     # Base weights from benchmark ranking
@@ -47,13 +47,13 @@ def sample_opponents(
     p = 0.0 if progress is None else float(progress)
     b = boundaries
     if p < b[0]:
-        mult = {"easy": 1.5, "medium": 1.0, "hard": 0.6, "elite": 0.4}
+        mult = {"easy": 3.0, "medium": 1.0, "hard": 0.3, "elite": 0.1}
     elif p < b[1]:
-        mult = {"easy": 1.2, "medium": 1.1, "hard": 0.9, "elite": 0.6}
+        mult = {"easy": 2.0, "medium": 1.0, "hard": 0.6, "elite": 0.4}
     elif p < b[2]:
-        mult = {"easy": 0.8, "medium": 1.0, "hard": 1.2, "elite": 1.4}
+        mult = {"easy": 0.6, "medium": 1.0, "hard": 1.4, "elite": 2.0}
     else:
-        mult = {"easy": 0.5, "medium": 0.9, "hard": 1.3, "elite": 1.6}
+        mult = {"easy": 0.3, "medium": 0.8, "hard": 1.5, "elite": 2.5}
 
     def cat(name: str) -> str:
         if name in easy:
@@ -73,11 +73,11 @@ def sample_opponents(
         w = w0 * mult.get(cat(s), 1.0)
         weights.append(max(1e-6, float(w)))
 
-    # Weighted sample 3 without replacement
+    # Weighted sample without replacement
     chosen: List[str] = []
     cand = candidates[:]
     wts = weights[:]
-    for _ in range(3):
+    for _ in range(num_opponents):
         total = sum(wts)
         r = rgn.random() * total if hasattr(rgn, "random") else rgn.uniform(0, total)
         cum = 0.0
@@ -92,29 +92,30 @@ def sample_opponents(
     return chosen
 
 
-def build_opponent_triplets(baselines: List[str], n_games: int) -> List[List[str]]:
-    """Build a list of opponent triplets for evaluation games.
-
-    Generates permutations of the provided baselines to create diverse 3-opponent combinations,
-    then repeats or truncates to reach the desired number of games.
+def build_opponent_combinations(
+    baselines: List[str], n_games: int, n_comb: int = 3
+) -> List[List[str]]:
     """
-    from itertools import cycle, islice
+    Selects random opponent combinations.
 
-    uniq = list(dict.fromkeys(baselines))  # deduplicate, keep order
-    triplets: List[List[str]] = []
+    Args:
+        baselines (List[str]): List of available opponents.
+        n_games (int): Number of games (number of combinations to generate).
+        n_comb (int): Number of opponents per combination. Default is 3.
 
-    if len(uniq) >= 3:
-        for comb in itertools.combinations(uniq, 3):
-            for perm in itertools.permutations(comb, 3):
-                triplets.append(list(perm))
-    elif len(uniq) > 0:
-        # If fewer than 3, pad with repeats
-        pad = (uniq * 3)[:3]
-        triplets = [pad]
-    else:
-        # Fallback if nothing provided
-        triplets = [["random", "random", "random"]]
+    Returns:
+        List[List[str]]: A list of opponent groups.
+    """
+    if not baselines:
+        return []
 
-    # Cycle through triplets to reach exactly n_games
-    triplets = list(islice(cycle(triplets), n_games))
-    return triplets
+    combinations = []
+    for _ in range(n_games):
+        # sample with replacement if baselines < n_comb, otherwise without replacement
+        if len(baselines) < n_comb:
+            opponents = random.choices(baselines, k=n_comb)
+        else:
+            opponents = random.sample(baselines, k=n_comb)
+        combinations.append(opponents)
+
+    return combinations

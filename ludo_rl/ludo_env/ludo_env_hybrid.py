@@ -1,7 +1,6 @@
-from __future__ import annotations
-
 from typing import Dict, List, Optional
 
+from ludo_engine import StrategyFactory
 from ludo_engine.models import ALL_COLORS
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
@@ -31,10 +30,24 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
         self.model: MaskablePPO = None
         self._frozen_policy: MaskableActorCriticPolicy = None
         self._opponent_builders: Dict[str, ObservationBuilder] = {}
+        self.obs_normalizer = None
 
     def set_model(self, model: MaskablePPO) -> None:
         """Inject the live model for self-play opponents."""
         self.model = model
+
+    def set_obs_normalizer(self, obs_normalizer) -> None:
+        """Inject the observation normalizer for frozen policy strategies."""
+        self.obs_normalizer = obs_normalizer
+
+    def _sample_opponents(self, num_opponents: int) -> List[str]:
+        return sample_opponents(
+            self.cfg.opponents.candidates,
+            self._progress,
+            self.cfg.curriculum.boundaries,
+            self.rng,
+            num_opponents,
+        )
 
     def switch_to_classic(self) -> None:
         """Switch from self-play to classic opponent sampling mode."""
@@ -85,22 +98,24 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
                     policy=self._frozen_policy,
                     obs_builder=self._opponent_builders[color],
                     deterministic=True,
+                    obs_normalizer=self.obs_normalizer,
                 )
                 for color in ALL_COLORS
                 if color != self.agent_color
             ]
             self._attach_strategies_mixed(strategies)
         else:  # classic mode
-            strategies = self._sample_opponents()
-            colors = [c for c in ALL_COLORS if c != self.agent_color]
+            # Derive opponent colors from the current game player order (skip agent)
+            colors = [p.color for p in self.game.players if p.color != self.agent_color]
+            strategies = self._sample_opponents(len(colors))
+            if len(strategies) != len(colors):
+                raise ValueError(
+                    f"Number of strategies ({len(strategies)}) must match number of opponent colors ({len(colors)})"
+                )
+
             for name, color in zip(strategies, colors):
                 player = self.game.get_player_from_color(color)
-                try:
-                    from ludo_engine.strategies.strategy import StrategyFactory
-
-                    player.set_strategy(StrategyFactory.create_strategy(name))
-                except Exception:
-                    pass
+                player.set_strategy(StrategyFactory.create_strategy(name))
 
     def extra_reset_info(self) -> Dict:
         return {"progress": self._progress, "mode": self.mode}

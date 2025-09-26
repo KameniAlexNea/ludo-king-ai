@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Dict, Optional
 
 from ludo_engine.models import ALL_COLORS
@@ -29,6 +27,7 @@ class LudoRLEnvSelfPlay(LudoRLEnvBase):
         self.model: MaskablePPO = None
         self._frozen_policy: MaskableActorCriticPolicy = None
         self._opponent_builders: Dict[str, ObservationBuilder] = {}
+        self.obs_normalizer = None
 
     # ---- Model snapshot management (in-memory) ----
     def set_model(self, model: MaskablePPO) -> None:
@@ -40,6 +39,10 @@ class LudoRLEnvSelfPlay(LudoRLEnvBase):
             self._frozen_policy = getattr(self.model, "policy", None)
         except Exception:
             self._frozen_policy = None
+
+    def set_obs_normalizer(self, obs_normalizer) -> None:
+        """Inject the observation normalizer for frozen policy strategies."""
+        self.obs_normalizer = obs_normalizer
 
     # ---- gym api ----
     def on_reset_before_attach(self, options: Optional[Dict] = None) -> None:
@@ -63,6 +66,7 @@ class LudoRLEnvSelfPlay(LudoRLEnvBase):
                 policy=self._frozen_policy,
                 obs_builder=self._opponent_builders[color],
                 deterministic=True,
+                obs_normalizer=self.obs_normalizer,
             )
             for color in ALL_COLORS
             if color != self.agent_color

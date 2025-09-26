@@ -1,7 +1,6 @@
-from __future__ import annotations
-
 from typing import Optional
 
+from loguru import logger
 from stable_baselines3.common.callbacks import BaseCallback
 
 from ludo_rl.config import EnvConfig, TrainConfig
@@ -34,12 +33,28 @@ class AnnealingCallback(BaseCallback):
                 self.train_cfg.entropy_coef_final - self.train_cfg.entropy_coef_initial
             )
             try:
-                if hasattr(self.model, "ent_coef"):
-                    # For SB3 PPO, ent_coef may be a schedule fn or float; attempt direct set
-                    if isinstance(self.model.ent_coef, (int, float)):
-                        self.model.ent_coef = float(new_ent)
-            except Exception:
-                pass
+                # Directly set ent_coef - SB3 uses this in loss computation
+                self.model.ent_coef = float(new_ent)
+            except Exception as e:
+                if self.verbose > 0:
+                    logger.error(
+                        f"[Annealing] Failed to set ent_coef to {new_ent}: {e}"
+                    )
+
+        # Log current values periodically
+        if (
+            self.train_cfg.anneal_log_freq > 0
+            and t % self.train_cfg.anneal_log_freq == 0
+        ):
+            try:
+                current_lr = self.model.policy.optimizer.param_groups[0]["lr"]
+                ent = getattr(self.model, "ent_coef", None)
+                logger.info(
+                    f"[Anneal] step={t} lr={current_lr:.6g} ent={ent} capture_scale={self.train_cfg.capture_scale_initial}->{self.train_cfg.capture_scale_final}"
+                )
+            except Exception as e:
+                if self.verbose > 0:
+                    logger.error(f"[Annealing] Failed to log annealing values: {e}")
 
         # Capture reward scale annealing (env side)
         if self.train_cfg.capture_scale_anneal_steps > 0:
