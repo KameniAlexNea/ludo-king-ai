@@ -25,6 +25,7 @@ from sb3_contrib import MaskablePPO
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import ObservationBuilder
 from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
+from stable_baselines3.common.vec_env import VecNormalize
 
 _STEP_PATTERN = re.compile(r"(?:^|_)(\d+)(?:_|$)")
 
@@ -136,6 +137,7 @@ def build_frozen_strategy(
     env_cfg: Optional[EnvConfig] = None,
     player_name: str = "ppo",
     deterministic: bool = True,
+    vecnormalize_path: Optional[str] = None,
 ):
     """Create a FrozenPolicyStrategy bound to a specific game instance.
 
@@ -143,6 +145,10 @@ def build_frozen_strategy(
     """
     cfg = env_cfg or EnvConfig()
     obs_builder = ObservationBuilder(cfg, game, agent_color)
+    obs_normalizer = None
+    if vecnormalize_path and os.path.exists(vecnormalize_path):
+        
+        obs_normalizer = VecNormalize.load(vecnormalize_path, venv=None)
     # The StrategyFactory expects a strategy instance with .decide()
     strat = FrozenPolicyStrategy(model.policy, obs_builder, deterministic=deterministic)
     # Adjust its public name if desired

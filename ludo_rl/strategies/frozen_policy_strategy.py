@@ -7,6 +7,7 @@ from ludo_engine.strategies.base import Strategy
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 
 from ludo_rl.ludo_env.observation import ObservationBuilder
+from stable_baselines3.common.vec_env import VecNormalize
 
 
 class FrozenPolicyStrategy(Strategy):
@@ -20,6 +21,7 @@ class FrozenPolicyStrategy(Strategy):
         policy: Optional[MaskableActorCriticPolicy],
         obs_builder: ObservationBuilder,
         deterministic: bool = True,
+        obs_normalizer: Optional[VecNormalize] = None,
     ):
         super().__init__(
             "FrozenPolicy",
@@ -28,14 +30,14 @@ class FrozenPolicyStrategy(Strategy):
         self.policy = policy
         self.obs_builder = obs_builder
         self.deterministic = deterministic
+        self.obs_normalizer = obs_normalizer
 
     @staticmethod
     def _build_action_mask(valid_moves: list[ValidMove]) -> np.ndarray:
         mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.float32)
         for mv in valid_moves:
             tid = mv.token_id
-            if isinstance(tid, int) and 0 <= tid < GameConstants.TOKENS_PER_PLAYER:
-                mask[tid] = 1
+            mask[tid] = 1
         return mask
 
     def decide(self, game_context: AIDecisionContext) -> int:  # type: ignore[override]
@@ -51,6 +53,9 @@ class FrozenPolicyStrategy(Strategy):
         turn_count = game_context.current_situation.turn_count
         dice_val = game_context.current_situation.dice_value
         obs = self.obs_builder.build(turn_count, dice_val)
+
+        if self.obs_normalizer is not None:
+            obs = self.obs_normalizer.normalize_obs(obs)
 
         # Compute distribution from policy, derive probs, and apply mask
         obs_tensor = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)

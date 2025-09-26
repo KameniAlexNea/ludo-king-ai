@@ -16,6 +16,7 @@ from itertools import combinations
 import numpy as np
 from dotenv import load_dotenv
 from ludo_engine import LudoGame, PlayerColor, StrategyFactory
+from ludo_engine.models import ALL_COLORS
 
 from ludo_tournament import BaseTournament
 from ludo_tournament.game_state_saver import GameStateSaver
@@ -225,23 +226,18 @@ class FourPlayerPPOTournament(BaseTournament):
                     )
 
                 # Create 4-player game
-                colours = [
-                    PlayerColor.RED,
-                    PlayerColor.BLUE,
-                    PlayerColor.GREEN,
-                    PlayerColor.YELLOW,
-                ]
+                colours = ALL_COLORS
                 game = LudoGame(colours)
 
                 # Assign strategies. Always wrap PPO model in its strategy class for consistency across env modes.
                 for i, (player_name, colour) in enumerate(zip(game_players, colours)):
                     if player_name == self.ppo_model:
                         strategy = load_ppo_strategy(
-                            self.env_kind,
-                            self.models_dir,
-                            player_name,
-                            colour,
-                            self.model_preference,
+                            env_kind=self.env_kind,
+                            models_dir=self.models_dir,
+                            player_name=player_name,
+                            colour=colour,
+                            model_preference=self.model_preference,
                             game=game,
                             max_turns=self.max_turns_per_game,
                         )

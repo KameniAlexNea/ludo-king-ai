@@ -136,6 +136,8 @@ def main():
             steps_budget=args.imitation_steps,
             multi_seat=False,
         )
+        # Normalize observations to match training data distribution
+        obs_s = np.array([eval_env.normalize_obs(obs) for obs in obs_s])
         # Multi-seat samples
         obs_m, act_m, mask_m = collect_imitation_samples(
             base_env_for_imitation,
@@ -143,6 +145,8 @@ def main():
             steps_budget=args.imitation_steps,
             multi_seat=True,
         )
+        # Normalize observations to match training data distribution
+        obs_m = np.array([eval_env.normalize_obs(obs) for obs in obs_m])
         obs_all = np.concatenate([obs_s, obs_m], axis=0)
         act_all = np.concatenate([act_s, act_m], axis=0)
         mask_all = np.concatenate([mask_s, mask_m], axis=0)
