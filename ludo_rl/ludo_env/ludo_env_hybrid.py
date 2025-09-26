@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional
 
+from ludo_engine import StrategyFactory
 from ludo_engine.models import ALL_COLORS
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
@@ -91,14 +92,12 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
         else:  # classic mode
             strategies = self._sample_opponents()
             colors = [c for c in ALL_COLORS if c != self.agent_color]
+            if len(strategies) != len(colors):
+                raise ValueError(f"Number of strategies ({len(strategies)}) must match number of opponent colors ({len(colors)})")
+            
             for name, color in zip(strategies, colors):
                 player = self.game.get_player_from_color(color)
-                try:
-                    from ludo_engine.strategies.strategy import StrategyFactory
-
-                    player.set_strategy(StrategyFactory.create_strategy(name))
-                except Exception:
-                    pass
+                player.set_strategy(StrategyFactory.create_strategy(name))
 
     def extra_reset_info(self) -> Dict:
         return {"progress": self._progress, "mode": self.mode}

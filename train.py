@@ -174,17 +174,18 @@ def main():
         # After imitation, run a quick evaluation callback manually (one pass) to log baseline performance under TB
         try:
             eval_cb.on_step()  # type: ignore
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[Imitation] Failed to run post-imitation evaluation: {e}")
+            # Non-critical, continue training
         # Save post-imitation snapshot for curve comparison
+        imitation_path = os.path.join(
+            args.model_dir, "maskable_ppo_after_imitation"
+        )
         try:
-            imitation_path = os.path.join(
-                args.model_dir, "maskable_ppo_after_imitation"
-            )
             model.save(imitation_path)
             logger.info(f"[Imitation] Saved post-imitation model to {imitation_path}.zip")
         except Exception as e:
-            logger.info(f"[Imitation] Warning: could not save post-imitation model: {e}")
+            raise RuntimeError(f"[Imitation] Failed to save post-imitation model to {imitation_path}: {e}") from e
 
     # Add checkpointing if enabled
     if args.checkpoint_freq and args.checkpoint_freq > 0:
@@ -199,7 +200,13 @@ def main():
         callbacks.append(ckpt_cb)
 
     model.learn(total_timesteps=args.total_steps, callback=callbacks)
-    model.save(os.path.join(args.model_dir, "maskable_ppo_ludo_rl_final"))
+    
+    final_model_path = os.path.join(args.model_dir, "maskable_ppo_ludo_rl_final")
+    try:
+        model.save(final_model_path)
+        logger.info(f"Training completed. Final model saved to {final_model_path}.zip")
+    except Exception as e:
+        raise RuntimeError(f"Failed to save final model to {final_model_path}: {e}") from e
 
 
 if __name__ == "__main__":

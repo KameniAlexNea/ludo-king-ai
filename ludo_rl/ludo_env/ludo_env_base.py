@@ -123,8 +123,8 @@ class LudoRLEnvBase(gym.Env):
                     player.set_strategy(strat)
                 elif StrategyFactory is not None:
                     player.set_strategy(StrategyFactory.create_strategy(strat))
-            except Exception:
-                pass
+            except Exception as e:
+                raise RuntimeError(f"Failed to set strategy for player {color}: {e}") from e
 
     # ---- gym api --------------------------------------------------------------
     def reset(

@@ -31,12 +31,12 @@ class LudoRLEnv(LudoRLEnvBase):
             strategies = self._sample_opponents()
         # Derive opponent colors from the current game player order (skip agent)
         colors = [p.color for p in self.game.players if p.color != self.agent_color]
+        if len(strategies) != len(colors):
+            raise ValueError(f"Number of strategies ({len(strategies)}) must match number of opponent colors ({len(colors)})")
+        
         for name, color in zip(strategies, colors):
             player = self.game.get_player_from_color(color)
-            try:
-                player.set_strategy(StrategyFactory.create_strategy(name))
-            except Exception:
-                pass
+            player.set_strategy(StrategyFactory.create_strategy(name))
 
     # ---- gym api hooks ----
     def extra_reset_info(self) -> Dict[str, Any]:
