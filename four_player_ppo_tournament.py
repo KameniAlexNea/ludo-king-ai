@@ -236,7 +236,7 @@ class FourPlayerPPOTournament(BaseTournament):
                             env_kind=self.env_kind,
                             models_dir=self.models_dir,
                             player_name=player_name,
-                            colour=colour,
+                            agent_color=colour,
                             model_preference=self.model_preference,
                             game=game,
                             max_turns=self.max_turns_per_game,

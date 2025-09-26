@@ -18,7 +18,4 @@ class MoveUtils:
     @staticmethod
     def get_action_mask_for_env(env) -> np.ndarray:
         """Get action mask for a given environment instance, handling exceptions gracefully."""
-        try:
-            return MoveUtils.action_mask(getattr(env, "pending_valid_moves", None))
-        except Exception:
-            return np.ones(GameConstants.TOKENS_PER_PLAYER, dtype=bool)
+        return MoveUtils.action_mask(getattr(env, "pending_valid_moves", None))

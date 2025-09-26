@@ -6,7 +6,7 @@ MaskablePPO policy.
 
 Main entry points:
   - select_best_ppo_model(models_dir, preference, explicit=None)
-  - load_ppo_policy(models_dir, preference, device='cpu') -> (model, name)
+  - load_ppo_policy(models_dir, preference, device='cpu') -> (model, name, vec_normalize)
   - load_ppo_strategy(..., game=game_instance) -> FrozenPolicyStrategy
 
 If you need to attach the PPO policy to multiple games, call
@@ -21,11 +21,14 @@ from typing import List, Optional, Tuple
 from ludo_engine.core import LudoGame, PlayerColor
 from ludo_engine.models import ALL_COLORS
 from sb3_contrib import MaskablePPO
+from sb3_contrib.common.wrappers import ActionMasker
+from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecNormalize
 
 from ludo_rl.config import EnvConfig
+from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.observation import ObservationBuilder
 from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
-from stable_baselines3.common.vec_env import VecNormalize
+from ludo_rl.utils.move_utils import MoveUtils
 
 _STEP_PATTERN = re.compile(r"(?:^|_)(\d+)(?:_|$)")
 
@@ -115,19 +118,56 @@ def load_ppo_policy(
     model_preference: str = "final",
     explicit: Optional[str] = None,
     device: str = "cpu",
-):
-    """Load a MaskablePPO model and return (model, basename)."""
+) -> Tuple[MaskablePPO, str, Optional[VecNormalize]]:
+    """Load a MaskablePPO model and its VecNormalize stats, return (model, basename, vec_normalize)."""
     model_name = select_best_ppo_model(models_dir, model_preference, explicit)
     if not os.path.isdir(models_dir):
         models_dir = os.path.dirname(models_dir)
+
     model_path = os.path.join(models_dir, f"{model_name}.zip")
     if not os.path.isfile(model_path):
         raise FileNotFoundError(f"Model file '{model_path}' not found")
+
+    # Load the model
     try:
         model = MaskablePPO.load(model_path, device=device)
     except Exception as e:  # pragma: no cover
         raise RuntimeError(f"Failed to load PPO model '{model_path}': {e}") from e
-    return model, model_name
+
+    # Try to load VecNormalize stats
+    vecnormalize_path = os.path.join(models_dir, f"{model_name}_vecnormalize.pkl")
+    vec_normalize = None
+
+    if os.path.exists(vecnormalize_path):
+        try:
+            # Create a dummy env to load VecNormalize (it needs the env structure)
+            env_cfg = EnvConfig()
+            dummy_env = DummyVecEnv(
+                [
+                    lambda: ActionMasker(
+                        LudoRLEnv(env_cfg), MoveUtils.get_action_mask_for_env
+                    )
+                ]
+            )
+            dummy_env = VecMonitor(dummy_env)
+
+            # Load the VecNormalize with the dummy env
+            vec_normalize = VecNormalize.load(vecnormalize_path, dummy_env)
+            vec_normalize.training = False  # Set to evaluation mode
+            vec_normalize.norm_reward = False  # Match training setup
+
+            # Close the dummy env since we only needed it for loading
+            dummy_env.close()
+
+        except Exception as e:
+            print(
+                f"Warning: Could not load VecNormalize stats from {vecnormalize_path}: {e}"
+            )
+            vec_normalize = None
+    else:
+        print(f"Warning: VecNormalize file not found at {vecnormalize_path}")
+
+    return model, model_name, vec_normalize
 
 
 def build_frozen_strategy(
@@ -137,7 +177,7 @@ def build_frozen_strategy(
     env_cfg: Optional[EnvConfig] = None,
     player_name: str = "ppo",
     deterministic: bool = True,
-    vecnormalize_path: Optional[str] = None,
+    vec_normalize: Optional[VecNormalize] = None,
 ):
     """Create a FrozenPolicyStrategy bound to a specific game instance.
 
@@ -145,12 +185,13 @@ def build_frozen_strategy(
     """
     cfg = env_cfg or EnvConfig()
     obs_builder = ObservationBuilder(cfg, game, agent_color)
-    obs_normalizer = None
-    if vecnormalize_path and os.path.exists(vecnormalize_path):
-        
-        obs_normalizer = VecNormalize.load(vecnormalize_path, venv=None)
-    # The StrategyFactory expects a strategy instance with .decide()
-    strat = FrozenPolicyStrategy(model.policy, obs_builder, deterministic=deterministic)
+
+    strat = FrozenPolicyStrategy(
+        model.policy,
+        obs_builder,
+        deterministic=deterministic,
+        obs_normalizer=vec_normalize,
+    )
     # Adjust its public name if desired
     strat.name = player_name
     return strat
@@ -167,21 +208,15 @@ def load_ppo_strategy(
     device: str = "cpu",
     max_turns=500,
 ):
-    """Backward-compatible loader that returns a FrozenPolicyStrategy.
-
-    Parameters mirror the legacy interface plus:
-      - game: required to build the observation context. If None, a temporary
-        LudoGame is constructed (NOT recommended for actual tournament play).
-    """
-    model, model_name = load_ppo_policy(
+    """Load PPO strategy with proper VecNormalize handling."""
+    # Load model and normalization stats
+    model, model_name, vec_normalize = load_ppo_policy(
         models_dir=models_dir, model_preference=model_preference, device=device
     )
+
     if game is None:
-        # logger.warning(
-        #     "No game instance provided to load_ppo_strategy; creating a temporary LudoGame.\n"
-        #     "Attach a proper strategy built via build_frozen_strategy(model, actual_game, ...) for real matches."
-        # )
         game = LudoGame(ALL_COLORS)
+
     strategy = build_frozen_strategy(
         model=model,
         game=game,
@@ -189,6 +224,7 @@ def load_ppo_strategy(
         env_cfg=EnvConfig(max_turns=max_turns, seed=42),
         player_name=player_name,
         deterministic=deterministic,
+        vec_normalize=vec_normalize,
     )
     return strategy
 
