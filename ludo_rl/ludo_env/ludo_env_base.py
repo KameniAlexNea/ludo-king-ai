@@ -200,14 +200,12 @@ class LudoRLEnvBase(gym.Env):
         elif num_players >= len(ALL_COLORS):
             # default to full set rotated so agent is first
             chosen_colors = [
-                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)]
-                for i in range(len(ALL_COLORS))
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)] for i in range(len(ALL_COLORS))
             ]
         else:
             # fallback: take the first num_players clockwise including agent
             chosen_colors = [
-                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)]
-                for i in range(num_players)
+                ALL_COLORS[(start_idx + i) % len(ALL_COLORS)] for i in range(num_players)
             ]
 
         # create game with selected colors (agent will be first in the game's player order)
@@ -215,9 +213,16 @@ class LudoRLEnvBase(gym.Env):
         self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
 
         # Update observation space with correct size
-        self.observation_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32
-        )
+        # Support discrete observation encoding if requested
+        if getattr(self.cfg, "obs", None) and getattr(self.cfg.obs, "discrete", False):
+            # Build MultiDiscrete nvec from observation builder
+            nvec = self.obs_builder.compute_discrete_dims()
+            # gym expects an array-like of ints for MultiDiscrete
+            self.observation_space = spaces.MultiDiscrete(nvec)
+        else:
+            self.observation_space = spaces.Box(
+                low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32
+            )
 
     def _reset_episode_stats(self) -> None:
         """Reset all episode-level statistics and counters."""

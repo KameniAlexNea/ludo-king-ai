@@ -45,10 +45,12 @@ class RewardConfig:
 
 @dataclass
 class ObservationConfig:
-    include_turn_index: bool = True
+    include_turn_index: bool = False
     # Encoding choices: prefer normalized floats by default for compactness.
     include_dice_one_hot: bool = False
     include_color_one_hot: bool = False
+    # Use discrete encoding (MultiDiscrete) instead of continuous Box
+    discrete: bool = False
 
 
 @dataclass

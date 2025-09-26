@@ -79,6 +79,20 @@ def main():
     else:
         learning_rate = args.learning_rate
 
+    # Optionally use a custom feature extractor when discrete observations are enabled
+    policy_kwargs = {}
+    try:
+        if getattr(env_cfg, "obs", None) and getattr(env_cfg.obs, "discrete", False):
+            from ludo_rl.features.multidiscrete_extractor import MultiDiscreteFeatureExtractor
+
+            policy_kwargs = {
+                "features_extractor_class": MultiDiscreteFeatureExtractor,
+                "features_extractor_kwargs": {"embed_dim": 8},
+            }
+    except Exception:
+        # If feature extractor import fails, fall back to default
+        policy_kwargs = {}
+
     model = MaskablePPO(
         "MlpPolicy",
         venv,
@@ -91,6 +105,7 @@ def main():
         verbose=1,
         device="auto",
         gamma=0.995,
+        policy_kwargs=policy_kwargs,
     )
 
     # When using selfplay or hybrid, inject the live model into envs so they can snapshot policy at reset

@@ -43,9 +43,38 @@ class ObservationBuilder:
             base += 6
         else:
             base += 1
-        if self.cfg.obs.include_turn_index:
-            base += 1
         return base
+
+    def compute_discrete_dims(self) -> list:
+        """Return the nvec list for a MultiDiscrete observation encoding."""
+        tokens_per_player = GameConstants.TOKENS_PER_PLAYER
+        max_players = len(ALL_COLORS)
+        dims: list = []
+
+        # agent color scalar (0..max_players-1)
+        dims.append(max_players)
+
+        # agent token positions (0 = HOME, 1..total_path)
+        pos_bins = self.total_path + 1
+        for _ in range(tokens_per_player):
+            dims.append(pos_bins)
+
+        # opponents token positions and active flags
+        for _ in range(max_players - 1):
+            for _ in range(tokens_per_player):
+                dims.append(pos_bins)
+            dims.append(2)  # active flag
+
+        # token progress (quantized) and vulnerable flag for agent tokens
+        progress_bins = 11
+        for _ in range(tokens_per_player):
+            dims.append(progress_bins)
+            dims.append(2)  # vulnerable flag
+
+        # dice (0=no dice, 1..6)
+        dims.append(7)
+
+        return dims
 
     def normalize_pos(self, pos: int) -> float:
         if pos == GameConstants.HOME_POSITION:
@@ -69,6 +98,10 @@ class ObservationBuilder:
         ) * 2.0 - 1.0
 
     def build(self, turn_counter: int, dice: int) -> np.ndarray:
+        # If discrete encoding requested, dispatch to discrete builder
+        if self.cfg.obs.discrete:
+            return self.build_discrete(turn_counter, dice)
+
         obs: List[float] = []
         tokens_per_player = GameConstants.TOKENS_PER_PLAYER
 
@@ -124,10 +157,67 @@ class ObservationBuilder:
             else:
                 obs.append(0.0)
 
-        if self.cfg.obs.include_turn_index:
-            obs.append(min(1.0, turn_counter / float(self.cfg.max_turns)))
-
         return np.asarray(obs, dtype=np.float32)
+
+    def build_discrete(self, turn_counter: int, dice: int) -> np.ndarray:
+        """Build a MultiDiscrete-style integer observation vector.
+
+        Mappings:
+        - positions: HOME -> 0, main/home ranks -> 1..total_path
+        - progress: quantized 0..10
+        - vulnerable: 0/1
+        - dice: 0..6 (0 means no dice rolled yet)
+        - turn index: 0..100
+        """
+        obs: List[int] = []
+        tokens_per_player = GameConstants.TOKENS_PER_PLAYER
+
+        # agent color scalar
+        obs.append(ALL_COLORS.index(self.agent_color))
+
+        # helper to map position -> int
+        def pos_to_int(p: int) -> int:
+            if p == GameConstants.HOME_POSITION:
+                return 0
+            if p >= BoardConstants.HOME_COLUMN_START:
+                rank = GameConstants.MAIN_BOARD_SIZE + (p - BoardConstants.HOME_COLUMN_START)
+            else:
+                q = p - self.start_pos if p >= self.start_pos else GameConstants.MAIN_BOARD_SIZE - self.start_pos + p
+                rank = q
+            return 1 + int(rank)
+
+        # agent tokens
+        for t in self.agent_player.tokens:
+            obs.append(pos_to_int(t.position))
+
+        # opponents in seat-relative order
+        start_idx = ALL_COLORS.index(self.agent_color)
+        ordered = ALL_COLORS[start_idx + 1 :] + ALL_COLORS[:start_idx]
+        for color in ordered:
+            if color in self.present_colors:
+                p = self.game.get_player_from_color(color)
+                for t in p.tokens:
+                    obs.append(pos_to_int(t.position))
+                obs.append(1)
+            else:
+                for _ in range(tokens_per_player):
+                    obs.append(pos_to_int(GameConstants.HOME_POSITION))
+                obs.append(0)
+
+        # token progress and vulnerable flags
+        for t in self.agent_player.tokens:
+            prog = int(round(token_progress(t.position, self.start_pos) * 10.0))
+            prog = max(0, min(10, prog))
+            obs.append(prog)
+            obs.append(1 if self.is_vulnerable(t.position) else 0)
+
+        # dice
+        if 1 <= dice <= 6:
+            obs.append(dice)
+        else:
+            obs.append(0)
+
+        return np.asarray(obs, dtype=np.int64)
 
     def is_vulnerable(self, pos: int) -> bool:
         return not (
