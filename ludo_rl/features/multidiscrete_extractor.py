@@ -30,7 +30,10 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
         # identical vocabularies like token positions.
         unique_ns = sorted(set(int(n) for n in self.nvec))
         self.embed_by_n = nn.ModuleDict(
-            {str(n): nn.Embedding(num_embeddings=n, embedding_dim=embed_dim) for n in unique_ns}
+            {
+                str(n): nn.Embedding(num_embeddings=n, embedding_dim=embed_dim)
+                for n in unique_ns
+            }
         )
 
         # Attention layer to let the model learn to weight/interact between discrete dims

@@ -18,7 +18,9 @@ class AnnealingCallback(BaseCallback):
     Gracefully no-ops if attributes not present.
     """
 
-    def __init__(self, train_cfg: TrainConfig, verbose: int = 0, scale_reward: bool = False):
+    def __init__(
+        self, train_cfg: TrainConfig, verbose: int = 0, scale_reward: bool = False
+    ):
         super().__init__(verbose)
         self.train_cfg = train_cfg
         self.scale_reward = scale_reward

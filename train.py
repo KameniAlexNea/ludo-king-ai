@@ -68,14 +68,14 @@ def main():
         )
 
     venv = VecMonitor(venv)
-    venv = VecNormalize(venv, norm_reward=True)
+    venv = VecNormalize(venv, norm_reward=False, norm_obs=False, clip_obs=1., clip_reward=1000.)
 
     # Separate eval env with same wrappers (always classic for evaluation vs baselines)
     # For evaluation we prefer single-process env for deterministic mask wrapping
     eval_raw = make_env(999, 1337, env_cfg, "classic")()
     eval_env = DummyVecEnv([lambda: ActionMasker(eval_raw, MoveUtils.get_action_mask_for_env)])
     eval_env = VecMonitor(eval_env)
-    eval_env = VecNormalize(eval_env, training=False, norm_obs=True, norm_reward=True)
+    eval_env = VecNormalize(eval_env, training=False, norm_obs=False, norm_reward=False, clip_obs=1., clip_reward=1000.)
 
     # Set up learning rate (use callable for annealing)
     if args.lr_anneal_enabled:
