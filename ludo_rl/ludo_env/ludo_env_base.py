@@ -68,13 +68,13 @@ class LudoRLEnvBase(gym.Env):
         self.rng = random.Random(cfg.seed)
 
         # Core game state
-        self.agent_color = PlayerColor.RED
+        self.agent_color = None
         self.game: Optional[LudoGame] = None
         self.obs_builder: Optional[ObservationBuilder] = None
 
         # Action and observation spaces
-        self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
         # Observation space size will be set after obs_builder initialization
+        self.action_space = None
 
         # Turn state
         self.pending_dice: Optional[int] = None
@@ -93,9 +93,10 @@ class LudoRLEnvBase(gym.Env):
         self.reward_calc = RewardCalculator()
 
         # Initialize spaces (will be updated on reset)
-        self.observation_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(1,), dtype=np.float32
-        )
+        self.observation_space = None
+
+        self.opponents: Optional[List[str]] = None  # can be list of Strategy or names
+        self.fixed_num_players: Optional[int] = None  # can be set externally
 
         self._initialize_game_state()
 
@@ -119,9 +120,12 @@ class LudoRLEnvBase(gym.Env):
     # ---- helpers --------------------------------------------------------------
     def _attach_strategies_mixed(self, strategies: List) -> None:
         """Attach strategies to non-agent players. Items can be Strategy instances or names."""
-        colors = [p.color for p in self.game.players if p.color != self.agent_color]
-        for strat, color in zip(strategies, colors):
-            player = self.game.get_player_from_color(color)
+        if len(strategies) != len(self.game.players) - 1:
+            raise ValueError(
+                f"Number of strategies ({len(strategies)}) must match number of opponent players ({len(self.game.players) - 1})"
+            )
+        colors = [(p.color, p) for p in self.game.players if p.color != self.agent_color]
+        for strat, (color, player) in zip(strategies, colors):
             try:
                 if Strategy is not object and isinstance(strat, Strategy):
                     player.set_strategy(strat)
@@ -141,9 +145,9 @@ class LudoRLEnvBase(gym.Env):
 
         # Merge attributes set by set_attr into options
         options = options or {}
-        if hasattr(self, "opponents") and self.opponents is not None:
+        if self.opponents:
             options["opponents"] = self.opponents
-        if hasattr(self, "fixed_num_players") and self.fixed_num_players is not None:
+        if self.fixed_num_players:
             options["fixed_num_players"] = self.fixed_num_players
 
         # Allow callers to temporarily force a player count for this reset
@@ -249,9 +253,11 @@ class LudoRLEnvBase(gym.Env):
 
     def _roll_dice_for_agent(self) -> None:
         """Roll dice and get valid moves for the agent."""
+        player = self.game.get_current_player()
+        assert player.color == self.agent_color, "Not agent's turn"
         self.pending_dice = self.game.roll_dice()
         self.pending_valid_moves = self.game.get_valid_moves(
-            self.game.get_current_player(), self.pending_dice
+            player, self.pending_dice
         )
 
     def _build_observation(self) -> np.ndarray:
@@ -264,18 +270,6 @@ class LudoRLEnvBase(gym.Env):
         info = {"episode": self.episode_count}
         info.update(self.extra_reset_info())
         return info
-
-    def _ensure_agent_turn(self):
-        """Legacy method for backward compatibility."""
-        self._advance_to_agent_turn()
-
-    def _roll_agent_dice(self):
-        """Legacy method for backward compatibility."""
-        return self.pending_dice, self.pending_valid_moves
-
-    def _simulate_single_opponent(self):
-        """Legacy method for backward compatibility."""
-        self._simulate_opponent_turn()
 
     def step(self, action: int):
         """Execute one step in the environment."""
