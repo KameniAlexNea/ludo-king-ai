@@ -92,7 +92,7 @@ def parse_args() -> TrainConfig:
     p.add_argument(
         "--lr-final",
         type=float,
-        default=TrainConfig.learning_rate * 0.25,
+        default=TrainConfig.lr_final,
         help="Final learning rate for linear anneal (initial is --learning-rate)",
     )
     p.add_argument(

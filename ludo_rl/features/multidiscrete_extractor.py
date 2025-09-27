@@ -23,12 +23,14 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
 
         super().__init__(observation_space, features_dim=total_embed)
 
-        # Create embedding layers per discrete dim
-        self.embeds = nn.ModuleList(
-            [
-                nn.Embedding(num_embeddings=int(n), embedding_dim=embed_dim)
-                for n in self.nvec
-            ]
+        # Create shared embedding layers for each unique cardinality (n)
+        # This means all dims with the same number of categories reuse the same
+        # nn.Embedding instance (e.g. all token position dims, all vulnerable
+        # flags, etc.). This avoids duplicating parameters for repeated
+        # identical vocabularies like token positions.
+        unique_ns = sorted(set(int(n) for n in self.nvec))
+        self.embed_by_n = nn.ModuleDict(
+            {str(n): nn.Embedding(num_embeddings=n, embedding_dim=embed_dim) for n in unique_ns}
         )
 
         # Attention layer to let the model learn to weight/interact between discrete dims
@@ -42,7 +44,10 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
         embeds = []
         # Ensure long dtype for embedding lookup
         obs_long = observations.long()
-        for i, emb in enumerate(self.embeds):
+        # For each discrete dim, look up the shared embedding for that dim's
+        # cardinality (nvec[i]). This reuses parameters for identical dims.
+        for i, n in enumerate(self.nvec):
+            emb = self.embed_by_n[str(int(n))]
             embeds.append(emb(obs_long[:, i]))
         # stack into (batch, seq_len, embed_dim)
         embeds_tensor = torch.stack(embeds, dim=1)
