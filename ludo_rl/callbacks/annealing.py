@@ -18,9 +18,10 @@ class AnnealingCallback(BaseCallback):
     Gracefully no-ops if attributes not present.
     """
 
-    def __init__(self, train_cfg: TrainConfig, verbose: int = 0):
+    def __init__(self, train_cfg: TrainConfig, verbose: int = 0, scale_reward: bool = False):
         super().__init__(verbose)
         self.train_cfg = train_cfg
+        self.scale_reward = scale_reward
 
     def _on_step(self) -> bool:
         # Current step
@@ -57,7 +58,7 @@ class AnnealingCallback(BaseCallback):
                     logger.error(f"[Annealing] Failed to log annealing values: {e}")
 
         # Capture reward scale annealing (env side)
-        if self.train_cfg.capture_scale_anneal_steps > 0:
+        if self.scale_reward and self.train_cfg.capture_scale_anneal_steps > 0:
             frac_c = min(1.0, t / float(self.train_cfg.capture_scale_anneal_steps))
             new_scale = self.train_cfg.capture_scale_initial + frac_c * (
                 self.train_cfg.capture_scale_final

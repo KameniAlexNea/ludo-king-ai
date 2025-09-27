@@ -34,10 +34,6 @@ class RewardConfig:
     enable_capture_shaping: bool = True
     capture_choice_bonus: float = 0.01  # Increased from 0.005
     decline_capture_penalty: float = -0.05  # Increased from -0.02
-    enable_progressive_finish: bool = True
-    finish_multipliers: List[float] = field(
-        default_factory=lambda: [1.2, 1.4, 1.7, 2.2]
-    )
     # Scaling / annealing
     capture_reward_scale: float = 1.5  # Increased from 1.0
     finish_reward_scale: float = 1.5  # Increased from 1.0

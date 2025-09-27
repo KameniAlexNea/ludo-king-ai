@@ -99,6 +99,10 @@ class LudoRLEnvBase(gym.Env):
 
         self._initialize_game_state()
 
+    def set_capture_scale(self, scale: float) -> None:
+        """Set capture reward scale dynamically."""
+        self.cfg.reward.capture_reward_scale = scale
+
     # ---- hooks for subclasses -------------------------------------------------
     def on_reset_before_attach(self, options: Optional[Dict[str, Any]] = None) -> None:
         """Subclass hook before attaching opponents; game and obs_builder are initialized."""
