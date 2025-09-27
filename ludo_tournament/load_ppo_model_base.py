@@ -29,7 +29,7 @@ from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
-from ludo_rl.ludo_env.observation import ObservationBuilder
+from ludo_rl.ludo_env.observation import ContinuousObservationBuilder, DiscreteObservationBuilder
 from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
 from ludo_rl.utils.move_utils import MoveUtils
 
@@ -231,7 +231,10 @@ def build_frozen_strategy(
     You can reuse the same loaded model across many games by calling this per game.
     """
     cfg = env_cfg or EnvConfig()
-    obs_builder = ObservationBuilder(cfg, game, agent_color)
+    if getattr(cfg, "obs", None) and getattr(cfg.obs, "discrete", False):
+        obs_builder = DiscreteObservationBuilder(cfg, game, agent_color)
+    else:
+        obs_builder = ContinuousObservationBuilder(cfg, game, agent_color)
 
     strat = FrozenPolicyStrategy(
         model.policy,

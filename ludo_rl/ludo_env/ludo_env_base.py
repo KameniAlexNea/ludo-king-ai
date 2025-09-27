@@ -18,7 +18,7 @@ from ludo_engine.strategies.base import Strategy  # type: ignore
 from ludo_engine.strategies.strategy import StrategyFactory  # type: ignore
 
 from ludo_rl.config import EnvConfig
-from ludo_rl.ludo_env.observation import ObservationBuilder
+from ludo_rl.ludo_env.observation import ContinuousObservationBuilder, DiscreteObservationBuilder, ObservationBuilderBase
 from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.reward_calculator import RewardCalculator
 
@@ -70,7 +70,7 @@ class LudoRLEnvBase(gym.Env):
         # Core game state
         self.agent_color = None
         self.game: Optional[LudoGame] = None
-        self.obs_builder: Optional[ObservationBuilder] = None
+        self.obs_builder: Optional[ObservationBuilderBase] = None
 
         # Action and observation spaces
         # Observation space size will be set after obs_builder initialization
@@ -220,7 +220,10 @@ class LudoRLEnvBase(gym.Env):
 
         # create game with selected colors (agent will be first in the game's player order)
         self.game = LudoGame(chosen_colors)
-        self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
+        if getattr(self.cfg, "obs", None) and getattr(self.cfg.obs, "discrete", False):
+            self.obs_builder = DiscreteObservationBuilder(self.cfg, self.game, self.agent_color)
+        else:
+            self.obs_builder = ContinuousObservationBuilder(self.cfg, self.game, self.agent_color)
 
         # Update observation space with correct size
         # Support discrete observation encoding if requested

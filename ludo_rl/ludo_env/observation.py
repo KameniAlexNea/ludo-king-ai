@@ -8,19 +8,50 @@ from ludo_rl.config import EnvConfig
 from ludo_rl.utils.reward_calculator import token_progress
 
 
-class ObservationBuilder:
+class ObservationBuilderBase:
     def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: PlayerColor):
         self.cfg = cfg
         self.game = game
         self.agent_color = agent_color
         self.start_pos = BoardConstants.START_POSITIONS[self.agent_color]
-        self.size = self.compute_size()
         self.total_path = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
         self.agent_player = next(
             p for p in self.game.players if p.color == self.agent_color
         )
         # cache which colors are present in this game to avoid unnecessary lookups
         self.present_colors = {p.color for p in self.game.players}
+
+    def normalize_pos(self, pos: int) -> float:
+        if pos == GameConstants.HOME_POSITION:
+            return -1.0
+        if pos >= BoardConstants.HOME_COLUMN_START:
+            # map 100..105 to 52..57
+            rank = GameConstants.MAIN_BOARD_SIZE + (
+                pos - BoardConstants.HOME_COLUMN_START
+            )
+        else:
+            # shift so agent start is 0
+            p = (
+                pos - self.start_pos
+                if pos >= self.start_pos
+                else GameConstants.MAIN_BOARD_SIZE - self.start_pos + pos
+            )
+            rank = p
+        # ranks 0..57 -> [-1, 1]
+        return (
+            rank / (GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
+        ) * 2.0 - 1.0
+
+    def is_vulnerable(self, pos: int) -> bool:
+        return not (
+            pos == GameConstants.HOME_POSITION or BoardConstants.is_safe_position(pos)
+        )
+
+
+class ContinuousObservationBuilder(ObservationBuilderBase):
+    def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: PlayerColor):
+        super().__init__(cfg, game, agent_color)
+        self.size = self.compute_size()
 
     def compute_size(self) -> int:
         base = 0
@@ -45,63 +76,7 @@ class ObservationBuilder:
             base += 1
         return base
 
-    def compute_discrete_dims(self) -> list:
-        """Return the nvec list for a MultiDiscrete observation encoding."""
-        tokens_per_player = GameConstants.TOKENS_PER_PLAYER
-        max_players = len(ALL_COLORS)
-        dims: list = []
-
-        # agent color scalar (0..max_players-1)
-        dims.append(max_players)
-
-        # agent token positions (0 = HOME, 1..total_path)
-        pos_bins = self.total_path + 1
-        for _ in range(tokens_per_player):
-            dims.append(pos_bins)
-
-        # opponents token positions and active flags
-        for _ in range(max_players - 1):
-            for _ in range(tokens_per_player):
-                dims.append(pos_bins)
-            dims.append(2)  # active flag
-
-        # token progress (quantized) and vulnerable flag for agent tokens
-        progress_bins = 11
-        for _ in range(tokens_per_player):
-            dims.append(progress_bins)
-            dims.append(2)  # vulnerable flag
-
-        # dice (0=no dice, 1..6)
-        dims.append(7)
-
-        return dims
-
-    def normalize_pos(self, pos: int) -> float:
-        if pos == GameConstants.HOME_POSITION:
-            return -1.0
-        if pos >= BoardConstants.HOME_COLUMN_START:
-            # map 100..105 to 52..57
-            rank = GameConstants.MAIN_BOARD_SIZE + (
-                pos - BoardConstants.HOME_COLUMN_START
-            )
-        else:
-            # shift so agent start is 0
-            p = (
-                pos - self.start_pos
-                if pos >= self.start_pos
-                else GameConstants.MAIN_BOARD_SIZE - self.start_pos + pos
-            )
-            rank = p
-        # ranks 0..57 -> [-1, 1]
-        return (
-            rank / (GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
-        ) * 2.0 - 1.0
-
     def build(self, turn_counter: int, dice: int) -> np.ndarray:
-        # If discrete encoding requested, dispatch to discrete builder
-        if self.cfg.obs.discrete:
-            return self.build_discrete(turn_counter, dice)
-
         obs: List[float] = []
         tokens_per_player = GameConstants.TOKENS_PER_PLAYER
 
@@ -159,7 +134,40 @@ class ObservationBuilder:
 
         return np.asarray(obs, dtype=np.float32)
 
-    def build_discrete(self, turn_counter: int, dice: int) -> np.ndarray:
+
+class DiscreteObservationBuilder(ObservationBuilderBase):
+    def compute_discrete_dims(self) -> list:
+        """Return the nvec list for a MultiDiscrete observation encoding."""
+        tokens_per_player = GameConstants.TOKENS_PER_PLAYER
+        max_players = len(ALL_COLORS)
+        dims: list = []
+
+        # agent color scalar (0..max_players-1)
+        dims.append(max_players)
+
+        # agent token positions (0 = HOME, 1..total_path)
+        pos_bins = self.total_path + 1
+        for _ in range(tokens_per_player):
+            dims.append(pos_bins)
+
+        # opponents token positions and active flags
+        for _ in range(max_players - 1):
+            for _ in range(tokens_per_player):
+                dims.append(pos_bins)
+            dims.append(2)  # active flag
+
+        # token progress (quantized) and vulnerable flag for agent tokens
+        progress_bins = 11
+        for _ in range(tokens_per_player):
+            dims.append(progress_bins)
+            dims.append(2)  # vulnerable flag
+
+        # dice (0=no dice, 1..6)
+        dims.append(7)
+
+        return dims
+
+    def build(self, turn_counter: int, dice: int) -> np.ndarray:
         """Build a MultiDiscrete-style integer observation vector.
 
         Mappings:
@@ -225,7 +233,6 @@ class ObservationBuilder:
 
         return np.asarray(obs, dtype=np.int64)
 
-    def is_vulnerable(self, pos: int) -> bool:
-        return not (
-            pos == GameConstants.HOME_POSITION or BoardConstants.is_safe_position(pos)
-        )
+
+# Backward compatibility: alias ObservationBuilder to ContinuousObservationBuilder
+ObservationBuilder = ContinuousObservationBuilder

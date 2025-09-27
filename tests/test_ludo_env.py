@@ -24,8 +24,8 @@ class TestObservationBuilder(unittest.TestCase):
 
     def test_compute_size(self):
         size = self.builder.compute_size()
-        # 4 agent + 12 opp + 4 progress + 6 dice + 1 turn = 27
-        expected = 4 + 12 + 4 + 6 + 1
+        # 1 color + 4 agent + 12 opp + 3 active + 4 progress + 4 safety + 1 dice = 29
+        expected = 1 + 4 + 12 + 3 + 4 + 4 + 1
         self.assertEqual(size, expected)
 
     def test_normalize_pos_home(self):
@@ -35,10 +35,6 @@ class TestObservationBuilder(unittest.TestCase):
     def test_normalize_pos_main_board(self):
         result = self.builder.normalize_pos(0)
         self.assertIsInstance(result, float)
-
-    def test_token_progress_home(self):
-        result = self.builder.token_progress(-1, 0)
-        self.assertEqual(result, 0.0)
 
     def test_build(self):
         obs = self.builder.build(turn_counter=5, dice=3)
