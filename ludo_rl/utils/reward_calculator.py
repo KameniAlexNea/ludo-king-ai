@@ -115,7 +115,7 @@ class RewardCalculator:
         # Event rewards
         if res.captured_tokens:
             capture_base = cfg.reward.capture * len(res.captured_tokens)
-            capture_base *= cfg.reward.capture_reward_scale
+            # capture_base *= cfg.reward.capture_reward_scale
             breakdown["capture"] += capture_base
             r += capture_base
             if cfg.reward.enable_capture_shaping:
@@ -124,7 +124,7 @@ class RewardCalculator:
 
         # Finish event
         if res.finished_token or res.new_position == GameConstants.FINISH_POSITION:
-            finish_val = cfg.reward.finish_token * cfg.reward.finish_reward_scale
+            finish_val = cfg.reward.finish_token # * cfg.reward.finish_reward_scale
             breakdown["finish"] += finish_val
             r += finish_val
 
