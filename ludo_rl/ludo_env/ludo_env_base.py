@@ -74,7 +74,7 @@ class LudoRLEnvBase(gym.Env):
 
         # Action and observation spaces
         # Observation space size will be set after obs_builder initialization
-        self.action_space = None
+        self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER, seed=cfg.seed)
 
         # Turn state
         self.pending_dice: Optional[int] = None

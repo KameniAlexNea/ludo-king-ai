@@ -63,4 +63,8 @@ class FrozenPolicyStrategy(Strategy):
         with torch.no_grad():
             dist = self.policy.get_distribution(obs_tensor, mask)  # type: ignore[attr-defined]
             token_id = dist.get_actions(deterministic=self.deterministic).item()
+        valid_token_ids = [mv.token_id for mv in valid_moves]
+        if token_id not in valid_token_ids:
+            # Log warning and fall back to random valid move
+            token_id = np.random.choice(valid_token_ids)
         return token_id
