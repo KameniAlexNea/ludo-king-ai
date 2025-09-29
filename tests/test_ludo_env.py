@@ -7,7 +7,7 @@ from ludo_engine.models import ALL_COLORS, PlayerColor
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env_base import LudoRLEnvBase
-from ludo_rl.ludo_env.observation import ObservationBuilder, ObservationBuilderBase
+from ludo_rl.ludo_env.observation import ObservationBuilder
 
 
 class MockLudoRLEnvBase(LudoRLEnvBase):

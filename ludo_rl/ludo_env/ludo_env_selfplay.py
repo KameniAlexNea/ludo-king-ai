@@ -6,7 +6,11 @@ from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env_base import LudoRLEnvBase
-from ludo_rl.ludo_env.observation import ContinuousObservationBuilder, DiscreteObservationBuilder, ObservationBuilderBase
+from ludo_rl.ludo_env.observation import (
+    ContinuousObservationBuilder,
+    DiscreteObservationBuilder,
+    ObservationBuilderBase,
+)
 from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
 
 
@@ -50,10 +54,16 @@ class LudoRLEnvSelfPlay(LudoRLEnvBase):
         self._opponent_builders = {}
         for c in ALL_COLORS:
             if c != self.agent_color:
-                if getattr(self.cfg, "obs", None) and getattr(self.cfg.obs, "discrete", False):
-                    self._opponent_builders[c] = DiscreteObservationBuilder(self.cfg, self.game, c)
+                if getattr(self.cfg, "obs", None) and getattr(
+                    self.cfg.obs, "discrete", False
+                ):
+                    self._opponent_builders[c] = DiscreteObservationBuilder(
+                        self.cfg, self.game, c
+                    )
                 else:
-                    self._opponent_builders[c] = ContinuousObservationBuilder(self.cfg, self.game, c)
+                    self._opponent_builders[c] = ContinuousObservationBuilder(
+                        self.cfg, self.game, c
+                    )
         # Snapshot current policy for this episode (used by opponents)
         self._snapshot_policy()
 

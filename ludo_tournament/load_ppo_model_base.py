@@ -29,7 +29,10 @@ from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
-from ludo_rl.ludo_env.observation import ContinuousObservationBuilder, DiscreteObservationBuilder
+from ludo_rl.ludo_env.observation import (
+    ContinuousObservationBuilder,
+    DiscreteObservationBuilder,
+)
 from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
 from ludo_rl.utils.move_utils import MoveUtils
 

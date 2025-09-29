@@ -25,7 +25,7 @@ from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
 from ludo_rl.trains.training_args import parse_args
 from ludo_rl.utils.move_utils import MoveUtils
 from loguru import logger
-
+from stable_baselines3.common.utils import set_random_seed
 
 def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic"):
     def _init():
@@ -43,6 +43,7 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic
         # MaskablePPO can access masks across subprocess boundaries.
         return env
 
+    set_random_seed(seed)
     return _init
 
 
