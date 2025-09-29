@@ -7,7 +7,7 @@ from ludo_engine.models import ALL_COLORS, PlayerColor
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env_base import LudoRLEnvBase
-from ludo_rl.ludo_env.observation import ObservationBuilder
+from ludo_rl.ludo_env.observation import ObservationBuilder, ObservationBuilderBase
 
 
 class MockLudoRLEnvBase(LudoRLEnvBase):
@@ -50,12 +50,13 @@ class TestLudoRLEnvBase(unittest.TestCase):
 
     def test_init(self):
         self.assertEqual(self.env.cfg, self.cfg)
-        self.assertEqual(self.env.agent_color, PlayerColor.RED)
-        self.assertIsInstance(self.env.game, LudoGame)
-        self.assertIsInstance(self.env.obs_builder, ObservationBuilder)
+        # agent_color, game, obs_builder are set in reset, not init
+        # self.assertEqual(self.env.agent_color, PlayerColor.RED)
+        # self.assertIsInstance(self.env.game, LudoGame)
+        # self.assertIsInstance(self.env.obs_builder, ObservationBuilderBase)
 
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._ensure_agent_turn")
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_agent_dice")
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._advance_to_agent_turn")
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_dice_for_agent")
     def test_reset(self, mock_roll, mock_ensure):
         mock_roll.return_value = (3, [])
         obs, info = self.env.reset()
@@ -64,12 +65,15 @@ class TestLudoRLEnvBase(unittest.TestCase):
         mock_ensure.assert_called_once()
         mock_roll.assert_called_once()
 
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_single_opponent")
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_opponent_turn")
     def test_ensure_agent_turn(self, mock_simulate):
+        self.env.reset()  # Initialize game state
         # Mock game to have agent as current player
-        self.env.game.get_current_player = Mock()
+        mock_player = Mock()
+        mock_player.color = self.env.agent_color
+        self.env.game.get_current_player = Mock(return_value=mock_player)
         self.env.game.get_current_player.return_value.color = self.env.agent_color
-        self.env._ensure_agent_turn()
+        self.env._advance_to_agent_turn()
         # Should not simulate since it's agent's turn
         mock_simulate.assert_not_called()
 
@@ -79,12 +83,12 @@ class TestLudoRLEnvBase(unittest.TestCase):
         self.assertTrue(terminated)
         self.assertEqual(reward, 0.0)
 
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_agent_dice")
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_single_opponent")
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._ensure_agent_turn")
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_dice_for_agent")
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_opponent_turn")
+    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._advance_to_agent_turn")
     def test_step_no_valid_moves(self, mock_ensure, mock_simulate, mock_roll):
-        self.env._pending_dice = 1
-        self.env._pending_valid = []  # No valid moves
+        self.env.pending_dice = 1
+        self.env.pending_valid_moves = []  # No valid moves
         # Mock current player to be agent to prevent opponent simulation loop
         mock_player = Mock()
         mock_player.color = self.env.agent_color

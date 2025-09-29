@@ -45,6 +45,7 @@ class TestAnnealingCallback(unittest.TestCase):
         self.train_cfg.capture_scale_anneal_steps = 2000
         self.train_cfg.capture_scale_initial = 1.3
         self.train_cfg.capture_scale_final = 1.0
+        self.callback.scale_reward = True  # Enable reward scaling
 
         result = self.callback._on_step()
         self.assertTrue(result)
@@ -75,7 +76,7 @@ class TestSimpleBaselineEvalCallback(unittest.TestCase):
     def setUp(self):
         self.baselines = ["random", "killer"]
         self.callback = SimpleBaselineEvalCallback(
-            self.baselines, n_games=10, eval_freq=1000
+            self.baselines, n_games=10, eval_freq=1000, eval_env=Mock()
         )
 
     def test_init(self):

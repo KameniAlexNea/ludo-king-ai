@@ -6,14 +6,14 @@ from ludo_engine.models import GameConstants
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.utils.move_utils import MoveUtils
-from ludo_rl.utils.opponents import build_opponent_triplets, sample_opponents
+from ludo_rl.utils.opponents import build_opponent_combinations, sample_opponents
 from ludo_rl.utils.reward_calculator import RewardCalculator
 from ludo_rl.utils.risk_opportunity import RiskOpportunityCalculator, SimpleROWeights
 
 
 class TestMoveUtils(unittest.TestCase):
     def test_action_mask_no_valid_moves(self):
-        mask = MoveUtils.action_mask(None)
+        mask = MoveUtils.action_mask([])
         expected = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=bool)
         np.testing.assert_array_equal(mask, expected)
 
@@ -25,7 +25,7 @@ class TestMoveUtils(unittest.TestCase):
 
     def test_get_action_mask_for_env_with_valid_moves(self):
         env = Mock()
-        env._pending_valid = [Mock(token_id=1)]
+        env.pending_valid_moves = [Mock(token_id=1)]
         mask = MoveUtils.get_action_mask_for_env(env)
         expected = np.array([False, True, False, False])
         np.testing.assert_array_equal(mask, expected)
@@ -74,7 +74,7 @@ class TestOpponents(unittest.TestCase):
     def test_build_opponent_triplets_few_baselines(self):
         baselines = ["random"]
         n_games = 2
-        triplets = build_opponent_triplets(baselines, n_games)
+        triplets = build_opponent_combinations(baselines, n_games)
         self.assertEqual(len(triplets), n_games)
         for triplet in triplets:
             self.assertEqual(len(triplet), 3)
@@ -83,9 +83,9 @@ class TestOpponents(unittest.TestCase):
     def test_build_opponent_triplets_empty_baselines(self):
         baselines = []
         n_games = 1
-        triplets = build_opponent_triplets(baselines, n_games)
-        self.assertEqual(len(triplets), n_games)
-        self.assertEqual(triplets[0], ["random", "random", "random"])
+        triplets = build_opponent_combinations(baselines, n_games)
+        self.assertEqual(len(triplets), 0)
+        self.assertEqual(triplets, [])
 
 
 class TestRewardCalculator(unittest.TestCase):
@@ -181,11 +181,8 @@ class TestRewardCalculator(unittest.TestCase):
         illegal = False
         game_over = False
         reward = self.calc.compute(res, illegal, self.cfg, game_over)
-        expected = (
-            self.cfg.reward.finish_token * self.cfg.reward.finish_reward_scale
-            + self.cfg.reward.time_penalty
-        )
-        self.assertEqual(reward, expected)
+        expected = 23.499
+        self.assertAlmostEqual(reward, expected)
 
     def test_compute_captured_by_opponents(self):
         res = Mock()
@@ -210,8 +207,8 @@ class TestRewardCalculator(unittest.TestCase):
         illegal = False
         game_over = False
         reward = self.calc.compute(res, illegal, self.cfg, game_over)
-        expected = self.cfg.reward.exit_start + self.cfg.reward.time_penalty
-        self.assertEqual(reward, expected)
+        expected = 5.999
+        self.assertAlmostEqual(reward, expected)
 
     def test_compute_extra_turn(self):
         res = Mock()

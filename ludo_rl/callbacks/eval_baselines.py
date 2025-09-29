@@ -36,7 +36,7 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
     ):
         self.n_games = int(n_games)
         self.env_cfg = env_cfg or EnvConfig()
-        self.setups = env_cfg.allowed_player_counts
+        self.setups = self.env_cfg.allowed_player_counts
 
         if eval_env is None:
             raise ValueError("eval_env must be provided")
