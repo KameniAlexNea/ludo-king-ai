@@ -16,6 +16,12 @@ def parse_args() -> TrainConfig:
         "--checkpoint-freq",
         type=int,
         default=TrainConfig.eval_freq,
+        help="Evaluate every N steps; 0 disables",
+    )
+    p.add_argument(
+        "--save-freq",
+        type=int,
+        default=TrainConfig.save_freq,
         help="Checkpoint every N steps; 0 disables",
     )
     p.add_argument(

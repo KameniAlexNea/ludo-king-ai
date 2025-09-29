@@ -213,9 +213,9 @@ def main():
             raise RuntimeError(f"[Imitation] Failed to save post-imitation model to {imitation_path}: {e}") from e
 
     # Add checkpointing if enabled
-    if args.checkpoint_freq and args.checkpoint_freq > 0:
+    if args.save_freq and args.save_freq > 0:
         ckpt_cb = CheckpointCallback(
-            save_freq=args.checkpoint_freq // args.n_envs,
+            save_freq=args.save_freq // args.n_envs,
             save_path=args.model_dir,
             name_prefix=args.checkpoint_prefix,
             save_replay_buffer=True,

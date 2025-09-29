@@ -142,6 +142,7 @@ class TrainConfig:
     capture_scale_anneal_steps: int = 1_500_000
     # Additional training options
     checkpoint_freq: int = 100_000
+    save_freq: int = 100_000
     checkpoint_prefix: str = "ppo_ludo"
     lr_anneal_enabled: bool = False
     anneal_log_freq: int = 50_000
