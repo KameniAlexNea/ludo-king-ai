@@ -20,6 +20,9 @@ class ObservationBuilderBase:
         )
         # cache which colors are present in this game to avoid unnecessary lookups
         self.present_colors = {p.color for p in self.game.players}
+    
+    def build(self, turn_counter: int, dice: int) -> np.ndarray:
+        raise NotImplementedError()
 
     def normalize_pos(self, pos: int) -> float:
         if pos == GameConstants.HOME_POSITION:
@@ -136,7 +139,11 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
 
 
 class DiscreteObservationBuilder(ObservationBuilderBase):
-    def compute_discrete_dims(self) -> list:
+    def __init__(self, cfg, game, agent_color):
+        super().__init__(cfg, game, agent_color)
+        self.size = self.compute_size()
+    
+    def compute_size(self) -> list:
         """Return the nvec list for a MultiDiscrete observation encoding."""
         tokens_per_player = GameConstants.TOKENS_PER_PLAYER
         max_players = len(ALL_COLORS)

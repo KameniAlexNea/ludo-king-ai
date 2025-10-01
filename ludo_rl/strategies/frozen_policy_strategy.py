@@ -34,13 +34,14 @@ class FrozenPolicyStrategy(Strategy):
 
     @staticmethod
     def _build_action_mask(valid_moves: list[ValidMove]) -> np.ndarray:
-        mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.float32)
+        mask = torch.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=torch.float32)
         for mv in valid_moves:
             tid = mv.token_id
             mask[tid] = 1
         return mask
 
     def decide(self, game_context: AIDecisionContext) -> int:  # type: ignore[override]
+        self.policy.set_training_mode(False)
         valid_moves = game_context.valid_moves
         if not valid_moves:
             return 0
@@ -58,7 +59,7 @@ class FrozenPolicyStrategy(Strategy):
             obs = self.obs_normalizer.normalize_obs(obs)
 
         # Compute distribution from policy, derive probs, and apply mask
-        obs_tensor = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
+        obs_tensor = torch.as_tensor(obs, dtype=torch.float16).unsqueeze(0)
         mask = self._build_action_mask(valid_moves)
         with torch.no_grad():
             dist = self.policy.get_distribution(obs_tensor, mask)  # type: ignore[attr-defined]

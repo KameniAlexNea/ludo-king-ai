@@ -240,10 +240,8 @@ class LudoRLEnvBase(gym.Env):
         # Update observation space with correct size
         # Support discrete observation encoding if requested
         if self.cfg.obs.discrete:
-            # Build MultiDiscrete nvec from observation builder
-            nvec = self.obs_builder.compute_discrete_dims()
             # gym expects an array-like of ints for MultiDiscrete
-            self.observation_space = spaces.MultiDiscrete(nvec)
+            self.observation_space = spaces.MultiDiscrete(self.obs_builder.size)
         else:
             self.observation_space = spaces.Box(
                 low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32
