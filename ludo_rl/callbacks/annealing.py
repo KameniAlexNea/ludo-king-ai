@@ -59,22 +59,4 @@ class AnnealingCallback(BaseCallback):
                 if self.verbose > 0:
                     logger.error(f"[Annealing] Failed to log annealing values: {e}")
 
-        # Capture reward scale annealing (env side)
-        if self.scale_reward and self.train_cfg.capture_scale_anneal_steps > 0:
-            frac_c = min(1.0, t / float(self.train_cfg.capture_scale_anneal_steps))
-            new_scale = self.train_cfg.capture_scale_initial + frac_c * (
-                self.train_cfg.capture_scale_final
-                - self.train_cfg.capture_scale_initial
-            )
-            try:
-                # Access underlying envs if vectorized
-                vec_env = getattr(self.model, "env", None)
-                if vec_env is not None and hasattr(vec_env, "envs"):
-                    for e in vec_env.envs:
-                        cfg: Optional[EnvConfig] = getattr(e, "cfg", None)
-                        if cfg is not None:
-                            cfg.reward.capture_reward_scale = float(new_scale)
-            except Exception:
-                pass
-
         return True

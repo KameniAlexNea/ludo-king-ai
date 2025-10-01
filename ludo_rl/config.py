@@ -6,37 +6,28 @@ from typing import List, Literal, Optional
 class RewardConfig:
     # Terminal
     # Terminal (win-focused preset)
-    win: float = 100.0  # Increased from 50.0
-    lose: float = -100.0  # Increased penalty from -20.0
-    draw: float = -20.0  # Small penalty for draws
+    win: float = 50.0  # Increased from 50.0
+    lose: float = -50.0  # Increased penalty from -20.0
+    draw: float = -15.0  # Small penalty for draws
     # Reduce heavy shaping on finishing tokens
     finish_token: float = 10.0  # Increased from 6.0
     # Events
     # Per-capture reward increased
-    capture: float = 1.0  # Increased from 0.4
+    capture: float = 3.0  # Increased from 0.4
     # Being captured is penalized more strongly to discourage unsafe play
     got_captured: float = -5.0  # Increased from -3.0
     all_captured: float = -10.0  # Increased from -6.0
     # Reward for leaving home increased
     exit_start: float = 2.0  # Increased from 1.0
-    extra_turn: float = 0.5  # Increased from 0.1
+    extra_turn: float = 1.0  # Increased from 0.1
     # Shaping
     # Increase shaping to make rewards denser
     progress_scale: float = 0.1  # Increased from 0.01
-    safe_zone_reward: float = 1.0  # Increased from 0.1
-    active_token_bonus: float = 0.01  # Increased from 0.001
-    inactivity_penalty: float = -0.01  # Increased from -0.005
+    safe_zone_reward: float = 2.0  # Increased from 0.1
     # Constraints
     illegal_action: float = -2.0  # Increased from -1.0
     # Reduce time penalty to encourage longer games if needed, but keep small
-    time_penalty: float = -0.001  # Reduced from -0.002
-    # Shaping toggles & extras
-    enable_capture_shaping: bool = True
-    capture_choice_bonus: float = 0.01  # Increased from 0.005
-    decline_capture_penalty: float = -0.05  # Increased from -0.02
-    # Scaling / annealing
-    capture_reward_scale: float = 1.5  # Increased from 1.0
-    finish_reward_scale: float = 1.5  # Increased from 1.0
+    time_penalty: float = -0.1  # Reduced from -0.002
 
 
 @dataclass
