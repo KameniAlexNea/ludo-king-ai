@@ -26,7 +26,6 @@ class TestRewardConfig(unittest.TestCase):
 class TestObservationConfig(unittest.TestCase):
     def test_default_values(self):
         cfg = ObservationConfig()
-        self.assertFalse(cfg.include_turn_index)
         self.assertFalse(cfg.include_dice_one_hot)
 
 

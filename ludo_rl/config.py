@@ -32,7 +32,6 @@ class RewardConfig:
 
 @dataclass
 class ObservationConfig:
-    include_turn_index: bool = False
     # Encoding choices: prefer normalized floats by default for compactness.
     include_dice_one_hot: bool = False
     include_color_one_hot: bool = False
@@ -90,10 +89,8 @@ class EnvConfig:
     obs: ObservationConfig = field(default_factory=ObservationConfig)
     opponents: OpponentConfig = field(default_factory=OpponentConfig)
     curriculum: CurriculumConfig = field(default_factory=CurriculumConfig)
-    debug_capture_logging: bool = False
     # Instrumentation
     track_opportunities: bool = True
-    log_opportunity_debug: bool = False
 
 
 @dataclass

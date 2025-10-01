@@ -304,16 +304,6 @@ class LudoRLEnvBase(gym.Env):
         if move_result:
             self.episode_stats.captured_opponents += len(move_result.captured_tokens)
 
-            # Debug logging for captures
-            if self.cfg.debug_capture_logging and move_result.captured_tokens:
-                logger.debug(
-                    f"[CaptureEvent] turn={self.current_turn} dice={self.pending_dice} "
-                    f"offensive={len(move_result.captured_tokens)} "
-                    f"defensive_inc={self.captured_by_opponents_this_turn} "
-                    f"cumulative_off={self.episode_stats.captured_opponents} "
-                    f"cumulative_def={self.episode_stats.captured_by_opponents}"
-                )
-
         self.current_turn += 1
 
         obs = self._build_observation()
