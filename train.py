@@ -2,7 +2,7 @@
 
 import copy
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
 import torch
@@ -12,6 +12,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 from torch.utils.data import TensorDataset
+from typing import Optional
 
 from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.callbacks.curriculum import ProgressCallback
@@ -27,10 +28,11 @@ from ludo_rl.utils.move_utils import MoveUtils
 from loguru import logger
 from stable_baselines3.common.utils import set_random_seed
 
-def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic"):
+def make_env(rank: int, base_cfg: EnvConfig, seed: Optional[int] = None, env_type: str = "classic"):
     def _init():
         cfg = copy.deepcopy(base_cfg)
-        cfg.seed = seed + rank
+        if seed is not None:
+            cfg.seed = seed + rank
         if env_type == "selfplay":
             env = LudoRLEnvSelfPlay(cfg)
         elif env_type == "hybrid":
@@ -43,7 +45,8 @@ def make_env(rank: int, seed: int, base_cfg: EnvConfig, env_type: str = "classic
         # MaskablePPO can access masks across subprocess boundaries.
         return env
 
-    set_random_seed(seed)
+    if seed is not None:
+        set_random_seed(seed)
     return _init
 
 
@@ -59,11 +62,11 @@ def main():
         env_cfg.fixed_num_players = 4
 
     if args.n_envs == 1:
-        venv = DummyVecEnv([lambda: ActionMasker(make_env(0, 42, env_cfg, args.env_type)(), MoveUtils.get_action_mask_for_env)])
+        venv = DummyVecEnv([lambda: ActionMasker(make_env(0, env_cfg, None, args.env_type)(), MoveUtils.get_action_mask_for_env)])
     else:
         venv = SubprocVecEnv(
             [
-                make_env(i, 42 + i * 100, env_cfg, args.env_type)
+                make_env(i, env_cfg, None, args.env_type)
                 for i in range(args.n_envs)
             ]
         )
@@ -73,7 +76,7 @@ def main():
 
     # Separate eval env with same wrappers (always classic for evaluation vs baselines)
     # For evaluation we prefer single-process env for deterministic mask wrapping
-    eval_raw = make_env(999, 1337, env_cfg, "classic")()
+    eval_raw = make_env(999, env_cfg, 42, "classic")()
     eval_env = DummyVecEnv([lambda: ActionMasker(eval_raw, MoveUtils.get_action_mask_for_env)])
     eval_env = VecMonitor(eval_env)
     eval_env = VecNormalize(eval_env, training=False, norm_obs=True, norm_reward=False, clip_obs=1., clip_reward=1000.)
