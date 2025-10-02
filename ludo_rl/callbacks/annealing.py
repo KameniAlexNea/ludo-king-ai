@@ -43,20 +43,4 @@ class AnnealingCallback(BaseCallback):
                     logger.error(
                         f"[Annealing] Failed to set ent_coef to {new_ent}: {e}"
                     )
-
-        # Log current values periodically
-        if (
-            self.train_cfg.anneal_log_freq > 0
-            and t % self.train_cfg.anneal_log_freq == 0
-        ):
-            try:
-                current_lr = self.model.policy.optimizer.param_groups[0]["lr"]
-                ent = getattr(self.model, "ent_coef", None)
-                logger.info(
-                    f"[Anneal] step={t} lr={current_lr:.6g} ent={ent} capture_scale={self.train_cfg.capture_scale_initial}->{self.train_cfg.capture_scale_final}"
-                )
-            except Exception as e:
-                if self.verbose > 0:
-                    logger.error(f"[Annealing] Failed to log annealing values: {e}")
-
         return True
