@@ -45,7 +45,7 @@ def main():
 
             policy_kwargs = {
                 "features_extractor_class": MultiDiscreteFeatureExtractor,
-                "features_extractor_kwargs": {"embed_dim": 16},
+                "features_extractor_kwargs": {"embed_dim": 32},
             }
     except Exception as e:
         print("Failed to import MultiDiscreteFeatureExtractor:", e)

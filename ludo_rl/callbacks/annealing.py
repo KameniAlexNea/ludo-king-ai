@@ -1,9 +1,7 @@
-from typing import Optional
-
 from loguru import logger
 from stable_baselines3.common.callbacks import BaseCallback
 
-from ludo_rl.config import EnvConfig, TrainConfig
+from ludo_rl.config import TrainConfig
 
 
 class AnnealingCallback(BaseCallback):

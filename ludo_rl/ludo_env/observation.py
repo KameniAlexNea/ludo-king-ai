@@ -20,7 +20,7 @@ class ObservationBuilderBase:
         )
         # cache which colors are present in this game to avoid unnecessary lookups
         self.present_colors = {p.color for p in self.game.players}
-    
+
     def build(self, turn_counter: int, dice: int) -> np.ndarray:
         raise NotImplementedError()
 
@@ -142,7 +142,7 @@ class DiscreteObservationBuilder(ObservationBuilderBase):
     def __init__(self, cfg, game, agent_color):
         super().__init__(cfg, game, agent_color)
         self.size = self.compute_size()
-    
+
     def compute_size(self) -> list:
         """Return the nvec list for a MultiDiscrete observation encoding."""
         tokens_per_player = GameConstants.TOKENS_PER_PLAYER

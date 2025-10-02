@@ -36,7 +36,7 @@ class ObservationConfig:
     include_dice_one_hot: bool = False
     include_color_one_hot: bool = False
     # Use discrete encoding (MultiDiscrete) instead of continuous Box
-    discrete: bool = False
+    discrete: bool = True
 
 
 @dataclass
@@ -137,7 +137,7 @@ class TrainConfig:
     env_type: Literal["classic", "selfplay", "hybrid"] = "classic"
     hybrid_switch_rate: float = 0.55
     # embedding dimension for discrete observation extractor
-    embed_dim: int = 8
+    embed_dim: int = 32
 
     def __post_init__(self):
         if self.env_type in ["selfplay", "hybrid"]:

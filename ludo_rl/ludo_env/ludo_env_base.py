@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
-from loguru import logger
 from ludo_engine.core import LudoGame, Player
 from ludo_engine.models import (
     ALL_COLORS,
@@ -507,9 +506,7 @@ class LudoRLEnvBase(gym.Env):
         """Build observation for terminal states."""
         return self.obs_builder.build(self.current_turn, 0)
 
-    def _build_step_info(
-        self, move_result: MoveResult, is_illegal: bool
-    ) -> StepInfo:
+    def _build_step_info(self, move_result: MoveResult, is_illegal: bool) -> StepInfo:
         """Build the info dataclass for the step."""
         captured_opponents = len(move_result.captured_tokens)
 

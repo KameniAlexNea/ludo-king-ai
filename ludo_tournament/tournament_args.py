@@ -64,4 +64,3 @@ def parse_arguments():
         help="Environment kind: 'classic' or 'single-seat'",
     )
     return parser.parse_args()
-

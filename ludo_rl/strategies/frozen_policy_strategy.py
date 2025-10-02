@@ -59,11 +59,15 @@ class FrozenPolicyStrategy(Strategy):
             obs = self.obs_normalizer.normalize_obs(obs)
 
         # Compute distribution from policy, derive probs, and apply mask
-        obs_tensor = torch.as_tensor(obs, dtype=torch.float16, device=self.policy.device).unsqueeze(0)
+        obs_tensor = torch.as_tensor(
+            obs, dtype=torch.float16, device=self.policy.device
+        ).unsqueeze(0)
         mask = self._build_action_mask(valid_moves)
         with torch.no_grad():
             dist = self.policy.get_distribution(obs_tensor, mask)  # type: ignore[attr-defined]
-            token_id = int(dist.get_actions(deterministic=self.deterministic).cpu().item())
+            token_id = int(
+                dist.get_actions(deterministic=self.deterministic).cpu().item()
+            )
         valid_token_ids = [mv.token_id for mv in valid_moves]
         if token_id not in valid_token_ids:
             # Log warning and fall back to random valid move
