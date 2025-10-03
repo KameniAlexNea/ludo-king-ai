@@ -72,14 +72,23 @@ def main():
         )
 
     venv = VecMonitor(venv)
-    venv = VecNormalize(venv, norm_reward=False, clip_obs=1., clip_reward=1000.)
+    # Do not normalize observations when using MultiDiscrete (discrete) encoding,
+    # as that turns categorical indices into floats and breaks the feature extractor.
+    norm_obs_flag = not getattr(env_cfg.obs, "discrete", False)
+    venv = VecNormalize(venv, training=True, norm_obs=norm_obs_flag, norm_reward=False, clip_obs=1., clip_reward=1000.)
 
     # Separate eval env with same wrappers (always classic for evaluation vs baselines)
     # For evaluation we prefer single-process env for deterministic mask wrapping
     eval_raw = make_env(999, env_cfg, 42, "classic")()
     eval_env = DummyVecEnv([lambda: ActionMasker(eval_raw, MoveUtils.get_action_mask_for_env)])
     eval_env = VecMonitor(eval_env)
-    eval_env = VecNormalize(eval_env, training=False, norm_obs=True, norm_reward=False, clip_obs=1., clip_reward=1000.)
+    eval_env = VecNormalize(eval_env, training=False, norm_obs=norm_obs_flag, norm_reward=False, clip_obs=1., clip_reward=1000.)
+    # Share normalization statistics with the training env so evaluation matches training distribution
+    try:
+        eval_env.obs_rms = venv.obs_rms
+        eval_env.ret_rms = venv.ret_rms
+    except Exception:
+        pass
 
     # Set up learning rate (use callable for annealing)
     if args.lr_anneal_enabled:

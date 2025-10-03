@@ -45,7 +45,7 @@ class RewardCalculator:
         extra_turn: bool = 0,
         winner: Optional[Player] = None,
         agent_color: Optional[PlayerColor] = None,
-        home_tokens: int = 0,
+        player_positions: list = [],
     ) -> float:
         r, _ = self.compute_with_breakdown(
             res,
@@ -56,7 +56,7 @@ class RewardCalculator:
             extra_turn,
             winner,
             agent_color,
-            home_tokens,
+            player_positions,
         )
         return r
 
@@ -70,7 +70,7 @@ class RewardCalculator:
         extra_turn: bool = 0,
         winner: Optional[Player] = None,
         agent_color: Optional[PlayerColor] = None,
-        home_tokens: int = 0,
+        player_positions: list[int] = [],
     ) -> tuple[float, dict]:
         """Compute reward and return a breakdown dict of contributions.
 
@@ -90,6 +90,10 @@ class RewardCalculator:
             "extra_turn": 0.0,
             "terminal": 0.0,
         }
+
+        home_tokens = sum(1 for pos in player_positions if pos == GameConstants.HOME_POSITION)
+        finished_tokens = sum(1 for pos in player_positions if pos == GameConstants.FINISH_POSITION)
+        nhome_column_tokens = sum(1 for pos in player_positions if pos < GameConstants.HOME_COLUMN_START)
 
         r = 0.0
 
@@ -139,7 +143,7 @@ class RewardCalculator:
             val = cfg.reward.got_captured * int(captured_by_opponents)
             breakdown["got_captured"] += val
             r += val
-            if home_tokens == 0:
+            if GameConstants.TOKENS_PER_PLAYER - finished_tokens == home_tokens:
                 breakdown["all_captured"] += cfg.reward.all_captured
                 r += cfg.reward.all_captured
 
@@ -147,14 +151,12 @@ class RewardCalculator:
         # token active on the board (i.e. home_tokens < TOKENS_PER_PLAYER - 1).
         if (
             res.old_position == GameConstants.HOME_POSITION
-            and res.new_position != res.old_position
+            and res.new_position != res.old_position and nhome_column_tokens > 1
         ):
-            tokens_per_player = GameConstants.TOKENS_PER_PLAYER
             # home_tokens counts how many are still at home; reward exit only
             # when there's another token already out (diversity/backup token).
-            if home_tokens < (tokens_per_player - 1):
-                breakdown["exit_start"] += cfg.reward.exit_start
-                r += cfg.reward.exit_start
+            breakdown["exit_start"] += cfg.reward.exit_start
+            r += cfg.reward.exit_start
 
         if extra_turn:
             breakdown["extra_turn"] += cfg.reward.extra_turn

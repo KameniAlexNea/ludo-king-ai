@@ -7,7 +7,10 @@ from ludo_engine.strategies.base import Strategy
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 from stable_baselines3.common.vec_env import VecNormalize
 
-from ludo_rl.ludo_env.observation import ObservationBuilderBase
+from ludo_rl.ludo_env.observation import (
+    ContinuousObservationBuilder,
+    ObservationBuilderBase,
+)
 
 
 class FrozenPolicyStrategy(Strategy):
@@ -33,11 +36,15 @@ class FrozenPolicyStrategy(Strategy):
         self.obs_normalizer = obs_normalizer
 
     @staticmethod
-    def _build_action_mask(valid_moves: list[ValidMove]) -> np.ndarray:
+    def _build_action_mask(valid_moves: list[ValidMove]) -> torch.Tensor:
+        """Return a 1D float tensor mask with 1.0 for valid token ids.
+
+        Maskable policies expect a boolean/float mask broadcastable to the batch
+        dimension. We'll return float tensor and expand later.
+        """
         mask = torch.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=torch.float32)
         for mv in valid_moves:
-            tid = mv.token_id
-            mask[tid] = 1
+            mask[mv.token_id] = 1.0
         return mask
 
     def decide(self, game_context: AIDecisionContext) -> int:  # type: ignore[override]
@@ -55,16 +62,22 @@ class FrozenPolicyStrategy(Strategy):
         dice_val = game_context.current_situation.dice_value
         obs = self.obs_builder.build(turn_count, dice_val)
 
+        # Only normalize observations when using continuous (Box) observations.
+        # For discrete (MultiDiscrete) observations, normalization would corrupt
+        # category indices and break the policy's embedding lookups.
         if self.obs_normalizer is not None:
             obs = self.obs_normalizer.normalize_obs(obs)
 
         # Compute distribution from policy, derive probs, and apply mask
+        # Use float32 for policy inputs; the discrete extractor will cast to long internally.
         obs_tensor = torch.as_tensor(
-            obs, dtype=torch.float16, device=self.policy.device
+            obs, dtype=torch.float32, device=self.policy.device
         ).unsqueeze(0)
-        mask = self._build_action_mask(valid_moves)
+        mask_1d = self._build_action_mask(valid_moves).to(self.policy.device)
+        # expand to (batch, action_dim)
+        mask = mask_1d.unsqueeze(0)
         with torch.no_grad():
-            dist = self.policy.get_distribution(obs_tensor, mask)  # type: ignore[attr-defined]
+            dist = self.policy.get_distribution(obs_tensor, action_masks=mask)
             token_id = int(
                 dist.get_actions(deterministic=self.deterministic).cpu().item()
             )

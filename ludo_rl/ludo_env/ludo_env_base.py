@@ -291,7 +291,8 @@ class LudoRLEnvBase(gym.Env):
             self._handle_opponent_turns()
 
         # Calculate reward and check termination
-        reward, reward_breakdown = self._calculate_reward(move_result, is_illegal)
+        player = self.game.get_current_player()
+        reward, reward_breakdown = self._calculate_reward(move_result, is_illegal, player.player_positions())
         terminated = self._check_termination(move_result)
         truncated = self._check_truncation()
 
@@ -454,7 +455,7 @@ class LudoRLEnvBase(gym.Env):
         return player.make_strategic_decision(context)
 
     def _calculate_reward(
-        self, move_result: Optional[MoveResult], is_illegal: bool
+        self, move_result: Optional[MoveResult], is_illegal: bool, player_positions: list = []
     ) -> tuple[float, Dict[str, float]]:
         """Calculate the reward for the current step."""
         return self.reward_calc.compute_with_breakdown(
@@ -466,16 +467,7 @@ class LudoRLEnvBase(gym.Env):
             extra_turn=bool(move_result.extra_turn),
             winner=self.game.winner,
             agent_color=self.agent_color,
-            home_tokens=self._count_home_tokens(),
-        )
-
-    def _count_home_tokens(self) -> int:
-        """Count how many of the agent's tokens are still at home."""
-        agent_player = self.game.get_player_from_color(self.agent_color)
-        return sum(
-            1
-            for pos in agent_player.player_positions()
-            if pos == GameConstants.HOME_POSITION
+            player_positions=player_positions,
         )
 
     def _check_termination(self, move_result: MoveResult) -> bool:
@@ -542,6 +534,6 @@ class LudoRLEnvBase(gym.Env):
             mask = MoveUtils.action_mask(self.pending_valid_moves)
             # ensure a plain Python list of bools
             return [bool(x) for x in mask]
-        except Exception:
+        except Exception as e:
             # If anything goes wrong, fall back to allowing all actions
-            return [True] * int(self.action_space.n)
+            raise RuntimeError("Failed to build action mask") from e
