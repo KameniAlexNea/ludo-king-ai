@@ -238,9 +238,19 @@ class LudoRLEnvBase(gym.Env):
             # gym expects an array-like of ints for MultiDiscrete
             self.observation_space = spaces.MultiDiscrete(self.obs_builder.size)
         else:
-            self.observation_space = spaces.Box(
-                low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32
-            )
+            # Use structured Dict observation space for continuous observations
+            tokens_per_player = GameConstants.TOKENS_PER_PLAYER
+            dice_dim = 6 if self.cfg.obs.include_dice_one_hot else 1
+            self.observation_space = spaces.Dict({
+                "agent_tokens": spaces.Box(low=-1.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32),
+                "agent_progress": spaces.Box(low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32),
+                "agent_vulnerable": spaces.Box(low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32),
+                "opponents": spaces.Dict({
+                    "positions": spaces.Box(low=-1.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32),
+                    "active": spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32),
+                }),
+                "dice": spaces.Box(low=-1.0, high=1.0, shape=(dice_dim,), dtype=np.float32),
+            })
 
     def _reset_episode_stats(self) -> None:
         """Reset all episode-level statistics and counters."""

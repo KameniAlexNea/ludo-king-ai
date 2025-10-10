@@ -13,6 +13,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMoni
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 from torch.utils.data import TensorDataset
 from typing import Optional
+import gymnasium as gym
 
 from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.callbacks.curriculum import ProgressCallback
@@ -73,8 +74,8 @@ def main():
 
     venv = VecMonitor(venv)
     # Do not normalize observations when using MultiDiscrete (discrete) encoding,
-    # as that turns categorical indices into floats and breaks the feature extractor.
-    norm_obs_flag = not getattr(env_cfg.obs, "discrete", False)
+    # or when using Dict spaces (VecNormalize doesn't support Dict).
+    norm_obs_flag = not getattr(env_cfg.obs, "discrete", False) and not isinstance(venv.observation_space, gym.spaces.Dict)
     venv = VecNormalize(venv, training=True, norm_obs=norm_obs_flag, norm_reward=False, clip_obs=1., clip_reward=1000.)
 
     # Separate eval env with same wrappers (always classic for evaluation vs baselines)
@@ -84,11 +85,12 @@ def main():
     eval_env = VecMonitor(eval_env)
     eval_env = VecNormalize(eval_env, training=False, norm_obs=norm_obs_flag, norm_reward=False, clip_obs=1., clip_reward=1000.)
     # Share normalization statistics with the training env so evaluation matches training distribution
-    try:
-        eval_env.obs_rms = venv.obs_rms
-        eval_env.ret_rms = venv.ret_rms
-    except Exception:
-        pass
+    if norm_obs_flag:
+        try:
+            eval_env.obs_rms = venv.obs_rms
+            eval_env.ret_rms = venv.ret_rms
+        except Exception:
+            pass
 
     # Set up learning rate (use callable for annealing)
     if args.lr_anneal_enabled:
@@ -174,7 +176,10 @@ def main():
             multi_seat=False,
         )
         # Normalize observations to match training data distribution
-        obs_s = np.array([eval_env.normalize_obs(obs) for obs in obs_s])
+        if norm_obs_flag:
+            obs_s = np.array([eval_env.normalize_obs(obs) for obs in obs_s])
+        else:
+            obs_s = np.array(obs_s)
         # Multi-seat samples
         obs_m, act_m, mask_m = collect_imitation_samples(
             base_env_for_imitation,
@@ -183,7 +188,10 @@ def main():
             multi_seat=True,
         )
         # Normalize observations to match training data distribution
-        obs_m = np.array([eval_env.normalize_obs(obs) for obs in obs_m])
+        if norm_obs_flag:
+            obs_m = np.array([eval_env.normalize_obs(obs) for obs in obs_m])
+        else:
+            obs_m = np.array(obs_m)
         obs_all = np.concatenate([obs_s, obs_m], axis=0)
         act_all = np.concatenate([act_s, act_m], axis=0)
         mask_all = np.concatenate([mask_s, mask_m], axis=0)

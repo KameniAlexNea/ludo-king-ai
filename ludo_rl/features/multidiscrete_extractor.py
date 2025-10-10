@@ -43,22 +43,48 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
         )
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        # observations shape: (batch, n_dims)
+        """Convert observations to per-dimension indices, embed, attend, and flatten.
+
+        Accepts either:
+        - indices: shape (batch, len(nvec)) with integer category ids
+        - one-hot blocks: shape (batch, sum(nvec)), concatenation of one-hot vectors per dim
+        """
+        B, D = observations.shape[0], observations.shape[1]
+        n_dims = len(self.nvec)
+        sum_n = int(sum(int(n) for n in self.nvec))
+
+        # Collapse one-hot blocks to indices if needed
+        if D == n_dims:
+            idx = observations.long()
+        elif D == sum_n:
+            # Split into blocks according to nvec and take argmax per block
+            indices = []
+            start = 0
+            # ensure float for argmax stability
+            obs_f = observations.to(dtype=torch.float32)
+            for n in self.nvec:
+                end = start + int(n)
+                block = obs_f[:, start:end]
+                # argmax along category axis -> index in [0, n-1]
+                indices.append(block.argmax(dim=1))
+                start = end
+            idx = torch.stack(indices, dim=1).long()
+        else:
+            raise ValueError(
+                f"Unexpected observation shape {tuple(observations.shape)}: expected (batch, {n_dims}) or (batch, {sum_n})"
+            )
+
+        # Embed each discrete dim using shared embeddings by cardinality
         embeds = []
-        # Ensure long dtype for embedding lookup
-        obs_long = observations.long()
-        # For each discrete dim, look up the shared embedding for that dim's
-        # cardinality (nvec[i]). This reuses parameters for identical dims.
         for i, n in enumerate(self.nvec):
             emb = self.embed_by_n[str(int(n))]
-            embeds.append(emb(obs_long[:, i]))
+            embeds.append(emb(idx[:, i]))
+
         # stack into (batch, seq_len, embed_dim)
         embeds_tensor = torch.stack(embeds, dim=1)
 
         # apply self-attention (queries=keys=values)
-        # attn_out shape: (batch, seq_len, embed_dim)
-        attn_out, attn_weights = self.attn(embeds_tensor, embeds_tensor, embeds_tensor)
+        attn_out, _ = self.attn(embeds_tensor, embeds_tensor, embeds_tensor)
 
         # flatten attended outputs to produce final feature vector
-        batch_size = attn_out.shape[0]
-        return attn_out.reshape(batch_size, -1)
+        return attn_out.reshape(B, -1)

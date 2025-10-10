@@ -1,5 +1,6 @@
 from typing import List
 
+import gymnasium as gym
 import numpy as np
 from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
@@ -79,63 +80,52 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
             base += 1
         return base
 
-    def build(self, turn_counter: int, dice: int) -> np.ndarray:
-        obs: List[float] = []
+    def build(self, turn_counter: int, dice: int):
         tokens_per_player = GameConstants.TOKENS_PER_PLAYER
 
-        # agent color encoding
-        if self.cfg.obs.include_color_one_hot:
-            color_onehot = [0.0] * len(ALL_COLORS)
-            color_onehot[ALL_COLORS.index(self.agent_color)] = 1.0
-            obs.extend(color_onehot)
-        else:
-            # normalized scalar in [0,1]
-            obs.append(ALL_COLORS.index(self.agent_color) / float(len(ALL_COLORS)))
+        # Agent tokens normalized positions
+        agent_tokens = [self.normalize_pos(t.position) for t in self.agent_player.tokens]
+        agent_progress = [token_progress(t.position, self.start_pos) for t in self.agent_player.tokens]
+        agent_vulnerable = [1.0 if self.is_vulnerable(t.position) else 0.0 for t in self.agent_player.tokens]
 
-        # agent and opponents tokens
-        # Write agent tokens first (agent_player.tokens)
-        for t in self.agent_player.tokens:
-            obs.append(self.normalize_pos(t.position))
-
-        # For opponents, iterate colors in seat-relative order starting after agent
+        # Opponents aggregated seat-next single opponent (for simple example)
         start_idx = ALL_COLORS.index(self.agent_color)
         ordered = ALL_COLORS[start_idx + 1 :] + ALL_COLORS[:start_idx]
+        # Aggregate across opponents by averaging positions into a 4-vector and a single active flag (1 if any present)
+        opp_pos_accum = [0.0] * tokens_per_player
+        opp_count = 0
         for color in ordered:
-            # find player with this color in the current game (may be absent in 2-player)
             if color in self.present_colors:
                 p = self.game.get_player_from_color(color)
-                for t in p.tokens:
-                    obs.append(self.normalize_pos(t.position))
-                # active flag 1 for present player
-                obs.append(1.0)
-            else:
-                # pad with home positions for each token
-                for _ in range(tokens_per_player):
-                    obs.append(self.normalize_pos(GameConstants.HOME_POSITION))
-                # active flag 0 for absent player
-                obs.append(0.0)
+                for i, t in enumerate(p.tokens):
+                    opp_pos_accum[i] += self.normalize_pos(t.position)
+                opp_count += 1
+        if opp_count > 0:
+            opp_positions = [v / float(opp_count) for v in opp_pos_accum]
+            opp_active = [1.0]
+        else:
+            opp_positions = [self.normalize_pos(GameConstants.HOME_POSITION)] * tokens_per_player
+            opp_active = [0.0]
 
-        # token progresses and safety flags (only agent)
-        for t in self.agent_player.tokens:
-            obs.append(token_progress(t.position, self.start_pos))
-            # explicit float for boolean
-            obs.append(1.0 if self.is_vulnerable(t.position) else 0.0)
-
-        # dice encoding
+        # Dice encoding
         if self.cfg.obs.include_dice_one_hot:
             d = [0.0] * 6
             if 1 <= dice <= 6:
                 d[dice - 1] = 1.0
-            obs.extend(d)
+            dice_vec = d
         else:
-            # normalized scalar in [0,1], map die face index -> index/6
-            # we use (dice-1)/6 to mirror color index / len normalization style
-            if 1 <= dice <= 6:
-                obs.append((dice - 1) / float(6))
-            else:
-                obs.append(0.0)
+            dice_vec = [((dice - 1) / 6.0) if (1 <= dice <= 6) else 0.0]
 
-        return np.asarray(obs, dtype=np.float32)
+        return {
+            "agent_tokens": np.asarray(agent_tokens, dtype=np.float32),
+            "agent_progress": np.asarray(agent_progress, dtype=np.float32),
+            "agent_vulnerable": np.asarray(agent_vulnerable, dtype=np.float32),
+            "opponents": {
+                "positions": np.asarray(opp_positions, dtype=np.float32),
+                "active": np.asarray(opp_active, dtype=np.float32),
+            },
+            "dice": np.asarray(dice_vec, dtype=np.float32),
+        }
 
 
 class DiscreteObservationBuilder(ObservationBuilderBase):
