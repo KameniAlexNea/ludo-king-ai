@@ -91,9 +91,17 @@ class RewardCalculator:
             "terminal": 0.0,
         }
 
-        home_tokens = sum(1 for pos in player_positions if pos == GameConstants.HOME_POSITION)
-        finished_tokens = sum(1 for pos in player_positions if pos == GameConstants.FINISH_POSITION)
-        nhome_column_tokens = sum(1 for pos in player_positions if pos < GameConstants.HOME_COLUMN_START)
+        home_tokens = sum(
+            1 for pos in player_positions if pos == GameConstants.HOME_POSITION
+        )
+        finished_tokens = sum(
+            1 for pos in player_positions if pos == GameConstants.FINISH_POSITION
+        )
+        nhome_column_tokens = sum(
+            1
+            for pos in player_positions
+            if GameConstants.HOME_POSITION < pos < GameConstants.HOME_COLUMN_START
+        )
 
         r = 0.0
 
@@ -151,7 +159,8 @@ class RewardCalculator:
         # token active on the board (i.e. home_tokens < TOKENS_PER_PLAYER - 1).
         if (
             res.old_position == GameConstants.HOME_POSITION
-            and res.new_position != res.old_position and nhome_column_tokens > 1
+            and res.new_position != res.old_position
+            and nhome_column_tokens > 1
         ):
             # home_tokens counts how many are still at home; reward exit only
             # when there's another token already out (diversity/backup token).

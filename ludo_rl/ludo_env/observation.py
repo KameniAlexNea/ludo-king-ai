@@ -1,6 +1,5 @@
 from typing import List
 
-import gymnasium as gym
 import numpy as np
 from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
@@ -84,28 +83,34 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
         tokens_per_player = GameConstants.TOKENS_PER_PLAYER
 
         # Agent tokens normalized positions
-        agent_tokens = [self.normalize_pos(t.position) for t in self.agent_player.tokens]
-        agent_progress = [token_progress(t.position, self.start_pos) for t in self.agent_player.tokens]
-        agent_vulnerable = [1.0 if self.is_vulnerable(t.position) else 0.0 for t in self.agent_player.tokens]
+        agent_tokens = [
+            self.normalize_pos(t.position) for t in self.agent_player.tokens
+        ]
+        agent_progress = [
+            token_progress(t.position, self.start_pos) for t in self.agent_player.tokens
+        ]
+        agent_vulnerable = [
+            1.0 if self.is_vulnerable(t.position) else 0.0
+            for t in self.agent_player.tokens
+        ]
 
-        # Opponents aggregated seat-next single opponent (for simple example)
+        # Opponents positions and active flags (no aggregation)
         start_idx = ALL_COLORS.index(self.agent_color)
         ordered = ALL_COLORS[start_idx + 1 :] + ALL_COLORS[:start_idx]
-        # Aggregate across opponents by averaging positions into a 4-vector and a single active flag (1 if any present)
-        opp_pos_accum = [0.0] * tokens_per_player
-        opp_count = 0
+        opp_positions = []
+        opp_active = []
         for color in ordered:
             if color in self.present_colors:
                 p = self.game.get_player_from_color(color)
-                for i, t in enumerate(p.tokens):
-                    opp_pos_accum[i] += self.normalize_pos(t.position)
-                opp_count += 1
-        if opp_count > 0:
-            opp_positions = [v / float(opp_count) for v in opp_pos_accum]
-            opp_active = [1.0]
-        else:
-            opp_positions = [self.normalize_pos(GameConstants.HOME_POSITION)] * tokens_per_player
-            opp_active = [0.0]
+                for t in p.tokens:
+                    opp_positions.append(self.normalize_pos(t.position))
+                opp_active.append(1.0)
+            else:
+                for _ in range(tokens_per_player):
+                    opp_positions.append(
+                        self.normalize_pos(GameConstants.HOME_POSITION)
+                    )
+                opp_active.append(0.0)
 
         # Dice encoding
         if self.cfg.obs.include_dice_one_hot:
@@ -120,10 +125,8 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
             "agent_tokens": np.asarray(agent_tokens, dtype=np.float32),
             "agent_progress": np.asarray(agent_progress, dtype=np.float32),
             "agent_vulnerable": np.asarray(agent_vulnerable, dtype=np.float32),
-            "opponents": {
-                "positions": np.asarray(opp_positions, dtype=np.float32),
-                "active": np.asarray(opp_active, dtype=np.float32),
-            },
+            "opponents_positions": np.asarray(opp_positions, dtype=np.float32),
+            "opponents_active": np.asarray(opp_active, dtype=np.float32),
             "dice": np.asarray(dice_vec, dtype=np.float32),
         }
 

@@ -1,7 +1,6 @@
-
-
 import copy
 import os
+
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
@@ -29,7 +28,13 @@ from ludo_rl.utils.move_utils import MoveUtils
 from loguru import logger
 from stable_baselines3.common.utils import set_random_seed
 
-def make_env(rank: int, base_cfg: EnvConfig, seed: Optional[int] = None, env_type: str = "classic"):
+
+def make_env(
+    rank: int,
+    base_cfg: EnvConfig,
+    seed: Optional[int] = None,
+    env_type: str = "classic",
+):
     def _init():
         cfg = copy.deepcopy(base_cfg)
         if seed is not None:
@@ -57,33 +62,55 @@ def main():
     os.makedirs(args.model_dir, exist_ok=True)
 
     env_cfg = EnvConfig(max_turns=args.max_turns)
-    
+
     # For selfplay and hybrid, force 4 players since they require specific opponent setups
     if args.env_type in ["selfplay", "hybrid"]:
         env_cfg.fixed_num_players = 4
 
     if args.n_envs == 1:
-        venv = DummyVecEnv([lambda: ActionMasker(make_env(0, env_cfg, None, args.env_type)(), MoveUtils.get_action_mask_for_env)])
+        venv = DummyVecEnv(
+            [
+                lambda: ActionMasker(
+                    make_env(0, env_cfg, None, args.env_type)(),
+                    MoveUtils.get_action_mask_for_env,
+                )
+            ]
+        )
     else:
         venv = SubprocVecEnv(
-            [
-                make_env(i, env_cfg, None, args.env_type)
-                for i in range(args.n_envs)
-            ]
+            [make_env(i, env_cfg, None, args.env_type) for i in range(args.n_envs)]
         )
 
     venv = VecMonitor(venv)
     # Do not normalize observations when using MultiDiscrete (discrete) encoding,
     # or when using Dict spaces (VecNormalize doesn't support Dict).
-    norm_obs_flag = not getattr(env_cfg.obs, "discrete", False) and not isinstance(venv.observation_space, gym.spaces.Dict)
-    venv = VecNormalize(venv, training=True, norm_obs=norm_obs_flag, norm_reward=False, clip_obs=1., clip_reward=1000.)
+    norm_obs_flag = not getattr(env_cfg.obs, "discrete", False) and not isinstance(
+        venv.observation_space, gym.spaces.Dict
+    )
+    venv = VecNormalize(
+        venv,
+        training=True,
+        norm_obs=norm_obs_flag,
+        norm_reward=False,
+        clip_obs=1.0,
+        clip_reward=1000.0,
+    )
 
     # Separate eval env with same wrappers (always classic for evaluation vs baselines)
     # For evaluation we prefer single-process env for deterministic mask wrapping
     eval_raw = make_env(999, env_cfg, 42, "classic")()
-    eval_env = DummyVecEnv([lambda: ActionMasker(eval_raw, MoveUtils.get_action_mask_for_env)])
+    eval_env = DummyVecEnv(
+        [lambda: ActionMasker(eval_raw, MoveUtils.get_action_mask_for_env)]
+    )
     eval_env = VecMonitor(eval_env)
-    eval_env = VecNormalize(eval_env, training=False, norm_obs=norm_obs_flag, norm_reward=False, clip_obs=1., clip_reward=1000.)
+    eval_env = VecNormalize(
+        eval_env,
+        training=False,
+        norm_obs=norm_obs_flag,
+        norm_reward=False,
+        clip_obs=1.0,
+        clip_reward=1000.0,
+    )
     # Share normalization statistics with the training env so evaluation matches training distribution
     if norm_obs_flag:
         try:
@@ -94,8 +121,12 @@ def main():
 
     # Set up learning rate (use callable for annealing)
     if args.lr_anneal_enabled:
+
         def lr_schedule(progress_remaining: float) -> float:
-            return args.lr_final + progress_remaining * (args.learning_rate - args.lr_final)
+            return args.lr_final + progress_remaining * (
+                args.learning_rate - args.lr_final
+            )
+
         learning_rate = lr_schedule
     else:
         learning_rate = args.learning_rate
@@ -104,7 +135,9 @@ def main():
     policy_kwargs = {}
     try:
         if getattr(env_cfg, "obs", None) and getattr(env_cfg.obs, "discrete", False):
-            from ludo_rl.features.multidiscrete_extractor import MultiDiscreteFeatureExtractor
+            from ludo_rl.features.multidiscrete_extractor import (
+                MultiDiscreteFeatureExtractor,
+            )
 
             policy_kwargs = {
                 "features_extractor_class": MultiDiscreteFeatureExtractor,
@@ -115,7 +148,7 @@ def main():
         policy_kwargs = {}
 
     model = MaskablePPO(
-        "MlpPolicy",
+        "MultiInputPolicy",
         venv,
         learning_rate=learning_rate,
         n_steps=args.n_steps,
@@ -135,7 +168,9 @@ def main():
             venv.env_method("set_model", model)
             venv.env_method("set_obs_normalizer", venv)
         except Exception as e:
-            raise RuntimeError(f"Failed to inject model and obs_normalizer into environments for {args.env_type} training: {e}") from e
+            raise RuntimeError(
+                f"Failed to inject model and obs_normalizer into environments for {args.env_type} training: {e}"
+            ) from e
 
     progress_cb = ProgressCallback(total_timesteps=args.total_steps, update_freq=10_000)
     eval_cb = SimpleBaselineEvalCallback(
@@ -157,7 +192,9 @@ def main():
 
     # Hybrid switch callback if using hybrid env
     if args.env_type == "hybrid":
-        switch_step = int(args.total_steps * args.hybrid_switch_rate)  # Switch halfway through training
+        switch_step = int(
+            args.total_steps * args.hybrid_switch_rate
+        )  # Switch halfway through training
         hybrid_cb = HybridSwitchCallback(switch_step, verbose=1)
         callbacks.append(hybrid_cb)
 
@@ -224,14 +261,16 @@ def main():
             logger.warning(f"[Imitation] Failed to run post-imitation evaluation: {e}")
             # Non-critical, continue training
         # Save post-imitation snapshot for curve comparison
-        imitation_path = os.path.join(
-            args.model_dir, "maskable_ppo_after_imitation"
-        )
+        imitation_path = os.path.join(args.model_dir, "maskable_ppo_after_imitation")
         try:
             model.save(imitation_path)
-            logger.info(f"[Imitation] Saved post-imitation model to {imitation_path}.zip")
+            logger.info(
+                f"[Imitation] Saved post-imitation model to {imitation_path}.zip"
+            )
         except Exception as e:
-            raise RuntimeError(f"[Imitation] Failed to save post-imitation model to {imitation_path}: {e}") from e
+            raise RuntimeError(
+                f"[Imitation] Failed to save post-imitation model to {imitation_path}: {e}"
+            ) from e
 
     # Add checkpointing if enabled
     if args.save_freq and args.save_freq > 0:
@@ -246,13 +285,15 @@ def main():
         callbacks.append(ckpt_cb)
 
     model.learn(total_timesteps=args.total_steps, callback=callbacks)
-    
+
     final_model_path = os.path.join(args.model_dir, "maskable_ppo_ludo_rl_final")
     try:
         model.save(final_model_path)
         logger.info(f"Training completed. Final model saved to {final_model_path}.zip")
     except Exception as e:
-        raise RuntimeError(f"Failed to save final model to {final_model_path}: {e}") from e
+        raise RuntimeError(
+            f"Failed to save final model to {final_model_path}: {e}"
+        ) from e
 
 
 if __name__ == "__main__":

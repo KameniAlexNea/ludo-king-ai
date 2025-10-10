@@ -240,17 +240,33 @@ class LudoRLEnvBase(gym.Env):
         else:
             # Use structured Dict observation space for continuous observations
             tokens_per_player = GameConstants.TOKENS_PER_PLAYER
+            max_opponents = GameConstants.MAX_PLAYERS - 1
             dice_dim = 6 if self.cfg.obs.include_dice_one_hot else 1
-            self.observation_space = spaces.Dict({
-                "agent_tokens": spaces.Box(low=-1.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32),
-                "agent_progress": spaces.Box(low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32),
-                "agent_vulnerable": spaces.Box(low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32),
-                "opponents": spaces.Dict({
-                    "positions": spaces.Box(low=-1.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32),
-                    "active": spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32),
-                }),
-                "dice": spaces.Box(low=-1.0, high=1.0, shape=(dice_dim,), dtype=np.float32),
-            })
+            self.observation_space = spaces.Dict(
+                {
+                    "agent_tokens": spaces.Box(
+                        low=-1.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
+                    ),
+                    "agent_progress": spaces.Box(
+                        low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
+                    ),
+                    "agent_vulnerable": spaces.Box(
+                        low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
+                    ),
+                    "opponents_positions": spaces.Box(
+                        low=-1.0,
+                        high=1.0,
+                        shape=(tokens_per_player * max_opponents,),
+                        dtype=np.float32,
+                    ),
+                    "opponents_active": spaces.Box(
+                        low=0.0, high=1.0, shape=(max_opponents,), dtype=np.float32
+                    ),
+                    "dice": spaces.Box(
+                        low=-1.0, high=1.0, shape=(dice_dim,), dtype=np.float32
+                    ),
+                }
+            )
 
     def _reset_episode_stats(self) -> None:
         """Reset all episode-level statistics and counters."""
@@ -302,7 +318,9 @@ class LudoRLEnvBase(gym.Env):
 
         # Calculate reward and check termination
         player = self.game.get_current_player()
-        reward, reward_breakdown = self._calculate_reward(move_result, is_illegal, player.player_positions())
+        reward, reward_breakdown = self._calculate_reward(
+            move_result, is_illegal, player.player_positions()
+        )
         terminated = self._check_termination(move_result)
         truncated = self._check_truncation()
 
@@ -325,6 +343,9 @@ class LudoRLEnvBase(gym.Env):
             info_dict["reward_breakdown"] = reward_breakdown
         except Exception:
             info_dict["reward_breakdown"] = {}
+
+        if reward > 0:
+            pass
 
         return obs, reward, terminated, truncated, info_dict
 
@@ -465,7 +486,10 @@ class LudoRLEnvBase(gym.Env):
         return player.make_strategic_decision(context)
 
     def _calculate_reward(
-        self, move_result: Optional[MoveResult], is_illegal: bool, player_positions: list = []
+        self,
+        move_result: Optional[MoveResult],
+        is_illegal: bool,
+        player_positions: list = [],
     ) -> tuple[float, Dict[str, float]]:
         """Calculate the reward for the current step."""
         return self.reward_calc.compute_with_breakdown(

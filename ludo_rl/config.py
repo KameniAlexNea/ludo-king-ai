@@ -1,6 +1,6 @@
+import os
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
-import os
 
 
 @dataclass
