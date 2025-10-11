@@ -34,7 +34,7 @@ class RewardConfig:
 @dataclass
 class ObservationConfig:
     # Encoding choices: prefer normalized floats by default for compactness.
-    include_dice_one_hot: bool = False
+    include_dice_one_hot: bool = True
     include_color_one_hot: bool = False
     # Use discrete encoding (MultiDiscrete) instead of continuous Box
     discrete: bool = os.getenv("DISCRETE_OBS", "false").lower() == "true"
