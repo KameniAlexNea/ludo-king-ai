@@ -3,16 +3,19 @@ import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
+from typing import Optional
+
+import gymnasium as gym
 import numpy as np
 import torch
+from loguru import logger
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 from torch.utils.data import TensorDataset
-from typing import Optional
-import gymnasium as gym
 
 from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.callbacks.curriculum import ProgressCallback
@@ -20,13 +23,11 @@ from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
 from ludo_rl.callbacks.hybrid_switch import HybridSwitchCallback
 from ludo_rl.config import EnvConfig, TrainConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
-from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
+from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
 from ludo_rl.trains.training_args import parse_args
 from ludo_rl.utils.move_utils import MoveUtils
-from loguru import logger
-from stable_baselines3.common.utils import set_random_seed
 
 
 def make_env(
