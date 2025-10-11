@@ -235,38 +235,31 @@ class LudoRLEnvBase(gym.Env):
         # Update observation space with correct size
         # Support discrete observation encoding if requested
         if self.cfg.obs.discrete:
-            # gym expects an array-like of ints for MultiDiscrete
-            self.observation_space = spaces.MultiDiscrete(self.obs_builder.size)
+            # Use structured Dict observation space for discrete observations
+            tokens_per_player = GameConstants.TOKENS_PER_PLAYER
+            max_opponents = GameConstants.MAX_PLAYERS - 1
+            pos_bins = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE + 1
+            self.observation_space = spaces.Dict({
+                "agent_color": spaces.MultiDiscrete([2] * len(ALL_COLORS)),  # One-hot binary
+                "agent_progress": spaces.MultiDiscrete([11] * tokens_per_player),
+                "agent_vulnerable": spaces.MultiDiscrete([2] * tokens_per_player),
+                "opponents_positions": spaces.MultiDiscrete([pos_bins] * tokens_per_player * max_opponents),
+                "opponents_active": spaces.MultiDiscrete([2] * max_opponents),
+                "dice": spaces.Discrete(7),
+            })
         else:
             # Use structured Dict observation space for continuous observations
             tokens_per_player = GameConstants.TOKENS_PER_PLAYER
             max_opponents = GameConstants.MAX_PLAYERS - 1
             dice_dim = 6 if self.cfg.obs.include_dice_one_hot else 1
-            self.observation_space = spaces.Dict(
-                {
-                    "agent_tokens": spaces.Box(
-                        low=-1.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
-                    ),
-                    "agent_progress": spaces.Box(
-                        low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
-                    ),
-                    "agent_vulnerable": spaces.Box(
-                        low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
-                    ),
-                    "opponents_positions": spaces.Box(
-                        low=-1.0,
-                        high=1.0,
-                        shape=(tokens_per_player * max_opponents,),
-                        dtype=np.float32,
-                    ),
-                    "opponents_active": spaces.Box(
-                        low=0.0, high=1.0, shape=(max_opponents,), dtype=np.float32
-                    ),
-                    "dice": spaces.Box(
-                        low=-1.0, high=1.0, shape=(dice_dim,), dtype=np.float32
-                    ),
-                }
-            )
+            self.observation_space = spaces.Dict({
+                "agent_color": spaces.Box(low=0.0, high=1.0, shape=(len(ALL_COLORS),), dtype=np.float32),
+                "agent_progress": spaces.Box(low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32),
+                "agent_vulnerable": spaces.Box(low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32),
+                "opponents_positions": spaces.Box(low=-1.0, high=1.0, shape=(tokens_per_player * max_opponents,), dtype=np.float32),
+                "opponents_active": spaces.Box(low=0.0, high=1.0, shape=(max_opponents,), dtype=np.float32),
+                "dice": spaces.Box(low=-1.0, high=1.0, shape=(dice_dim,), dtype=np.float32),
+            })
 
     def _reset_episode_stats(self) -> None:
         """Reset all episode-level statistics and counters."""

@@ -57,12 +57,17 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
         """Returns observation as a dictionary of float32 NumPy arrays."""
         tokens_per_player = GameConstants.TOKENS_PER_PLAYER
 
-        # 1. Agent-Specific Continuous Features
-        agent_tokens = [self.normalize_pos(t.position) for t in self.agent_player.tokens]
+        # Agent color one-hot encoding
+        agent_color_onehot = [0.0] * len(ALL_COLORS)
+        agent_color_onehot[ALL_COLORS.index(self.agent_color)] = 1.0
+
+        # Agent progress (normalized 0-1) - this replaces positions since they're redundant
         agent_progress = [token_progress(t.position, self.start_pos) for t in self.agent_player.tokens]
+        
+        # Agent vulnerable flags
         agent_vulnerable = [1.0 if self.is_vulnerable(t.position) else 0.0 for t in self.agent_player.tokens]
 
-        # 2. Opponent Continuous Features (Order matters for NN input consistency)
+        # Opponents (ordered by seat position)
         start_idx = ALL_COLORS.index(self.agent_color)
         ordered = ALL_COLORS[start_idx + 1 :] + ALL_COLORS[:start_idx]
         opp_positions = []
@@ -80,19 +85,16 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
                     opp_positions.append(home_pos_normalized)
                 opp_active.append(0.0)
 
-        # 3. Dice Continuous/Categorical Features
+        # Dice encoding
         if self.cfg.obs.include_dice_one_hot:
-            d = [0.0] * 6
+            dice_vec = [0.0] * 6
             if 1 <= dice <= 6:
-                d[dice - 1] = 1.0
-            dice_vec = d
+                dice_vec[dice - 1] = 1.0
         else:
-            # Normalized scalar [0.0, ~1.0]
-            dice_vec = [((dice - 1) / 6.0)]
+            dice_vec = [((dice - 1) / 6.0) if (1 <= dice <= 6) else 0.0]
 
-        # Final Structured Output
         return {
-            "agent_tokens": np.asarray(agent_tokens, dtype=np.float32),
+            "agent_color": np.asarray(agent_color_onehot, dtype=np.float32),
             "agent_progress": np.asarray(agent_progress, dtype=np.float32),
             "agent_vulnerable": np.asarray(agent_vulnerable, dtype=np.float32),
             "opponents_positions": np.asarray(opp_positions, dtype=np.float32),
@@ -112,80 +114,50 @@ class DiscreteObservationBuilder(ObservationBuilderBase):
     def build(self, turn_counter: int, dice: int) -> Dict[str, np.ndarray]:
         """Returns observation as a dictionary of int64 NumPy arrays."""
         tokens_per_player = GameConstants.TOKENS_PER_PLAYER
-        obs: Dict[str, np.ndarray] = {}
 
-        def pos_to_int(p: int) -> int:
-            """
-            Maps token position to an integer rank:
-            HOME -> 0
-            Path ranks -> 1..total_path
-            """
-            if p == GameConstants.HOME_POSITION:
-                return 0
-            
-            if p >= BoardConstants.HOME_COLUMN_START:
-                # Home column positions map to 52..57
-                rank = GameConstants.MAIN_BOARD_SIZE + (p - BoardConstants.HOME_COLUMN_START)
-            else:
-                # Main board positions shifted relative to agent's start
-                q = (
-                    p - self.start_pos
-                    if p >= self.start_pos
-                    else GameConstants.MAIN_BOARD_SIZE - self.start_pos + p
-                )
-                rank = q
-            
-            # Since rank goes from 0 to 57, we map to 1 to 58 (total_path + 1 bins)
-            return 1 + int(rank)
+        # Agent color one-hot encoding (discrete version)
+        agent_color_onehot = [0] * len(ALL_COLORS)
+        agent_color_onehot[ALL_COLORS.index(self.agent_color)] = 1
 
-        # 1. Agent-Specific Discrete Features
-        obs["agent_positions"] = np.asarray(
-            [pos_to_int(t.position) for t in self.agent_player.tokens],
-            dtype=np.int64
-        )
+        # Agent progress (discrete bins 0-10) - positions removed as redundant
+        agent_progress = [
+            max(0, min(10, int(round(token_progress(t.position, self.start_pos) * 10.0)))) 
+            for t in self.agent_player.tokens
+        ]
         
-        # Agent progress quantized to 0..10
-        obs["agent_progress"] = np.asarray(
-            [
-                max(0, min(10, int(round(token_progress(t.position, self.start_pos) * 10.0)))) 
-                for t in self.agent_player.tokens
-            ],
-            dtype=np.int64
-        )
-        
-        # Agent vulnerable flag (0 or 1)
-        obs["agent_vulnerable"] = np.asarray(
-            [1 if self.is_vulnerable(t.position) else 0 for t in self.agent_player.tokens],
-            dtype=np.int64
-        )
+        # Agent vulnerable flags
+        agent_vulnerable = [1 if self.is_vulnerable(t.position) else 0 for t in self.agent_player.tokens]
 
-        # 2. Opponent Discrete Features (Order matters)
+        # Opponents (ordered by seat position)
         opp_positions = []
         opp_active = []
         start_idx = ALL_COLORS.index(self.agent_color)
         ordered = ALL_COLORS[start_idx + 1:] + ALL_COLORS[:start_idx]
-        home_pos_int = pos_to_int(GameConstants.HOME_POSITION)
+        home_pos_int = 0  # HOME maps to 0 in discrete
 
         for color in ordered:
             if color in self.present_colors:
                 p = self.game.get_player_from_color(color)
                 for t in p.tokens:
-                    opp_positions.append(pos_to_int(t.position))
+                    # Use discrete position mapping for opponents too
+                    opp_positions.append(1 + int(token_progress(t.position, self.start_pos) * (self.total_path)))
                 opp_active.append(1)
             else:
-                # Pad with home positions for absent players
                 for _ in range(tokens_per_player):
                     opp_positions.append(home_pos_int)
                 opp_active.append(0)
-        
-        obs["opponents_positions"] = np.asarray(opp_positions, dtype=np.int64)
-        obs["opponents_active"] = np.asarray(opp_active, dtype=np.int64)
-        
-        # 3. Dice Discrete Feature
-        # Dice roll (0=no roll, 1..6)
-        obs["dice"] = np.asarray([dice if (1 <= dice <= 6) else 0], dtype=np.int64)
 
-        return obs
+        # Dice (discrete value)
+        dice_val = dice if (1 <= dice <= 6) else 0
+
+        return {
+            "agent_color": np.asarray(agent_color_onehot, dtype=np.int64),
+            "agent_progress": np.asarray(agent_progress, dtype=np.int64),
+            "agent_vulnerable": np.asarray(agent_vulnerable, dtype=np.int64),
+            "opponents_positions": np.asarray(opp_positions, dtype=np.int64),
+            "opponents_active": np.asarray(opp_active, dtype=np.int64),
+            "dice": np.asarray([dice_val], dtype=np.int64),
+        }
 
 
 # Backward compatibility alias
