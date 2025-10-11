@@ -178,10 +178,9 @@ class LudoRLEnvBase(gym.Env):
 
     def _setup_random_seed(self, seed: Optional[int]) -> None:
         """Set up random seeds for reproducibility."""
-        if seed is not None:
-            self.rng.seed(seed)
-            random.seed(seed)
-            np.random.seed(seed)
+        self.rng.seed(seed)
+        random.seed(seed)
+        np.random.seed(seed)
 
     def _initialize_game_state(self) -> None:
         """Initialize the game and agent color."""

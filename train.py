@@ -88,14 +88,16 @@ def main():
     norm_obs_flag = not getattr(env_cfg.obs, "discrete", False) and not isinstance(
         venv.observation_space, gym.spaces.Dict
     )
-    venv = VecNormalize(
-        venv,
-        training=True,
-        norm_obs=norm_obs_flag,
-        norm_reward=False,
-        clip_obs=1.0,
-        clip_reward=1000.0,
-    )
+    logger.info(f"Observation normalization enabled: {norm_obs_flag}")
+    if norm_obs_flag:
+        venv = VecNormalize(
+            venv,
+            training=True,
+            norm_obs=True,
+            norm_reward=False,
+            clip_obs=1.0,
+            clip_reward=1000.0,
+        )
 
     # Separate eval env with same wrappers (always classic for evaluation vs baselines)
     # For evaluation we prefer single-process env for deterministic mask wrapping
@@ -104,14 +106,15 @@ def main():
         [lambda: ActionMasker(eval_raw, MoveUtils.get_action_mask_for_env)]
     )
     eval_env = VecMonitor(eval_env)
-    eval_env = VecNormalize(
-        eval_env,
-        training=False,
-        norm_obs=norm_obs_flag,
-        norm_reward=False,
-        clip_obs=1.0,
-        clip_reward=1000.0,
-    )
+    if norm_obs_flag:
+        eval_env = VecNormalize(
+            eval_env,
+            training=False,
+            norm_obs=True,
+            norm_reward=False,
+            clip_obs=1.0,
+            clip_reward=1000.0,
+        )
     # Share normalization statistics with the training env so evaluation matches training distribution
     if norm_obs_flag:
         try:
