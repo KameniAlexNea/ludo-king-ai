@@ -6,20 +6,22 @@ from ludo_engine.models import BoardConstants, GameConstants, MoveResult, Player
 from ludo_rl.config import EnvConfig
 
 
-def token_progress(pos: int, start_pos: int) -> float:
+def token_progress_pos(pos: int, start_pos: int) -> int:
     if pos == GameConstants.HOME_POSITION:
-        return 0.0
+        return 0
     if pos >= GameConstants.HOME_COLUMN_START:
         home_steps = pos - GameConstants.HOME_COLUMN_START + 1
-        return (GameConstants.MAIN_BOARD_SIZE + home_steps) / float(
-            GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
-        )
+        return GameConstants.MAIN_BOARD_SIZE + home_steps
     # on main board: forward distance from start to current pos
     if pos >= start_pos:
         steps = pos - start_pos
     else:
         steps = GameConstants.MAIN_BOARD_SIZE - start_pos + pos
-    return steps / float(GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
+    return steps + 1
+
+
+def token_progress(pos: int, start_pos: int) -> float:
+    return token_progress_pos(pos, start_pos) / float(GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
 
 
 class RewardCalculator:

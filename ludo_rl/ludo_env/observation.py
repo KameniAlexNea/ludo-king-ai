@@ -6,7 +6,7 @@ import numpy as np
 from ludo_engine.core import LudoGame 
 from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor 
 from ludo_rl.config import EnvConfig 
-from ludo_rl.utils.reward_calculator import token_progress
+from ludo_rl.utils.reward_calculator import token_progress, token_progress_pos
 
 
 class ObservationBuilderBase:
@@ -27,16 +27,6 @@ class ObservationBuilderBase:
     def build(self, turn_counter: int, dice: int) -> Dict[str, np.ndarray]:
         """Abstract method to build the observation dictionary."""
         raise NotImplementedError()
-
-    def normalize_pos(self, pos: int) -> float:
-        """
-        Normalizes a token's absolute position into a float in [-1.0, 1.0].
-        HOME_POSITION maps to -1.0. Other positions are relative to the agent's start.
-        """
-        if pos == GameConstants.HOME_POSITION:
-            return -1.0
-        rank = token_progress(pos, self.start_pos)
-        return rank * 2.0 - 1.0
 
     def is_vulnerable(self, pos: int) -> bool:
         """Check if a position is not HOME and not a safe square."""
@@ -72,13 +62,14 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
         ordered = ALL_COLORS[start_idx + 1 :] + ALL_COLORS[:start_idx]
         opp_positions = []
         opp_active = []
-        home_pos_normalized = self.normalize_pos(GameConstants.HOME_POSITION)
+        home_pos_normalized = 0
 
         for color in ordered:
             if color in self.present_colors:
                 p = self.game.get_player_from_color(color)
+                start_pos = BoardConstants.START_POSITIONS[color]
                 for t in p.tokens:
-                    opp_positions.append(self.normalize_pos(t.position))
+                    opp_positions.append(token_progress(t.position, start_pos))
                 opp_active.append(1.0)
             else:
                 for _ in range(tokens_per_player):
@@ -121,7 +112,7 @@ class DiscreteObservationBuilder(ObservationBuilderBase):
 
         # Agent progress (discrete bins 0-10) - positions removed as redundant
         agent_progress = [
-            max(0, min(10, int(round(token_progress(t.position, self.start_pos) * 10.0)))) 
+            token_progress_pos(t.position, self.start_pos)
             for t in self.agent_player.tokens
         ]
         
@@ -138,9 +129,10 @@ class DiscreteObservationBuilder(ObservationBuilderBase):
         for color in ordered:
             if color in self.present_colors:
                 p = self.game.get_player_from_color(color)
+                start_pos = BoardConstants.START_POSITIONS[color]
                 for t in p.tokens:
                     # Use discrete position mapping for opponents too
-                    opp_positions.append(1 + int(token_progress(t.position, self.start_pos) * (self.total_path)))
+                    opp_positions.append(token_progress_pos(t.position, start_pos))
                 opp_active.append(1)
             else:
                 for _ in range(tokens_per_player):
