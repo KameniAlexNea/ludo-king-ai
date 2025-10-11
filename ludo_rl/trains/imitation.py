@@ -123,20 +123,26 @@ def collect_imitation_samples(
                 turn_index += 1
             # End game loop
     logger.info(f"[Imitation] Collection completed with {len(obs_buf)} samples")
-    # Convert buffers to arrays
+    # Convert buffers to arrays - handle Dict observations
     if not obs_buf:
         raise RuntimeError(
             "No imitation samples collected; check strategy availability."
         )
-    return (
-        np.stack(obs_buf, axis=0).astype(np.float32),
-        np.array(act_buf, dtype=np.int64),
-        np.stack(mask_buf, axis=0).astype(np.float32),
-    )
+    
+    # For Dict observations, return as lists (don't stack)
+    if isinstance(obs_buf[0], dict):
+        return obs_buf, np.array(act_buf, dtype=np.int64), np.stack(mask_buf, axis=0).astype(np.float32)
+    else:
+        # Original behavior for flat arrays
+        return (
+            np.stack(obs_buf, axis=0).astype(np.float32),
+            np.array(act_buf, dtype=np.int64),
+            np.stack(mask_buf, axis=0).astype(np.float32),
+        )
 
 
 def imitation_train(
-    model: MaskablePPO, dataset: TensorDataset, epochs: int, batch_size: int
+    model: MaskablePPO, dataset, epochs: int, batch_size: int
 ) -> None:
     curr_device = model.device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -155,8 +161,24 @@ def imitation_train(
             f"[Imitation] Epoch {_ + 1}/{epochs} Loss: {loss.item() if loss is not None else 'N/A'}"
         )
         for batch in loader:
-            obs_t, act_t, mask_t = batch
-            obs_t = obs_t.to(device)
+            if isinstance(batch, dict):
+                # Handle Dict dataset
+                obs_list = batch['obs']
+                act_t = batch['act']
+                mask_t = batch['mask']
+                # Manually collate the obs dict
+                obs_t = {}
+                for key in obs_list[0].keys():
+                    tensors = [torch.from_numpy(obs[key]) for obs in obs_list]
+                    obs_t[key] = torch.stack(tensors, dim=0)
+            else:
+                # Handle TensorDataset
+                obs_t, act_t, mask_t = batch
+            
+            if isinstance(obs_t, dict):
+                obs_t = {k: v.to(device) for k, v in obs_t.items()}
+            else:
+                obs_t = obs_t.to(device) if hasattr(obs_t, 'to') else obs_t
             act_t = act_t.to(device)
             mask_t = mask_t.to(device)
             dist = policy.get_distribution(obs_t)
