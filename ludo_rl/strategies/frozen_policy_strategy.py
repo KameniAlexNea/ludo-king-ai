@@ -7,9 +7,7 @@ from ludo_engine.strategies.base import Strategy
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 from stable_baselines3.common.vec_env import VecNormalize
 
-from ludo_rl.ludo_env.observation import (
-    ObservationBuilderBase,
-)
+from ludo_rl.ludo_env.observation import ObservationBuilderBase
 
 
 class FrozenPolicyStrategy(Strategy):

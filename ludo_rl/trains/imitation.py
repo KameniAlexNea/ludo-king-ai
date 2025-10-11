@@ -8,7 +8,7 @@ from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS
 from ludo_engine.strategies.strategy import StrategyFactory
 from sb3_contrib import MaskablePPO
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader
 
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.utils.move_utils import MoveUtils
@@ -128,10 +128,14 @@ def collect_imitation_samples(
         raise RuntimeError(
             "No imitation samples collected; check strategy availability."
         )
-    
+
     # For Dict observations, return as lists (don't stack)
     if isinstance(obs_buf[0], dict):
-        return obs_buf, np.array(act_buf, dtype=np.int64), np.stack(mask_buf, axis=0).astype(np.float32)
+        return (
+            obs_buf,
+            np.array(act_buf, dtype=np.int64),
+            np.stack(mask_buf, axis=0).astype(np.float32),
+        )
     else:
         # Original behavior for flat arrays
         return (
@@ -141,9 +145,7 @@ def collect_imitation_samples(
         )
 
 
-def imitation_train(
-    model: MaskablePPO, dataset, epochs: int, batch_size: int
-) -> None:
+def imitation_train(model: MaskablePPO, dataset, epochs: int, batch_size: int) -> None:
     curr_device = model.device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"[Imitation] Training on device: {device}")
@@ -163,9 +165,9 @@ def imitation_train(
         for batch in loader:
             if isinstance(batch, dict):
                 # Handle Dict dataset
-                obs_list = batch['obs']
-                act_t = batch['act']
-                mask_t = batch['mask']
+                obs_list = batch["obs"]
+                act_t = batch["act"]
+                mask_t = batch["mask"]
                 # Manually collate the obs dict
                 obs_t = {}
                 for key in obs_list[0].keys():
@@ -174,11 +176,11 @@ def imitation_train(
             else:
                 # Handle TensorDataset
                 obs_t, act_t, mask_t = batch
-            
+
             if isinstance(obs_t, dict):
                 obs_t = {k: v.to(device) for k, v in obs_t.items()}
             else:
-                obs_t = obs_t.to(device) if hasattr(obs_t, 'to') else obs_t
+                obs_t = obs_t.to(device) if hasattr(obs_t, "to") else obs_t
             act_t = act_t.to(device)
             mask_t = mask_t.to(device)
             dist = policy.get_distribution(obs_t)

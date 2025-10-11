@@ -1,16 +1,19 @@
-from typing import List, Dict, Any
+from typing import Dict
 
 import numpy as np
-# NOTE: These domain classes (LudoGame, EnvConfig, PlayerColor, etc.) 
+
+# NOTE: These domain classes (LudoGame, EnvConfig, PlayerColor, etc.)
 # are assumed to be defined in your ludo_engine and ludo_rl packages.
-from ludo_engine.core import LudoGame 
-from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor 
-from ludo_rl.config import EnvConfig 
+from ludo_engine.core import LudoGame
+from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
+
+from ludo_rl.config import EnvConfig
 from ludo_rl.utils.reward_calculator import token_progress, token_progress_pos
 
 
 class ObservationBuilderBase:
     """Base class providing common utilities for Ludo RL observation."""
+
     def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: PlayerColor):
         self.cfg = cfg
         self.game = game
@@ -21,7 +24,7 @@ class ObservationBuilderBase:
         self.agent_player = next(
             p for p in self.game.players if p.color == self.agent_color
         )
-        # Cache colors present in the game 
+        # Cache colors present in the game
         self.present_colors = {p.color for p in self.game.players}
 
     def build(self, turn_counter: int, dice: int) -> Dict[str, np.ndarray]:
@@ -37,9 +40,10 @@ class ObservationBuilderBase:
 
 class ContinuousObservationBuilder(ObservationBuilderBase):
     """
-    Builds a structured continuous observation (float32 dictionary) suitable 
+    Builds a structured continuous observation (float32 dictionary) suitable
     for Stable Baselines3's MultiInputPolicy.
     """
+
     def __init__(self, cfg: EnvConfig, game: LudoGame, agent_color: PlayerColor):
         super().__init__(cfg, game, agent_color)
 
@@ -52,10 +56,15 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
         agent_color_onehot[ALL_COLORS.index(self.agent_color)] = 1.0
 
         # Agent progress (normalized 0-1) - this replaces positions since they're redundant
-        agent_progress = [token_progress(t.position, self.start_pos) for t in self.agent_player.tokens]
-        
+        agent_progress = [
+            token_progress(t.position, self.start_pos) for t in self.agent_player.tokens
+        ]
+
         # Agent vulnerable flags
-        agent_vulnerable = [1.0 if self.is_vulnerable(t.position) else 0.0 for t in self.agent_player.tokens]
+        agent_vulnerable = [
+            1.0 if self.is_vulnerable(t.position) else 0.0
+            for t in self.agent_player.tokens
+        ]
 
         # Opponents (ordered by seat position)
         start_idx = ALL_COLORS.index(self.agent_color)
@@ -96,9 +105,10 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
 
 class DiscreteObservationBuilder(ObservationBuilderBase):
     """
-    Builds a structured discrete observation (int64 dictionary) suitable 
+    Builds a structured discrete observation (int64 dictionary) suitable
     for Stable Baselines3's MultiInputPolicy (using MultiDiscrete/Discrete spaces).
     """
+
     def __init__(self, cfg, game, agent_color):
         super().__init__(cfg, game, agent_color)
 
@@ -115,15 +125,17 @@ class DiscreteObservationBuilder(ObservationBuilderBase):
             token_progress_pos(t.position, self.start_pos)
             for t in self.agent_player.tokens
         ]
-        
+
         # Agent vulnerable flags
-        agent_vulnerable = [1 if self.is_vulnerable(t.position) else 0 for t in self.agent_player.tokens]
+        agent_vulnerable = [
+            1 if self.is_vulnerable(t.position) else 0 for t in self.agent_player.tokens
+        ]
 
         # Opponents (ordered by seat position)
         opp_positions = []
         opp_active = []
         start_idx = ALL_COLORS.index(self.agent_color)
-        ordered = ALL_COLORS[start_idx + 1:] + ALL_COLORS[:start_idx]
+        ordered = ALL_COLORS[start_idx + 1 :] + ALL_COLORS[:start_idx]
         home_pos_int = 0  # HOME maps to 0 in discrete
 
         for color in ordered:

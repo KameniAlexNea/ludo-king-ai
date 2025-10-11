@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
-from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback, EvalCallback
+from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 from torch.utils.data import TensorDataset
@@ -225,28 +225,30 @@ def main():
         # Normalize observations to match training data distribution
         if norm_obs_flag:
             obs_m = [eval_env.normalize_obs(obs) for obs in obs_m]
-        
+
         # Handle Dict observations for imitation learning
         if isinstance(obs_s[0], dict):
             # For Dict observations, create a custom dataset
             from torch.utils.data import Dataset
-            
+
             class DictImitationDataset(Dataset):
                 def __init__(self, obs_list, act_list, mask_list):
                     self.obs = obs_list
                     self.act = act_list
                     self.mask = mask_list
-                    
+
                 def __len__(self):
                     return len(self.obs)
-                    
+
                 def __getitem__(self, idx):
                     return {
-                        'obs': {k: torch.from_numpy(v) for k, v in self.obs[idx].items()},
-                        'act': torch.tensor(self.act[idx], dtype=torch.long),
-                        'mask': torch.from_numpy(self.mask[idx])
+                        "obs": {
+                            k: torch.from_numpy(v) for k, v in self.obs[idx].items()
+                        },
+                        "act": torch.tensor(self.act[idx], dtype=torch.long),
+                        "mask": torch.from_numpy(self.mask[idx]),
                     }
-            
+
             obs_all = obs_s + obs_m
             act_all = np.concatenate([act_s, act_m], axis=0)
             mask_all = np.concatenate([mask_s, mask_m], axis=0)

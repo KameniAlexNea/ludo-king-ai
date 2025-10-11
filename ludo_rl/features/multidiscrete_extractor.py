@@ -22,19 +22,26 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
             "agent_color": {"n": 2, "size": 4},  # 4 colors, each 0/1
             "agent_progress": {"n": 11, "size": 4},  # 4 tokens, each 0-10
             "agent_vulnerable": {"n": 2, "size": 4},  # 4 tokens, each 0/1
-            "opponents_positions": {"n": 65, "size": 12},  # 12 positions (3 opp × 4 tokens), each 0-64
+            "opponents_positions": {
+                "n": 65,
+                "size": 12,
+            },  # 12 positions (3 opp × 4 tokens), each 0-64
             "opponents_active": {"n": 2, "size": 3},  # 3 opponents, each 0/1
             "dice": {"n": 7, "size": 1},  # 1 dice value, 0-6
         }
 
         # Calculate total feature dimension
-        total_features = sum(config["size"] * embed_dim for config in self.component_configs.values())
+        total_features = sum(
+            config["size"] * embed_dim for config in self.component_configs.values()
+        )
         super().__init__(observation_space, features_dim=total_features)
 
         self.embed_dim = embed_dim
 
         # Create embedding layers for each unique cardinality
-        unique_ns = sorted(set(config["n"] for config in self.component_configs.values()))
+        unique_ns = sorted(
+            set(config["n"] for config in self.component_configs.values())
+        )
         self.embed_by_n = nn.ModuleDict(
             {
                 str(n): nn.Embedding(num_embeddings=n, embedding_dim=embed_dim)
@@ -58,7 +65,9 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
                 embeddings.append(emb)
 
             # Concatenate embeddings for this component
-            component_features = torch.cat(embeddings, dim=1)  # (batch, size * embed_dim)
+            component_features = torch.cat(
+                embeddings, dim=1
+            )  # (batch, size * embed_dim)
             features.append(component_features)
 
         # Concatenate all component features

@@ -21,7 +21,9 @@ def token_progress_pos(pos: int, start_pos: int) -> int:
 
 
 def token_progress(pos: int, start_pos: int) -> float:
-    return token_progress_pos(pos, start_pos) / float(GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
+    return token_progress_pos(pos, start_pos) / float(
+        GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+    )
 
 
 class RewardCalculator:
