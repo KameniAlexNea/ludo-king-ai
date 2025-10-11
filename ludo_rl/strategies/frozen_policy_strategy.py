@@ -62,21 +62,15 @@ class FrozenPolicyStrategy(Strategy):
         # Only normalize observations when using continuous (Box) observations.
         # For discrete (MultiDiscrete) observations, normalization would corrupt
         # category indices and break the policy's embedding lookups.
-        obs_tensor: torch.Tensor | dict[str, torch.Tensor]
+        obs_input: np.ndarray | dict[str, np.ndarray]
         if isinstance(obs, dict):
-            # For Dict observations, convert each value to a tensor and add a batch dimension.
-            # The obs_normalizer should not be used with Dict spaces.
-            obs_tensor = {
-                key: torch.as_tensor(value, device=self.policy.device).unsqueeze(0)
-                for key, value in obs.items()
-            }
+            obs_input = obs
         else:
-            # For Box observations (numpy array)
+            obs_input = obs
             if self.obs_normalizer is not None:
-                obs = self.obs_normalizer.normalize_obs(obs)
-            obs_tensor = torch.as_tensor(
-                obs, dtype=torch.float32, device=self.policy.device
-            ).unsqueeze(0)
+                obs_input = self.obs_normalizer.normalize_obs(obs_input[np.newaxis, ...])[0]
+
+        obs_tensor, _ = self.policy.obs_to_tensor(obs_input)
 
         # Compute distribution from policy, derive probs, and apply mask
         mask_1d = self._build_action_mask(valid_moves).to(self.policy.device)
