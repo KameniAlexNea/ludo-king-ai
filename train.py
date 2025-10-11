@@ -6,8 +6,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 from typing import Optional
 
 import gymnasium as gym
-import numpy as np
-import torch
 from loguru import logger
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
@@ -15,7 +13,6 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
-from torch.utils.data import TensorDataset
 
 from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.callbacks.curriculum import ProgressCallback
@@ -25,7 +22,6 @@ from ludo_rl.config import EnvConfig, TrainConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
-from ludo_rl.trains.imitation import collect_imitation_samples, imitation_train
 from ludo_rl.trains.training_args import parse_args
 from ludo_rl.utils.move_utils import MoveUtils
 
@@ -201,106 +197,6 @@ def main():
         )  # Switch halfway through training
         hybrid_cb = HybridSwitchCallback(switch_step, verbose=1)
         callbacks.append(hybrid_cb)
-
-    # Optional imitation kickstart
-    if False:
-        logger.info("[Imitation] Collecting scripted policy samples...")
-        strat_list = [
-            s.strip() for s in args.imitation_strategies.split(",") if s.strip()
-        ]
-        # Single-seat samples
-        base_env_for_imitation = LudoRLEnv(env_cfg)
-        obs_s, act_s, mask_s = collect_imitation_samples(
-            base_env_for_imitation,
-            strat_list,
-            steps_budget=args.imitation_steps,
-            multi_seat=False,
-        )
-        # Normalize observations to match training data distribution
-        if norm_obs_flag:
-            obs_s = [eval_env.normalize_obs(obs) for obs in obs_s]
-        # Multi-seat samples
-        obs_m, act_m, mask_m = collect_imitation_samples(
-            base_env_for_imitation,
-            strat_list,
-            steps_budget=args.imitation_steps,
-            multi_seat=True,
-        )
-        # Normalize observations to match training data distribution
-        if norm_obs_flag:
-            obs_m = [eval_env.normalize_obs(obs) for obs in obs_m]
-
-        # Handle Dict observations for imitation learning
-        if isinstance(obs_s[0], dict):
-            # For Dict observations, create a custom dataset
-            from torch.utils.data import Dataset
-
-            class DictImitationDataset(Dataset):
-                def __init__(self, obs_list, act_list, mask_list):
-                    self.obs = obs_list
-                    self.act = act_list
-                    self.mask = mask_list
-
-                def __len__(self):
-                    return len(self.obs)
-
-                def __getitem__(self, idx):
-                    return {
-                        "obs": {
-                            k: torch.from_numpy(v) for k, v in self.obs[idx].items()
-                        },
-                        "act": torch.tensor(self.act[idx], dtype=torch.long),
-                        "mask": torch.from_numpy(self.mask[idx]),
-                    }
-
-            obs_all = obs_s + obs_m
-            act_all = np.concatenate([act_s, act_m], axis=0)
-            mask_all = np.concatenate([mask_s, mask_m], axis=0)
-            dataset = DictImitationDataset(obs_all, act_all, mask_all)
-        else:
-            # Original flat array handling
-            obs_all = np.concatenate([np.array(obs_s), np.array(obs_m)], axis=0)
-            act_all = np.concatenate([act_s, act_m], axis=0)
-            mask_all = np.concatenate([mask_s, mask_m], axis=0)
-            dataset = TensorDataset(
-                torch.from_numpy(obs_all),
-                torch.from_numpy(act_all),
-                torch.from_numpy(mask_all),
-            )
-        # Temporary entropy boost
-        original_ent = float(model.ent_coef)
-        boosted_ent = original_ent + args.imitation_entropy_boost
-        model.ent_coef = boosted_ent
-        logger.info(
-            f"[Imitation] Training on {len(dataset)} samples (single+multi-seat) for {args.imitation_epochs} epochs"
-        )
-        imitation_train(
-            model,
-            dataset,
-            epochs=args.imitation_epochs,
-            batch_size=args.imitation_batch_size,
-        )
-        # Restore entropy coef (annealing callback will handle future schedule)
-        model.ent_coef = original_ent
-        logger.info("[Imitation] Completed pretraining phase.")
-        # After imitation, run a quick evaluation callback manually (one pass) to log baseline performance under TB
-        try:
-            eval_cb.model = model  # Set the model on the callback
-            eval_cb.on_step()  # type: ignore
-        except Exception as e:
-            logger.warning(f"[Imitation] Failed to run post-imitation evaluation: {e}")
-            # Non-critical, continue training
-        # Save post-imitation snapshot for curve comparison
-        imitation_path = os.path.join(args.model_dir, "maskable_ppo_after_imitation")
-        try:
-            model.save(imitation_path)
-            logger.info(
-                f"[Imitation] Saved post-imitation model to {imitation_path}.zip"
-            )
-        except Exception as e:
-            raise RuntimeError(
-                f"[Imitation] Failed to save post-imitation model to {imitation_path}: {e}"
-            ) from e
 
     # Add checkpointing if enabled
     if args.save_freq and args.save_freq > 0:
