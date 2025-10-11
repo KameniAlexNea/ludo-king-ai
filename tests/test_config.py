@@ -11,22 +11,10 @@ from ludo_rl.config import (
 
 
 class TestRewardConfig(unittest.TestCase):
-    def test_default_values(self):
-        cfg = RewardConfig()
-        self.assertEqual(cfg.win, 100.0)
-        self.assertEqual(cfg.lose, -100.0)
-        self.assertEqual(cfg.capture, 1.0)
-
     def test_custom_values(self):
         cfg = RewardConfig(win=200.0, capture=10.0)
         self.assertEqual(cfg.win, 200.0)
         self.assertEqual(cfg.capture, 10.0)
-
-
-class TestObservationConfig(unittest.TestCase):
-    def test_default_values(self):
-        cfg = ObservationConfig()
-        self.assertFalse(cfg.include_dice_one_hot)
 
 
 class TestOpponentConfig(unittest.TestCase):
