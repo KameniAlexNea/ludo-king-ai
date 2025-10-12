@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional
 
+from loguru import logger
 from ludo_engine import StrategyFactory
 from ludo_engine.models import ALL_COLORS
 from sb3_contrib import MaskablePPO
@@ -7,7 +8,11 @@ from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env_base import LudoRLEnvBase
-from ludo_rl.ludo_env.observation import ObservationBuilder
+from ludo_rl.ludo_env.observation import (
+    ContinuousObservationBuilder,
+    DiscreteObservationBuilder,
+    ObservationBuilderBase,
+)
 from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
 from ludo_rl.utils.opponents import sample_opponents
 
@@ -23,14 +28,19 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
 
     def __init__(self, cfg: EnvConfig):
         super().__init__(cfg)
-        self.mode = "selfplay"  # Start in self-play mode
+        self.env_mode = "selfplay"  # "selfplay" or "classic"
         self._progress: Optional[float] = None
 
         # Self-play components
         self.model: MaskablePPO = None
         self._frozen_policy: MaskableActorCriticPolicy = None
-        self._opponent_builders: Dict[str, ObservationBuilder] = {}
+        self._opponent_builders: Dict[str, ObservationBuilderBase] = {}
         self.obs_normalizer = None
+        self.obs_builder_cls = (
+            DiscreteObservationBuilder
+            if self.cfg.obs.discrete
+            else ContinuousObservationBuilder
+        )
 
     def set_model(self, model: MaskablePPO) -> None:
         """Inject the live model for self-play opponents."""
@@ -49,14 +59,11 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
             num_opponents,
         )
 
-    def switch_to_classic(self) -> None:
-        """Switch from self-play to classic opponent sampling mode."""
-        self.mode = "classic"
-
     def _snapshot_policy(self) -> None:
         try:
             self._frozen_policy = getattr(self.model, "policy", None)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to snapshot policy: {e}")
             self._frozen_policy = None
 
     def _sample_opponents(self) -> List[str]:
@@ -70,15 +77,12 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
 
     def on_reset_before_attach(self, options: Optional[Dict] = None) -> None:
         # Check if callback has signaled to switch to classic mode
-        if getattr(self, "switch_to_classic", False):
-            self.mode = "classic"
-
-        if self.mode == "selfplay":
+        if self.env_mode == "selfplay":
             # Build per-opponent observation builders for strategy perspectives
             self._opponent_builders = {}
             for c in ALL_COLORS:
                 if c != self.agent_color:
-                    self._opponent_builders[c] = ObservationBuilder(
+                    self._opponent_builders[c] = self.obs_builder_cls(
                         self.cfg, self.game, c
                     )
             # Snapshot current policy for this episode (used by opponents)
@@ -91,7 +95,7 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
             self._attach_strategies_mixed(strategies)
             return
 
-        if self.mode == "selfplay":
+        if self.env_mode == "selfplay":
             # Attach FrozenPolicyStrategy for each opponent
             strategies = [
                 FrozenPolicyStrategy(
@@ -118,7 +122,7 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
                 player.set_strategy(StrategyFactory.create_strategy(name))
 
     def extra_reset_info(self) -> Dict:
-        return {"progress": self._progress, "mode": self.mode}
+        return {"progress": self._progress, "env_mode": self.env_mode}
 
     def set_training_progress(self, p: float):
         self._progress = max(0.0, min(1.0, float(p)))

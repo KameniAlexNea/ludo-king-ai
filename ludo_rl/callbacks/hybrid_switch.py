@@ -13,7 +13,7 @@ class HybridSwitchCallback(BaseCallback):
         if self.num_timesteps >= self.switch_step:
             try:
                 # Switch all envs to classic mode
-                self.training_env.set_attr("switch_to_classic", True)
+                self.training_env.set_attr("switch_to_classic", "classic")
                 if self.verbose:
                     logger.info(
                         f"[HybridSwitch] Switched to classic mode at step {self.num_timesteps}"

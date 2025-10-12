@@ -32,6 +32,11 @@ class LudoRLEnvSelfPlay(LudoRLEnvBase):
         self._frozen_policy: MaskableActorCriticPolicy = None
         self._opponent_builders: Dict[str, ObservationBuilderBase] = {}
         self.obs_normalizer = None
+        self.obs_builder_cls = (
+            DiscreteObservationBuilder
+            if self.cfg.obs.discrete
+            else ContinuousObservationBuilder
+        )
 
     # ---- Model snapshot management (in-memory) ----
     def set_model(self, model: MaskablePPO) -> None:
@@ -54,16 +59,9 @@ class LudoRLEnvSelfPlay(LudoRLEnvBase):
         self._opponent_builders = {}
         for c in ALL_COLORS:
             if c != self.agent_color:
-                if getattr(self.cfg, "obs", None) and getattr(
-                    self.cfg.obs, "discrete", False
-                ):
-                    self._opponent_builders[c] = DiscreteObservationBuilder(
-                        self.cfg, self.game, c
-                    )
-                else:
-                    self._opponent_builders[c] = ContinuousObservationBuilder(
-                        self.cfg, self.game, c
-                    )
+                self._opponent_builders[c] = self.obs_builder_cls(
+                    self.cfg, self.game, c
+                )
         # Snapshot current policy for this episode (used by opponents)
         self._snapshot_policy()
 
