@@ -61,7 +61,9 @@ class TwoPlayerPPOTournament(BaseTournament):
             else:
                 raise ValueError(f"Models directory '{self.models_dir}' does not exist")
         else:
-            self.ppo_model = select_best_ppo_model(self.models_dir, self.model_preference)
+            self.ppo_model = select_best_ppo_model(
+                self.models_dir, self.model_preference
+            )
         self.ppo_model_path = os.path.join(self.models_dir, f"{self.ppo_model}.zip")
 
         # Get strategies universe
@@ -148,16 +150,21 @@ class TwoPlayerPPOTournament(BaseTournament):
                 # Alternate starting positions for fairness
                 if game_num % 2 == 0:
                     game_players = [self.ppo_model, opponent_strategy]
-                    game_colors = [ALL_COLORS[0], ALL_COLORS[2]]  # Red vs Yellow (opposite positions)
+                    game_colors = [
+                        ALL_COLORS[0],
+                        ALL_COLORS[2],
+                    ]  # Red vs Yellow (opposite positions)
                 else:
                     game_players = [opponent_strategy, self.ppo_model]
-                    game_colors = [ALL_COLORS[0], ALL_COLORS[2]]  # Same colors, different order
+                    game_colors = [
+                        ALL_COLORS[0],
+                        ALL_COLORS[2],
+                    ]  # Same colors, different order
 
                 if self.verbose_output:
                     color_names = [ALL_COLORS[0].value, ALL_COLORS[2].value]
                     player_color_info = [
-                        f"{game_players[i].upper()}({color_names[i]})" 
-                        for i in range(2)
+                        f"{game_players[i].upper()}({color_names[i]})" for i in range(2)
                     ]
                     print(f"  Game {game_num + 1}: {' vs '.join(player_color_info)}")
 
@@ -165,7 +172,9 @@ class TwoPlayerPPOTournament(BaseTournament):
                 game = LudoGame(game_colors)
 
                 # Assign strategies
-                for i, (player_name, colour) in enumerate(zip(game_players, game_colors)):
+                for i, (player_name, colour) in enumerate(
+                    zip(game_players, game_colors)
+                ):
                     if player_name == self.ppo_model:
                         strategy = load_ppo_strategy(
                             env_kind=self.env_kind,
@@ -178,7 +187,7 @@ class TwoPlayerPPOTournament(BaseTournament):
                         )
                     else:
                         strategy = StrategyFactory.create_strategy(player_name)
-                    
+
                     player = game.get_player_from_color(colour)
                     player.set_strategy(strategy)
                     player.strategy_name = player_name
@@ -203,16 +212,18 @@ class TwoPlayerPPOTournament(BaseTournament):
             ppo_wins = matchup_wins[self.ppo_model]
             opponent_wins = matchup_wins[opponent_strategy]
             draws = matchup_wins["draw"]
-            
-            print(f"  Results: {self.ppo_model.upper()}: {ppo_wins}, "
-                  f"{opponent_strategy.upper()}: {opponent_wins}, Draws: {draws}")
-            
+
+            print(
+                f"  Results: {self.ppo_model.upper()}: {ppo_wins}, "
+                f"{opponent_strategy.upper()}: {opponent_wins}, Draws: {draws}"
+            )
+
             # Calculate win percentage for this matchup
             total_matchup_games = ppo_wins + opponent_wins + draws
             if total_matchup_games > 0:
                 ppo_win_pct = (ppo_wins / total_matchup_games) * 100
                 print(f"  PPO Win Rate: {ppo_win_pct:.1f}%")
-            
+
             matchup_results.append((opponent_strategy, matchup_wins))
 
         elapsed = time.time() - start_time
@@ -241,22 +252,22 @@ class TwoPlayerPPOTournament(BaseTournament):
                 "moves_made": 0,
                 "turns_taken": 0,
             }
-        
+
         while not game.game_over and turn_count < self.max_turns_per_game:
             current_player = game.get_current_player()
             strategy_name = current_player.strategy_name
             dice_roll = game.roll_dice()
-            
+
             # Get AI decision context
             context = game.get_ai_decision_context(dice_roll)
-            
+
             if context.valid_moves:
                 # Player makes strategic decision
                 chosen_token = current_player.make_strategic_decision(context)
-                
+
                 # Execute the move
                 move_result = game.execute_move(current_player, chosen_token, dice_roll)
-                
+
                 # Save decision if state saver is available
                 if self.state_saver:
                     self.state_saver.save_decision(
@@ -267,7 +278,9 @@ class TwoPlayerPPOTournament(BaseTournament):
 
                 if move_result.captured_tokens:
                     captures = len(move_result.captured_tokens)
-                    game_results["player_stats"][strategy_name]["tokens_captured"] += captures
+                    game_results["player_stats"][strategy_name]["tokens_captured"] += (
+                        captures
+                    )
                     game_results["game_events"].append(
                         f"Turn {turn_count}: {strategy_name} captured {captures} token(s)"
                     )
@@ -282,16 +295,18 @@ class TwoPlayerPPOTournament(BaseTournament):
                     game_results["winner"] = current_player
                     game_results["turns_played"] = turn_count
                     if verbose:
-                        print(f"  Game {game_id}: {strategy_name.upper()} WINS! ({turn_count} turns)")
+                        print(
+                            f"  Game {game_id}: {strategy_name.upper()} WINS! ({turn_count} turns)"
+                        )
                     break
-                
+
                 # Handle turn progression
                 if not move_result.extra_turn and not game.game_over:
                     game.next_turn()
             else:
                 # No valid moves, skip turn
                 game.next_turn()
-            
+
             turn_count += 1
             game_results["player_stats"][strategy_name]["turns_taken"] += 1
 
@@ -334,7 +349,7 @@ class TwoPlayerPPOTournament(BaseTournament):
                 "strategies": self.all_strategies,
                 "matchups_tested": len(self.all_strategies),
                 "games_per_matchup": self.games_per_matchup,
-                "tournament_type": "head_to_head"
+                "tournament_type": "head_to_head",
             }
         )
         return summary

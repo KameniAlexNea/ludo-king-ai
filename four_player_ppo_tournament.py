@@ -62,7 +62,9 @@ class FourPlayerPPOTournament(BaseTournament):
             else:
                 raise ValueError(f"Models directory '{self.models_dir}' does not exist")
         else:
-            self.ppo_model = select_best_ppo_model(self.models_dir, self.model_preference)
+            self.ppo_model = select_best_ppo_model(
+                self.models_dir, self.model_preference
+            )
         self.ppo_model_path = os.path.join(self.models_dir, f"{self.ppo_model}.zip")
 
         # PPO policy will be accessed via PPOStrategyClass wrapper uniformly.
