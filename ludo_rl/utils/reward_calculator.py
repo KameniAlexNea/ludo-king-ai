@@ -1,7 +1,4 @@
-from typing import Optional
-
 from ludo_engine import LudoGame
-from ludo_engine.core import Player
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
 from ludo_rl.config import EnvConfig

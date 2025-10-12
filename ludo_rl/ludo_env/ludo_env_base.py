@@ -337,7 +337,8 @@ class LudoRLEnvBase(gym.Env):
 
         # Calculate reward and check termination
         reward, reward_breakdown = self._calculate_reward(
-            move_result, is_illegal,
+            move_result,
+            is_illegal,
         )
         terminated = self._check_termination(move_result)
         truncated = self._check_truncation()

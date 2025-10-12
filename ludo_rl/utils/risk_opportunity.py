@@ -1,11 +1,10 @@
 from dataclasses import dataclass
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Dict, Iterable, Tuple
 
-from ludo_engine import Player
 from ludo_engine.core import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
-from ludo_rl.config import EnvConfig, RewardConfig
+from ludo_rl.config import RewardConfig
 from ludo_rl.utils.reward_calculator import RewardCalculator as BaseRewardCalculator
 
 
@@ -121,12 +120,7 @@ class RiskOpportunityCalculator:
 
 
 class RewardCalculator:
-    """Compute shaped rewards based on game events and state changes.
-
-    Usage:
-        calc = RewardCalculator()
-        reward = calc.compute(res, illegal, cfg, game_over, captured_by_opponents, extra_turn, winner, agent_color, home_tokens)
-    """
+    """Compute shaped rewards based on game events and state changes."""
 
     def __init__(self):
         self.reward_calculator = BaseRewardCalculator()
@@ -140,19 +134,41 @@ class RewardCalculator:
         return_breakdown: bool = False,
         is_illegal: bool = False,
     ) -> float:
-        reward = self.reward_calculator.compute(
+        # Get RO score (includes move-specific rewards and risk penalties)
+        ro_reward = self.ro_calculator.compute(
+            game, agent_color, move, return_breakdown=True, is_illegal=is_illegal
+        )
+        # Get base reward breakdown for non-overlapping components
+        _, base_breakdown = self.reward_calculator.compute(
             game,
             agent_color,
             move,
             return_breakdown=True,
             is_illegal=is_illegal,
         )
-        ro_reward = self.ro_calculator.compute(
-            game, agent_color, move, return_breakdown=True, is_illegal=is_illegal
-        )
+
+        # Components already handled by RO: progress, safe_zone, capture, finish, extra_turn, exit_start
+        overlapping_keys = {
+            "progress",
+            "safe_zone",
+            "capture",
+            "finish",
+            "extra_turn",
+            "exit_start",
+        }
+
+        # Add non-overlapping components from base reward
+        additional_reward = 0.0
+        additional_breakdown = {}
+        for key, value in base_breakdown.items():
+            if key not in overlapping_keys:
+                additional_reward += value
+                additional_breakdown[key] = value
+
         if return_breakdown:
-            r, b = reward
             ro_r, ro_b = ro_reward
-            scores = {**b, **ro_b}
-            return r + ro_r, scores
-        return reward[0] + ro_reward[0]
+            total_r = ro_r + additional_reward
+            total_b = {**ro_b, **additional_breakdown}
+            return total_r, total_b
+        ro_r, _ = ro_reward
+        return ro_r + additional_reward

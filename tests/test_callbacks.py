@@ -7,7 +7,7 @@ from ludo_rl.callbacks.annealing import AnnealingCallback
 from ludo_rl.callbacks.curriculum import ProgressCallback
 from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
 from ludo_rl.callbacks.hybrid_switch import HybridSwitchCallback
-from ludo_rl.config import EnvConfig, TrainConfig
+from ludo_rl.config import TrainConfig
 
 
 class TestAnnealingCallback(unittest.TestCase):
