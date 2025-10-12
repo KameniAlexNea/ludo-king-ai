@@ -2,6 +2,7 @@ from typing import Optional
 
 import numpy as np
 import torch
+from loguru import logger
 from ludo_engine.models import AIDecisionContext, GameConstants, ValidMove
 from ludo_engine.strategies.base import Strategy
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
@@ -86,5 +87,10 @@ class FrozenPolicyStrategy(Strategy):
         valid_token_ids = [mv.token_id for mv in valid_moves]
         if token_id not in valid_token_ids:
             # Log warning and fall back to random valid move
+            logger.warning(
+                f"Policy selected invalid token_id {token_id}, "
+                f"valid ids: {valid_token_ids}. "
+                "Falling back to random valid move."
+            )
             token_id = np.random.choice(valid_token_ids)
         return token_id

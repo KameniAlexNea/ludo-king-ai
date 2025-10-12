@@ -357,14 +357,7 @@ class LudoRLEnvBase(gym.Env):
         step_info = self._build_step_info(move_result, is_illegal)
 
         info_dict = step_info.__dict__
-        # Attach reward breakdown totals for diagnostic logging
-        try:
-            info_dict["reward_breakdown"] = reward_breakdown
-        except Exception:
-            info_dict["reward_breakdown"] = {}
-
-        if reward > 0:
-            pass
+        info_dict["reward_breakdown"] = reward_breakdown
 
         return obs, reward, terminated, truncated, info_dict
 

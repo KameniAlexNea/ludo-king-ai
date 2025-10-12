@@ -143,8 +143,9 @@ def main():
                 "features_extractor_class": MultiDiscreteFeatureExtractor,
                 "features_extractor_kwargs": {"embed_dim": args.embed_dim},
             }
-    except Exception:
+    except ImportError:
         # If feature extractor import fails, fall back to default
+        logger.warning("Failed to import MultiDiscreteFeatureExtractor, using default.")
         policy_kwargs = {}
 
     if args.load_model:
