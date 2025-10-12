@@ -131,7 +131,6 @@ class RewardCalculator:
         # Event rewards
         if res.captured_tokens:
             capture_base = cfg.reward.capture * len(res.captured_tokens)
-            # capture_base *= cfg.reward.capture_reward_scale
             breakdown["capture"] += capture_base
             r += capture_base
 

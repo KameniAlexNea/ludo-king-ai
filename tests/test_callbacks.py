@@ -34,27 +34,6 @@ class TestAnnealingCallback(unittest.TestCase):
         expected_ent = 0.1 + 0.5 * (0.02 - 0.1)
         self.assertAlmostEqual(self.callback.model.ent_coef, expected_ent)
 
-    @patch("stable_baselines3.common.callbacks.BaseCallback._on_step")
-    def test_on_step_capture_scale_annealing(self, mock_super_on_step):
-        mock_super_on_step.return_value = True
-        self.callback.num_timesteps = 1000
-        self.callback.model = Mock()
-        self.callback.model.env = Mock()
-        self.callback.model.env.envs = [Mock()]
-        self.callback.model.env.envs[0].cfg = EnvConfig()
-        self.train_cfg.capture_scale_anneal_steps = 2000
-        self.train_cfg.capture_scale_initial = 1.3
-        self.train_cfg.capture_scale_final = 1.0
-        self.callback.scale_reward = True  # Enable reward scaling
-
-        result = self.callback._on_step()
-        self.assertTrue(result)
-        expected_scale = 1.3 + 0.5 * (1.0 - 1.3)
-        self.assertAlmostEqual(
-            self.callback.model.env.envs[0].cfg.reward.capture_reward_scale,
-            expected_scale,
-        )
-
 
 class TestProgressCallback(unittest.TestCase):
     def test_init(self):

@@ -9,7 +9,6 @@ class AnnealingCallback(BaseCallback):
 
     This callback adjusts:
       - model.ent_coef linearly from entropy_coef_initial -> entropy_coef_final
-      - env.cfg.reward.capture_reward_scale from capture_scale_initial -> capture_scale_final
 
     It expects that the training script passes in the TrainConfig and that the
     VecEnv exposes each underlying env with an attribute `cfg` referencing EnvConfig.
