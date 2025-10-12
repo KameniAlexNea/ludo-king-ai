@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
 
@@ -33,10 +34,10 @@ class RewardConfig:
 @dataclass
 class ObservationConfig:
     # Encoding choices: prefer normalized floats by default for compactness.
-    include_dice_one_hot: bool = False
+    include_dice_one_hot: bool = True
     include_color_one_hot: bool = False
     # Use discrete encoding (MultiDiscrete) instead of continuous Box
-    discrete: bool = True
+    discrete: bool = os.getenv("DISCRETE_OBS", "false").lower() == "true"
 
 
 @dataclass
@@ -138,6 +139,7 @@ class TrainConfig:
     hybrid_switch_rate: float = 0.55
     # embedding dimension for discrete observation extractor
     embed_dim: int = 32
+    load_model: Optional[str] = None  # path to model to load
 
     def __post_init__(self):
         if self.env_type in ["selfplay", "hybrid"]:

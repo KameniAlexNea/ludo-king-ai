@@ -1,25 +1,30 @@
 from typing import Optional
 
+from ludo_engine import LudoGame
 from ludo_engine.core import Player
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
 from ludo_rl.config import EnvConfig
 
 
-def token_progress(pos: int, start_pos: int) -> float:
+def token_progress_pos(pos: int, start_pos: int) -> int:
     if pos == GameConstants.HOME_POSITION:
-        return 0.0
+        return 0
     if pos >= GameConstants.HOME_COLUMN_START:
         home_steps = pos - GameConstants.HOME_COLUMN_START + 1
-        return (GameConstants.MAIN_BOARD_SIZE + home_steps) / float(
-            GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
-        )
+        return GameConstants.MAIN_BOARD_SIZE + home_steps
     # on main board: forward distance from start to current pos
     if pos >= start_pos:
         steps = pos - start_pos
     else:
         steps = GameConstants.MAIN_BOARD_SIZE - start_pos + pos
-    return steps / float(GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
+    return steps + 1
+
+
+def token_progress(pos: int, start_pos: int) -> float:
+    return token_progress_pos(pos, start_pos) / float(
+        GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+    )
 
 
 class RewardCalculator:
@@ -37,40 +42,28 @@ class RewardCalculator:
 
     def compute(
         self,
-        res: MoveResult,
-        illegal: bool,
+        game: LudoGame,
+        agent_color: PlayerColor,
+        move: MoveResult,
         cfg: EnvConfig,
-        game_over: bool,
-        captured_by_opponents: int = 0,
-        extra_turn: bool = 0,
-        winner: Optional[Player] = None,
-        agent_color: Optional[PlayerColor] = None,
-        home_tokens: int = 0,
+        return_breakdown: bool = False,
+        is_illegal: bool = False,
     ) -> float:
-        r, _ = self.compute_with_breakdown(
-            res,
-            illegal,
-            cfg,
-            game_over,
-            captured_by_opponents,
-            extra_turn,
-            winner,
-            agent_color,
-            home_tokens,
+        r, b = self.compute_with_breakdown(
+            game, agent_color, move, cfg, return_breakdown, is_illegal
         )
+        if return_breakdown:
+            return r, b
         return r
 
     def compute_with_breakdown(
         self,
-        res: MoveResult,
-        illegal: bool,
+        game: LudoGame,
+        agent_color: PlayerColor,
+        move: MoveResult,
         cfg: EnvConfig,
-        game_over: bool,
-        captured_by_opponents: int = 0,
-        extra_turn: bool = 0,
-        winner: Optional[Player] = None,
-        agent_color: Optional[PlayerColor] = None,
-        home_tokens: int = 0,
+        return_breakdown: bool = False,
+        is_illegal: bool = False,
     ) -> tuple[float, dict]:
         """Compute reward and return a breakdown dict of contributions.
 
@@ -91,13 +84,26 @@ class RewardCalculator:
             "terminal": 0.0,
         }
 
+        player_positions = game.get_player_from_color(agent_color).player_positions()
+        home_tokens = sum(
+            1 for pos in player_positions if pos == GameConstants.HOME_POSITION
+        )
+        finished_tokens = sum(
+            1 for pos in player_positions if pos == GameConstants.FINISH_POSITION
+        )
+        nhome_column_tokens = sum(
+            1
+            for pos in player_positions
+            if GameConstants.HOME_POSITION < pos < GameConstants.HOME_COLUMN_START
+        )
+
         r = 0.0
 
         # Progress reward
         if agent_color is not None:
             start_pos = BoardConstants.START_POSITIONS[agent_color]
-            progress_old = token_progress(res.old_position, start_pos)
-            progress_new = token_progress(res.new_position, start_pos)
+            progress_old = token_progress(move.old_position, start_pos)
+            progress_new = token_progress(move.new_position, start_pos)
             delta = progress_new - progress_old
             if delta > 0:
                 val = cfg.reward.progress_scale * delta
@@ -106,27 +112,27 @@ class RewardCalculator:
 
         # Safe zone reward
         if not BoardConstants.is_safe_position(
-            res.old_position
-        ) and BoardConstants.is_safe_position(res.new_position):
+            move.old_position
+        ) and BoardConstants.is_safe_position(move.new_position):
             val = cfg.reward.safe_zone_reward
             breakdown["safe_zone"] += val
             r += val
 
         # Event rewards
-        if res.captured_tokens:
-            capture_base = cfg.reward.capture * len(res.captured_tokens)
+        if move.captured_tokens:
+            capture_base = cfg.reward.capture * len(move.captured_tokens)
             # capture_base *= cfg.reward.capture_reward_scale
             breakdown["capture"] += capture_base
             r += capture_base
 
         # Finish event
-        if res.finished_token or res.new_position == GameConstants.FINISH_POSITION:
+        if r >= finished_tokens or move.new_position == GameConstants.FINISH_POSITION:
             finish_val = cfg.reward.finish_token
             breakdown["finish"] += finish_val
             r += finish_val
 
         # Constraint penalties
-        if illegal:
+        if is_illegal:
             breakdown["illegal"] += cfg.reward.illegal_action
             r += cfg.reward.illegal_action
 
@@ -135,40 +141,39 @@ class RewardCalculator:
         r += cfg.reward.time_penalty
 
         # Opponent effects during the full turn (after agent acted)
-        if captured_by_opponents > 0:
-            val = cfg.reward.got_captured * int(captured_by_opponents)
+        if len(move.captured_tokens) > 0:
+            val = cfg.reward.got_captured * int(len(move.captured_tokens))
             breakdown["got_captured"] += val
             r += val
-            if home_tokens == 0:
+            if GameConstants.TOKENS_PER_PLAYER - finished_tokens == home_tokens:
                 breakdown["all_captured"] += cfg.reward.all_captured
                 r += cfg.reward.all_captured
 
         # Home exit reward: only grant if agent already has at least one other
         # token active on the board (i.e. home_tokens < TOKENS_PER_PLAYER - 1).
         if (
-            res.old_position == GameConstants.HOME_POSITION
-            and res.new_position != res.old_position
+            move.old_position == GameConstants.HOME_POSITION
+            and move.new_position != move.old_position
+            and nhome_column_tokens > 1
         ):
-            tokens_per_player = GameConstants.TOKENS_PER_PLAYER
             # home_tokens counts how many are still at home; reward exit only
             # when there's another token already out (diversity/backup token).
-            if home_tokens < (tokens_per_player - 1):
-                breakdown["exit_start"] += cfg.reward.exit_start
-                r += cfg.reward.exit_start
+            breakdown["exit_start"] += cfg.reward.exit_start
+            r += cfg.reward.exit_start
 
-        if extra_turn:
+        if move.extra_turn:
             breakdown["extra_turn"] += cfg.reward.extra_turn
             r += cfg.reward.extra_turn
 
         # Terminal outcomes
-        if winner is not None and agent_color is not None:
-            if winner.color == agent_color:
+        if game.winner is not None and agent_color is not None:
+            if game.winner.color == agent_color:
                 breakdown["terminal"] += cfg.reward.win
                 r += cfg.reward.win
             else:
                 breakdown["terminal"] += cfg.reward.lose
                 r += cfg.reward.lose
-        elif game_over:
+        elif game.game_over:
             breakdown["terminal"] += cfg.reward.draw
             r += cfg.reward.draw
 

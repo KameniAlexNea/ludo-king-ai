@@ -1,10 +1,12 @@
 from dataclasses import dataclass
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 
+from ludo_engine import Player
 from ludo_engine.core import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
-from ludo_rl.config import RewardConfig
+from ludo_rl.config import EnvConfig, RewardConfig
+from ludo_rl.utils.reward_calculator import RewardCalculator as BaseRewardCalculator
 
 
 @dataclass
@@ -31,7 +33,7 @@ class RiskOpportunityCalculator:
     """
 
     def __init__(self, weights: SimpleROWeights | None = None) -> None:
-        self.weights = weights
+        self.weights = weights or SimpleROWeights()
 
     @staticmethod
     def _forward_distance(from_pos: int, opp_pos: int) -> int:
@@ -115,4 +117,42 @@ class RiskOpportunityCalculator:
         score = opp - risk
         if not return_breakdown:
             return score
-        return score, {"opportunity": opp, "risk": -risk, "illegal": is_illegal}
+        return score, {"opportunity": opp, "risk": -risk}
+
+
+class RewardCalculator:
+    """Compute shaped rewards based on game events and state changes.
+
+    Usage:
+        calc = RewardCalculator()
+        reward = calc.compute(res, illegal, cfg, game_over, captured_by_opponents, extra_turn, winner, agent_color, home_tokens)
+    """
+
+    def __init__(self):
+        self.reward_calculator = BaseRewardCalculator()
+        self.ro_calculator = RiskOpportunityCalculator()
+
+    def compute(
+        self,
+        game: LudoGame,
+        agent_color: PlayerColor,
+        move: MoveResult,
+        return_breakdown: bool = False,
+        is_illegal: bool = False,
+    ) -> float:
+        reward = self.reward_calculator.compute(
+            game,
+            agent_color,
+            move,
+            return_breakdown=True,
+            is_illegal=is_illegal,
+        )
+        ro_reward = self.ro_calculator.compute(
+            game, agent_color, move, return_breakdown=True, is_illegal=is_illegal
+        )
+        if return_breakdown:
+            r, b = reward
+            ro_r, ro_b = ro_reward
+            scores = {**b, **ro_b}
+            return r + ro_r, scores
+        return reward[0] + ro_reward[0]
