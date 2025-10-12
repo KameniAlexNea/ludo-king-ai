@@ -5,20 +5,22 @@ an engine Strategy implementation (FrozenPolicyStrategy) wrapping a loaded
 MaskablePPO policy.
 
 Main entry points:
-  - select_best_ppo_model(models_dir, preference, explicit=None)
-  - load_ppo_policy(models_dir, preference, device='cpu') -> (model, name, vec_normalize)
-  - load_ppo_strategy(..., game=game_instance) -> FrozenPolicyStrategy
+    - select_best_ppo_model(models_dir, preference, explicit=None)
+    - load_ppo_policy(models_dir, preference, device='cpu') -> (model, name, vec_normalize, env_config)
+    - load_ppo_strategy(..., game=game_instance) -> FrozenPolicyStrategy
 
 If you need to attach the PPO policy to multiple games, call
 `load_ppo_policy` once and then build strategies per game using
 `build_frozen_strategy`.
 """
 
+import copy
 import glob
 import os
 import re
 from typing import List, Optional, Tuple
 
+import gymnasium as gym
 from ludo_engine.core import LudoGame, PlayerColor
 from ludo_engine.models import ALL_COLORS
 from sb3_contrib import MaskablePPO
@@ -29,7 +31,10 @@ from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
-from ludo_rl.ludo_env.observation import ObservationBuilder
+from ludo_rl.ludo_env.observation import (
+    ContinuousObservationBuilder,
+    DiscreteObservationBuilder,
+)
 from ludo_rl.strategies.frozen_policy_strategy import FrozenPolicyStrategy
 from ludo_rl.utils.move_utils import MoveUtils
 
@@ -57,6 +62,53 @@ def _list_model_files(models_dir: str) -> List[str]:
         for f in os.listdir(models_dir)
         if f.endswith(".zip") and not f.startswith(".")
     ]
+
+
+def _infer_env_config_from_model(model: MaskablePPO) -> EnvConfig:
+    """Infer the EnvConfig used during training from the saved model metadata."""
+
+    env_cfg = EnvConfig()
+    obs_space = getattr(model, "observation_space", None)
+
+    include_dice_one_hot = env_cfg.obs.include_dice_one_hot
+    discrete = env_cfg.obs.discrete
+
+    try:  # Detect discrete extractor usage directly from the policy if available
+        from ludo_rl.features.multidiscrete_extractor import (
+            MultiDiscreteFeatureExtractor,
+        )
+    except Exception:  # pragma: no cover - optional dependency during evaluation
+        MultiDiscreteFeatureExtractor = None  # type: ignore[assignment]
+
+    if obs_space is not None:
+        if isinstance(obs_space, gym.spaces.Dict):
+            # Determine if any component uses MultiDiscrete (discrete observation pipeline)
+            discrete = any(
+                isinstance(component_space, gym.spaces.MultiDiscrete)
+                for component_space in obs_space.spaces.values()
+            )
+
+            dice_space = obs_space.spaces.get("dice")
+            if isinstance(dice_space, gym.spaces.Box):
+                include_dice_one_hot = dice_space.shape[-1] == 6
+            elif isinstance(dice_space, gym.spaces.MultiDiscrete):
+                include_dice_one_hot = False
+        elif isinstance(obs_space, gym.spaces.MultiDiscrete):
+            discrete = True
+            include_dice_one_hot = False
+        elif isinstance(obs_space, gym.spaces.Box):
+            discrete = False
+            if obs_space.shape:
+                include_dice_one_hot = obs_space.shape[-1] == 6
+
+    if MultiDiscreteFeatureExtractor is not None and isinstance(
+        model.policy.features_extractor, MultiDiscreteFeatureExtractor
+    ):
+        discrete = True
+
+    env_cfg.obs.include_dice_one_hot = include_dice_one_hot
+    env_cfg.obs.discrete = discrete
+    return env_cfg
 
 
 def select_best_ppo_model(
@@ -137,8 +189,11 @@ def load_ppo_policy(
     explicit: Optional[str] = None,
     device: str = "cpu",
     env_kind: str = "classic",
-) -> Tuple[MaskablePPO, str, Optional[VecNormalize]]:
-    """Load a MaskablePPO model and its VecNormalize stats, return (model, basename, vec_normalize)."""
+) -> Tuple[MaskablePPO, str, Optional[VecNormalize], EnvConfig]:
+    """Load MaskablePPO policy, VecNormalize stats (if any), and inferred EnvConfig."""
+    # Normalize aliases
+    if env_kind == "single-seat":
+        env_kind = "classic"
     if env_kind not in ["classic", "selfplay", "hybrid"]:
         raise ValueError(
             f"Invalid env_kind '{env_kind}'. Must be 'classic', 'selfplay', or 'hybrid'"
@@ -158,63 +213,53 @@ def load_ppo_policy(
     except Exception as e:  # pragma: no cover
         raise RuntimeError(f"Failed to load PPO model '{model_path}': {e}") from e
 
-    # Try to load VecNormalize stats
-    vec_normalize = None
+    env_cfg = _infer_env_config_from_model(model)
 
-    # Find all VecNormalize files
-    vecnormalize_files = glob.glob(os.path.join(models_dir, "*vecnormalize*_steps.pkl"))
+    # Try to load VecNormalize stats if available; continue without if not found
+    vec_normalize: Optional[VecNormalize] = None
 
-    if not vecnormalize_files:
-        raise FileNotFoundError(f"No VecNormalize files found in {models_dir}")
+    # Find all VecNormalize files (support multiple naming patterns)
+    vecnormalize_files = glob.glob(
+        os.path.join(os.path.dirname(model_path), "*vecnormalize*.pkl")
+    )
 
-    # Check if model name contains steps
-    if "_" in model_name and any(char.isdigit() for char in model_name):
-        # Extract steps from model name (simple approach)
-        parts = model_name.split("_")
-        steps = None
-        for part in parts:
-            if part.isdigit():
-                steps = part
-                break
-        if not steps:
-            raise ValueError(f"Could not extract steps from model name '{model_name}'")
+    vecnormalize_path: Optional[str] = None
+    if vecnormalize_files:
+        # Prefer files with explicit step numbers matching model if any
+        chosen: Optional[str] = None
+        # Try to extract step int from model name
+        m = _STEP_PATTERN.search(model_name)
+        target_step = int(m.group(1)) if m else None
+        if target_step is not None:
+            for f in vecnormalize_files:
+                nums = [int(x) for x in re.findall(r"(\d+)", os.path.basename(f))]
+                if target_step in nums:
+                    chosen = f
+                    break
+        if chosen is None:
+            # fallback to latest by max numeric token in filename
+            def last_number(path: str) -> int:
+                nums = [int(x) for x in re.findall(r"(\d+)", os.path.basename(path))]
+                return nums[-1] if nums else -1
 
-        # Look for exact match
-        target_file = f"ppo_ludo_vecnormalize_{steps}_steps.pkl"
-        vecnormalize_path = os.path.join(models_dir, target_file)
-        if not os.path.exists(vecnormalize_path):
-            available_files = [os.path.basename(f) for f in vecnormalize_files]
-            raise FileNotFoundError(
-                f"VecNormalize file '{target_file}' not found for model '{model_name}'. Available: {available_files}"
-            )
-    else:
-        # For non-step models, use highest step file
+            chosen = max(vecnormalize_files, key=last_number)
+        vecnormalize_path = chosen
+
+    if vecnormalize_path is not None and os.path.exists(vecnormalize_path):
         try:
-            vecnormalize_path = max(
-                vecnormalize_files,
-                key=lambda x: int(os.path.basename(x).split("_")[-2]),
+            dummy_env = DummyVecEnv(
+                [lambda: _create_env_for_vecnormalize(env_cfg, env_kind)]
             )
-        except (ValueError, IndexError) as e:
-            raise RuntimeError(f"Failed to find highest step VecNormalize file: {e}")
+            dummy_env = VecMonitor(dummy_env)
+            vec_normalize = VecNormalize.load(vecnormalize_path, dummy_env)
+            vec_normalize.training = False
+            vec_normalize.norm_reward = False
+            dummy_env.close()
+        except Exception:
+            # If loading VecNormalize fails, proceed without normalization
+            vec_normalize = None
 
-    # Load VecNormalize
-    try:
-        env_cfg = EnvConfig()
-        dummy_env = DummyVecEnv(
-            [lambda: _create_env_for_vecnormalize(env_cfg, env_kind)]
-        )
-        dummy_env = VecMonitor(dummy_env)
-
-        vec_normalize = VecNormalize.load(vecnormalize_path, dummy_env)
-        vec_normalize.training = False
-        vec_normalize.norm_reward = False
-        dummy_env.close()
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to load VecNormalize from '{vecnormalize_path}': {e}"
-        )
-
-    return model, model_name, vec_normalize
+    return model, model_name, vec_normalize, env_cfg
 
 
 def build_frozen_strategy(
@@ -231,7 +276,13 @@ def build_frozen_strategy(
     You can reuse the same loaded model across many games by calling this per game.
     """
     cfg = env_cfg or EnvConfig()
-    obs_builder = ObservationBuilder(cfg, game, agent_color)
+
+    discrete_obs = bool(cfg.obs and getattr(cfg.obs, "discrete", False))
+    if discrete_obs:
+        vec_normalize = None  # Never normalize categorical features
+        obs_builder = DiscreteObservationBuilder(cfg, game, agent_color)
+    else:
+        obs_builder = ContinuousObservationBuilder(cfg, game, agent_color)
 
     strat = FrozenPolicyStrategy(
         model.policy,
@@ -256,12 +307,14 @@ def load_ppo_strategy(
     max_turns=500,
 ):
     """Load PPO strategy with proper VecNormalize handling."""
+    if env_kind == "single-seat":
+        env_kind = "classic"
     if env_kind not in ["classic", "selfplay", "hybrid"]:
         raise ValueError(
             f"Invalid env_kind '{env_kind}'. Must be 'classic', 'selfplay', or 'hybrid'"
         )
     # Load model and normalization stats
-    model, model_name, vec_normalize = load_ppo_policy(
+    model, model_name, vec_normalize, inferred_env_cfg = load_ppo_policy(
         models_dir=models_dir,
         model_preference=model_preference,
         device=device,
@@ -271,11 +324,15 @@ def load_ppo_strategy(
     if game is None:
         game = LudoGame(ALL_COLORS)
 
+    env_cfg = copy.deepcopy(inferred_env_cfg)
+    env_cfg.max_turns = max_turns
+    env_cfg.seed = 42
+
     strategy = build_frozen_strategy(
         model=model,
         game=game,
         agent_color=agent_color,
-        env_cfg=EnvConfig(max_turns=max_turns, seed=42),
+        env_cfg=env_cfg,
         player_name=player_name,
         deterministic=deterministic,
         vec_normalize=vec_normalize,

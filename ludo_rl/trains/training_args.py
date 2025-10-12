@@ -16,6 +16,12 @@ def parse_args() -> TrainConfig:
         "--checkpoint-freq",
         type=int,
         default=TrainConfig.eval_freq,
+        help="Evaluate every N steps; 0 disables",
+    )
+    p.add_argument(
+        "--save-freq",
+        type=int,
+        default=TrainConfig.save_freq,
         help="Checkpoint every N steps; 0 disables",
     )
     p.add_argument(
@@ -92,7 +98,7 @@ def parse_args() -> TrainConfig:
     p.add_argument(
         "--lr-final",
         type=float,
-        default=TrainConfig.learning_rate * 0.25,
+        default=TrainConfig.lr_final,
         help="Final learning rate for linear anneal (initial is --learning-rate)",
     )
     p.add_argument(
@@ -119,6 +125,18 @@ def parse_args() -> TrainConfig:
         type=float,
         default=TrainConfig.hybrid_switch_rate,
         help="Switch rate for hybrid environment",
+    )
+    p.add_argument(
+        "--embed_dim",
+        type=int,
+        default=TrainConfig.embed_dim,
+        help="Embedding dimension for discrete observation extractor",
+    )
+    p.add_argument(
+        "--load_model",
+        type=str,
+        default=TrainConfig.load_model,
+        help="Path to model to load",
     )
     args = p.parse_args()
     args = TrainConfig(**vars(args))

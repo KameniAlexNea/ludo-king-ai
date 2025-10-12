@@ -272,13 +272,14 @@ class BaseTournament:
             else None
         )
 
+        # Each completed game increments games_played for 4 players; divide to estimate total games.
+        total_player_entries = sum(
+            stats["games_played"] for stats in self.detailed_stats.values()
+        )
         summary = {
             "tournament_type": tournament_type,
             "participants": participants,
-            "total_games": sum(
-                stats["games_played"] for stats in self.detailed_stats.values()
-            )
-            // 4,  # each game increments games_played for 4 players
+            "total_games": total_player_entries // 4,
             "results": dict(self.detailed_stats),
             "champion": champion,
         }

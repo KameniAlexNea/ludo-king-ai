@@ -36,7 +36,7 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
     ):
         self.n_games = int(n_games)
         self.env_cfg = env_cfg or EnvConfig()
-        self.setups = env_cfg.allowed_player_counts
+        self.setups = self.env_cfg.allowed_player_counts
 
         if eval_env is None:
             raise ValueError("eval_env must be provided")
@@ -58,23 +58,26 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
             callback_on_new_best=callback_on_new_best,
             callback_after_eval=callback_after_eval,
         )
-        self.baselines = [
-            i
-            for setup in self.setups
-            for i in build_opponent_combinations(
-                baselines, n_games=self.n_games, n_comb=setup
+        # Pre-build a list of opponent combinations per setup size with the correct
+        # number of opponents (players-1). Example: 2-player -> 1 opponent, 4-player -> 3 opponents.
+        self.baselines_per_setup = []
+        for setup in self.setups:
+            n_comb = max(0, int(setup) - 1)
+            combos = build_opponent_combinations(
+                list(baselines), n_games=self.n_games, n_comb=n_comb
             )
-        ]
+            self.baselines_per_setup.append(combos)
         self.executed = 0
 
     def _on_step(self) -> bool:
         # Evaluate every eval_freq steps
         if not (self.eval_freq > 0 and self.n_calls % self.eval_freq == 0):
             return True
-        executed_steps = self.executed % len(self.baselines)
-        setup_idx = executed_steps // self.n_games
+        total_setups = len(self.setups)
+        setup_idx = (self.executed // self.n_games) % max(1, total_setups)
         setup = self.setups[setup_idx]
-        opponents = self.baselines[executed_steps]
+        idx_in_setup = self.executed % self.n_games
+        opponents = self.baselines_per_setup[setup_idx][idx_in_setup]
 
         continue_training = True
 

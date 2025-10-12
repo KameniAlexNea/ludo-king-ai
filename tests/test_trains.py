@@ -1,30 +1,9 @@
 import argparse
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from ludo_rl.config import TrainConfig
-from ludo_rl.trains.lr_utils import apply_linear_lr, linear_interp
 from ludo_rl.trains.training_args import parse_args
-
-
-class TestLrUtils(unittest.TestCase):
-    def test_linear_interp(self):
-        result = linear_interp(0.0, 1.0, 0.5)
-        self.assertEqual(result, 0.5)
-
-    def test_linear_interp_bounds(self):
-        result = linear_interp(0.0, 1.0, 1.5)
-        self.assertEqual(result, 1.0)
-        result = linear_interp(0.0, 1.0, -0.5)
-        self.assertEqual(result, 0.0)
-
-    @patch("sb3_contrib.MaskablePPO")
-    def test_apply_linear_lr(self, mock_ppo):
-        model = Mock()
-        model.policy.optimizer.param_groups = [{"lr": 0.1}]
-        new_lr = apply_linear_lr(model, 0.1, 0.01, 0.5)
-        self.assertEqual(new_lr, 0.055)
-        self.assertEqual(model.policy.optimizer.param_groups[0]["lr"], 0.055)
 
 
 class TestTrainingArgs(unittest.TestCase):

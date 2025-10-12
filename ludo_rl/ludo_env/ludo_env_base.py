@@ -5,8 +5,7 @@ from typing import Any, Dict, List, Optional
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
-from loguru import logger
-from ludo_engine.core import LudoGame, Player, PlayerColor
+from ludo_engine.core import LudoGame, Player
 from ludo_engine.models import (
     ALL_COLORS,
     GameConstants,
@@ -14,11 +13,15 @@ from ludo_engine.models import (
     MoveType,
     ValidMove,
 )
-from ludo_engine.strategies.base import Strategy  # type: ignore
-from ludo_engine.strategies.strategy import StrategyFactory  # type: ignore
+from ludo_engine.strategies.base import Strategy
+from ludo_engine.strategies.strategy import StrategyFactory
 
 from ludo_rl.config import EnvConfig
-from ludo_rl.ludo_env.observation import ObservationBuilder
+from ludo_rl.ludo_env.observation import (
+    ContinuousObservationBuilder,
+    DiscreteObservationBuilder,
+    ObservationBuilderBase,
+)
 from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.reward_calculator import RewardCalculator
 
@@ -68,13 +71,15 @@ class LudoRLEnvBase(gym.Env):
         self.rng = random.Random(cfg.seed)
 
         # Core game state
-        self.agent_color = PlayerColor.RED
+        self.agent_color = None
         self.game: Optional[LudoGame] = None
-        self.obs_builder: Optional[ObservationBuilder] = None
+        self.obs_builder: Optional[ObservationBuilderBase] = None
 
         # Action and observation spaces
-        self.action_space = spaces.Discrete(GameConstants.TOKENS_PER_PLAYER)
         # Observation space size will be set after obs_builder initialization
+        self.action_space = spaces.Discrete(
+            GameConstants.TOKENS_PER_PLAYER, seed=cfg.seed
+        )
 
         # Turn state
         self.pending_dice: Optional[int] = None
@@ -93,9 +98,10 @@ class LudoRLEnvBase(gym.Env):
         self.reward_calc = RewardCalculator()
 
         # Initialize spaces (will be updated on reset)
-        self.observation_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(1,), dtype=np.float32
-        )
+        self.observation_space = None
+
+        self.opponents: Optional[List[str]] = None  # can be list of Strategy or names
+        self.fixed_num_players: Optional[int] = None  # can be set externally
 
         self._initialize_game_state()
 
@@ -115,9 +121,14 @@ class LudoRLEnvBase(gym.Env):
     # ---- helpers --------------------------------------------------------------
     def _attach_strategies_mixed(self, strategies: List) -> None:
         """Attach strategies to non-agent players. Items can be Strategy instances or names."""
-        colors = [p.color for p in self.game.players if p.color != self.agent_color]
-        for strat, color in zip(strategies, colors):
-            player = self.game.get_player_from_color(color)
+        if len(strategies) != len(self.game.players) - 1:
+            raise ValueError(
+                f"Number of strategies ({len(strategies)}) must match number of opponent players ({len(self.game.players) - 1})"
+            )
+        colors = [
+            (p.color, p) for p in self.game.players if p.color != self.agent_color
+        ]
+        for strat, (color, player) in zip(strategies, colors):
             try:
                 if Strategy is not object and isinstance(strat, Strategy):
                     player.set_strategy(strat)
@@ -137,9 +148,9 @@ class LudoRLEnvBase(gym.Env):
 
         # Merge attributes set by set_attr into options
         options = options or {}
-        if hasattr(self, "opponents") and self.opponents is not None:
+        if self.opponents:
             options["opponents"] = self.opponents
-        if hasattr(self, "fixed_num_players") and self.fixed_num_players is not None:
+        if self.fixed_num_players:
             options["fixed_num_players"] = self.fixed_num_players
 
         # Allow callers to temporarily force a player count for this reset
@@ -167,10 +178,9 @@ class LudoRLEnvBase(gym.Env):
 
     def _setup_random_seed(self, seed: Optional[int]) -> None:
         """Set up random seeds for reproducibility."""
-        if seed is not None:
-            self.rng.seed(seed)
-            random.seed(seed)
-            np.random.seed(seed)
+        self.rng.seed(seed)
+        random.seed(seed)
+        np.random.seed(seed)
 
     def _initialize_game_state(self) -> None:
         """Initialize the game and agent color."""
@@ -212,12 +222,70 @@ class LudoRLEnvBase(gym.Env):
 
         # create game with selected colors (agent will be first in the game's player order)
         self.game = LudoGame(chosen_colors)
-        self.obs_builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
+        if self.cfg.obs.discrete:
+            self.obs_builder = DiscreteObservationBuilder(
+                self.cfg, self.game, self.agent_color
+            )
+        else:
+            self.obs_builder = ContinuousObservationBuilder(
+                self.cfg, self.game, self.agent_color
+            )
 
         # Update observation space with correct size
-        self.observation_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(self.obs_builder.size,), dtype=np.float32
-        )
+        # Support discrete observation encoding if requested
+        if self.cfg.obs.discrete:
+            # Use structured Dict observation space for discrete observations
+            tokens_per_player = GameConstants.TOKENS_PER_PLAYER
+            max_opponents = GameConstants.MAX_PLAYERS - 1
+            pos_bins = (
+                GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE + 1
+            )
+            self.observation_space = spaces.Dict(
+                {
+                    "agent_color": spaces.MultiDiscrete(
+                        [2] * len(ALL_COLORS)
+                    ),  # One-hot binary
+                    "agent_progress": spaces.MultiDiscrete(
+                        [pos_bins] * tokens_per_player
+                    ),
+                    "agent_vulnerable": spaces.MultiDiscrete([2] * tokens_per_player),
+                    "opponents_positions": spaces.MultiDiscrete(
+                        [pos_bins] * tokens_per_player * max_opponents
+                    ),
+                    "opponents_active": spaces.MultiDiscrete([2] * max_opponents),
+                    "dice": spaces.MultiDiscrete([7]),
+                }
+            )
+        else:
+            # Use structured Dict observation space for continuous observations
+            tokens_per_player = GameConstants.TOKENS_PER_PLAYER
+            max_opponents = GameConstants.MAX_PLAYERS - 1
+            dice_dim = 6 if self.cfg.obs.include_dice_one_hot else 1
+            self.observation_space = spaces.Dict(
+                {
+                    "agent_color": spaces.Box(
+                        low=0.0, high=1.0, shape=(len(ALL_COLORS),), dtype=np.float32
+                    ),
+                    "agent_progress": spaces.Box(
+                        low=-1.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
+                    ),
+                    "agent_vulnerable": spaces.Box(
+                        low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
+                    ),
+                    "opponents_positions": spaces.Box(
+                        low=-1.0,
+                        high=1.0,
+                        shape=(tokens_per_player * max_opponents,),
+                        dtype=np.float32,
+                    ),
+                    "opponents_active": spaces.Box(
+                        low=0.0, high=1.0, shape=(max_opponents,), dtype=np.float32
+                    ),
+                    "dice": spaces.Box(
+                        low=0.0, high=1.0, shape=(dice_dim,), dtype=np.float32
+                    ),
+                }
+            )
 
     def _reset_episode_stats(self) -> None:
         """Reset all episode-level statistics and counters."""
@@ -238,10 +306,10 @@ class LudoRLEnvBase(gym.Env):
 
     def _roll_dice_for_agent(self) -> None:
         """Roll dice and get valid moves for the agent."""
+        player = self.game.get_current_player()
+        assert player.color == self.agent_color, "Not agent's turn"
         self.pending_dice = self.game.roll_dice()
-        self.pending_valid_moves = self.game.get_valid_moves(
-            self.game.get_current_player(), self.pending_dice
-        )
+        self.pending_valid_moves = self.game.get_valid_moves(player, self.pending_dice)
 
     def _build_observation(self) -> np.ndarray:
         """Build the current observation."""
@@ -253,18 +321,6 @@ class LudoRLEnvBase(gym.Env):
         info = {"episode": self.episode_count}
         info.update(self.extra_reset_info())
         return info
-
-    def _ensure_agent_turn(self):
-        """Legacy method for backward compatibility."""
-        self._advance_to_agent_turn()
-
-    def _roll_agent_dice(self):
-        """Legacy method for backward compatibility."""
-        return self.pending_dice, self.pending_valid_moves
-
-    def _simulate_single_opponent(self):
-        """Legacy method for backward compatibility."""
-        self._simulate_opponent_turn()
 
     def step(self, action: int):
         """Execute one step in the environment."""
@@ -280,7 +336,10 @@ class LudoRLEnvBase(gym.Env):
             self._handle_opponent_turns()
 
         # Calculate reward and check termination
-        reward, reward_breakdown = self._calculate_reward(move_result, is_illegal)
+        player = self.game.get_current_player()
+        reward, reward_breakdown = self._calculate_reward(
+            move_result, is_illegal, player.player_positions()
+        )
         terminated = self._check_termination(move_result)
         truncated = self._check_truncation()
 
@@ -292,27 +351,13 @@ class LudoRLEnvBase(gym.Env):
         if move_result:
             self.episode_stats.captured_opponents += len(move_result.captured_tokens)
 
-            # Debug logging for captures
-            if self.cfg.debug_capture_logging and move_result.captured_tokens:
-                logger.debug(
-                    f"[CaptureEvent] turn={self.current_turn} dice={self.pending_dice} "
-                    f"offensive={len(move_result.captured_tokens)} "
-                    f"defensive_inc={self.captured_by_opponents_this_turn} "
-                    f"cumulative_off={self.episode_stats.captured_opponents} "
-                    f"cumulative_def={self.episode_stats.captured_by_opponents}"
-                )
-
         self.current_turn += 1
 
         obs = self._build_observation()
         step_info = self._build_step_info(move_result, is_illegal)
 
         info_dict = step_info.__dict__
-        # Attach reward breakdown totals for diagnostic logging
-        try:
-            info_dict["reward_breakdown"] = reward_breakdown
-        except Exception:
-            info_dict["reward_breakdown"] = {}
+        info_dict["reward_breakdown"] = reward_breakdown
 
         return obs, reward, terminated, truncated, info_dict
 
@@ -384,10 +429,6 @@ class LudoRLEnvBase(gym.Env):
         )
         self.episode_stats.home_exit_ops_available += exit_ops
 
-        # Debug logging
-        if self.cfg.debug_capture_logging and self.current_turn < 100:
-            self._log_opportunity_debug(valid_moves, finish_ops, exit_ops, capture_ops)
-
     def _track_opportunities_after_move(
         self, move_result: MoveResult, valid_moves: List[ValidMove], action: int
     ) -> None:
@@ -414,24 +455,6 @@ class LudoRLEnvBase(gym.Env):
         if chosen_move.move_type == MoveType.EXIT_HOME:
             self.episode_stats.home_exit_ops_taken += 1
 
-    def _log_opportunity_debug(
-        self,
-        valid_moves: List[ValidMove],
-        finish_ops: int,
-        exit_ops: int,
-        capture_ops: int,
-    ) -> None:
-        """Log debug information about opportunities."""
-        try:
-            move_types = [move.move_type for move in valid_moves]
-            logger.debug(
-                f"[OppDebug] turn={self.current_turn} dice={self.pending_dice} "
-                f"move_types={move_types} fin_by_pos_avail+={finish_ops} "
-                f"exit_avail+={exit_ops} cap_avail+={capture_ops}"
-            )
-        except Exception:
-            pass
-
     def _handle_opponent_turns(self) -> None:
         """Handle all opponent turns until it's the agent's turn again."""
         self.game.next_turn()
@@ -451,7 +474,7 @@ class LudoRLEnvBase(gym.Env):
         valid_moves = self.game.get_valid_moves(player, dice)
 
         if valid_moves:
-            token_id = self._get_opponent_action(player, dice, valid_moves)
+            token_id = self._get_opponent_action(player, dice)
             move_result = self.game.execute_move(player, token_id, dice)
 
             # Track captures on agent
@@ -469,24 +492,18 @@ class LudoRLEnvBase(gym.Env):
         else:
             self.game.next_turn()
 
-    def _get_opponent_action(
-        self, player: Player, dice: int, valid_moves: List[ValidMove]
-    ) -> int:
+    def _get_opponent_action(self, player: Player, dice: int) -> int:
         """Get the action for an opponent player."""
-        try:
-            context = self.game.get_ai_decision_context(dice)
-            return player.make_strategic_decision(context)
-        except Exception:
-            return self.rng.choice(valid_moves).token_id
+        context = self.game.get_ai_decision_context(dice)
+        return player.make_strategic_decision(context)
 
     def _calculate_reward(
-        self, move_result: Optional[MoveResult], is_illegal: bool
-    ) -> float:
+        self,
+        move_result: Optional[MoveResult],
+        is_illegal: bool,
+        player_positions: list = [],
+    ) -> tuple[float, Dict[str, float]]:
         """Calculate the reward for the current step."""
-        if move_result is None:
-            # No valid moves case
-            move_result = self._create_no_move_result(self.pending_dice)
-
         return self.reward_calc.compute_with_breakdown(
             res=move_result,
             illegal=is_illegal,
@@ -496,33 +513,24 @@ class LudoRLEnvBase(gym.Env):
             extra_turn=bool(move_result.extra_turn),
             winner=self.game.winner,
             agent_color=self.agent_color,
-            home_tokens=self._count_home_tokens(),
+            player_positions=player_positions,
         )
 
-    def _count_home_tokens(self) -> int:
-        """Count how many of the agent's tokens are still at home."""
-        agent_player = self.game.get_player_from_color(self.agent_color)
-        return sum(
-            1
-            for pos in agent_player.player_positions()
-            if pos == GameConstants.HOME_POSITION
-        )
-
-    def _check_termination(self, move_result: Optional[MoveResult]) -> bool:
+    def _check_termination(self, move_result: MoveResult) -> bool:
         """Check if the episode should terminate."""
-        if move_result is None:
-            return False
-        return move_result.game_won or self.game.game_over
+        return (
+            move_result.game_won
+            or self.game.game_over
+            or (self.game.winner is not None)
+        )
 
     def _check_truncation(self) -> bool:
         """Check if the episode should be truncated due to max turns."""
         return self.current_turn >= self.cfg.max_turns and not self.game.game_over
 
-    def _prepare_next_agent_turn(self, move_result: Optional[MoveResult]) -> None:
+    def _prepare_next_agent_turn(self, move_result: MoveResult) -> None:
         """Prepare the state for the next agent turn."""
-        has_extra_turn = move_result and move_result.extra_turn
-
-        if has_extra_turn:
+        if move_result.extra_turn:
             self._roll_dice_for_agent()
         else:
             self._advance_to_agent_turn()
@@ -536,11 +544,9 @@ class LudoRLEnvBase(gym.Env):
         """Build observation for terminal states."""
         return self.obs_builder.build(self.current_turn, 0)
 
-    def _build_step_info(
-        self, move_result: Optional[MoveResult], is_illegal: bool
-    ) -> StepInfo:
+    def _build_step_info(self, move_result: MoveResult, is_illegal: bool) -> StepInfo:
         """Build the info dataclass for the step."""
-        captured_opponents = len(move_result.captured_tokens) if move_result else 0
+        captured_opponents = len(move_result.captured_tokens)
 
         agent_player = self.game.get_player_from_color(self.agent_color)
         finished_tokens = agent_player.get_finished_tokens_count()
@@ -561,3 +567,19 @@ class LudoRLEnvBase(gym.Env):
             episode_home_exit_ops_available=self.episode_stats.home_exit_ops_available,
             episode_home_exit_ops_taken=self.episode_stats.home_exit_ops_taken,
         )
+
+    # ---- action masking API for MaskablePPO/SubprocVecEnv -----------------
+    def action_masks(self) -> list:
+        """Return a boolean mask of valid actions for the current agent turn.
+
+        This implements the environment-side action masking API expected by
+        MaskablePPO when using SubprocVecEnv (ActionMasker wrapper cannot be
+        used across subprocesses). The mask length must match `action_space.n`.
+        """
+        try:
+            mask = MoveUtils.action_mask(self.pending_valid_moves)
+            # ensure a plain Python list of bools
+            return [bool(x) for x in mask]
+        except Exception as e:
+            # If anything goes wrong, fall back to allowing all actions
+            raise RuntimeError("Failed to build action mask") from e

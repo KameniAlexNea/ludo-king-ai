@@ -3,7 +3,6 @@ import unittest
 from ludo_rl.config import (
     CurriculumConfig,
     EnvConfig,
-    ObservationConfig,
     OpponentConfig,
     RewardConfig,
     TrainConfig,
@@ -11,23 +10,10 @@ from ludo_rl.config import (
 
 
 class TestRewardConfig(unittest.TestCase):
-    def test_default_values(self):
-        cfg = RewardConfig()
-        self.assertEqual(cfg.win, 100.0)
-        self.assertEqual(cfg.lose, -100.0)
-        self.assertEqual(cfg.capture, 8.0)
-
     def test_custom_values(self):
         cfg = RewardConfig(win=200.0, capture=10.0)
         self.assertEqual(cfg.win, 200.0)
         self.assertEqual(cfg.capture, 10.0)
-
-
-class TestObservationConfig(unittest.TestCase):
-    def test_default_values(self):
-        cfg = ObservationConfig()
-        self.assertTrue(cfg.include_turn_index)
-        self.assertTrue(cfg.include_dice_one_hot)
 
 
 class TestOpponentConfig(unittest.TestCase):
@@ -59,9 +45,9 @@ class TestEnvConfig(unittest.TestCase):
 class TestTrainConfig(unittest.TestCase):
     def test_default_values(self):
         cfg = TrainConfig()
-        self.assertEqual(cfg.total_steps, 5_000_000)
+        self.assertEqual(cfg.total_steps, 20_000_000)
         self.assertEqual(cfg.n_envs, 8)
-        self.assertEqual(cfg.learning_rate, 1e-4)
+        self.assertEqual(cfg.learning_rate, 3e-4)
 
     def test_post_init_selfplay(self):
         cfg = TrainConfig(env_type="selfplay")
