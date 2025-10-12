@@ -6,24 +6,20 @@ from ludo_engine.models import BoardConstants, GameConstants, MoveResult, Player
 from ludo_rl.config import EnvConfig
 
 
-def token_progress_pos(pos: int, start_pos: int) -> int:
+def token_progress(pos: int, start_pos: int) -> float:
     if pos == GameConstants.HOME_POSITION:
-        return 0
+        return 0.0
     if pos >= GameConstants.HOME_COLUMN_START:
         home_steps = pos - GameConstants.HOME_COLUMN_START + 1
-        return GameConstants.MAIN_BOARD_SIZE + home_steps
+        return (GameConstants.MAIN_BOARD_SIZE + home_steps) / float(
+            GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+        )
     # on main board: forward distance from start to current pos
     if pos >= start_pos:
         steps = pos - start_pos
     else:
         steps = GameConstants.MAIN_BOARD_SIZE - start_pos + pos
-    return steps + 1
-
-
-def token_progress(pos: int, start_pos: int) -> float:
-    return token_progress_pos(pos, start_pos) / float(
-        GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
-    )
+    return steps / float(GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE)
 
 
 class RewardCalculator:
@@ -49,7 +45,7 @@ class RewardCalculator:
         extra_turn: bool = 0,
         winner: Optional[Player] = None,
         agent_color: Optional[PlayerColor] = None,
-        player_positions: list = [],
+        home_tokens: int = 0,
     ) -> float:
         r, _ = self.compute_with_breakdown(
             res,
@@ -60,7 +56,7 @@ class RewardCalculator:
             extra_turn,
             winner,
             agent_color,
-            player_positions,
+            home_tokens,
         )
         return r
 
@@ -74,7 +70,7 @@ class RewardCalculator:
         extra_turn: bool = 0,
         winner: Optional[Player] = None,
         agent_color: Optional[PlayerColor] = None,
-        player_positions: list[int] = [],
+        home_tokens: int = 0,
     ) -> tuple[float, dict]:
         """Compute reward and return a breakdown dict of contributions.
 
@@ -94,18 +90,6 @@ class RewardCalculator:
             "extra_turn": 0.0,
             "terminal": 0.0,
         }
-
-        home_tokens = sum(
-            1 for pos in player_positions if pos == GameConstants.HOME_POSITION
-        )
-        finished_tokens = sum(
-            1 for pos in player_positions if pos == GameConstants.FINISH_POSITION
-        )
-        nhome_column_tokens = sum(
-            1
-            for pos in player_positions
-            if GameConstants.HOME_POSITION < pos < GameConstants.HOME_COLUMN_START
-        )
 
         r = 0.0
 
@@ -131,6 +115,7 @@ class RewardCalculator:
         # Event rewards
         if res.captured_tokens:
             capture_base = cfg.reward.capture * len(res.captured_tokens)
+            # capture_base *= cfg.reward.capture_reward_scale
             breakdown["capture"] += capture_base
             r += capture_base
 
@@ -154,7 +139,7 @@ class RewardCalculator:
             val = cfg.reward.got_captured * int(captured_by_opponents)
             breakdown["got_captured"] += val
             r += val
-            if GameConstants.TOKENS_PER_PLAYER - finished_tokens == home_tokens:
+            if home_tokens == 0:
                 breakdown["all_captured"] += cfg.reward.all_captured
                 r += cfg.reward.all_captured
 
@@ -163,12 +148,13 @@ class RewardCalculator:
         if (
             res.old_position == GameConstants.HOME_POSITION
             and res.new_position != res.old_position
-            and nhome_column_tokens > 1
         ):
+            tokens_per_player = GameConstants.TOKENS_PER_PLAYER
             # home_tokens counts how many are still at home; reward exit only
             # when there's another token already out (diversity/backup token).
-            breakdown["exit_start"] += cfg.reward.exit_start
-            r += cfg.reward.exit_start
+            if home_tokens < (tokens_per_player - 1):
+                breakdown["exit_start"] += cfg.reward.exit_start
+                r += cfg.reward.exit_start
 
         if extra_turn:
             breakdown["extra_turn"] += cfg.reward.extra_turn

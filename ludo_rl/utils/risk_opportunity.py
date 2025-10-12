@@ -103,12 +103,11 @@ class RiskOpportunityCalculator:
         game: LudoGame,
         agent_color: PlayerColor,
         move: MoveResult,
-        *,
-        weights: SimpleROWeights | None = None,
         return_breakdown: bool = False,
+        is_illegal: bool = False,
     ) -> float | Tuple[float, Dict[str, float]]:
         """Return opportunity - risk (optionally with a breakdown)."""
-        w = weights or self.weights or SimpleROWeights()
+        w = self.weights
         old_pos = move.old_position
         new_pos = move.new_position
         opp = self._opportunity_score(move, old_pos, new_pos, w)
@@ -116,4 +115,4 @@ class RiskOpportunityCalculator:
         score = opp - risk
         if not return_breakdown:
             return score
-        return score, {"opportunity": opp, "risk": -risk}
+        return score, {"opportunity": opp, "risk": -risk, "illegal": is_illegal}

@@ -336,9 +336,8 @@ class LudoRLEnvBase(gym.Env):
             self._handle_opponent_turns()
 
         # Calculate reward and check termination
-        player = self.game.get_current_player()
         reward, reward_breakdown = self._calculate_reward(
-            move_result, is_illegal, player.player_positions()
+            move_result, is_illegal,
         )
         terminated = self._check_termination(move_result)
         truncated = self._check_truncation()
@@ -501,19 +500,15 @@ class LudoRLEnvBase(gym.Env):
         self,
         move_result: Optional[MoveResult],
         is_illegal: bool,
-        player_positions: list = [],
     ) -> tuple[float, Dict[str, float]]:
         """Calculate the reward for the current step."""
         return self.reward_calc.compute_with_breakdown(
-            res=move_result,
-            illegal=is_illegal,
-            cfg=self.cfg,
-            game_over=self.game.game_over,
-            captured_by_opponents=self.captured_by_opponents_this_turn,
-            extra_turn=bool(move_result.extra_turn),
-            winner=self.game.winner,
-            agent_color=self.agent_color,
-            player_positions=player_positions,
+            self.game,
+            self.agent_color,
+            move_result,
+            self.cfg,
+            return_breakdown=True,
+            is_illegal=is_illegal,
         )
 
     def _check_termination(self, move_result: MoveResult) -> bool:
