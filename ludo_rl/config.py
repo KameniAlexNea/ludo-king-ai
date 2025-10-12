@@ -29,6 +29,8 @@ class RewardConfig:
     illegal_action: float = -2.0  # Increased from -1.0
     # Reduce time penalty to encourage longer games if needed, but keep small
     time_penalty: float = -0.1  # Reduced from -0.002
+    # reward signal function
+    reward_type: Literal["sparse", "merged", "risk_opportunity"] = "merged"
 
 
 @dataclass

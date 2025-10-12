@@ -119,7 +119,7 @@ class RiskOpportunityCalculator:
         return score, {"opportunity": opp, "risk": -risk}
 
 
-class RewardCalculator:
+class MergedRewardCalculator:
     """Compute shaped rewards based on game events and state changes."""
 
     def __init__(self):

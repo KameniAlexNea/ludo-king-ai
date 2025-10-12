@@ -24,6 +24,7 @@ from ludo_rl.ludo_env.observation import (
 )
 from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.reward_calculator import RewardCalculator
+from ludo_rl.utils.risk_opportunity import RiskOpportunityCalculator, MergedRewardCalculator
 
 
 @dataclass
@@ -95,7 +96,16 @@ class LudoRLEnvBase(gym.Env):
         self.captured_by_opponents_this_turn = 0
 
         # Components
-        self.reward_calc = RewardCalculator()
+        reward_class = None
+        if self.cfg.reward.reward_type == "sparse":
+            reward_class = RewardCalculator
+        elif self.cfg.reward.reward_type == "risk_opportunity":
+            reward_class = RiskOpportunityCalculator
+        elif self.cfg.reward.reward_type == "merged":
+            reward_class = MergedRewardCalculator
+        else:
+            raise ValueError(f"Unknown reward type: {self.cfg.reward.reward_type}")
+        self.reward_calc = reward_class()
 
         # Initialize spaces (will be updated on reset)
         self.observation_space = None
@@ -267,13 +277,13 @@ class LudoRLEnvBase(gym.Env):
                         low=0.0, high=1.0, shape=(len(ALL_COLORS),), dtype=np.float32
                     ),
                     "agent_progress": spaces.Box(
-                        low=-1.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
+                        low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
                     ),
                     "agent_vulnerable": spaces.Box(
                         low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
                     ),
                     "opponents_positions": spaces.Box(
-                        low=-1.0,
+                        low=0.0,
                         high=1.0,
                         shape=(tokens_per_player * max_opponents,),
                         dtype=np.float32,
