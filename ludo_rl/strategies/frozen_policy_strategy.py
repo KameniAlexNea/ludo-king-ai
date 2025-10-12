@@ -68,7 +68,9 @@ class FrozenPolicyStrategy(Strategy):
         else:
             obs_input = obs
             if self.obs_normalizer is not None:
-                obs_input = self.obs_normalizer.normalize_obs(obs_input[np.newaxis, ...])[0]
+                obs_input = self.obs_normalizer.normalize_obs(
+                    obs_input[np.newaxis, ...]
+                )[0]
 
         obs_tensor, _ = self.policy.obs_to_tensor(obs_input)
 

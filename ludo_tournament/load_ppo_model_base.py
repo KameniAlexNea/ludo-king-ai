@@ -20,9 +20,9 @@ import os
 import re
 from typing import List, Optional, Tuple
 
+import gymnasium as gym
 from ludo_engine.core import LudoGame, PlayerColor
 from ludo_engine.models import ALL_COLORS
-import gymnasium as gym
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecNormalize
@@ -101,9 +101,8 @@ def _infer_env_config_from_model(model: MaskablePPO) -> EnvConfig:
             if obs_space.shape:
                 include_dice_one_hot = obs_space.shape[-1] == 6
 
-    if (
-        MultiDiscreteFeatureExtractor is not None
-        and isinstance(model.policy.features_extractor, MultiDiscreteFeatureExtractor)
+    if MultiDiscreteFeatureExtractor is not None and isinstance(
+        model.policy.features_extractor, MultiDiscreteFeatureExtractor
     ):
         discrete = True
 

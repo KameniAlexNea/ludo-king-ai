@@ -3,7 +3,6 @@ import unittest
 from ludo_rl.config import (
     CurriculumConfig,
     EnvConfig,
-    ObservationConfig,
     OpponentConfig,
     RewardConfig,
     TrainConfig,

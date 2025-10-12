@@ -147,20 +147,46 @@ def main():
         # If feature extractor import fails, fall back to default
         policy_kwargs = {}
 
-    model = MaskablePPO(
-        "MultiInputPolicy",
-        venv,
-        learning_rate=learning_rate,
-        n_steps=args.n_steps,
-        batch_size=args.batch_size,
-        ent_coef=args.ent_coef,
-        vf_coef=args.vf_coef,
-        tensorboard_log=args.logdir,
-        verbose=1,
-        device="auto",
-        gamma=0.995,
-        policy_kwargs=policy_kwargs,
-    )
+    if args.load_model:
+        if not os.path.isfile(args.load_model):
+            raise FileNotFoundError(
+                f"Specified model to load not found: {args.load_model}"
+            )
+        try:
+            logger.info(f"Loading model from {args.load_model}")
+            model = MaskablePPO.load(
+                args.load_model,
+                env=venv,
+                custom_objects={
+                    "learning_rate": learning_rate,
+                    "n_steps": args.n_steps,
+                },
+                device="auto",
+            )
+            # Update any changed hyperparameters
+            model.ent_coef = args.ent_coef
+            model.vf_coef = args.vf_coef
+            model.batch_size = args.batch_size
+            model.policy_kwargs = policy_kwargs
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load model from {args.load_model}: {e}"
+            ) from e
+    else:
+        model = MaskablePPO(
+            "MultiInputPolicy",
+            venv,
+            learning_rate=learning_rate,
+            n_steps=args.n_steps,
+            batch_size=args.batch_size,
+            ent_coef=args.ent_coef,
+            vf_coef=args.vf_coef,
+            tensorboard_log=args.logdir,
+            verbose=1,
+            device="auto",
+            gamma=0.995,
+            policy_kwargs=policy_kwargs,
+        )
 
     # When using selfplay or hybrid, inject the live model into envs so they can snapshot policy at reset
     if args.env_type in ["selfplay", "hybrid"]:

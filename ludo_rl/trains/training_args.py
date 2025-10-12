@@ -132,6 +132,12 @@ def parse_args() -> TrainConfig:
         default=TrainConfig.embed_dim,
         help="Embedding dimension for discrete observation extractor",
     )
+    p.add_argument(
+        "--load_model",
+        type=str,
+        default=TrainConfig.load_model,
+        help="Path to model to load",
+    )
     args = p.parse_args()
     args = TrainConfig(**vars(args))
     print(asdict(args))

@@ -139,6 +139,7 @@ class TrainConfig:
     hybrid_switch_rate: float = 0.55
     # embedding dimension for discrete observation extractor
     embed_dim: int = 32
+    load_model: Optional[str] = None  # path to model to load
 
     def __post_init__(self):
         if self.env_type in ["selfplay", "hybrid"]:
