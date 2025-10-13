@@ -66,15 +66,6 @@ class LudoRLEnvHybrid(LudoRLEnvBase):
             logger.error(f"Failed to snapshot policy: {e}")
             self._frozen_policy = None
 
-    def _sample_opponents(self) -> List[str]:
-        """Sample opponents for classic mode."""
-        return sample_opponents(
-            self.cfg.opponents.candidates,
-            self._progress,
-            self.cfg.curriculum.boundaries,
-            self.rng,
-        )
-
     def on_reset_before_attach(self, options: Optional[Dict] = None) -> None:
         # Check if callback has signaled to switch to classic mode
         if self.env_mode == "selfplay":

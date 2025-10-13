@@ -90,12 +90,12 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
             dice_vec[dice - 1] = True
 
         return {
-            "agent_color": np.asarray(agent_color_onehot, dtype=np.bool),
+            "agent_color": np.asarray(agent_color_onehot, dtype=bool),
             "agent_progress": np.asarray(agent_progress, dtype=np.float32),
-            "agent_vulnerable": np.asarray(agent_vulnerable, dtype=np.bool),
+            "agent_vulnerable": np.asarray(agent_vulnerable, dtype=bool),
             "opponents_positions": np.asarray(opp_positions, dtype=np.float32),
-            "opponents_active": np.asarray(opp_active, dtype=np.bool),
-            "dice": np.asarray(dice_vec, dtype=np.bool),
+            "opponents_active": np.asarray(opp_active, dtype=bool),
+            "dice": np.asarray(dice_vec, dtype=bool),
         }
 
 

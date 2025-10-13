@@ -555,7 +555,7 @@ class LudoRLEnvBase(gym.Env):
         return StepInfo(
             illegal_action=is_illegal,
             illegal_actions_total=self.illegal_actions,
-            action_mask=MoveUtils.action_mask(self.pending_valid_moves),
+            action_mask=MoveUtils.action_masks(self.pending_valid_moves),
             captured_opponents=captured_opponents,
             captured_by_opponents=self.captured_by_opponents_this_turn,
             episode_captured_opponents=self.episode_stats.captured_opponents,
@@ -577,10 +577,4 @@ class LudoRLEnvBase(gym.Env):
         MaskablePPO when using SubprocVecEnv (ActionMasker wrapper cannot be
         used across subprocesses). The mask length must match `action_space.n`.
         """
-        try:
-            mask = MoveUtils.action_mask(self.pending_valid_moves)
-            # ensure a plain Python list of bools
-            return [bool(x) for x in mask]
-        except Exception as e:
-            # If anything goes wrong, fall back to allowing all actions
-            raise RuntimeError("Failed to build action mask") from e
+        return MoveUtils.action_masks(self.pending_valid_moves)

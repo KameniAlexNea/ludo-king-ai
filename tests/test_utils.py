@@ -13,13 +13,13 @@ from ludo_rl.utils.risk_opportunity import RiskOpportunityCalculator, SimpleROWe
 
 class TestMoveUtils(unittest.TestCase):
     def test_action_mask_no_valid_moves(self):
-        mask = MoveUtils.action_mask([])
+        mask = MoveUtils.action_masks([])
         expected = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=bool)
         np.testing.assert_array_equal(mask, expected)
 
     def test_action_mask_with_valid_moves(self):
         valid_moves = [Mock(token_id=0), Mock(token_id=2)]
-        mask = MoveUtils.action_mask(valid_moves)
+        mask = MoveUtils.action_masks(valid_moves)
         expected = np.array([True, False, True, False])
         np.testing.assert_array_equal(mask, expected)
 
