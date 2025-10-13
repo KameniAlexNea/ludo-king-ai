@@ -4,7 +4,7 @@ from typing import Dict, Iterable, Tuple
 from ludo_engine.core import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
-from ludo_rl.config import RewardConfig
+from ludo_rl.config import EnvConfig, RewardConfig
 from ludo_rl.utils.reward_calculator import RewardCalculator as BaseRewardCalculator
 
 
@@ -104,6 +104,7 @@ class RiskOpportunityCalculator:
         game: LudoGame,
         agent_color: PlayerColor,
         move: MoveResult,
+        cfg: EnvConfig = None,
         return_breakdown: bool = False,
         is_illegal: bool = False,
     ) -> float | Tuple[float, Dict[str, float]]:
@@ -131,18 +132,25 @@ class MergedRewardCalculator:
         game: LudoGame,
         agent_color: PlayerColor,
         move: MoveResult,
+        cfg: EnvConfig,
         return_breakdown: bool = False,
         is_illegal: bool = False,
     ) -> float:
         # Get RO score (includes move-specific rewards and risk penalties)
         ro_reward = self.ro_calculator.compute(
-            game, agent_color, move, return_breakdown=True, is_illegal=is_illegal
+            game,
+            agent_color,
+            move,
+            cfg=cfg,
+            return_breakdown=True,
+            is_illegal=is_illegal,
         )
         # Get base reward breakdown for non-overlapping components
         _, base_breakdown = self.reward_calculator.compute(
             game,
             agent_color,
             move,
+            cfg=cfg,
             return_breakdown=True,
             is_illegal=is_illegal,
         )

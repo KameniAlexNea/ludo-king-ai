@@ -508,7 +508,7 @@ class LudoRLEnvBase(gym.Env):
         is_illegal: bool,
     ) -> tuple[float, Dict[str, float]]:
         """Calculate the reward for the current step."""
-        return self.reward_calc.compute_with_breakdown(
+        return self.reward_calc.compute(
             self.game,
             self.agent_color,
             move_result,

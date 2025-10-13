@@ -1,8 +1,7 @@
-import copy
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
+import copy
 from typing import Optional
 
 import gymnasium as gym
@@ -24,6 +23,8 @@ from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.trains.training_args import parse_args
 from ludo_rl.utils.move_utils import MoveUtils
+
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 
 def make_env(
