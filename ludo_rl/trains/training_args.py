@@ -42,29 +42,6 @@ def parse_args() -> TrainConfig:
     p.add_argument("--ent-coef", type=float, default=TrainConfig.ent_coef)
     p.add_argument("--vf-coef", type=float, default=TrainConfig.vf_coef)
     p.add_argument("--max-turns", type=int, default=TrainConfig.max_turns)
-    # Imitation / kickstart
-    p.add_argument(
-        "--imitation-enabled",
-        action="store_true",
-        default=TrainConfig.imitation_enabled,
-    )
-    p.add_argument(
-        "--imitation-strategies",
-        type=str,
-        default=TrainConfig.imitation_strategies,
-        help="Comma-separated scripted strategies to imitate",
-    )
-    p.add_argument("--imitation-steps", type=int, default=TrainConfig.imitation_steps)
-    p.add_argument(
-        "--imitation-batch-size", type=int, default=TrainConfig.imitation_batch_size
-    )
-    p.add_argument("--imitation-epochs", type=int, default=TrainConfig.imitation_epochs)
-    p.add_argument(
-        "--imitation-entropy-boost",
-        type=float,
-        default=TrainConfig.imitation_entropy_boost,
-        help="Temporary entropy bonus added to ent_coef during imitation phase",
-    )
     # Annealing overrides
     p.add_argument(
         "--entropy-coef-initial", type=float, default=TrainConfig.entropy_coef_initial
