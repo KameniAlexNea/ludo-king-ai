@@ -24,7 +24,10 @@ from ludo_rl.ludo_env.observation import (
 )
 from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.reward_calculator import RewardCalculator
-from ludo_rl.utils.risk_opportunity import RiskOpportunityCalculator, MergedRewardCalculator
+from ludo_rl.utils.risk_opportunity import (
+    MergedRewardCalculator,
+    RiskOpportunityCalculator,
+)
 
 
 @dataclass
@@ -270,30 +273,22 @@ class LudoRLEnvBase(gym.Env):
             # Use structured Dict observation space for continuous observations
             tokens_per_player = GameConstants.TOKENS_PER_PLAYER
             max_opponents = GameConstants.MAX_PLAYERS - 1
-            dice_dim = 6 if self.cfg.obs.include_dice_one_hot else 1
+            dice_dim = 6
             self.observation_space = spaces.Dict(
                 {
-                    "agent_color": spaces.Box(
-                        low=0.0, high=1.0, shape=(len(ALL_COLORS),), dtype=np.float32
-                    ),
+                    "agent_color": spaces.MultiBinary(len(ALL_COLORS)),
                     "agent_progress": spaces.Box(
                         low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
                     ),
-                    "agent_vulnerable": spaces.Box(
-                        low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
-                    ),
+                    "agent_vulnerable": spaces.MultiBinary(tokens_per_player),
                     "opponents_positions": spaces.Box(
                         low=0.0,
                         high=1.0,
                         shape=(tokens_per_player * max_opponents,),
                         dtype=np.float32,
                     ),
-                    "opponents_active": spaces.Box(
-                        low=0.0, high=1.0, shape=(max_opponents,), dtype=np.float32
-                    ),
-                    "dice": spaces.Box(
-                        low=0.0, high=1.0, shape=(dice_dim,), dtype=np.float32
-                    ),
+                    "opponents_active": spaces.MultiBinary(max_opponents),
+                    "dice": spaces.MultiBinary(dice_dim),
                 }
             )
 
