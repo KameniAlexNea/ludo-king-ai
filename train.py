@@ -131,7 +131,7 @@ def main():
                 return 1e-6 + (lr_max - 1e-6) * (progress / lr_change)
             else:
                 adjusted_progress = (progress - lr_change) / (1 - lr_change)
-                return lr_min + 0.5 * (lr_max - lr_min) * (
+                return lr_max + 0.5 * (lr_max - lr_min) * (
                     1 + math.cos(math.pi * adjusted_progress)
                 )
 
