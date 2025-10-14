@@ -2,13 +2,11 @@ from typing import Dict
 
 import numpy as np
 
-# NOTE: These domain classes (LudoGame, EnvConfig, PlayerColor, etc.)
-# are assumed to be defined in your ludo_engine and ludo_rl packages.
 from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
 
 from ludo_rl.config import EnvConfig
-from ludo_rl.utils.reward_calculator import token_progress, token_progress_pos
+from ludo_rl.rewards.reward_calculator import token_progress, token_progress_pos
 
 
 class ObservationBuilderBase:

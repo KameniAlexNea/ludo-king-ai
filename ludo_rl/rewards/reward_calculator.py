@@ -83,8 +83,8 @@ class SparseRewardCalculator:
         # Progress reward
         if agent_color is not None:
             start_pos = BoardConstants.START_POSITIONS[agent_color]
-            progress_old = token_progress(move.old_position, start_pos)
-            progress_new = token_progress(move.new_position, start_pos)
+            progress_old = token_progress_pos(move.old_position, start_pos)
+            progress_new = token_progress_pos(move.new_position, start_pos)
             delta = progress_new - progress_old
             if delta > 0:
                 val = cfg.reward.progress_scale * delta

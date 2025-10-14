@@ -5,10 +5,10 @@ import numpy as np
 from ludo_engine.models import GameConstants
 
 from ludo_rl.config import EnvConfig
+from ludo_rl.rewards.reward_calculator import SparseRewardCalculator as RewardCalculator
+from ludo_rl.rewards.risk_opportunity import RiskOpportunityCalculator, SimpleROWeights
 from ludo_rl.utils.move_utils import MoveUtils
 from ludo_rl.utils.opponents import build_opponent_combinations, sample_opponents
-from ludo_rl.utils.reward_calculator import SparseRewardCalculator as RewardCalculator
-from ludo_rl.utils.risk_opportunity import RiskOpportunityCalculator, SimpleROWeights
 
 
 class TestMoveUtils(unittest.TestCase):

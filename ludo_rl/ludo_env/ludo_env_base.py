@@ -22,12 +22,12 @@ from ludo_rl.ludo_env.observation import (
     DiscreteObservationBuilder,
     ObservationBuilderBase,
 )
-from ludo_rl.utils.move_utils import MoveUtils
-from ludo_rl.utils.reward_calculator import SparseRewardCalculator
-from ludo_rl.utils.risk_opportunity import (
+from ludo_rl.rewards.reward_calculator import SparseRewardCalculator
+from ludo_rl.rewards.risk_opportunity import (
     MergedRewardCalculator,
     RiskOpportunityCalculator,
 )
+from ludo_rl.utils.move_utils import MoveUtils
 
 
 @dataclass

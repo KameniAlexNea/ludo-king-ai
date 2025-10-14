@@ -5,7 +5,7 @@ from ludo_engine.core import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
 from ludo_rl.config import EnvConfig, RewardConfig
-from ludo_rl.utils.reward_calculator import SparseRewardCalculator
+from ludo_rl.rewards.reward_calculator import SparseRewardCalculator
 
 
 @dataclass
