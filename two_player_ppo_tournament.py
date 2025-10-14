@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PPO vs Strategies Two-Player Tournament System
-Head-to-head tournament pitting the PPO model against each strategy individually.
+PPO vs Strategies Two-Player Round-Robin Tournament System
+Round-robin tournament where each strategy competes against every other strategy.
 """
 
 import os
@@ -30,7 +30,7 @@ def seed_environ(seed):
 
 
 class TwoPlayerPPOTournament(BaseTournament):
-    """Head-to-head tournament system pitting PPO model against each strategy individually."""
+    """Round-robin tournament system where each strategy competes against every other strategy."""
 
     def __init__(self, args):
         # Core configuration
@@ -68,13 +68,14 @@ class TwoPlayerPPOTournament(BaseTournament):
 
         # Get strategies universe
         self.all_strategies = self._get_strategies()
+        self.all_participants = [self.ppo_model] + self.all_strategies
 
         if self.verbose_output:
-            print("🎯 PPO vs Strategies Two-Player Tournament Configuration:")
+            print("🎯 PPO vs Strategies Two-Player Round-Robin Tournament Configuration:")
             print(f"   • PPO Model: {self.ppo_model}")
             print(f"   • Model Preference: {self.model_preference}")
-            print(f"   • Available strategies: {len(self.all_strategies)}")
-            print(f"   • Head-to-head matchups: {len(self.all_strategies)}")
+            print(f"   • Total strategies: {len(self.all_participants)}")
+            print(f"   • Round-robin matchups: {len(self.all_participants) * (len(self.all_participants) - 1) // 2}")
             print(f"   • Games per matchup: {self.games_per_matchup}")
             print(f"   • Max turns per game: {self.max_turns_per_game}")
             print(f"   • Models directory: {self.models_dir}")
@@ -82,9 +83,9 @@ class TwoPlayerPPOTournament(BaseTournament):
                 f"   • Output directory: {self.output_dir if self.output_dir else 'None (no saving)'}"
             )
             print(f"   • Environment mode: {self.env_kind}")
-            print(
-                f"   • Total games to play: {len(self.all_strategies) * self.games_per_matchup}"
-            )
+            total_games = (len(self.all_participants) * (len(self.all_participants) - 1) // 2) * self.games_per_matchup
+            print(f"   • Total games to play: {total_games}")
+            print(f"   • Games per strategy: {(len(self.all_participants) - 1) * self.games_per_matchup}")
 
     def _get_strategies(self):
         """Get strategies to use in tournament."""
@@ -97,12 +98,12 @@ class TwoPlayerPPOTournament(BaseTournament):
         ]
 
     def run_tournament(self):
-        """Execute PPO vs Strategies two-player tournament."""
-        print("🏆 PPO vs STRATEGIES HEAD-TO-HEAD TOURNAMENT 🏆")
+        """Execute PPO vs Strategies two-player round-robin tournament."""
+        print("🏆 PPO vs STRATEGIES ROUND-ROBIN TOURNAMENT 🏆")
         print("=" * 70)
 
         self._display_participants()
-        self._run_head_to_head()
+        self._run_round_robin()
         self._display_final_results()
         self._display_detailed_analysis()
 
@@ -112,124 +113,128 @@ class TwoPlayerPPOTournament(BaseTournament):
         """Show tournament participants."""
         print("\n🤖 Tournament Participants:")
         print("-" * 50)
-        print(f"PPO: {self.ppo_model.upper()}")
-        print("\nOpponent Strategies:")
 
         descriptions = StrategyFactory.get_strategy_descriptions()
-        for i, strategy in enumerate(self.all_strategies, 1):
-            desc = descriptions.get(strategy, "No description")
+        for i, strategy in enumerate(self.all_participants, 1):
+            if strategy == self.ppo_model:
+                desc = "PPO Model"
+            else:
+                desc = descriptions.get(strategy, "No description")
             print(f"{i}. {strategy.upper()}: {desc}")
 
         print("\n📋 Tournament Format:")
         print(f"   • {self.games_per_matchup} games per head-to-head matchup")
-        print(f"   • {len(self.all_strategies)} unique opponents")
+        print(f"   • {len(self.all_participants)} total strategies")
+        print(f"   • Round-robin: each vs each (no self-matches)")
         print(f"   • Maximum {self.max_turns_per_game} turns per game")
-        print("   • Two-player head-to-head with detailed analytics")
+        print("   • Two-player round-robin with detailed analytics")
 
-    def _run_head_to_head(self):
-        """Run head-to-head matches: PPO vs each strategy."""
-        print("\n🎮 Head-to-Head Execution:")
+    def _run_round_robin(self):
+        """Run round-robin matches: each strategy vs every other strategy."""
+        print("\n🎮 Round-Robin Execution:")
         print("=" * 70)
 
         total_games = 0
         matchup_results = []
         start_time = time.time()
+        matchup_idx = 0
 
-        for matchup_idx, opponent_strategy in enumerate(self.all_strategies, 1):
-            print(
-                f"\nMatchup {matchup_idx}/{len(self.all_strategies)}: "
-                f"{self.ppo_model.upper()} vs {opponent_strategy.upper()}"
-            )
-            print("-" * 60)
+        # Generate all unique pairs (i < j to avoid duplicates)
+        for i in range(len(self.all_participants)):
+            for j in range(i + 1, len(self.all_participants)):
+                player1 = self.all_participants[i]
+                player2 = self.all_participants[j]
+                matchup_idx += 1
 
-            # Track wins for this matchup
-            matchup_wins = {self.ppo_model: 0, opponent_strategy: 0, "draw": 0}
-
-            # Play multiple games for this matchup
-            for game_num in range(self.games_per_matchup):
-                # Alternate starting positions for fairness
-                if game_num % 2 == 0:
-                    game_players = [self.ppo_model, opponent_strategy]
-                    game_colors = [
-                        ALL_COLORS[0],
-                        ALL_COLORS[2],
-                    ]  # Red vs Yellow (opposite positions)
-                else:
-                    game_players = [opponent_strategy, self.ppo_model]
-                    game_colors = [
-                        ALL_COLORS[0],
-                        ALL_COLORS[2],
-                    ]  # Same colors, different order
-
-                if self.verbose_output:
-                    color_names = [ALL_COLORS[0].value, ALL_COLORS[2].value]
-                    player_color_info = [
-                        f"{game_players[i].upper()}({color_names[i]})" for i in range(2)
-                    ]
-                    print(f"  Game {game_num + 1}: {' vs '.join(player_color_info)}")
-
-                # Create 2-player game
-                game = LudoGame(game_colors)
-
-                # Assign strategies
-                for i, (player_name, colour) in enumerate(
-                    zip(game_players, game_colors)
-                ):
-                    if player_name == self.ppo_model:
-                        strategy = load_ppo_strategy(
-                            env_kind=self.env_kind,
-                            models_dir=self.models_dir,
-                            player_name=player_name,
-                            agent_color=colour,
-                            model_preference=self.model_preference,
-                            game=game,
-                            max_turns=self.max_turns_per_game,
-                        )
-                    else:
-                        strategy = StrategyFactory.create_strategy(player_name)
-
-                    player = game.get_player_from_color(colour)
-                    player.set_strategy(strategy)
-                    player.strategy_name = player_name
-
-                # Play the game
-                results = self._play_two_player_game(
-                    game, f"{matchup_idx}.{game_num + 1}", self.verbose_output
+                print(
+                    f"\nMatchup {matchup_idx}/{(len(self.all_participants) * (len(self.all_participants) - 1) // 2)}: "
+                    f"{player1.upper()} vs {player2.upper()}"
                 )
-                total_games += 1
+                print("-" * 60)
 
-                # Track matchup wins
-                if results["winner"]:
-                    winner_name = results["winner"].strategy_name
-                    matchup_wins[winner_name] += 1
-                else:
-                    matchup_wins["draw"] += 1
+                # Track wins for this matchup
+                matchup_wins = {player1: 0, player2: 0, "draw": 0}
 
-                # Process results for overall tournament tracking
-                super()._process_game_results(results, game_players)
+                # Play multiple games for this matchup
+                for game_num in range(self.games_per_matchup):
+                    # Alternate starting positions for fairness
+                    if game_num % 2 == 0:
+                        game_players = [player1, player2]
+                        game_colors = [
+                            ALL_COLORS[0],
+                            ALL_COLORS[2],
+                        ]  # Red vs Yellow (opposite positions)
+                    else:
+                        game_players = [player2, player1]
+                        game_colors = [
+                            ALL_COLORS[0],
+                            ALL_COLORS[2],
+                        ]  # Same colors, different order
 
-            # Show matchup summary
-            ppo_wins = matchup_wins[self.ppo_model]
-            opponent_wins = matchup_wins[opponent_strategy]
-            draws = matchup_wins["draw"]
+                    if self.verbose_output:
+                        color_names = [ALL_COLORS[0].value, ALL_COLORS[2].value]
+                        player_color_info = [
+                            f"{game_players[i].upper()}({color_names[i]})" for i in range(2)
+                        ]
+                        print(f"  Game {game_num + 1}: {' vs '.join(player_color_info)}")
 
-            print(
-                f"  Results: {self.ppo_model.upper()}: {ppo_wins}, "
-                f"{opponent_strategy.upper()}: {opponent_wins}, Draws: {draws}"
-            )
+                    # Create 2-player game
+                    game = LudoGame(game_colors)
 
-            # Calculate win percentage for this matchup
-            total_matchup_games = ppo_wins + opponent_wins + draws
-            if total_matchup_games > 0:
-                ppo_win_pct = (ppo_wins / total_matchup_games) * 100
-                print(f"  PPO Win Rate: {ppo_win_pct:.1f}%")
+                    # Assign strategies
+                    for k, (player_name, colour) in enumerate(
+                        zip(game_players, game_colors)
+                    ):
+                        if player_name == self.ppo_model:
+                            strategy = load_ppo_strategy(
+                                env_kind=self.env_kind,
+                                models_dir=self.models_dir,
+                                player_name=player_name,
+                                agent_color=colour,
+                                model_preference=self.model_preference,
+                                game=game,
+                                max_turns=self.max_turns_per_game,
+                            )
+                        else:
+                            strategy = StrategyFactory.create_strategy(player_name)
 
-            matchup_results.append((opponent_strategy, matchup_wins))
+                        player = game.get_player_from_color(colour)
+                        player.set_strategy(strategy)
+                        player.strategy_name = player_name
+
+                    # Play the game
+                    results = self._play_two_player_game(
+                        game, f"{matchup_idx}.{game_num + 1}", self.verbose_output
+                    )
+                    total_games += 1
+
+                    # Track matchup wins
+                    if results["winner"]:
+                        winner_name = results["winner"].strategy_name
+                        matchup_wins[winner_name] += 1
+                    else:
+                        matchup_wins["draw"] += 1
+
+                    # Process results for overall tournament tracking
+                    super()._process_game_results(results, game_players)
+
+                # Show matchup summary
+                player1_wins = matchup_wins[player1]
+                player2_wins = matchup_wins[player2]
+                draws = matchup_wins["draw"]
+
+                print(
+                    f"  Results: {player1.upper()}: {player1_wins}, "
+                    f"{player2.upper()}: {player2_wins}, Draws: {draws}"
+                )
+
+                matchup_results.append(((player1, player2), matchup_wins))
 
         elapsed = time.time() - start_time
         print(f"\n⏱️  Tournament completed in {elapsed:.1f} seconds")
         print(f"📊 Total games played: {total_games}")
-        print(f"🎯 Head-to-head matchups: {len(self.all_strategies)}")
+        num_matchups = len(self.all_participants) * (len(self.all_participants) - 1) // 2
+        print(f"🎯 Round-robin matchups: {num_matchups}")
 
         return matchup_results
 
@@ -324,32 +329,28 @@ class TwoPlayerPPOTournament(BaseTournament):
 
     def _display_final_results(self):
         """Display comprehensive tournament results."""
-        # Create list of all participants including PPO model
-        participants = [self.ppo_model] + self.all_strategies
         return super()._display_final_results(
-            participants, "PPO vs STRATEGIES HEAD-TO-HEAD STANDINGS"
+            self.all_participants, "PPO vs STRATEGIES ROUND-ROBIN STANDINGS"
         )
 
     def _display_detailed_analysis(self):
         """Show detailed strategic analysis."""
-        # Create list of all participants including PPO model
-        participants = [self.ppo_model] + self.all_strategies
-        return super()._display_detailed_analysis(participants)
+        return super()._display_detailed_analysis(self.all_participants)
 
     def _get_tournament_summary(self):
         """Return structured tournament summary."""
-        participants = [self.ppo_model] + self.all_strategies
         summary = super()._get_tournament_summary(
-            participants, "PPO vs Strategies Head-to-Head Tournament"
+            self.all_participants, "PPO vs Strategies Round-Robin Tournament"
         )
         # Add PPO-specific information
         summary.update(
             {
                 "ppo_model": self.ppo_model,
                 "strategies": self.all_strategies,
-                "matchups_tested": len(self.all_strategies),
+                "all_participants": self.all_participants,
+                "matchups_tested": len(self.all_participants) * (len(self.all_participants) - 1) // 2,
                 "games_per_matchup": self.games_per_matchup,
-                "tournament_type": "head_to_head",
+                "tournament_type": "round_robin",
             }
         )
         return summary
@@ -362,9 +363,9 @@ if __name__ == "__main__":
     # Set random seed
     seed_environ(args.seed)
 
-    print("🎯 LUDO PPO vs STRATEGIES HEAD-TO-HEAD TOURNAMENT 🎯")
+    print("🎯 LUDO PPO vs STRATEGIES ROUND-ROBIN TOURNAMENT 🎯")
     print("=" * 70)
-    print("Starting comprehensive PPO vs Strategies head-to-head tournament...")
+    print("Starting comprehensive PPO vs Strategies round-robin tournament...")
 
     # Run main tournament
     tournament = TwoPlayerPPOTournament(args)
@@ -378,6 +379,6 @@ if __name__ == "__main__":
     else:
         print("🏆 No clear champion (no games completed)")
     print(f"📊 Total Games: {summary['total_games']}")
-    print(f"🎯 Head-to-Head Matchups: {summary['matchups_tested']}")
+    print(f"🎯 Round-Robin Matchups: {summary['matchups_tested']}")
     print(f"🤖 PPO Model: {summary['ppo_model'].upper()}")
-    print(f"🎮 Strategies: {', '.join([s.upper() for s in summary['strategies']])}")
+    print(f"🎮 All Strategies: {', '.join([s.upper() for s in summary['all_participants']])}")
