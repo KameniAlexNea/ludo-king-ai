@@ -67,7 +67,7 @@ class StepInfo:
 class LudoRLEnvBase(gym.Env):
     """Base Ludo RL environment with action masking support."""
 
-    metadata = {"render_modes": ["human"], "name": "LudoRLEnvBase-v0"}
+    metadata = {"render_modes": ["human", "rgb_array"], "name": "LudoRLEnvBase-v0"}
 
     def __init__(self, cfg: EnvConfig):
         super().__init__()
@@ -578,3 +578,19 @@ class LudoRLEnvBase(gym.Env):
         used across subprocesses). The mask length must match `action_space.n`.
         """
         return MoveUtils.action_masks(self.pending_valid_moves)
+
+    def render(self):
+        """Render the environment."""
+        if self.render_mode == "rgb_array":
+            # @TODO generate ludo env visual
+            return np.zeros((480, 640, 3), dtype=np.uint8)
+        elif self.render_mode == "human":
+            # Print text representation
+            if self.game:
+                print(f"Current player: {self.game.get_current_player().color}")
+                print(f"Dice: {self.pending_dice}")
+                print(f"Turn: {self.current_turn}")
+            else:
+                print("Game not initialized")
+        else:
+            return super().render()

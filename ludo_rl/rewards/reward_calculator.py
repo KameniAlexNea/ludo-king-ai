@@ -161,4 +161,4 @@ class SparseRewardCalculator:
         elif game.game_over:
             breakdown["terminal"] += cfg.reward.draw
             reward += cfg.reward.draw
-        return (reward, breakdown) if return_breakdown else reward
+        return (float(reward), breakdown) if return_breakdown else reward

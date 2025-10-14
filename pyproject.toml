@@ -6,8 +6,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "gradio>=4.0.0",
-    "gym>=0.26.2",
-    "gymnasium>=0.29.0",
+    "gymnasium[other]>=0.29.0",
+    "huggingface-sb3>=3.0",
     "langchain-groq>=0.0.1",
     "langchain-ollama>=0.0.1",
     "loguru>=0.7.3",
