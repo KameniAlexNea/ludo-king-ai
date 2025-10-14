@@ -78,7 +78,7 @@ class SparseRewardCalculator:
             if GameConstants.HOME_POSITION < pos < GameConstants.HOME_COLUMN_START
         )
 
-        r = 0.0
+        reward = 0.0
 
         # Progress reward
         if agent_color is not None:
@@ -89,7 +89,7 @@ class SparseRewardCalculator:
             if delta > 0:
                 val = cfg.reward.progress_scale * delta
                 breakdown["progress"] += val
-                r += val
+                reward += val
 
         # Safe zone reward
         if not BoardConstants.is_safe_position(
@@ -97,38 +97,38 @@ class SparseRewardCalculator:
         ) and BoardConstants.is_safe_position(move.new_position):
             val = cfg.reward.safe_zone_reward
             breakdown["safe_zone"] += val
-            r += val
+            reward += val
 
         # Event rewards
         if move.captured_tokens:
             capture_base = cfg.reward.capture * len(move.captured_tokens)
             # capture_base *= cfg.reward.capture_reward_scale
             breakdown["capture"] += capture_base
-            r += capture_base
+            reward += capture_base
 
         # Finish event
-        if r >= finished_tokens or move.new_position == GameConstants.FINISH_POSITION:
+        if move.new_position == GameConstants.FINISH_POSITION:
             finish_val = cfg.reward.finish_token
             breakdown["finish"] += finish_val
-            r += finish_val
+            reward += finish_val
 
         # Constraint penalties
         if is_illegal:
             breakdown["illegal"] += cfg.reward.illegal_action
-            r += cfg.reward.illegal_action
+            reward += cfg.reward.illegal_action
 
         # Step penalty
         breakdown["time_penalty"] += cfg.reward.time_penalty
-        r += cfg.reward.time_penalty
+        reward += cfg.reward.time_penalty
 
         # Opponent effects during the full turn (after agent acted)
         if len(move.captured_tokens) > 0:
             val = cfg.reward.got_captured * int(len(move.captured_tokens))
             breakdown["got_captured"] += val
-            r += val
+            reward += val
             if GameConstants.TOKENS_PER_PLAYER - finished_tokens == home_tokens:
                 breakdown["all_captured"] += cfg.reward.all_captured
-                r += cfg.reward.all_captured
+                reward += cfg.reward.all_captured
 
         # Home exit reward: only grant if agent already has at least one other
         # token active on the board (i.e. home_tokens < TOKENS_PER_PLAYER - 1).
@@ -140,22 +140,22 @@ class SparseRewardCalculator:
             # home_tokens counts how many are still at home; reward exit only
             # when there's another token already out (diversity/backup token).
             breakdown["exit_start"] += cfg.reward.exit_start
-            r += cfg.reward.exit_start
+            reward += cfg.reward.exit_start
 
         if move.extra_turn:
             breakdown["extra_turn"] += cfg.reward.extra_turn
-            r += cfg.reward.extra_turn
+            reward += cfg.reward.extra_turn
 
         # Terminal outcomes
         if game.winner is not None and agent_color is not None:
             if game.winner.color == agent_color:
                 breakdown["terminal"] += cfg.reward.win
-                r += cfg.reward.win
+                reward += cfg.reward.win
             else:
                 breakdown["terminal"] += cfg.reward.lose
-                r += cfg.reward.lose
+                reward += cfg.reward.lose
         elif game.game_over:
             breakdown["terminal"] += cfg.reward.draw
-            r += cfg.reward.draw
+            reward += cfg.reward.draw
 
-        return (r, breakdown) if return_breakdown else r
+        return (reward, breakdown) if return_breakdown else reward
