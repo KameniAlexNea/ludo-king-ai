@@ -24,7 +24,7 @@ class RewardConfig:
     extra_turn: float = 0.5
     # Shaping
     # Increase shaping to make rewards denser
-    progress_scale: float = 0.1
+    progress_scale: float = 0.05
     safe_zone_reward: float = 2.0
     # Constraints
     illegal_action: float = -2.0
