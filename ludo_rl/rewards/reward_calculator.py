@@ -1,6 +1,6 @@
 from ludo_engine import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
-
+from loguru import logger
 from ludo_rl.config import EnvConfig
 
 
@@ -61,6 +61,7 @@ class SparseRewardCalculator:
             "got_captured": 0.0,
             "all_captured": 0.0,
             "exit_start": 0.0,
+            "diversity_bonus": 0.0,
             "extra_turn": 0.0,
             "terminal": 0.0,
         }
@@ -160,6 +161,4 @@ class SparseRewardCalculator:
         elif game.game_over:
             breakdown["terminal"] += cfg.reward.draw
             reward += cfg.reward.draw
-        if reward > 0:
-            pass
         return (reward, breakdown) if return_breakdown else reward

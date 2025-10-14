@@ -20,7 +20,7 @@ class RewardConfig:
     all_captured: float = -10.0
     # Reward for leaving home increased
     exit_start: float = 2.0
-    diversity_bonus: float = 1.0
+    diversity_bonus: float = 0.1
     extra_turn: float = 0.5
     # Shaping
     # Increase shaping to make rewards denser

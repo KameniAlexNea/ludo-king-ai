@@ -121,12 +121,12 @@ def main():
 
     # Set up learning rate (use callable for annealing)
     if args.lr_anneal_enabled:
+        lr_change = 300_000 / args.total_steps
 
         def lr_schedule(progress_remaining: float) -> float:
             lr_min = args.lr_final
             lr_max = args.learning_rate
             progress = 1 - progress_remaining
-            lr_change = 0.1
             if progress < lr_change:
                 return 1e-6 + (lr_max - 1e-6) * (progress / lr_change)
             else:
