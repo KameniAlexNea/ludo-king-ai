@@ -92,9 +92,7 @@ class SparseRewardCalculator:
                 reward += val
 
         # Safe zone reward
-        if not BoardConstants.is_safe_position(
-            move.old_position
-        ) and BoardConstants.is_safe_position(move.new_position):
+        if move.old_position != move.new_position and move.new_position in BoardConstants.STAR_SQUARES:
             val = cfg.reward.safe_zone_reward
             breakdown["safe_zone"] += val
             reward += val
@@ -135,12 +133,14 @@ class SparseRewardCalculator:
         if (
             move.old_position == GameConstants.HOME_POSITION
             and move.new_position != move.old_position
-            and nhome_column_tokens > 1
         ):
             # home_tokens counts how many are still at home; reward exit only
             # when there's another token already out (diversity/backup token).
             breakdown["exit_start"] += cfg.reward.exit_start
             reward += cfg.reward.exit_start
+        if nhome_column_tokens > 1:
+            breakdown["diversity_bonus"] += cfg.reward.diversity_bonus * nhome_column_tokens
+            reward += cfg.reward.diversity_bonus * nhome_column_tokens
 
         if move.extra_turn:
             breakdown["extra_turn"] += cfg.reward.extra_turn
