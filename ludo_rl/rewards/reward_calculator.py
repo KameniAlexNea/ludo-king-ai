@@ -92,7 +92,10 @@ class SparseRewardCalculator:
                 reward += val
 
         # Safe zone reward
-        if move.old_position != move.new_position and move.new_position in BoardConstants.STAR_SQUARES:
+        if (
+            move.old_position != move.new_position
+            and move.new_position in BoardConstants.STAR_SQUARES
+        ):
             val = cfg.reward.safe_zone_reward
             breakdown["safe_zone"] += val
             reward += val
@@ -137,7 +140,9 @@ class SparseRewardCalculator:
             reward += cfg.reward.exit_start
         # Diversity bonus: reward if more than one token is out on the board
         if nhome_column_tokens > 1:
-            breakdown["diversity_bonus"] += cfg.reward.diversity_bonus * nhome_column_tokens
+            breakdown["diversity_bonus"] += (
+                cfg.reward.diversity_bonus * nhome_column_tokens
+            )
             reward += cfg.reward.diversity_bonus * nhome_column_tokens
 
         if move.extra_turn:

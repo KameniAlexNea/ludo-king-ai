@@ -2,6 +2,7 @@ import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import copy
+import math
 from typing import Optional
 
 import gymnasium as gym
@@ -122,9 +123,17 @@ def main():
     if args.lr_anneal_enabled:
 
         def lr_schedule(progress_remaining: float) -> float:
-            return args.lr_final + progress_remaining * (
-                args.learning_rate - args.lr_final
-            )
+            lr_min = args.lr_final
+            lr_max = args.learning_rate
+            progress = 1 - progress_remaining
+            lr_change = 0.1
+            if progress < lr_change:
+                return 1e-6 + (lr_max - 1e-6) * (progress / lr_change)
+            else:
+                adjusted_progress = (progress - lr_change) / (1 - lr_change)
+                return lr_min + 0.5 * (lr_max - lr_min) * (
+                    1 + math.cos(math.pi * adjusted_progress)
+                )
 
         learning_rate = lr_schedule
     else:

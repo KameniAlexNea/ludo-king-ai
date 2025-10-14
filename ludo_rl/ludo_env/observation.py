@@ -1,7 +1,6 @@
 from typing import Dict
 
 import numpy as np
-
 from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
 
