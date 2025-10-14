@@ -24,7 +24,7 @@ def token_progress(pos: int, start_pos: int) -> float:
     )
 
 
-class RewardCalculator:
+class SparseRewardCalculator:
     """Encapsulates reward computation for a single environment step.
 
     Inputs:
@@ -38,22 +38,6 @@ class RewardCalculator:
     """
 
     def compute(
-        self,
-        game: LudoGame,
-        agent_color: PlayerColor,
-        move: MoveResult,
-        cfg: EnvConfig,
-        return_breakdown: bool = False,
-        is_illegal: bool = False,
-    ) -> float:
-        r, b = self.compute_with_breakdown(
-            game, agent_color, move, cfg, return_breakdown, is_illegal
-        )
-        if return_breakdown:
-            return r, b
-        return r
-
-    def compute_with_breakdown(
         self,
         game: LudoGame,
         agent_color: PlayerColor,
@@ -174,4 +158,4 @@ class RewardCalculator:
             breakdown["terminal"] += cfg.reward.draw
             r += cfg.reward.draw
 
-        return r, breakdown
+        return (r, breakdown) if return_breakdown else r

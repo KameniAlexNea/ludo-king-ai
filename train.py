@@ -24,8 +24,6 @@ from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.trains.training_args import parse_args
 from ludo_rl.utils.move_utils import MoveUtils
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
 
 def make_env(
     rank: int,

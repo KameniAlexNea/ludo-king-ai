@@ -23,7 +23,7 @@ from ludo_rl.ludo_env.observation import (
     ObservationBuilderBase,
 )
 from ludo_rl.utils.move_utils import MoveUtils
-from ludo_rl.utils.reward_calculator import RewardCalculator
+from ludo_rl.utils.reward_calculator import SparseRewardCalculator
 from ludo_rl.utils.risk_opportunity import (
     MergedRewardCalculator,
     RiskOpportunityCalculator,
@@ -101,7 +101,7 @@ class LudoRLEnvBase(gym.Env):
         # Components
         reward_class = None
         if self.cfg.reward.reward_type == "sparse":
-            reward_class = RewardCalculator
+            reward_class = SparseRewardCalculator
         elif self.cfg.reward.reward_type == "risk_opportunity":
             reward_class = RiskOpportunityCalculator
         elif self.cfg.reward.reward_type == "merged":

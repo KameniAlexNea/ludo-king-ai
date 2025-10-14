@@ -5,7 +5,7 @@ from ludo_engine.core import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
 from ludo_rl.config import EnvConfig, RewardConfig
-from ludo_rl.utils.reward_calculator import RewardCalculator as BaseRewardCalculator
+from ludo_rl.utils.reward_calculator import SparseRewardCalculator
 
 
 @dataclass
@@ -124,7 +124,7 @@ class MergedRewardCalculator:
     """Compute shaped rewards based on game events and state changes."""
 
     def __init__(self):
-        self.reward_calculator = BaseRewardCalculator()
+        self.reward_calculator = SparseRewardCalculator()
         self.ro_calculator = RiskOpportunityCalculator()
 
     def compute(

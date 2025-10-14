@@ -30,7 +30,9 @@ class RewardConfig:
     # Reduce time penalty to encourage longer games if needed, but keep small
     time_penalty: float = -0.1
     # reward signal function
-    reward_type: Literal["sparse", "merged", "risk_opportunity"] = "merged"
+    reward_type: Literal["sparse", "merged", "risk_opportunity"] = os.getenv(
+        "REWARD_TYPE", "sparse"
+    )  # "sparse", "merged", "risk_opportunity"
 
 
 @dataclass
@@ -103,7 +105,6 @@ class TrainConfig:
     total_steps: int = 20_000_000
     n_envs: int = 8
     eval_freq: int = 200_000
-    tournament_games: int = 240
     algorithm: str = "maskable_ppo"
     learning_rate: float = 3e-4
     lr_final: float = 8e-5
