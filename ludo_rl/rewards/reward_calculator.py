@@ -128,16 +128,14 @@ class SparseRewardCalculator:
                 breakdown["all_captured"] += cfg.reward.all_captured
                 reward += cfg.reward.all_captured
 
-        # Home exit reward: only grant if agent already has at least one other
-        # token active on the board (i.e. home_tokens < TOKENS_PER_PLAYER - 1).
+        # Home exit reward
         if (
             move.old_position == GameConstants.HOME_POSITION
             and move.new_position != move.old_position
         ):
-            # home_tokens counts how many are still at home; reward exit only
-            # when there's another token already out (diversity/backup token).
             breakdown["exit_start"] += cfg.reward.exit_start
             reward += cfg.reward.exit_start
+        # Diversity bonus: reward if more than one token is out on the board
         if nhome_column_tokens > 1:
             breakdown["diversity_bonus"] += cfg.reward.diversity_bonus * nhome_column_tokens
             reward += cfg.reward.diversity_bonus * nhome_column_tokens
