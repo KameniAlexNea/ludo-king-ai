@@ -1,9 +1,8 @@
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import copy
 import math
 import os
 from typing import Optional
-
+os.environ["CUDA_VISIBLE_DEVICES"] = ""  # Use GPUs 0 and 1
 import gymnasium as gym
 import torch
 from dotenv import load_dotenv
@@ -182,7 +181,7 @@ def main():
                     "learning_rate": learning_rate,
                     "n_steps": args.n_steps,
                 },
-                device="auto",
+                device="cpu",
             )
             # Update any changed hyperparameters
             model.ent_coef = args.ent_coef
@@ -204,7 +203,7 @@ def main():
             vf_coef=args.vf_coef,
             tensorboard_log=args.logdir,
             verbose=1,
-            device="auto",
+            device="cpu",
             gamma=0.995,
             policy_kwargs=policy_kwargs,
         )

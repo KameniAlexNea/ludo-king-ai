@@ -61,26 +61,30 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
             }
         )
 
-    def forward(self, observations: dict) -> torch.Tensor:
-        """Process Dict observation into concatenated embeddings."""
-        features = []
+        # Multi-head attention for processing embeddings
+        self.attention = nn.MultiheadAttention(embed_dim, num_heads=8, batch_first=True)
 
-        # Process each component
+    def forward(self, observations: dict) -> torch.Tensor:
+        """Process Dict observation into concatenated embeddings with attention."""
+        all_embeddings = []
+
+        # Process each component and collect individual embeddings
         for key, config in self.component_configs.items():
-            obs_tensor = observations[key]  # Shape: (batch, size)
+            obs_tensor = observations[key]  # Shape: (batch, n * size)
             n, size = config["n"], config["size"]
 
-            # Embed each position in this component
-            embeddings = []
+            # For each position i in size, take the next n elements and argmax
             for i in range(size):
-                emb = self.embed_by_n[str(n)](obs_tensor[:, i].long())
-                embeddings.append(emb)
+                one_hot = obs_tensor[:, i * n : (i + 1) * n]  # (batch, n)
+                discrete = torch.argmax(one_hot, dim=-1)  # (batch,)
+                emb = self.embed_by_n[str(n)](discrete)
+                all_embeddings.append(emb)
 
-            # Concatenate embeddings for this component
-            component_features = torch.cat(
-                embeddings, dim=1
-            )  # (batch, size * embed_dim)
-            features.append(component_features)
+        # Stack all embeddings: (batch, num_embeddings, embed_dim)
+        embs_tensor = torch.stack(all_embeddings, dim=1)
 
-        # Concatenate all component features
-        return torch.cat(features, dim=1)  # (batch, total_features)
+        # Apply multi-head attention
+        attended, _ = self.attention(embs_tensor, embs_tensor, embs_tensor)
+
+        # Flatten to match expected features_dim
+        return attended.view(attended.size(0), -1)
