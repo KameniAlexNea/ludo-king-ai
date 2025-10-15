@@ -1,6 +1,6 @@
 from ludo_engine import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
-from loguru import logger
+
 from ludo_rl.config import EnvConfig
 
 

@@ -92,7 +92,11 @@ class EnvConfig:
         int(os.getenv("FIXED_NUM_PLAYERS")) if os.getenv("FIXED_NUM_PLAYERS") else None
     )
     # Allowed player counts to sample from when `fixed_num_players` is None.
-    allowed_player_counts: List[int] = field(default_factory=lambda: [2, 4])
+    allowed_player_counts: List[int] = field(
+        default_factory=lambda: list(
+            map(int, os.getenv("ALLOWED_PLAYER_COUNTS", "2,4").split(","))
+        )
+    )
     reward: RewardConfig = field(default_factory=RewardConfig)
     obs: ObservationConfig = field(default_factory=ObservationConfig)
     opponents: OpponentConfig = field(default_factory=OpponentConfig)

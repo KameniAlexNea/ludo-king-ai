@@ -71,11 +71,15 @@ class TwoPlayerPPOTournament(BaseTournament):
         self.all_participants = [self.ppo_model] + self.all_strategies
 
         if self.verbose_output:
-            print("🎯 PPO vs Strategies Two-Player Round-Robin Tournament Configuration:")
+            print(
+                "🎯 PPO vs Strategies Two-Player Round-Robin Tournament Configuration:"
+            )
             print(f"   • PPO Model: {self.ppo_model}")
             print(f"   • Model Preference: {self.model_preference}")
             print(f"   • Total strategies: {len(self.all_participants)}")
-            print(f"   • Round-robin matchups: {len(self.all_participants) * (len(self.all_participants) - 1) // 2}")
+            print(
+                f"   • Round-robin matchups: {len(self.all_participants) * (len(self.all_participants) - 1) // 2}"
+            )
             print(f"   • Games per matchup: {self.games_per_matchup}")
             print(f"   • Max turns per game: {self.max_turns_per_game}")
             print(f"   • Models directory: {self.models_dir}")
@@ -83,9 +87,13 @@ class TwoPlayerPPOTournament(BaseTournament):
                 f"   • Output directory: {self.output_dir if self.output_dir else 'None (no saving)'}"
             )
             print(f"   • Environment mode: {self.env_kind}")
-            total_games = (len(self.all_participants) * (len(self.all_participants) - 1) // 2) * self.games_per_matchup
+            total_games = (
+                len(self.all_participants) * (len(self.all_participants) - 1) // 2
+            ) * self.games_per_matchup
             print(f"   • Total games to play: {total_games}")
-            print(f"   • Games per strategy: {(len(self.all_participants) - 1) * self.games_per_matchup}")
+            print(
+                f"   • Games per strategy: {(len(self.all_participants) - 1) * self.games_per_matchup}"
+            )
 
     def _get_strategies(self):
         """Get strategies to use in tournament."""
@@ -125,7 +133,7 @@ class TwoPlayerPPOTournament(BaseTournament):
         print("\n📋 Tournament Format:")
         print(f"   • {self.games_per_matchup} games per head-to-head matchup")
         print(f"   • {len(self.all_participants)} total strategies")
-        print(f"   • Round-robin: each vs each (no self-matches)")
+        print("   • Round-robin: each vs each (no self-matches)")
         print(f"   • Maximum {self.max_turns_per_game} turns per game")
         print("   • Two-player round-robin with detailed analytics")
 
@@ -174,9 +182,12 @@ class TwoPlayerPPOTournament(BaseTournament):
                     if self.verbose_output:
                         color_names = [ALL_COLORS[0].value, ALL_COLORS[2].value]
                         player_color_info = [
-                            f"{game_players[i].upper()}({color_names[i]})" for i in range(2)
+                            f"{game_players[i].upper()}({color_names[i]})"
+                            for i in range(2)
                         ]
-                        print(f"  Game {game_num + 1}: {' vs '.join(player_color_info)}")
+                        print(
+                            f"  Game {game_num + 1}: {' vs '.join(player_color_info)}"
+                        )
 
                     # Create 2-player game
                     game = LudoGame(game_colors)
@@ -233,7 +244,9 @@ class TwoPlayerPPOTournament(BaseTournament):
         elapsed = time.time() - start_time
         print(f"\n⏱️  Tournament completed in {elapsed:.1f} seconds")
         print(f"📊 Total games played: {total_games}")
-        num_matchups = len(self.all_participants) * (len(self.all_participants) - 1) // 2
+        num_matchups = (
+            len(self.all_participants) * (len(self.all_participants) - 1) // 2
+        )
         print(f"🎯 Round-robin matchups: {num_matchups}")
 
         return matchup_results
@@ -348,7 +361,9 @@ class TwoPlayerPPOTournament(BaseTournament):
                 "ppo_model": self.ppo_model,
                 "strategies": self.all_strategies,
                 "all_participants": self.all_participants,
-                "matchups_tested": len(self.all_participants) * (len(self.all_participants) - 1) // 2,
+                "matchups_tested": len(self.all_participants)
+                * (len(self.all_participants) - 1)
+                // 2,
                 "games_per_matchup": self.games_per_matchup,
                 "tournament_type": "round_robin",
             }
@@ -381,4 +396,6 @@ if __name__ == "__main__":
     print(f"📊 Total Games: {summary['total_games']}")
     print(f"🎯 Round-Robin Matchups: {summary['matchups_tested']}")
     print(f"🤖 PPO Model: {summary['ppo_model'].upper()}")
-    print(f"🎮 All Strategies: {', '.join([s.upper() for s in summary['all_participants']])}")
+    print(
+        f"🎮 All Strategies: {', '.join([s.upper() for s in summary['all_participants']])}"
+    )
