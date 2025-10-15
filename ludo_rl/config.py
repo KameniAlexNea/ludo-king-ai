@@ -10,26 +10,26 @@ class RewardConfig:
     win: float = 50.0
     lose: float = -50.0
     draw: float = -15.0
-    # Reduce heavy shaping on finishing tokens
-    finish_token: float = 10.0
+    # Per-token rewards
+    finish_token: float = 1.0
     # Events
     # Per-capture reward increased
-    capture: float = 3.0
+    capture: float = 0.3
     # Being captured is penalized more strongly to discourage unsafe play
-    got_captured: float = -5.0
-    all_captured: float = -10.0
+    got_captured: float = -0.5
+    all_captured: float = -1.0
     # Reward for leaving home increased
-    exit_start: float = 2.0
-    diversity_bonus: float = 0.1
-    extra_turn: float = 0.5
+    exit_start: float = 0.2
+    diversity_bonus: float = 0.01
+    extra_turn: float = 0.05
     # Shaping
     # Increase shaping to make rewards denser
-    progress_scale: float = 0.05
-    safe_zone_reward: float = 2.0
+    progress_scale: float = 0.005
+    safe_zone_reward: float = 0.2
     # Constraints
-    illegal_action: float = -2.0
+    illegal_action: float = -0.2
     # Reduce time penalty to encourage longer games if needed, but keep small
-    time_penalty: float = -0.1
+    time_penalty: float = -0.01
     # reward signal function
     reward_type: Literal["sparse", "merged", "risk_opportunity"] = os.getenv(
         "REWARD_TYPE", "sparse"
