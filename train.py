@@ -2,6 +2,7 @@ import copy
 import math
 import os
 from typing import Optional
+
 os.environ["CUDA_VISIBLE_DEVICES"] = ""  # Use GPUs 0 and 1
 import gymnasium as gym
 import torch
@@ -162,6 +163,16 @@ def main():
             logger.info(
                 "Using MultiDiscreteFeatureExtractor for discrete observations."
             )
+        else:
+            from ludo_rl.features.continous_extraction import ContinuousFeatureExtractor
+
+            policy_kwargs.update(
+                {
+                    "features_extractor_class": ContinuousFeatureExtractor,
+                    "features_extractor_kwargs": {"embed_dim": 64},
+                }
+            )
+            logger.info("Using ContinuousFeatureExtractor for continuous observations.")
     except ImportError:
         # If feature extractor import fails, fall back to default
         logger.warning("Failed to import MultiDiscreteFeatureExtractor, using default.")
