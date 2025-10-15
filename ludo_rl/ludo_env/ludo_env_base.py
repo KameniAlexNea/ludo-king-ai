@@ -22,8 +22,12 @@ from ludo_rl.ludo_env.observation import (
     DiscreteObservationBuilder,
     ObservationBuilderBase,
 )
+from ludo_rl.rewards.reward_calculator import SparseRewardCalculator
+from ludo_rl.rewards.risk_opportunity import (
+    MergedRewardCalculator,
+    RiskOpportunityCalculator,
+)
 from ludo_rl.utils.move_utils import MoveUtils
-from ludo_rl.utils.reward_calculator import RewardCalculator
 
 
 @dataclass
@@ -63,7 +67,7 @@ class StepInfo:
 class LudoRLEnvBase(gym.Env):
     """Base Ludo RL environment with action masking support."""
 
-    metadata = {"render_modes": ["human"], "name": "LudoRLEnvBase-v0"}
+    metadata = {"render_modes": ["human", "rgb_array"], "name": "LudoRLEnvBase-v0"}
 
     def __init__(self, cfg: EnvConfig):
         super().__init__()
@@ -95,7 +99,16 @@ class LudoRLEnvBase(gym.Env):
         self.captured_by_opponents_this_turn = 0
 
         # Components
-        self.reward_calc = RewardCalculator()
+        reward_class = None
+        if self.cfg.reward.reward_type == "sparse":
+            reward_class = SparseRewardCalculator
+        elif self.cfg.reward.reward_type == "risk_opportunity":
+            reward_class = RiskOpportunityCalculator
+        elif self.cfg.reward.reward_type == "merged":
+            reward_class = MergedRewardCalculator
+        else:
+            raise ValueError(f"Unknown reward type: {self.cfg.reward.reward_type}")
+        self.reward_calc = reward_class()
 
         # Initialize spaces (will be updated on reset)
         self.observation_space = None
@@ -260,30 +273,22 @@ class LudoRLEnvBase(gym.Env):
             # Use structured Dict observation space for continuous observations
             tokens_per_player = GameConstants.TOKENS_PER_PLAYER
             max_opponents = GameConstants.MAX_PLAYERS - 1
-            dice_dim = 6 if self.cfg.obs.include_dice_one_hot else 1
+            dice_dim = 6
             self.observation_space = spaces.Dict(
                 {
-                    "agent_color": spaces.Box(
-                        low=0.0, high=1.0, shape=(len(ALL_COLORS),), dtype=np.float32
-                    ),
+                    "agent_color": spaces.MultiBinary(len(ALL_COLORS)),
                     "agent_progress": spaces.Box(
-                        low=-1.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
-                    ),
-                    "agent_vulnerable": spaces.Box(
                         low=0.0, high=1.0, shape=(tokens_per_player,), dtype=np.float32
                     ),
+                    "agent_vulnerable": spaces.MultiBinary(tokens_per_player),
                     "opponents_positions": spaces.Box(
-                        low=-1.0,
+                        low=0.0,
                         high=1.0,
                         shape=(tokens_per_player * max_opponents,),
                         dtype=np.float32,
                     ),
-                    "opponents_active": spaces.Box(
-                        low=0.0, high=1.0, shape=(max_opponents,), dtype=np.float32
-                    ),
-                    "dice": spaces.Box(
-                        low=0.0, high=1.0, shape=(dice_dim,), dtype=np.float32
-                    ),
+                    "opponents_active": spaces.MultiBinary(max_opponents),
+                    "dice": spaces.MultiBinary(dice_dim),
                 }
             )
 
@@ -336,9 +341,9 @@ class LudoRLEnvBase(gym.Env):
             self._handle_opponent_turns()
 
         # Calculate reward and check termination
-        player = self.game.get_current_player()
         reward, reward_breakdown = self._calculate_reward(
-            move_result, is_illegal, player.player_positions()
+            move_result,
+            is_illegal,
         )
         terminated = self._check_termination(move_result)
         truncated = self._check_truncation()
@@ -501,19 +506,15 @@ class LudoRLEnvBase(gym.Env):
         self,
         move_result: Optional[MoveResult],
         is_illegal: bool,
-        player_positions: list = [],
     ) -> tuple[float, Dict[str, float]]:
         """Calculate the reward for the current step."""
-        return self.reward_calc.compute_with_breakdown(
-            res=move_result,
-            illegal=is_illegal,
-            cfg=self.cfg,
-            game_over=self.game.game_over,
-            captured_by_opponents=self.captured_by_opponents_this_turn,
-            extra_turn=bool(move_result.extra_turn),
-            winner=self.game.winner,
-            agent_color=self.agent_color,
-            player_positions=player_positions,
+        return self.reward_calc.compute(
+            self.game,
+            self.agent_color,
+            move_result,
+            self.cfg,
+            return_breakdown=True,
+            is_illegal=is_illegal,
         )
 
     def _check_termination(self, move_result: MoveResult) -> bool:
@@ -554,7 +555,7 @@ class LudoRLEnvBase(gym.Env):
         return StepInfo(
             illegal_action=is_illegal,
             illegal_actions_total=self.illegal_actions,
-            action_mask=MoveUtils.action_mask(self.pending_valid_moves),
+            action_mask=MoveUtils.action_masks(self.pending_valid_moves),
             captured_opponents=captured_opponents,
             captured_by_opponents=self.captured_by_opponents_this_turn,
             episode_captured_opponents=self.episode_stats.captured_opponents,
@@ -576,10 +577,20 @@ class LudoRLEnvBase(gym.Env):
         MaskablePPO when using SubprocVecEnv (ActionMasker wrapper cannot be
         used across subprocesses). The mask length must match `action_space.n`.
         """
-        try:
-            mask = MoveUtils.action_mask(self.pending_valid_moves)
-            # ensure a plain Python list of bools
-            return [bool(x) for x in mask]
-        except Exception as e:
-            # If anything goes wrong, fall back to allowing all actions
-            raise RuntimeError("Failed to build action mask") from e
+        return MoveUtils.action_masks(self.pending_valid_moves)
+
+    def render(self):
+        """Render the environment."""
+        if self.render_mode == "rgb_array":
+            # @TODO generate ludo env visual
+            return np.zeros((480, 640, 3), dtype=np.uint8)
+        elif self.render_mode == "human":
+            # Print text representation
+            if self.game:
+                print(f"Current player: {self.game.get_current_player().color}")
+                print(f"Dice: {self.pending_dice}")
+                print(f"Turn: {self.current_turn}")
+            else:
+                print("Game not initialized")
+        else:
+            return super().render()

@@ -7,35 +7,40 @@ from typing import List, Literal, Optional
 class RewardConfig:
     # Terminal
     # Terminal (win-focused preset)
-    win: float = 50.0  # Increased from 50.0
-    lose: float = -50.0  # Increased penalty from -20.0
-    draw: float = -15.0  # Small penalty for draws
+    win: float = 50.0
+    lose: float = -50.0
+    draw: float = -15.0
     # Reduce heavy shaping on finishing tokens
-    finish_token: float = 10.0  # Increased from 6.0
+    finish_token: float = 10.0
     # Events
     # Per-capture reward increased
-    capture: float = 3.0  # Increased from 0.4
+    capture: float = 3.0
     # Being captured is penalized more strongly to discourage unsafe play
-    got_captured: float = -5.0  # Increased from -3.0
-    all_captured: float = -10.0  # Increased from -6.0
+    got_captured: float = -5.0
+    all_captured: float = -10.0
     # Reward for leaving home increased
-    exit_start: float = 2.0  # Increased from 1.0
-    extra_turn: float = 1.0  # Increased from 0.1
+    exit_start: float = 2.0
+    diversity_bonus: float = 0.1
+    extra_turn: float = 0.5
     # Shaping
     # Increase shaping to make rewards denser
-    progress_scale: float = 0.1  # Increased from 0.01
-    safe_zone_reward: float = 2.0  # Increased from 0.1
+    progress_scale: float = 0.05
+    safe_zone_reward: float = 2.0
     # Constraints
-    illegal_action: float = -2.0  # Increased from -1.0
+    illegal_action: float = -2.0
     # Reduce time penalty to encourage longer games if needed, but keep small
-    time_penalty: float = -0.1  # Reduced from -0.002
+    time_penalty: float = -0.1
+    # reward signal function
+    reward_type: Literal["sparse", "merged", "risk_opportunity"] = os.getenv(
+        "REWARD_TYPE", "sparse"
+    )  # "sparse", "merged", "risk_opportunity"
 
 
 @dataclass
 class ObservationConfig:
     # Encoding choices: prefer normalized floats by default for compactness.
-    include_dice_one_hot: bool = True
-    include_color_one_hot: bool = False
+    include_dice_one_hot: bool = True  # always True, not used
+    include_color_one_hot: bool = True  # always True, not used
     # Use discrete encoding (MultiDiscrete) instead of continuous Box
     discrete: bool = os.getenv("DISCRETE_OBS", "false").lower() == "true"
 
@@ -83,9 +88,15 @@ class EnvConfig:
     randomize_agent: bool = True
     # If set, forces env to use this many players (e.g., 2 or 4). If None, a
     # player count will be sampled per-reset from `allowed_player_counts`.
-    fixed_num_players: Optional[int] = None
+    fixed_num_players: Optional[int] = (
+        int(os.getenv("FIXED_NUM_PLAYERS")) if os.getenv("FIXED_NUM_PLAYERS") else None
+    )
     # Allowed player counts to sample from when `fixed_num_players` is None.
-    allowed_player_counts: List[int] = field(default_factory=lambda: [2, 4])
+    allowed_player_counts: List[int] = field(
+        default_factory=lambda: list(
+            map(int, os.getenv("ALLOWED_PLAYER_COUNTS", "2,4").split(","))
+        )
+    )
     reward: RewardConfig = field(default_factory=RewardConfig)
     obs: ObservationConfig = field(default_factory=ObservationConfig)
     opponents: OpponentConfig = field(default_factory=OpponentConfig)
@@ -99,7 +110,6 @@ class TrainConfig:
     total_steps: int = 20_000_000
     n_envs: int = 8
     eval_freq: int = 200_000
-    tournament_games: int = 240
     algorithm: str = "maskable_ppo"
     learning_rate: float = 3e-4
     lr_final: float = 8e-5
@@ -112,15 +122,6 @@ class TrainConfig:
     max_turns: int = 500
     eval_games: int = 240
     eval_baselines: str = ",".join(OpponentConfig().evaluation_candidates)
-    # Imitation kickstart
-    imitation_enabled: bool = False
-    imitation_strategies: str = ",".join(OpponentConfig().evaluation_candidates)
-    imitation_steps: int = (
-        50_000  # number of environment steps worth of samples to collect
-    )
-    imitation_batch_size: int = 1024
-    imitation_epochs: int = 5
-    imitation_entropy_boost: float = 0.01
     # Scheduling / annealing
     use_entropy_annealing: bool = False
     entropy_coef_initial: float = 0.5

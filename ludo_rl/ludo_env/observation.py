@@ -1,14 +1,11 @@
 from typing import Dict
 
 import numpy as np
-
-# NOTE: These domain classes (LudoGame, EnvConfig, PlayerColor, etc.)
-# are assumed to be defined in your ludo_engine and ludo_rl packages.
 from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
 
 from ludo_rl.config import EnvConfig
-from ludo_rl.utils.reward_calculator import token_progress, token_progress_pos
+from ludo_rl.rewards.reward_calculator import token_progress, token_progress_pos
 
 
 class ObservationBuilderBase:
@@ -52,8 +49,8 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
         tokens_per_player = GameConstants.TOKENS_PER_PLAYER
 
         # Agent color one-hot encoding
-        agent_color_onehot = [0.0] * len(ALL_COLORS)
-        agent_color_onehot[ALL_COLORS.index(self.agent_color)] = 1.0
+        agent_color_onehot = [False] * len(ALL_COLORS)
+        agent_color_onehot[ALL_COLORS.index(self.agent_color)] = True
 
         # Agent progress (normalized 0-1) - this replaces positions since they're redundant
         agent_progress = [
@@ -62,8 +59,7 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
 
         # Agent vulnerable flags
         agent_vulnerable = [
-            1.0 if self.is_vulnerable(t.position) else 0.0
-            for t in self.agent_player.tokens
+            self.is_vulnerable(t.position) for t in self.agent_player.tokens
         ]
 
         # Opponents (ordered by seat position)
@@ -86,20 +82,17 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
                 opp_active.append(0.0)
 
         # Dice encoding
-        if self.cfg.obs.include_dice_one_hot:
-            dice_vec = [0.0] * 6
-            if 1 <= dice <= 6:
-                dice_vec[dice - 1] = 1.0
-        else:
-            dice_vec = [((dice - 1) / 6.0) if (1 <= dice <= 6) else 0.0]
+        dice_vec = [False] * 6
+        if 1 <= dice <= 6:
+            dice_vec[dice - 1] = True
 
         return {
-            "agent_color": np.asarray(agent_color_onehot, dtype=np.float32),
+            "agent_color": np.asarray(agent_color_onehot, dtype=bool),
             "agent_progress": np.asarray(agent_progress, dtype=np.float32),
-            "agent_vulnerable": np.asarray(agent_vulnerable, dtype=np.float32),
+            "agent_vulnerable": np.asarray(agent_vulnerable, dtype=bool),
             "opponents_positions": np.asarray(opp_positions, dtype=np.float32),
-            "opponents_active": np.asarray(opp_active, dtype=np.float32),
-            "dice": np.asarray(dice_vec, dtype=np.float32),
+            "opponents_active": np.asarray(opp_active, dtype=bool),
+            "dice": np.asarray(dice_vec, dtype=bool),
         }
 
 

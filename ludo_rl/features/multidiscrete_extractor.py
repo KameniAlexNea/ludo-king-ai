@@ -1,6 +1,7 @@
 import gymnasium as gym
 import torch
 import torch.nn as nn
+from ludo_engine.models import ALL_COLORS, GameConstants
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 
@@ -18,15 +19,26 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
             )
 
         # Define embedding dimensions for each component
+        SIZE = 1 + GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+        MAX_OPPONENTS = GameConstants.MAX_PLAYERS - 1
         self.component_configs = {
-            "agent_color": {"n": 2, "size": 4},  # 4 colors, each 0/1
-            "agent_progress": {"n": 11, "size": 4},  # 4 tokens, each 0-10
-            "agent_vulnerable": {"n": 2, "size": 4},  # 4 tokens, each 0/1
+            "agent_color": {"n": 2, "size": len(ALL_COLORS)},  # 4 colors, each 0/1
+            "agent_progress": {
+                "n": SIZE,
+                "size": GameConstants.TOKENS_PER_PLAYER,
+            },  # 4 tokens, each 0-10
+            "agent_vulnerable": {
+                "n": 2,
+                "size": GameConstants.TOKENS_PER_PLAYER,
+            },  # 4 tokens, each 0/1
             "opponents_positions": {
-                "n": 65,
-                "size": 12,
+                "n": SIZE,
+                "size": GameConstants.TOKENS_PER_PLAYER * MAX_OPPONENTS,
             },  # 12 positions (3 opp × 4 tokens), each 0-64
-            "opponents_active": {"n": 2, "size": 3},  # 3 opponents, each 0/1
+            "opponents_active": {
+                "n": 2,
+                "size": MAX_OPPONENTS,
+            },  # 3 opponents, each 0/1
             "dice": {"n": 7, "size": 1},  # 1 dice value, 0-6
         }
 

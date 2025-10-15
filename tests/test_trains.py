@@ -24,12 +24,6 @@ class TestTrainingArgs(unittest.TestCase):
             batch_size=64,
             ent_coef=0.01,
             max_turns=1000,
-            imitation_enabled=False,
-            imitation_strategies="",
-            imitation_steps=0,
-            imitation_batch_size=64,
-            imitation_epochs=1,
-            imitation_entropy_boost=0.0,
             entropy_coef_initial=0.01,
             entropy_coef_final=0.001,
             entropy_anneal_steps=10000,
@@ -63,12 +57,6 @@ class TestTrainingArgs(unittest.TestCase):
             batch_size=128,
             ent_coef=0.02,
             max_turns=2000,
-            imitation_enabled=True,
-            imitation_strategies="random,killer",
-            imitation_steps=5000,
-            imitation_batch_size=128,
-            imitation_epochs=2,
-            imitation_entropy_boost=0.01,
             entropy_coef_initial=0.02,
             entropy_coef_final=0.002,
             entropy_anneal_steps=20000,
@@ -83,7 +71,6 @@ class TestTrainingArgs(unittest.TestCase):
         )
         config = parse_args()
         self.assertEqual(config.total_steps, 20000)
-        self.assertEqual(config.imitation_enabled, True)
         self.assertEqual(config.env_type, "hybrid")
 
 

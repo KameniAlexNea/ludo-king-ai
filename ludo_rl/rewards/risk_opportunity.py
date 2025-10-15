@@ -4,7 +4,8 @@ from typing import Dict, Iterable, Tuple
 from ludo_engine.core import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
-from ludo_rl.config import RewardConfig
+from ludo_rl.config import EnvConfig, RewardConfig
+from ludo_rl.rewards.reward_calculator import SparseRewardCalculator
 
 
 @dataclass
@@ -31,7 +32,7 @@ class RiskOpportunityCalculator:
     """
 
     def __init__(self, weights: SimpleROWeights | None = None) -> None:
-        self.weights = weights
+        self.weights = weights or SimpleROWeights()
 
     @staticmethod
     def _forward_distance(from_pos: int, opp_pos: int) -> int:
@@ -103,12 +104,12 @@ class RiskOpportunityCalculator:
         game: LudoGame,
         agent_color: PlayerColor,
         move: MoveResult,
-        *,
-        weights: SimpleROWeights | None = None,
+        cfg: EnvConfig = None,
         return_breakdown: bool = False,
+        is_illegal: bool = False,
     ) -> float | Tuple[float, Dict[str, float]]:
         """Return opportunity - risk (optionally with a breakdown)."""
-        w = weights or self.weights or SimpleROWeights()
+        w = self.weights
         old_pos = move.old_position
         new_pos = move.new_position
         opp = self._opportunity_score(move, old_pos, new_pos, w)
@@ -117,3 +118,65 @@ class RiskOpportunityCalculator:
         if not return_breakdown:
             return score
         return score, {"opportunity": opp, "risk": -risk}
+
+
+class MergedRewardCalculator:
+    """Compute shaped rewards based on game events and state changes."""
+
+    def __init__(self):
+        self.reward_calculator = SparseRewardCalculator()
+        self.ro_calculator = RiskOpportunityCalculator()
+
+    def compute(
+        self,
+        game: LudoGame,
+        agent_color: PlayerColor,
+        move: MoveResult,
+        cfg: EnvConfig,
+        return_breakdown: bool = False,
+        is_illegal: bool = False,
+    ) -> float:
+        # Get RO score (includes move-specific rewards and risk penalties)
+        ro_reward = self.ro_calculator.compute(
+            game,
+            agent_color,
+            move,
+            cfg=cfg,
+            return_breakdown=True,
+            is_illegal=is_illegal,
+        )
+        # Get base reward breakdown for non-overlapping components
+        _, base_breakdown = self.reward_calculator.compute(
+            game,
+            agent_color,
+            move,
+            cfg=cfg,
+            return_breakdown=True,
+            is_illegal=is_illegal,
+        )
+
+        # Components already handled by RO: progress, safe_zone, capture, finish, extra_turn, exit_start
+        overlapping_keys = {
+            "progress",
+            "safe_zone",
+            "capture",
+            "finish",
+            "extra_turn",
+            "exit_start",
+        }
+
+        # Add non-overlapping components from base reward
+        additional_reward = 0.0
+        additional_breakdown = {}
+        for key, value in base_breakdown.items():
+            if key not in overlapping_keys:
+                additional_reward += value
+                additional_breakdown[key] = value
+
+        if return_breakdown:
+            ro_r, ro_b = ro_reward
+            total_r = ro_r + additional_reward
+            total_b = {**ro_b, **additional_breakdown}
+            return total_r, total_b
+        ro_r, _ = ro_reward
+        return ro_r + additional_reward

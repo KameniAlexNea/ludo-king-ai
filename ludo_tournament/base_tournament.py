@@ -37,6 +37,8 @@ class BaseTournament:
                 "head_to_head": defaultdict(lambda: {"wins": 0, "games": 0}),
             }
         )
+        # Track number of completed games (independent of player count per game)
+        self._games_count: int = 0
 
     def _play_four_player_game(
         self, game: LudoGame, game_number: str, verbose_output: bool = True
@@ -128,6 +130,8 @@ class BaseTournament:
         self, results: Dict[str, Any], game_players: List[str]
     ) -> None:
         """Process and store game results for analysis."""
+        # Increment total games once per completed game
+        self._games_count += 1
         winner_name = results["winner"].strategy_name if results["winner"] else None
 
         for player_name in game_players:
@@ -258,28 +262,27 @@ class BaseTournament:
             for p in participants
             if p in self.detailed_stats and self.detailed_stats[p]["games_played"] > 0
         ]
-
+        # Choose champion by highest win rate, then by total wins as tie-breaker
         champion = (
             max(
                 played_participants,
                 key=lambda p: (
+                    (
+                        self.detailed_stats[p]["games_won"]
+                        / max(1, self.detailed_stats[p]["games_played"])
+                    ),
                     self.detailed_stats[p]["games_won"],
-                    self.detailed_stats[p]["games_won"]
-                    / max(1, self.detailed_stats[p]["games_played"]),
                 ),
             )
             if played_participants
             else None
         )
 
-        # Each completed game increments games_played for 4 players; divide to estimate total games.
-        total_player_entries = sum(
-            stats["games_played"] for stats in self.detailed_stats.values()
-        )
         summary = {
             "tournament_type": tournament_type,
             "participants": participants,
-            "total_games": total_player_entries // 4,
+            # Use tracked total number of games rather than inferring via players
+            "total_games": self._games_count,
             "results": dict(self.detailed_stats),
             "champion": champion,
         }
