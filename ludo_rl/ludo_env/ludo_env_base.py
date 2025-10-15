@@ -1,5 +1,5 @@
 import random
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 import gymnasium as gym
@@ -516,7 +516,7 @@ class LudoRLEnvBase(gym.Env):
             self.cfg,
             return_breakdown=True,
             is_illegal=is_illegal,
-            episode_info=step_info,
+            episode_info=asdict(step_info),
         )
 
     def _check_termination(self, move_result: MoveResult) -> bool:

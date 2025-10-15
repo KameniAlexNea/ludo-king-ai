@@ -21,16 +21,16 @@ class ContinuousFeatureExtractor(BaseFeaturesExtractor):
         # Determine the dimensions for the agent and opponent sections based on
         # the structure defined in your ContinuousObservationBuilder
 
-        # --- Define Feature Grouping and Sizes (Assuming 4 tokens, 3 opponents) ---
+        # --- Define Feature Grouping and Sizes (Matching ContinuousObservationBuilder) ---
         self.agent_keys = {
-            "agent_tokens",  # 4 floats
-            "agent_progress",  # 4 floats
-            "agent_vulnerable",  # 4 floats
-            "dice",  # 1 float (if not one-hot) or 6 floats (if one-hot)
+            "agent_color",  # 4 bools (one-hot encoded agent color)
+            "agent_progress",  # 4 floats (progress of each token)
+            "agent_vulnerable",  # 4 bools (vulnerability flags)
+            "dice",  # 6 bools (one-hot encoded dice value)
         }
         self.opponent_keys = {
             "opponents_positions",  # 12 floats (3 opp * 4 tokens)
-            "opponents_active",  # 3 floats
+            "opponents_active",  # 3 bools (which opponents are active)
         }
 
         # Calculate the size of the opponent sequence (12 positions + 3 flags)
@@ -48,14 +48,6 @@ class ContinuousFeatureExtractor(BaseFeaturesExtractor):
 
         # We need a small linear layer to project the scalar items into a richer feature space
         self.projection_dim = 16
-        self.input_projection = nn.Linear(self.opp_item_dim, self.projection_dim)
-
-        # Multi-head attention for opponent features
-        self.attention = nn.MultiheadAttention(
-            self.projection_dim,
-            num_heads=max(1, self.projection_dim // 4),
-            batch_first=True,
-        )
 
         # Output dimension of the aggregated opponent feature
         self.opp_aggregated_dim = self.projection_dim
@@ -66,9 +58,21 @@ class ContinuousFeatureExtractor(BaseFeaturesExtractor):
             # We assume the output from your ContinuousObserver is a 1D tensor for each key
             agent_raw_dim += observation_space[key].shape[0]
 
-        # Final feature dimension is Agent (raw concatenated) + Opponent (aggregated)
-        total_features_dim = agent_raw_dim + self.opp_aggregated_dim
+        # Final feature dimension is embed_dim (after processing)
+        total_features_dim = embed_dim
+
+        # Now call super().__init__() with the correct features_dim
         super().__init__(observation_space, features_dim=total_features_dim)
+
+        # Now it's safe to create nn.Module attributes
+        self.input_projection = nn.Linear(self.opp_item_dim, self.projection_dim)
+
+        # Multi-head attention for opponent features
+        self.attention = nn.MultiheadAttention(
+            self.projection_dim,
+            num_heads=max(1, self.projection_dim // 4),
+            batch_first=True,
+        )
 
         # Final layer to concatenate the agent features
         self.final_concat_layer = nn.Linear(
