@@ -1,11 +1,12 @@
-import os
-
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import copy
 import math
+import os
 from typing import Optional
 
 import gymnasium as gym
+import torch
+from dotenv import load_dotenv
 from loguru import logger
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
@@ -24,6 +25,8 @@ from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.trains.training_args import parse_args
 from ludo_rl.utils.move_utils import MoveUtils
+
+load_dotenv()
 
 
 def make_env(
@@ -59,6 +62,7 @@ def main():
     os.makedirs(args.model_dir, exist_ok=True)
 
     env_cfg = EnvConfig(max_turns=args.max_turns)
+    logger.info(f"Config used: {env_cfg}")
 
     # For selfplay and hybrid, force 4 players since they require specific opponent setups
     if args.env_type in ["selfplay", "hybrid"]:
@@ -140,17 +144,25 @@ def main():
         learning_rate = args.learning_rate
 
     # Optionally use a custom feature extractor when discrete observations are enabled
-    policy_kwargs = {}
+    policy_kwargs = {
+        "net_arch": [512, 256, 128],
+        "activation_fn": torch.nn.LeakyReLU,
+    }
     try:
-        if getattr(env_cfg, "obs", None) and getattr(env_cfg.obs, "discrete", False):
+        if env_cfg.obs.discrete:
             from ludo_rl.features.multidiscrete_extractor import (
                 MultiDiscreteFeatureExtractor,
             )
 
-            policy_kwargs = {
-                "features_extractor_class": MultiDiscreteFeatureExtractor,
-                "features_extractor_kwargs": {"embed_dim": args.embed_dim},
-            }
+            policy_kwargs.update(
+                {
+                    "features_extractor_class": MultiDiscreteFeatureExtractor,
+                    "features_extractor_kwargs": {"embed_dim": args.embed_dim},
+                }
+            )
+            logger.info(
+                "Using MultiDiscreteFeatureExtractor for discrete observations."
+            )
     except ImportError:
         # If feature extractor import fails, fall back to default
         logger.warning("Failed to import MultiDiscreteFeatureExtractor, using default.")
@@ -244,6 +256,15 @@ def main():
             verbose=1,
         )
         callbacks.append(ckpt_cb)
+
+    final_model_path = os.path.join(args.model_dir, "maskable_ppo_ludo_rl_start")
+    try:
+        model.save(final_model_path)
+        logger.info(f"Training started. Initial model saved to {final_model_path}.zip")
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to save initial model to {final_model_path}: {e}"
+        ) from e
 
     model.learn(total_timesteps=args.total_steps, callback=callbacks)
 

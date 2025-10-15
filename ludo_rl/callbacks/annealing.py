@@ -35,6 +35,8 @@ class AnnealingCallback(BaseCallback):
             try:
                 # Directly set ent_coef - SB3 uses this in loss computation
                 self.model.ent_coef = float(new_ent)
+                if t % 1_000_000 == 0:
+                    logger.info(f"[Annealing] Set ent_coef to {new_ent}")
             except Exception as e:
                 if self.verbose > 0:
                     logger.error(

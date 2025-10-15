@@ -2,14 +2,18 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 @dataclass
 class RewardConfig:
     # Terminal
     # Terminal (win-focused preset)
-    win: float = 50.0
-    lose: float = -50.0
-    draw: float = -15.0
+    win: float = 100.0
+    lose: float = -100.0
+    draw: float = -30.0
     # Per-token rewards
     finish_token: float = 1.0
     # Events
@@ -18,7 +22,7 @@ class RewardConfig:
     # Being captured is penalized more strongly to discourage unsafe play
     got_captured: float = -0.5
     all_captured: float = -1.0
-    # Reward for leaving home increased
+    # Reward for leaving home and diversity bonus
     exit_start: float = 0.2
     diversity_bonus: float = 0.01
     extra_turn: float = 0.05
