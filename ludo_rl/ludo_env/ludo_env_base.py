@@ -22,6 +22,7 @@ from ludo_rl.ludo_env.observation import (
     DiscreteObservationBuilder,
     ObservationBuilderBase,
 )
+from ludo_rl.rewards.reward_adv_calculator import AdvancedRewardCalculator
 from ludo_rl.rewards.reward_calculator import SparseRewardCalculator
 from ludo_rl.rewards.risk_opportunity import (
     MergedRewardCalculator,
@@ -106,6 +107,8 @@ class LudoRLEnvBase(gym.Env):
             reward_class = RiskOpportunityCalculator
         elif self.cfg.reward.reward_type == "merged":
             reward_class = MergedRewardCalculator
+        elif self.cfg.reward.reward_type == "sparse_adv":
+            reward_class = AdvancedRewardCalculator
         else:
             raise ValueError(f"Unknown reward type: {self.cfg.reward.reward_type}")
         self.reward_calc = reward_class()
@@ -340,11 +343,6 @@ class LudoRLEnvBase(gym.Env):
         if not (move_result and move_result.extra_turn) and not self.game.game_over:
             self._handle_opponent_turns()
 
-        # Calculate reward and check termination
-        reward, reward_breakdown = self._calculate_reward(
-            move_result,
-            is_illegal,
-        )
         terminated = self._check_termination(move_result)
         truncated = self._check_truncation()
 
@@ -360,6 +358,11 @@ class LudoRLEnvBase(gym.Env):
 
         obs = self._build_observation()
         step_info = self._build_step_info(move_result, is_illegal)
+
+        # Calculate reward and check termination
+        reward, reward_breakdown = self._calculate_reward(
+            move_result, is_illegal, step_info
+        )
 
         info_dict = step_info.__dict__
         info_dict["reward_breakdown"] = reward_breakdown
@@ -503,9 +506,7 @@ class LudoRLEnvBase(gym.Env):
         return player.make_strategic_decision(context)
 
     def _calculate_reward(
-        self,
-        move_result: Optional[MoveResult],
-        is_illegal: bool,
+        self, move_result: Optional[MoveResult], is_illegal: bool, step_info: StepInfo
     ) -> tuple[float, Dict[str, float]]:
         """Calculate the reward for the current step."""
         return self.reward_calc.compute(
@@ -515,6 +516,7 @@ class LudoRLEnvBase(gym.Env):
             self.cfg,
             return_breakdown=True,
             is_illegal=is_illegal,
+            episode_info=step_info,
         )
 
     def _check_termination(self, move_result: MoveResult) -> bool:

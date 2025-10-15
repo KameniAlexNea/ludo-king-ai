@@ -1,7 +1,44 @@
-from typing import Dict, Any
-from ludo_engine import LudoGame, Player
+from dataclasses import dataclass
+from typing import Any, Dict
+
+from ludo_engine import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
+
 from ludo_rl.config import EnvConfig
+
+
+@dataclass
+class AdvRewardConfig:
+    """Advanced reward configuration for strategic Ludo components."""
+
+    # Opportunity rewards
+    capture_opportunity_taken: float = 0.5
+    capture_opportunity_missed: float = -0.3
+    exit_opportunity_taken: float = 0.4
+    exit_opportunity_missed: float = -0.2
+    finish_opportunity_taken: float = 0.6
+    finish_opportunity_missed: float = -0.1
+
+    # Opportunity utilization efficiency bonuses
+    capture_utilization_bonus: float = (
+        0.25  # Bonus multiplier for capture utilization ratio
+    )
+    exit_utilization_bonus: float = 0.2  # Bonus multiplier for exit utilization ratio
+    finish_utilization_bonus: float = (
+        0.3  # Bonus multiplier for finish utilization ratio
+    )
+
+    # Risk management
+    vulnerability_reduction: float = 0.3
+    vulnerability_increase: float = -0.4
+
+    # Strategic positioning
+    blocking_bonus: float = 0.2
+    extra_safe_zone_bonus: float = 0.1
+
+    # Long-term planning
+    progress_efficiency: float = 0.1
+    opponent_pressure_relief: float = 0.15
 
 
 class AdvancedRewardCalculator:
@@ -14,7 +51,8 @@ class AdvancedRewardCalculator:
     - Long-term planning (progress efficiency, opponent pressure)
     """
 
-    def __init__(self):
+    def __init__(self, adv_cfg: AdvRewardConfig = None):
+        self.adv_cfg = adv_cfg or AdvRewardConfig()
         self.prev_opportunities = {}  # Track previous episode opportunities for comparison
 
     def compute(
@@ -68,20 +106,33 @@ class AdvancedRewardCalculator:
         }
 
         reward = 0.0
-        agent_player = game.get_player_from_color(agent_color)
 
         # Basic components (similar to sparse calculator)
-        reward += self._compute_basic_components(game, agent_color, move, cfg, breakdown, is_illegal)
+        reward += self._compute_basic_components(
+            game, agent_color, move, cfg, breakdown, is_illegal
+        )
 
         # Advanced strategic components
         reward += self._compute_opportunity_rewards(episode_info, cfg, breakdown)
         reward += self._compute_risk_management(game, agent_color, move, cfg, breakdown)
-        reward += self._compute_strategic_positioning(game, agent_color, move, cfg, breakdown)
-        reward += self._compute_long_term_planning(game, agent_color, move, cfg, episode_info, breakdown)
+        reward += self._compute_strategic_positioning(
+            game, agent_color, move, cfg, breakdown
+        )
+        reward += self._compute_long_term_planning(
+            game, agent_color, move, cfg, episode_info, breakdown
+        )
 
         return (float(reward), breakdown) if return_breakdown else reward
 
-    def _compute_basic_components(self, game: LudoGame, agent_color: PlayerColor, move: MoveResult, cfg: EnvConfig, breakdown: dict, is_illegal: bool) -> float:
+    def _compute_basic_components(
+        self,
+        game: LudoGame,
+        agent_color: PlayerColor,
+        move: MoveResult,
+        cfg: EnvConfig,
+        breakdown: dict,
+        is_illegal: bool,
+    ) -> float:
         """Compute basic reward components (similar to SparseRewardCalculator)."""
         reward = 0.0
 
@@ -132,10 +183,16 @@ class AdvancedRewardCalculator:
             breakdown["got_captured"] += val
             reward += val
 
-            home_tokens = sum(1 for pos in game.get_player_from_color(agent_color).player_positions()
-                            if pos == GameConstants.HOME_POSITION)
-            finished_tokens = sum(1 for pos in game.get_player_from_color(agent_color).player_positions()
-                                if pos == GameConstants.FINISH_POSITION)
+            home_tokens = sum(
+                1
+                for pos in game.get_player_from_color(agent_color).player_positions()
+                if pos == GameConstants.HOME_POSITION
+            )
+            finished_tokens = sum(
+                1
+                for pos in game.get_player_from_color(agent_color).player_positions()
+                if pos == GameConstants.FINISH_POSITION
+            )
             if GameConstants.TOKENS_PER_PLAYER - finished_tokens == home_tokens:
                 breakdown["all_captured"] += cfg.reward.all_captured
                 reward += cfg.reward.all_captured
@@ -150,11 +207,14 @@ class AdvancedRewardCalculator:
 
         # Diversity bonus
         nhome_column_tokens = sum(
-            1 for pos in game.get_player_from_color(agent_color).player_positions()
+            1
+            for pos in game.get_player_from_color(agent_color).player_positions()
             if GameConstants.HOME_POSITION < pos < GameConstants.HOME_COLUMN_START
         )
         if nhome_column_tokens > 1:
-            breakdown["diversity_bonus"] += cfg.reward.diversity_bonus * nhome_column_tokens
+            breakdown["diversity_bonus"] += (
+                cfg.reward.diversity_bonus * nhome_column_tokens
+            )
             reward += cfg.reward.diversity_bonus * nhome_column_tokens
 
         if move.extra_turn:
@@ -175,112 +235,173 @@ class AdvancedRewardCalculator:
 
         return reward
 
-    def _compute_opportunity_rewards(self, episode_info: dict, cfg: EnvConfig, breakdown: dict) -> float:
+    def _compute_opportunity_rewards(
+        self, episode_info: dict, cfg: EnvConfig, breakdown: dict
+    ) -> float:
         """Reward based on opportunity utilization."""
         reward = 0.0
 
         # Capture opportunities
-        capture_available = episode_info.get('episode_capture_ops_available', 0)
-        capture_taken = episode_info.get('episode_capture_ops_taken', 0)
+        capture_available = episode_info.get("episode_capture_ops_available", 0)
+        capture_taken = episode_info.get("episode_capture_ops_taken", 0)
         if capture_available > 0:
             capture_ratio = capture_taken / capture_available
             # Reward taking captures, penalize missing them
-            taken_reward = capture_taken * 0.5  # Bonus for each taken
-            missed_penalty = (capture_available - capture_taken) * -0.3  # Penalty for missed
-            breakdown["capture_opportunity_taken"] += taken_reward
+            taken_reward = (
+                capture_taken * self.adv_cfg.capture_opportunity_taken
+            )  # Bonus for each taken
+            missed_penalty = (
+                capture_available - capture_taken
+            ) * self.adv_cfg.capture_opportunity_missed  # Penalty for missed
+            # Add utilization efficiency bonus
+            efficiency_bonus = capture_ratio * self.adv_cfg.capture_utilization_bonus
+            breakdown["capture_opportunity_taken"] += taken_reward + efficiency_bonus
             breakdown["capture_opportunity_missed"] += missed_penalty
-            reward += taken_reward + missed_penalty
+            reward += taken_reward + missed_penalty + efficiency_bonus
 
         # Exit opportunities
-        exit_available = episode_info.get('episode_home_exit_ops_available', 0)
-        exit_taken = episode_info.get('episode_home_exit_ops_taken', 0)
+        exit_available = episode_info.get("episode_home_exit_ops_available", 0)
+        exit_taken = episode_info.get("episode_home_exit_ops_taken", 0)
         if exit_available > 0:
             exit_ratio = exit_taken / exit_available
             # Reward taking exits, penalize missing them (more than captures since exits are fundamental)
-            taken_reward = exit_taken * 0.4
-            missed_penalty = (exit_available - exit_taken) * -0.2
-            breakdown["exit_opportunity_taken"] += taken_reward
+            taken_reward = exit_taken * self.adv_cfg.exit_opportunity_taken
+            missed_penalty = (
+                exit_available - exit_taken
+            ) * self.adv_cfg.exit_opportunity_missed
+            # Add utilization efficiency bonus
+            efficiency_bonus = exit_ratio * self.adv_cfg.exit_utilization_bonus
+            breakdown["exit_opportunity_taken"] += taken_reward + efficiency_bonus
             breakdown["exit_opportunity_missed"] += missed_penalty
-            reward += taken_reward + missed_penalty
+            reward += taken_reward + missed_penalty + efficiency_bonus
 
         # Finish opportunities
-        finish_available = episode_info.get('episode_finish_ops_available', 0)
-        finish_taken = episode_info.get('episode_finish_ops_taken', 0)
+        finish_available = episode_info.get("episode_finish_ops_available", 0)
+        finish_taken = episode_info.get("episode_finish_ops_taken", 0)
         if finish_available > 0:
             finish_ratio = finish_taken / finish_available
-            taken_reward = finish_taken * 0.6  # High reward for finishing
-            missed_penalty = (finish_available - finish_taken) * -0.1
-            breakdown["finish_opportunity_taken"] = taken_reward
+            taken_reward = (
+                finish_taken * self.adv_cfg.finish_opportunity_taken
+            )  # High reward for finishing
+            missed_penalty = (
+                finish_available - finish_taken
+            ) * self.adv_cfg.finish_opportunity_missed
+            # Add utilization efficiency bonus
+            efficiency_bonus = finish_ratio * self.adv_cfg.finish_utilization_bonus
+            breakdown["finish_opportunity_taken"] = taken_reward + efficiency_bonus
             breakdown["finish_opportunity_missed"] = missed_penalty
-            reward += taken_reward + missed_penalty
+            reward += taken_reward + missed_penalty + efficiency_bonus
 
         return reward
 
-    def _compute_risk_management(self, game: LudoGame, agent_color: PlayerColor, move: MoveResult, cfg: EnvConfig, breakdown: dict) -> float:
+    def _compute_risk_management(
+        self,
+        game: LudoGame,
+        agent_color: PlayerColor,
+        move: MoveResult,
+        cfg: EnvConfig,
+        breakdown: dict,
+    ) -> float:
         """Reward for managing risk (vulnerable tokens)."""
         reward = 0.0
 
         # Calculate vulnerable tokens before and after move
-        vuln_before = self._count_vulnerable_tokens(game, agent_color, before_move=True, move=move)
-        vuln_after = self._count_vulnerable_tokens(game, agent_color, before_move=False, move=move)
+        vuln_before = self._count_vulnerable_tokens(
+            game, agent_color, before_move=True, move=move
+        )
+        vuln_after = self._count_vulnerable_tokens(
+            game, agent_color, before_move=False, move=move
+        )
 
         vuln_delta = vuln_before - vuln_after
         if vuln_delta > 0:
             # Reduced vulnerability - good
-            val = vuln_delta * 0.3
+            val = vuln_delta * self.adv_cfg.vulnerability_reduction
             breakdown["vulnerability_reduction"] += val
             reward += val
         elif vuln_delta < 0:
             # Increased vulnerability - bad
-            val = vuln_delta * -0.4  # Stronger penalty
+            val = vuln_delta * self.adv_cfg.vulnerability_increase  # Stronger penalty
             breakdown["vulnerability_increase"] += val
             reward += val
 
         return reward
 
-    def _compute_strategic_positioning(self, game: LudoGame, agent_color: PlayerColor, move: MoveResult, cfg: EnvConfig, breakdown: dict) -> float:
+    def _compute_strategic_positioning(
+        self,
+        game: LudoGame,
+        agent_color: PlayerColor,
+        move: MoveResult,
+        cfg: EnvConfig,
+        breakdown: dict,
+    ) -> float:
         """Reward for strategic positioning (blocking, safe zones, etc.)."""
         reward = 0.0
 
         # Blocking bonus: reward if move blocks opponent progress
         if self._move_blocks_opponent(game, agent_color, move):
-            val = 0.2
+            val = self.adv_cfg.blocking_bonus
             breakdown["blocking_bonus"] += val
             reward += val
 
         # Additional safe zone bonus if multiple tokens in safe zones
-        safe_tokens = sum(1 for pos in game.get_player_from_color(agent_color).player_positions()
-                         if pos in BoardConstants.STAR_SQUARES)
+        safe_tokens = sum(
+            1
+            for pos in game.get_player_from_color(agent_color).player_positions()
+            if pos in BoardConstants.STAR_SQUARES
+        )
         if safe_tokens > 1:
-            val = (safe_tokens - 1) * 0.1  # Bonus for each additional safe token
+            val = (
+                (safe_tokens - 1) * self.adv_cfg.extra_safe_zone_bonus
+            )  # Bonus for each additional safe token
             breakdown["safe_zone"] += val  # Add to existing safe_zone
             reward += val
 
         return reward
 
-    def _compute_long_term_planning(self, game: LudoGame, agent_color: PlayerColor, move: MoveResult, cfg: EnvConfig, episode_info: dict, breakdown: dict) -> float:
+    def _compute_long_term_planning(
+        self,
+        game: LudoGame,
+        agent_color: PlayerColor,
+        move: MoveResult,
+        cfg: EnvConfig,
+        episode_info: dict,
+        breakdown: dict,
+    ) -> float:
         """Reward for long-term planning aspects."""
         reward = 0.0
 
         # Progress efficiency: reward if progress is made efficiently (not wasting moves)
         if move.old_position != move.new_position:
             start_pos = BoardConstants.START_POSITIONS[agent_color]
-            progress_made = self._token_progress_pos(move.new_position, start_pos) - self._token_progress_pos(move.old_position, start_pos)
+            progress_made = self._token_progress_pos(
+                move.new_position, start_pos
+            ) - self._token_progress_pos(move.old_position, start_pos)
             if progress_made > 0:
                 # Efficiency bonus based on dice roll utilization
-                dice_value = game.dice_value if hasattr(game, 'dice_value') else 6  # Assume max if unknown
-                efficiency = min(progress_made / dice_value, 1.0)  # How much of dice used for progress
-                val = efficiency * 0.1
+                dice_value = (
+                    game.dice_value if hasattr(game, "dice_value") else 6
+                )  # Assume max if unknown
+                efficiency = min(
+                    progress_made / dice_value, 1.0
+                )  # How much of dice used for progress
+                val = efficiency * self.adv_cfg.progress_efficiency
                 breakdown["progress_efficiency"] += val
                 reward += val
 
         # Opponent pressure relief: reward if opponents have fewer active tokens after move
-        opp_active_before = episode_info.get('opponents_active_before', 3)  # Assume 3 if not tracked
-        opp_active_after = sum(1 for p in game.players if p.color != agent_color and
-                              any(pos != GameConstants.HOME_POSITION for pos in p.player_positions()))
+        opp_active_before = episode_info.get(
+            "opponents_active_before", 3
+        )  # Assume 3 if not tracked
+        opp_active_after = sum(
+            1
+            for p in game.players
+            if p.color != agent_color
+            and any(pos != GameConstants.HOME_POSITION for pos in p.player_positions())
+        )
         pressure_relief = opp_active_before - opp_active_after
         if pressure_relief > 0:
-            val = pressure_relief * 0.15
+            val = pressure_relief * self.adv_cfg.opponent_pressure_relief
             breakdown["opponent_pressure_relief"] += val
             reward += val
 
@@ -299,16 +420,28 @@ class AdvancedRewardCalculator:
             steps = GameConstants.MAIN_BOARD_SIZE - start_pos + pos
         return steps + 1
 
-    def _count_vulnerable_tokens(self, game: LudoGame, agent_color: PlayerColor, before_move=True, move=None) -> int:
+    def _count_vulnerable_tokens(
+        self,
+        game: LudoGame,
+        agent_color: PlayerColor,
+        before_move=True,
+        move: MoveResult = None,
+    ) -> int:
         """Count how many of agent's tokens are vulnerable to capture."""
         agent_positions = game.get_player_from_color(agent_color).player_positions()
         if not before_move and move:
             # Adjust for the move
-            agent_positions = [move.new_position if pos == move.old_position else pos for pos in agent_positions]
+            agent_positions = [
+                move.new_position if pos == move.old_position else pos
+                for pos in agent_positions
+            ]
 
         vulnerable = 0
         for pos in agent_positions:
-            if pos == GameConstants.HOME_POSITION or pos == GameConstants.FINISH_POSITION:
+            if (
+                pos == GameConstants.HOME_POSITION
+                or pos == GameConstants.FINISH_POSITION
+            ):
                 continue
             # Check if any opponent can capture this position
             for player in game.players:
@@ -317,7 +450,10 @@ class AdvancedRewardCalculator:
                 opp_positions = player.player_positions()
                 # Simple check: if opponent has token that can reach this pos with exact dice
                 for opp_pos in opp_positions:
-                    if opp_pos != GameConstants.HOME_POSITION and opp_pos != GameConstants.FINISH_POSITION:
+                    if (
+                        opp_pos != GameConstants.HOME_POSITION
+                        and opp_pos != GameConstants.FINISH_POSITION
+                    ):
                         # Calculate distance (simplified)
                         dist = (pos - opp_pos) % GameConstants.MAIN_BOARD_SIZE
                         if dist <= 6 and dist > 0:  # Can reach with dice 1-6
@@ -325,7 +461,9 @@ class AdvancedRewardCalculator:
                             break
         return vulnerable
 
-    def _move_blocks_opponent(self, game: LudoGame, agent_color: PlayerColor, move: MoveResult) -> bool:
+    def _move_blocks_opponent(
+        self, game: LudoGame, agent_color: PlayerColor, move: MoveResult
+    ) -> bool:
         """Check if the move blocks opponent progress."""
         # Simple check: if new position is just ahead of opponent token
         for player in game.players:
@@ -333,8 +471,13 @@ class AdvancedRewardCalculator:
                 continue
             opp_positions = player.player_positions()
             for opp_pos in opp_positions:
-                if opp_pos != GameConstants.HOME_POSITION and opp_pos != GameConstants.FINISH_POSITION:
+                if (
+                    opp_pos != GameConstants.HOME_POSITION
+                    and opp_pos != GameConstants.FINISH_POSITION
+                ):
                     # If agent's new pos is one step ahead of opponent
-                    if (move.new_position - opp_pos) % GameConstants.MAIN_BOARD_SIZE == 1:
+                    if (
+                        move.new_position - opp_pos
+                    ) % GameConstants.MAIN_BOARD_SIZE == 1:
                         return True
         return False
