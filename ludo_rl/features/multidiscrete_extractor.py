@@ -72,13 +72,15 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
         for key, config in self.component_configs.items():
             obs_tensor = observations[key]  # Shape: (batch, n * size)
             n, size = config["n"], config["size"]
+            batch = obs_tensor.size(0)
 
-            # For each position i in size, take the next n elements and argmax
-            for i in range(size):
-                one_hot = obs_tensor[:, i * n : (i + 1) * n]  # (batch, n)
-                discrete = torch.argmax(one_hot, dim=-1)  # (batch,)
-                emb = self.embed_by_n[str(n)](discrete)
-                all_embeddings.append(emb)
+            # Reshape to (batch, size, n) and argmax to get discrete indices
+            obs_reshaped = obs_tensor.view(batch, size, n)
+            discrete_values = torch.argmax(obs_reshaped, dim=-1)  # (batch, size)
+
+            # Embed all discrete values at once
+            embs: torch.Tensor = self.embed_by_n[str(n)](discrete_values)  # (batch, size, embed_dim)
+            all_embeddings.extend(embs.unbind(dim=1))  # List of (batch, embed_dim) tensors
 
         # Stack all embeddings: (batch, num_embeddings, embed_dim)
         embs_tensor = torch.stack(all_embeddings, dim=1)
