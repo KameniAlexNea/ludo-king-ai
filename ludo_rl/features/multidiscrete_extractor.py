@@ -89,4 +89,4 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
         attended, _ = self.attention(embs_tensor, embs_tensor, embs_tensor)
 
         # Flatten to match expected features_dim
-        return attended.view(attended.size(0), -1)
+        return attended.reshape(attended.size(0), -1)
