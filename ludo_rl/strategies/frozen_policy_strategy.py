@@ -21,7 +21,7 @@ class FrozenPolicyStrategy(Strategy):
         self,
         policy: Optional[MaskableActorCriticPolicy],
         obs_builder: ObservationBuilderBase,
-        deterministic: bool = True,
+        deterministic: bool = False,
         obs_normalizer: Optional[VecNormalize] = None,
     ):
         super().__init__(
@@ -30,7 +30,7 @@ class FrozenPolicyStrategy(Strategy):
         )
         self.policy = policy
         self.obs_builder = obs_builder
-        self.deterministic = deterministic
+        self.deterministic = False
         self.obs_normalizer = obs_normalizer
 
     @staticmethod

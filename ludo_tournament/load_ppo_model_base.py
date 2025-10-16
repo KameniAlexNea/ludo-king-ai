@@ -268,7 +268,7 @@ def build_frozen_strategy(
     agent_color: PlayerColor = PlayerColor.RED,
     env_cfg: Optional[EnvConfig] = None,
     player_name: str = "ppo",
-    deterministic: bool = True,
+    deterministic: bool = False,
     vec_normalize: Optional[VecNormalize] = None,
 ):
     """Create a FrozenPolicyStrategy bound to a specific game instance.
@@ -302,7 +302,7 @@ def load_ppo_strategy(
     agent_color: PlayerColor = PlayerColor.RED,
     model_preference: str = "final",
     game: Optional[LudoGame] = None,
-    deterministic: bool = True,
+    deterministic: bool = False,
     device: str = "cpu",
     max_turns=500,
 ):

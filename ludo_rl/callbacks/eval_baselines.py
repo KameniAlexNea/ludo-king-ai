@@ -50,7 +50,7 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
             eval_freq=eval_freq,
             log_path=log_path,
             best_model_save_path=best_model_save_path,
-            deterministic=True,
+            deterministic=False,
             render=False,
             verbose=verbose,
             warn=True,
