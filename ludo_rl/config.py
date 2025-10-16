@@ -121,6 +121,8 @@ class TrainConfig:
     batch_size: int = 512
     ent_coef: float = 0.2
     vf_coef: float = 0.5
+    gamma: float = 0.999
+    gae_lambda: float = 0.95
     logdir: str = "./training/logs"
     model_dir: str = "./training/models"
     max_turns: int = 500

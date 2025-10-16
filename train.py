@@ -215,7 +215,8 @@ def main():
             tensorboard_log=args.logdir,
             verbose=1,
             device="cpu",
-            gamma=0.995,
+            gamma=args.gamma,
+            gae_lambda=args.gae_lambda,
             policy_kwargs=policy_kwargs,
         )
 
