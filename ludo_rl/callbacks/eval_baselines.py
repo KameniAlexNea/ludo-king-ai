@@ -1,4 +1,6 @@
 import os
+import re
+import zlib
 from typing import Dict, Optional, Sequence
 
 import numpy as np
@@ -74,6 +76,15 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
             )
             self.baselines_per_setup.append(combos)
         self.executed = 0
+
+    def _short_metric_key(self, key: str) -> str:
+        """Create a compact, unique metric key to avoid SB3 logger truncation collisions."""
+        tokens = re.findall(r"[A-Za-z0-9]+", str(key).lower())
+        if not tokens:
+            tokens = ["term"]
+        core = "_".join(t[:4] for t in tokens[:3])
+        h = format(zlib.adler32(str(key).encode("utf-8")) & 0xFFFFFFFF, "x")[:4]
+        return f"{core}_{h}"
 
     def _on_step(self) -> bool:
         # Evaluate every eval_freq steps
@@ -190,9 +201,10 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         self.logger.record("eval/mean_reward", mean_reward)
         self.logger.record("eval/mean_ep_length", mean_ep_length)
         self.logger.record("eval/win_rate", win_rate)
-        # Optional: log a few key breakdown terms
+        # Log breakdown terms using compact, unique keys to avoid truncation collisions
         for k, v in avg_breakdown.items():
-            self.logger.record(f"eval/breakdown/{k}", float(v))
+            sk = self._short_metric_key(k)
+            self.logger.record(f"eval/bd/{sk}", float(v))
 
         # Save eval arrays similar to parent callback
         if self.log_path is not None:

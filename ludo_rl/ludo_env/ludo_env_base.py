@@ -182,6 +182,10 @@ class LudoRLEnvBase(gym.Env):
         self.on_reset_before_attach(options)
         self.attach_opponents(options)
 
+        # Reset reward calculator's episode state (if it supports it)
+        if hasattr(self.reward_calc, "reset_for_new_episode"):
+            self.reward_calc.reset_for_new_episode()
+
         # Start the first agent turn
         self._advance_to_agent_turn()
         self._roll_dice_for_agent()

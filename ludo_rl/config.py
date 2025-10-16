@@ -35,9 +35,9 @@ class RewardConfig:
     # Reduce time penalty to encourage longer games if needed, but keep small
     time_penalty: float = -0.01
     # reward signal function
-    reward_type: Literal["sparse", "merged", "risk_opportunity"] = os.getenv(
-        "REWARD_TYPE", "sparse"
-    )  # "sparse", "merged", "risk_opportunity"
+    reward_type: Literal["sparse", "merged", "risk_opportunity", "sparse_adv"] = (
+        os.getenv("REWARD_TYPE", "sparse")
+    )  # "sparse", "merged", "risk_opportunity", "sparse_adv"
 
 
 @dataclass

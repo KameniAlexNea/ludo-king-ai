@@ -11,34 +11,30 @@ from ludo_rl.config import EnvConfig
 class AdvRewardConfig:
     """Advanced reward configuration for strategic Ludo components."""
 
-    # Opportunity rewards
-    capture_opportunity_taken: float = 0.5
-    capture_opportunity_missed: float = -0.3
-    exit_opportunity_taken: float = 0.4
-    exit_opportunity_missed: float = -0.2
-    finish_opportunity_taken: float = 0.6
-    finish_opportunity_missed: float = -0.1
+    # Opportunity rewards (REDUCED to not drown terminal signal)
+    capture_opportunity_taken: float = 0.1  # was 0.5
+    capture_opportunity_missed: float = -0.05  # was -0.3, applies at episode end only
+    exit_opportunity_taken: float = 0.1  # was 0.4
+    exit_opportunity_missed: float = -0.05  # was -0.2, applies at episode end only
+    finish_opportunity_taken: float = 0.2  # was 0.6
+    finish_opportunity_missed: float = -0.05  # was -0.1, applies at episode end only
 
-    # Opportunity utilization efficiency bonuses
-    capture_utilization_bonus: float = (
-        0.25  # Bonus multiplier for capture utilization ratio
-    )
-    exit_utilization_bonus: float = 0.2  # Bonus multiplier for exit utilization ratio
-    finish_utilization_bonus: float = (
-        0.3  # Bonus multiplier for finish utilization ratio
-    )
+    # Opportunity utilization efficiency bonuses (REDUCED)
+    capture_utilization_bonus: float = 0.05  # was 0.25
+    exit_utilization_bonus: float = 0.05  # was 0.2
+    finish_utilization_bonus: float = 0.1  # was 0.3
 
     # Risk management
-    vulnerability_reduction: float = 0.3
-    vulnerability_increase: float = -0.4
+    vulnerability_reduction: float = 0.15  # was 0.3
+    vulnerability_increase: float = -0.2  # was -0.4
 
     # Strategic positioning
-    blocking_bonus: float = 0.2
-    extra_safe_zone_bonus: float = 0.1
+    blocking_bonus: float = 0.1  # was 0.2
+    extra_safe_zone_bonus: float = 0.05  # was 0.1
 
     # Long-term planning
-    progress_efficiency: float = 0.1
-    opponent_pressure_relief: float = 0.15
+    progress_efficiency: float = 0.05  # was 0.1
+    opponent_pressure_relief: float = 0.05  # was 0.15 (MAJOR reduction)
 
 
 class AdvancedRewardCalculator:
@@ -56,6 +52,10 @@ class AdvancedRewardCalculator:
         self.prev_opportunities = {}  # Track previous episode opportunities for comparison
 
         # Initialize previous counters for incremental updates
+        self._reset_prev()
+
+    def reset_for_new_episode(self) -> None:
+        """Call this at the start of each new episode to reset opportunity tracking."""
         self._reset_prev()
 
     def _reset_prev(self) -> None:
@@ -253,7 +253,12 @@ class AdvancedRewardCalculator:
     def _compute_opportunity_rewards(
         self, game: LudoGame, episode_info: dict, cfg: EnvConfig, breakdown: dict
     ) -> float:
-        """Reward based on opportunity utilization."""
+        """Reward based on opportunity utilization.
+
+        IMPORTANT: This function applies opportunity rewards incrementally (deltas),
+        NOT cumulatively per step. Missed penalties are applied only once at episode end
+        to avoid repeated penalty stacking.
+        """
         reward = 0.0
         # We'll apply opportunity rewards incrementally using deltas between calls
         # so we don't multiply episode totals by number of steps.
