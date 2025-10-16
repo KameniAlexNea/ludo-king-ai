@@ -163,7 +163,7 @@ def main():
             logger.info(
                 "Using MultiDiscreteFeatureExtractor for discrete observations."
             )
-        else:
+        elif False:  # deactivate continous feature for the moment
             from ludo_rl.features.continous_extraction import ContinuousFeatureExtractor
 
             policy_kwargs.update(

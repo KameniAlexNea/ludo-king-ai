@@ -55,6 +55,19 @@ class AdvancedRewardCalculator:
         self.adv_cfg = adv_cfg or AdvRewardConfig()
         self.prev_opportunities = {}  # Track previous episode opportunities for comparison
 
+        # Initialize previous counters for incremental updates
+        self._reset_prev()
+
+    def _reset_prev(self) -> None:
+        self.prev_opportunities = {
+            "capture_available": 0,
+            "capture_taken": 0,
+            "exit_available": 0,
+            "exit_taken": 0,
+            "finish_available": 0,
+            "finish_taken": 0,
+        }
+
     def compute(
         self,
         game: LudoGame,
@@ -98,6 +111,8 @@ class AdvancedRewardCalculator:
             "capture_opportunity_missed": 0.0,
             "exit_opportunity_taken": 0.0,
             "exit_opportunity_missed": 0.0,
+            "finish_opportunity_taken": 0.0,
+            "finish_opportunity_missed": 0.0,
             "vulnerability_reduction": 0.0,
             "vulnerability_increase": 0.0,
             "blocking_bonus": 0.0,
@@ -113,7 +128,7 @@ class AdvancedRewardCalculator:
         )
 
         # Advanced strategic components
-        reward += self._compute_opportunity_rewards(episode_info, cfg, breakdown)
+        reward += self._compute_opportunity_rewards(game, episode_info, cfg, breakdown)
         reward += self._compute_risk_management(game, agent_color, move, cfg, breakdown)
         reward += self._compute_strategic_positioning(
             game, agent_color, move, cfg, breakdown
@@ -236,61 +251,97 @@ class AdvancedRewardCalculator:
         return reward
 
     def _compute_opportunity_rewards(
-        self, episode_info: dict, cfg: EnvConfig, breakdown: dict
+        self, game: LudoGame, episode_info: dict, cfg: EnvConfig, breakdown: dict
     ) -> float:
         """Reward based on opportunity utilization."""
         reward = 0.0
+        # We'll apply opportunity rewards incrementally using deltas between calls
+        # so we don't multiply episode totals by number of steps.
+        # Read current cumulative episode counters from episode_info
+        cur_capture_avail = int(episode_info.get("episode_capture_ops_available", 0))
+        cur_capture_taken = int(episode_info.get("episode_capture_ops_taken", 0))
 
-        # Capture opportunities
-        capture_available = episode_info.get("episode_capture_ops_available", 0)
-        capture_taken = episode_info.get("episode_capture_ops_taken", 0)
-        if capture_available > 0:
-            capture_ratio = capture_taken / capture_available
-            # Reward taking captures, penalize missing them
-            taken_reward = (
-                capture_taken * self.adv_cfg.capture_opportunity_taken
-            )  # Bonus for each taken
-            missed_penalty = (
-                capture_available - capture_taken
-            ) * self.adv_cfg.capture_opportunity_missed  # Penalty for missed
-            # Add utilization efficiency bonus
-            efficiency_bonus = capture_ratio * self.adv_cfg.capture_utilization_bonus
+        cur_exit_avail = int(episode_info.get("episode_home_exit_ops_available", 0))
+        cur_exit_taken = int(episode_info.get("episode_home_exit_ops_taken", 0))
+
+        cur_finish_avail = int(episode_info.get("episode_finish_ops_available", 0))
+        cur_finish_taken = int(episode_info.get("episode_finish_ops_taken", 0))
+
+        # Capture taken delta
+        delta_capture_taken = max(
+            0, cur_capture_taken - self.prev_opportunities["capture_taken"]
+        )
+        if delta_capture_taken > 0:
+            taken_reward = delta_capture_taken * self.adv_cfg.capture_opportunity_taken
+            # Add a small per-taken utilization bonus to approximate episode efficiency
+            efficiency_bonus = (
+                delta_capture_taken * self.adv_cfg.capture_utilization_bonus
+            )
             breakdown["capture_opportunity_taken"] += taken_reward + efficiency_bonus
-            breakdown["capture_opportunity_missed"] += missed_penalty
-            reward += taken_reward + missed_penalty + efficiency_bonus
+            reward += taken_reward + efficiency_bonus
 
-        # Exit opportunities
-        exit_available = episode_info.get("episode_home_exit_ops_available", 0)
-        exit_taken = episode_info.get("episode_home_exit_ops_taken", 0)
-        if exit_available > 0:
-            exit_ratio = exit_taken / exit_available
-            # Reward taking exits, penalize missing them (more than captures since exits are fundamental)
-            taken_reward = exit_taken * self.adv_cfg.exit_opportunity_taken
-            missed_penalty = (
-                exit_available - exit_taken
-            ) * self.adv_cfg.exit_opportunity_missed
-            # Add utilization efficiency bonus
-            efficiency_bonus = exit_ratio * self.adv_cfg.exit_utilization_bonus
+        # Exit taken delta
+        delta_exit_taken = max(
+            0, cur_exit_taken - self.prev_opportunities["exit_taken"]
+        )
+        if delta_exit_taken > 0:
+            taken_reward = delta_exit_taken * self.adv_cfg.exit_opportunity_taken
+            efficiency_bonus = delta_exit_taken * self.adv_cfg.exit_utilization_bonus
             breakdown["exit_opportunity_taken"] += taken_reward + efficiency_bonus
-            breakdown["exit_opportunity_missed"] += missed_penalty
-            reward += taken_reward + missed_penalty + efficiency_bonus
+            reward += taken_reward + efficiency_bonus
 
-        # Finish opportunities
-        finish_available = episode_info.get("episode_finish_ops_available", 0)
-        finish_taken = episode_info.get("episode_finish_ops_taken", 0)
-        if finish_available > 0:
-            finish_ratio = finish_taken / finish_available
-            taken_reward = (
-                finish_taken * self.adv_cfg.finish_opportunity_taken
-            )  # High reward for finishing
-            missed_penalty = (
-                finish_available - finish_taken
-            ) * self.adv_cfg.finish_opportunity_missed
-            # Add utilization efficiency bonus
-            efficiency_bonus = finish_ratio * self.adv_cfg.finish_utilization_bonus
-            breakdown["finish_opportunity_taken"] = taken_reward + efficiency_bonus
-            breakdown["finish_opportunity_missed"] = missed_penalty
-            reward += taken_reward + missed_penalty + efficiency_bonus
+        # Finish taken delta
+        delta_finish_taken = max(
+            0, cur_finish_taken - self.prev_opportunities["finish_taken"]
+        )
+        if delta_finish_taken > 0:
+            taken_reward = delta_finish_taken * self.adv_cfg.finish_opportunity_taken
+            efficiency_bonus = (
+                delta_finish_taken * self.adv_cfg.finish_utilization_bonus
+            )
+            breakdown["finish_opportunity_taken"] += taken_reward + efficiency_bonus
+            reward += taken_reward + efficiency_bonus
+
+        # Update previous counters
+        self.prev_opportunities["capture_available"] = cur_capture_avail
+        self.prev_opportunities["capture_taken"] = cur_capture_taken
+        self.prev_opportunities["exit_available"] = cur_exit_avail
+        self.prev_opportunities["exit_taken"] = cur_exit_taken
+        self.prev_opportunities["finish_available"] = cur_finish_avail
+        self.prev_opportunities["finish_taken"] = cur_finish_taken
+
+        # Apply missed-penalties only at episode end to avoid repeated subtraction per step
+        try:
+            episode_done = bool(game.game_over or game.winner is not None)
+        except Exception:
+            episode_done = False
+
+        if episode_done:
+            # Capture missed
+            missed_capture = max(0, cur_capture_avail - cur_capture_taken)
+            if missed_capture > 0:
+                missed_penalty = (
+                    missed_capture * self.adv_cfg.capture_opportunity_missed
+                )
+                breakdown["capture_opportunity_missed"] += missed_penalty
+                reward += missed_penalty
+
+            # Exit missed
+            missed_exit = max(0, cur_exit_avail - cur_exit_taken)
+            if missed_exit > 0:
+                missed_penalty = missed_exit * self.adv_cfg.exit_opportunity_missed
+                breakdown["exit_opportunity_missed"] += missed_penalty
+                reward += missed_penalty
+
+            # Finish missed
+            missed_finish = max(0, cur_finish_avail - cur_finish_taken)
+            if missed_finish > 0:
+                missed_penalty = missed_finish * self.adv_cfg.finish_opportunity_missed
+                breakdown["finish_opportunity_missed"] += missed_penalty
+                reward += missed_penalty
+
+            # Reset prev counters for next episode
+            self._reset_prev()
 
         return reward
 

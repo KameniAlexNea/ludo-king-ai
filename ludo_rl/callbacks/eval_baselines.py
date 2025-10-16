@@ -1,6 +1,11 @@
-from typing import Optional, Sequence
+import os
+from typing import Dict, Optional, Sequence
 
+import numpy as np
+from ludo_engine import LudoGame
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
+from sb3_contrib.common.maskable.evaluation import evaluate_policy
+from stable_baselines3.common.vec_env import sync_envs_normalization
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
 from ludo_rl.config import EnvConfig
@@ -43,10 +48,11 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
 
         self.eval_env = eval_env
 
-        # Initialize parent with eval_env and other parameters
+        # Initialize parent with eval_env and other parameters. We'll override _on_step
+        # to run a custom evaluation loop that also logs win-rate and reward breakdowns.
         super().__init__(
             eval_env=self.eval_env,
-            n_eval_episodes=self.n_games,  # Use n_games for evaluation episodes
+            n_eval_episodes=self.n_games,
             eval_freq=eval_freq,
             log_path=log_path,
             best_model_save_path=best_model_save_path,
@@ -54,7 +60,7 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
             render=False,
             verbose=verbose,
             warn=True,
-            use_masking=True,  # Enable masking for Ludo
+            use_masking=True,
             callback_on_new_best=callback_on_new_best,
             callback_after_eval=callback_after_eval,
         )
@@ -85,8 +91,140 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         self.eval_env.set_attr("opponents", opponents)
         self.eval_env.set_attr("fixed_num_players", setup)
 
-        # Call parent _on_step to do the standard evaluation and logging
-        continue_training = super()._on_step()
+        # Sync normalization stats if applicable (keeps parity with parent)
+        if self.model.get_vec_normalize_env() is not None:
+            try:
+                sync_envs_normalization(self.training_env, self.eval_env)
+            except AttributeError as e:
+                raise AssertionError(
+                    "Training and eval env are not wrapped the same way, "
+                    "see https://stable-baselines3.readthedocs.io/en/master/guide/callbacks.html#evalcallback "
+                    "and warning above."
+                ) from e
+
+        # Aggregators for breakdowns and wins
+        episodes_breakdowns: list[Dict[str, float]] = []
+        wins = 0
+
+        def trace_callback(locals_, _globals=None):
+            nonlocal episodes_breakdowns, wins
+            infos = locals_.get("infos")
+            dones = locals_.get("dones")
+            # accumulate step-level breakdown into a temp episode dict
+            if not hasattr(trace_callback, "_ep_bd"):
+                trace_callback._ep_bd = {}
+            if infos is not None:
+                info0 = infos[0] if isinstance(infos, (list, tuple)) else infos
+                rb = info0.get("reward_breakdown") if isinstance(info0, dict) else None
+                if rb:
+                    for k, v in rb.items():
+                        trace_callback._ep_bd[k] = trace_callback._ep_bd.get(
+                            k, 0.0
+                        ) + float(v)
+            # handle episode end
+            if dones is not None:
+                done0 = bool(
+                    dones[0] if isinstance(dones, (list, np.ndarray)) else dones
+                )
+                if done0:
+                    # determine win/lose from underlying env attributes
+                    try:
+                        game: LudoGame = self.eval_env.get_attr("game")[0]
+                        agent_color = self.eval_env.get_attr("agent_color")[0]
+                        is_win = bool(
+                            game
+                            and game.winner is not None
+                            and game.winner.color == agent_color
+                        )
+                    except Exception:
+                        is_win = False
+                    wins += 1 if is_win else 0
+                    episodes_breakdowns.append(trace_callback._ep_bd)
+                    trace_callback._ep_bd = {}
+
+        # Use sb3-contrib evaluate_policy to ensure masking is applied
+        episode_rewards, episode_lengths = evaluate_policy(
+            self.model,  # type: ignore[arg-type]
+            self.eval_env,
+            n_eval_episodes=self.n_eval_episodes,
+            render=self.render,
+            deterministic=self.deterministic,
+            return_episode_rewards=True,
+            warn=self.warn,
+            callback=trace_callback,
+            use_masking=True,
+        )
+
+        # Aggregate metrics
+        win_rate = wins / max(1, self.n_eval_episodes)
+        # average per-term across episodes (missing terms treated as 0)
+        agg_keys = (
+            set().union(*(bd.keys() for bd in episodes_breakdowns))
+            if episodes_breakdowns
+            else set()
+        )
+        avg_breakdown: Dict[str, float] = {}
+        for k in agg_keys:
+            s = sum(bd.get(k, 0.0) for bd in episodes_breakdowns)
+            avg_breakdown[k] = s / max(1, len(episodes_breakdowns))
+
+        mean_reward, std_reward = (
+            float(np.mean(episode_rewards)),
+            float(np.std(episode_rewards)),
+        )
+        mean_ep_length, std_ep_length = (
+            float(np.mean(episode_lengths)),
+            float(np.std(episode_lengths)),
+        )
+        self.last_mean_reward = float(mean_reward)
+
+        # Logging (stdout)
+        if self.verbose > 0:
+            print(
+                f"Eval num_timesteps={self.num_timesteps}, episode_reward={mean_reward:.2f} +/- {std_reward:.2f}"
+            )
+            print(f"Episode length: {mean_ep_length:.2f} +/- {std_ep_length:.2f}")
+            print(f"Win rate: {win_rate * 100:.2f}%")
+
+        # Tensorboard logs
+        self.logger.record("eval/mean_reward", mean_reward)
+        self.logger.record("eval/mean_ep_length", mean_ep_length)
+        self.logger.record("eval/win_rate", win_rate)
+        # Optional: log a few key breakdown terms
+        for k, v in avg_breakdown.items():
+            self.logger.record(f"eval/breakdown/{k}", float(v))
+
+        # Save eval arrays similar to parent callback
+        if self.log_path is not None:
+            self.evaluations_timesteps.append(self.num_timesteps)
+            self.evaluations_results.append(episode_rewards.tolist())
+            self.evaluations_length.append(episode_lengths.tolist())
+            np.savez(
+                self.log_path,
+                timesteps=self.evaluations_timesteps,
+                results=self.evaluations_results,
+                ep_lengths=self.evaluations_length,
+            )
+
+        # Best-model checkpoint logic
+        if mean_reward > self.best_mean_reward:
+            if self.verbose > 0:
+                print("New best mean reward!")
+            if self.best_model_save_path is not None:
+                self.model.save(os.path.join(self.best_model_save_path, "best_model"))
+            self.best_mean_reward = float(mean_reward)
+            if self.callback_on_new_best is not None:
+                continue_training = self.callback_on_new_best.on_step()
+
+        # Trigger callback after every evaluation, if needed (parity with parent)
+        if self.callback is not None:
+            continue_training = continue_training and self._on_event()
+
+        # Dump log
+        self.logger.record(
+            "time/total_timesteps", self.num_timesteps, exclude="tensorboard"
+        )
+        self.logger.dump(self.num_timesteps)
 
         self.eval_env.set_attr("opponents", None)
         self.eval_env.set_attr("fixed_num_players", None)
