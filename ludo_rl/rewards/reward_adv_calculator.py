@@ -26,7 +26,7 @@ class AdvRewardConfig:
 
     # Risk management
     vulnerability_reduction: float = 0.15  # was 0.3
-    vulnerability_increase: float = -0.2  # was -0.4
+    vulnerability_increase: float = 0.2  # FIXED SIGN: was -0.4, now positive so negation works correctly
 
     # Strategic positioning
     blocking_bonus: float = 0.1  # was 0.2
@@ -34,7 +34,7 @@ class AdvRewardConfig:
 
     # Long-term planning
     progress_efficiency: float = 0.05  # was 0.1
-    opponent_pressure_relief: float = 0.05  # was 0.15 (MAJOR reduction)
+    opponent_pressure_relief: float = 0.0001  # CRITICAL REDUCTION: was 0.05, causing +180 avg per game
 
 
 class AdvancedRewardCalculator:
