@@ -14,22 +14,24 @@ class RewardConfig:
     win: float = 100.0
     lose: float = -100.0
     draw: float = -30.0
-    # Per-token rewards
-    finish_token: float = 1.0
+    # Per-token rewards (MASSIVELY REDUCED per Gemini analysis - was 1.0, reduce 10x)
+    finish_token: float = 0.1
     # Events
     # Per-capture reward increased
     capture: float = 0.3
     # Being captured is penalized more strongly to discourage unsafe play
     got_captured: float = -0.5
     all_captured: float = -1.0
-    # Reward for leaving home and diversity bonus
-    exit_start: float = 0.2
-    diversity_bonus: float = 0.01
+    # Reward for leaving home (REDUCED - it's required, not strategic, was 0.2 now 0.05 per Gemini)
+    exit_start: float = 0.05
+    # Diversity bonus (REDUCED - low-signal heuristic, was 0.01 now 0.002 per Gemini)
+    diversity_bonus: float = 0.002
     extra_turn: float = 0.05
     # Shaping
-    # Increase shaping to make rewards denser
-    progress_scale: float = 0.005
-    safe_zone_reward: float = 0.2
+    # Reduce progress_scale 5x per analysis (was 0.005, now 0.001)
+    progress_scale: float = 0.001
+    # Safe zone reward (REDUCED - disproportionately large vs capture opportunities, was 0.2 now 0.02 per Gemini)
+    safe_zone_reward: float = 0.02
     # Constraints
     illegal_action: float = -0.2
     # Reduce time penalty to encourage longer games if needed, but keep small
