@@ -93,15 +93,17 @@ def sample_opponents(
 
 
 def build_opponent_combinations(
-    baselines: List[str], n_games: int, n_comb: int = 3
+    baselines: List[str], n_games: int, n_comb: int = 3, deterministic: bool = False
 ) -> List[List[str]]:
     """
-    Selects random opponent combinations.
+    Selects opponent combinations (random or deterministic).
 
     Args:
         baselines (List[str]): List of available opponents.
         n_games (int): Number of games (number of combinations to generate).
         n_comb (int): Number of opponents per combination. Default is 3.
+        deterministic (bool): If True, cycle through opponents deterministically instead of random sampling.
+                              Useful for evaluation to ensure each opponent gets played consistently.
 
     Returns:
         List[List[str]]: A list of opponent groups.
@@ -110,12 +112,31 @@ def build_opponent_combinations(
         return []
 
     combinations = []
-    for _ in range(n_games):
-        # sample with replacement if baselines < n_comb, otherwise without replacement
-        if len(baselines) < n_comb:
-            opponents = random.choices(baselines, k=n_comb)
-        else:
-            opponents = random.sample(baselines, k=n_comb)
-        combinations.append(opponents)
+
+    if deterministic:
+        # Deterministic mode: cycle through baselines repeatedly
+        # For 2-player (n_comb=1), each opponent gets played sequentially
+        # For 4-player (n_comb=3), repeat baselines to fill slots
+        for i in range(n_games):
+            if n_comb == 1:
+                # For 2-player: cycle through each baseline one at a time
+                opponent = [baselines[i % len(baselines)]]
+            else:
+                # For multi-player: cycle through baselines to fill all slots
+                opponents = []
+                for j in range(n_comb):
+                    idx = (i + j) % len(baselines)
+                    opponents.append(baselines[idx])
+                opponent = opponents
+            combinations.append(opponent)
+    else:
+        # Random mode: original behavior
+        for _ in range(n_games):
+            # sample with replacement if baselines < n_comb, otherwise without replacement
+            if len(baselines) < n_comb:
+                opponents = random.choices(baselines, k=n_comb)
+            else:
+                opponents = random.sample(baselines, k=n_comb)
+            combinations.append(opponents)
 
     return combinations

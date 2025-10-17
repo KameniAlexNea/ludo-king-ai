@@ -25,16 +25,24 @@ class AdvRewardConfig:
     finish_utilization_bonus: float = 0.02  # was 0.1
 
     # Risk management (INVERSE CORRELATION - MINIMIZE)
-    vulnerability_reduction: float = 0.1  # was 0.15, now 0.001 - weak signal, losing agents get more of this
-    vulnerability_increase: float = 0.2  # FIXED SIGN: was -0.4, now positive so negation works correctly
+    vulnerability_reduction: float = (
+        0.1  # was 0.15, now 0.001 - weak signal, losing agents get more of this
+    )
+    vulnerability_increase: float = (
+        0.2  # FIXED SIGN: was -0.4, now positive so negation works correctly
+    )
 
     # Strategic positioning (INVERSE CORRELATION - MINIMIZE)
     blocking_bonus: float = 0.001  # was 0.1, now 0.001 - weak guidance, not strongly correlated with winning
     extra_safe_zone_bonus: float = 0.001  # was 0.05, minimize to weak signal
 
     # Long-term planning
-    progress_efficiency: float = 0.001  # was 0.05, reduce 5x - focus on strategic progress not movement
-    opponent_pressure_relief: float = 0.0001  # CRITICAL REDUCTION: was 0.05, causing +180 avg per game
+    progress_efficiency: float = (
+        0.001  # was 0.05, reduce 5x - focus on strategic progress not movement
+    )
+    opponent_pressure_relief: float = (
+        0.0001  # CRITICAL REDUCTION: was 0.05, causing +180 avg per game
+    )
 
 
 class AdvancedRewardCalculator:

@@ -39,10 +39,12 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         callback_on_new_best=None,
         callback_after_eval=None,
         log_path: Optional[str] = None,
+        deterministic_eval: bool = True,
     ):
         self.n_games = int(n_games)
         self.env_cfg = env_cfg or EnvConfig()
         self.setups = self.env_cfg.allowed_player_counts
+        self.deterministic_eval = deterministic_eval
 
         if eval_env is None:
             raise ValueError("eval_env must be provided")
@@ -67,11 +69,15 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         )
         # Pre-build a list of opponent combinations per setup size with the correct
         # number of opponents (players-1). Example: 2-player -> 1 opponent, 4-player -> 3 opponents.
+        # Use deterministic mode to cycle through opponents sequentially instead of random sampling.
         self.baselines_per_setup = []
         for setup in self.setups:
             n_comb = max(0, int(setup) - 1)
             combos = build_opponent_combinations(
-                list(baselines), n_games=self.n_games, n_comb=n_comb
+                list(baselines),
+                n_games=self.n_games,
+                n_comb=n_comb,
+                deterministic=self.deterministic_eval,
             )
             self.baselines_per_setup.append(combos)
         self.executed = 0

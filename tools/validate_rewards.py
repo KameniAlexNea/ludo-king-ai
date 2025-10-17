@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from ludo_engine import LudoGame
-from ludo_engine.models import ALL_COLORS, PlayerColor, GameConstants, MoveType
+from ludo_engine.models import ALL_COLORS, GameConstants, MoveType, PlayerColor
 from ludo_engine.strategies.strategy import StrategyFactory
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -168,7 +168,7 @@ def run_game(
 
     # Initialize reward calc
     reward_calc.reset_for_new_episode()
-    
+
     # Track opportunities per color
     color_stats = {
         color: {
@@ -195,9 +195,15 @@ def run_game(
         valid_moves = ai_context.valid_moves if ai_context else []
 
         # Track available opportunities
-        color_stats[current_color]["capture_ops_available"] += sum(1 for m in valid_moves if m.captures_opponent)
-        color_stats[current_color]["finish_ops_available"] += sum(1 for m in valid_moves if m.target_position == GameConstants.FINISH_POSITION)
-        color_stats[current_color]["home_exit_ops_available"] += sum(1 for m in valid_moves if m.move_type == MoveType.EXIT_HOME)
+        color_stats[current_color]["capture_ops_available"] += sum(
+            1 for m in valid_moves if m.captures_opponent
+        )
+        color_stats[current_color]["finish_ops_available"] += sum(
+            1 for m in valid_moves if m.target_position == GameConstants.FINISH_POSITION
+        )
+        color_stats[current_color]["home_exit_ops_available"] += sum(
+            1 for m in valid_moves if m.move_type == MoveType.EXIT_HOME
+        )
 
         # Use the player's built-in strategic decision making
         token_id = player.make_strategic_decision(ai_context)
@@ -210,7 +216,7 @@ def run_game(
 
         # Execute move
         move_result = game.execute_move(player, token_id, dice)
-        
+
         # Track taken opportunities - find which move was executed
         chosen_move = next((m for m in valid_moves if m.token_id == token_id), None)
         if chosen_move:
@@ -223,11 +229,21 @@ def run_game(
 
         # Build episode_info dict from accumulated stats
         episode_info = {
-            "episode_capture_ops_available": color_stats[current_color]["capture_ops_available"],
-            "episode_capture_ops_taken": color_stats[current_color]["capture_ops_taken"],
-            "episode_home_exit_ops_available": color_stats[current_color]["home_exit_ops_available"],
-            "episode_home_exit_ops_taken": color_stats[current_color]["home_exit_ops_taken"],
-            "episode_finish_ops_available": color_stats[current_color]["finish_ops_available"],
+            "episode_capture_ops_available": color_stats[current_color][
+                "capture_ops_available"
+            ],
+            "episode_capture_ops_taken": color_stats[current_color][
+                "capture_ops_taken"
+            ],
+            "episode_home_exit_ops_available": color_stats[current_color][
+                "home_exit_ops_available"
+            ],
+            "episode_home_exit_ops_taken": color_stats[current_color][
+                "home_exit_ops_taken"
+            ],
+            "episode_finish_ops_available": color_stats[current_color][
+                "finish_ops_available"
+            ],
             "episode_finish_ops_taken": color_stats[current_color]["finish_ops_taken"],
         }
 
