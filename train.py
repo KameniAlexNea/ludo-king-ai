@@ -234,7 +234,7 @@ def main():
     eval_cb = SimpleBaselineEvalCallback(
         baselines=[s.strip() for s in args.eval_baselines.split(",") if s.strip()],
         n_games=args.eval_games,
-        eval_freq=args.eval_freq,
+        eval_freq=args.eval_freq // args.n_envs,
         env_cfg=env_cfg,
         verbose=1,
         eval_env=eval_env,

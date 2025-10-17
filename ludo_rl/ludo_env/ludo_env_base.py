@@ -63,6 +63,10 @@ class StepInfo:
     episode_finish_ops_taken: int
     episode_home_exit_ops_available: int
     episode_home_exit_ops_taken: int
+    is_game_over: bool = False  # Whether the game has ended
+    agent_won: bool = (
+        False  # Whether the agent won (only relevant when is_game_over=True)
+    )
 
 
 class LudoRLEnvBase(gym.Env):
@@ -558,6 +562,12 @@ class LudoRLEnvBase(gym.Env):
         agent_player = self.game.get_player_from_color(self.agent_color)
         finished_tokens = agent_player.get_finished_tokens_count()
 
+        # Check if game is over and if agent won
+        is_game_over = self.game.game_over or (self.game.winner is not None)
+        agent_won = False
+        if is_game_over and self.game.winner is not None:
+            agent_won = self.game.winner.color == self.agent_color
+
         return StepInfo(
             illegal_action=is_illegal,
             illegal_actions_total=self.illegal_actions,
@@ -573,6 +583,8 @@ class LudoRLEnvBase(gym.Env):
             episode_finish_ops_taken=self.episode_stats.finish_ops_taken,
             episode_home_exit_ops_available=self.episode_stats.home_exit_ops_available,
             episode_home_exit_ops_taken=self.episode_stats.home_exit_ops_taken,
+            is_game_over=is_game_over,
+            agent_won=agent_won,
         )
 
     # ---- action masking API for MaskablePPO/SubprocVecEnv -----------------

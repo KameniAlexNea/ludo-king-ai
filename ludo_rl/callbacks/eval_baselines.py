@@ -4,7 +4,6 @@ import zlib
 from typing import Dict, Optional, Sequence
 
 import numpy as np
-from ludo_engine import LudoGame
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 from sb3_contrib.common.maskable.evaluation import evaluate_policy
 from stable_baselines3.common.vec_env import sync_envs_normalization
@@ -77,6 +76,11 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
             self.baselines_per_setup.append(combos)
         self.executed = 0
 
+        # Early stopping: track win rate improvements
+        self.best_win_rate = -1.0
+        self.non_improving_evals = 0
+        self.max_non_improving_evals = 5
+
     def _short_metric_key(self, key: str) -> str:
         """Create a compact, unique metric key to avoid SB3 logger truncation collisions."""
         tokens = re.findall(r"[A-Za-z0-9]+", str(key).lower())
@@ -138,17 +142,13 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
                     dones[0] if isinstance(dones, (list, np.ndarray)) else dones
                 )
                 if done0:
-                    # determine win/lose from underlying env attributes
-                    try:
-                        game: LudoGame = self.eval_env.get_attr("game")[0]
-                        agent_color = self.eval_env.get_attr("agent_color")[0]
-                        is_win = bool(
-                            game
-                            and game.winner is not None
-                            and game.winner.color == agent_color
-                        )
-                    except Exception:
-                        is_win = False
+                    # determine win/lose from info dict (which is populated by _build_step_info)
+                    info0 = infos[0] if isinstance(infos, (list, tuple)) else infos
+                    is_win = (
+                        info0.get("agent_won", False)
+                        if isinstance(info0, dict)
+                        else False
+                    )
                     wins += 1 if is_win else 0
                     episodes_breakdowns.append(trace_callback._ep_bd)
                     trace_callback._ep_bd = {}
@@ -189,13 +189,22 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         )
         self.last_mean_reward = float(mean_reward)
 
+        # Check win-rate improvement for early stopping
+        if win_rate > self.best_win_rate:
+            self.best_win_rate = win_rate
+            self.non_improving_evals = 0
+        else:
+            self.non_improving_evals += 1
+
         # Logging (stdout)
         if self.verbose > 0:
             print(
                 f"Eval num_timesteps={self.num_timesteps}, episode_reward={mean_reward:.2f} +/- {std_reward:.2f}"
             )
             print(f"Episode length: {mean_ep_length:.2f} +/- {std_ep_length:.2f}")
-            print(f"Win rate: {win_rate * 100:.2f}%")
+            print(
+                f"Win rate: {win_rate * 100:.2f}% (best: {self.best_win_rate * 100:.2f}%, non-improving: {self.non_improving_evals}/{self.max_non_improving_evals})"
+            )
 
         # Tensorboard logs
         self.logger.record("eval/mean_reward", mean_reward)
@@ -241,4 +250,14 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         self.eval_env.set_attr("opponents", None)
         self.eval_env.set_attr("fixed_num_players", None)
         self.executed += 1
+
+        # Early stopping: if win rate hasn't improved for N consecutive evals, stop training
+        if self.non_improving_evals >= self.max_non_improving_evals:
+            if self.verbose > 0:
+                print(
+                    f"[Early Stop] No win rate improvement for {self.max_non_improving_evals} consecutive evaluations. "
+                    f"Best win rate: {self.best_win_rate * 100:.2f}%. Stopping training."
+                )
+            return False  # Signal training to stop
+
         return continue_training
