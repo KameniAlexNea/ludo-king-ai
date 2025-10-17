@@ -15,6 +15,7 @@ from ludo_engine.models import (
 )
 from ludo_engine.strategies.base import Strategy
 from ludo_engine.strategies.strategy import StrategyFactory
+from stable_baselines3.common.utils import set_random_seed
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import (
@@ -202,9 +203,10 @@ class LudoRLEnvBase(gym.Env):
 
     def _setup_random_seed(self, seed: Optional[int]) -> None:
         """Set up random seeds for reproducibility."""
+        if seed is None:
+            return
+        set_random_seed(seed)
         self.rng.seed(seed)
-        random.seed(seed)
-        np.random.seed(seed)
 
     def _initialize_game_state(self) -> None:
         """Initialize the game and agent color."""

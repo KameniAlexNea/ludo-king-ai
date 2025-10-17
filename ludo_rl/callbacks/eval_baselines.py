@@ -79,7 +79,7 @@ class SimpleBaselineEvalCallback(MaskableEvalCallback):
         # Early stopping: track win rate improvements
         self.best_win_rate = -1.0
         self.non_improving_evals = 0
-        self.max_non_improving_evals = 5
+        self.max_non_improving_evals = 10
 
     def _short_metric_key(self, key: str) -> str:
         """Create a compact, unique metric key to avoid SB3 logger truncation collisions."""

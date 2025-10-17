@@ -11,7 +11,6 @@ from loguru import logger
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
@@ -51,8 +50,6 @@ def make_env(
         # MaskablePPO can access masks across subprocess boundaries.
         return env
 
-    if seed is not None:
-        set_random_seed(seed)
     return _init
 
 
@@ -257,9 +254,9 @@ def main():
         callbacks.append(hybrid_cb)
 
     # Add checkpointing if enabled
-    if args.save_freq and args.save_freq > 0:
+    if args.checkpoint_freq and args.checkpoint_freq > 0:
         ckpt_cb = CheckpointCallback(
-            save_freq=args.save_freq // args.n_envs,
+            save_freq=args.checkpoint_freq // args.n_envs,
             save_path=args.model_dir,
             name_prefix=args.checkpoint_prefix,
             save_replay_buffer=True,
