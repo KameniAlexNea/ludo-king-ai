@@ -6,31 +6,46 @@ mean/median/percentiles for total reward, per-term breakdown and win-rate.
 """
 
 import argparse
+import os
 import statistics
 from collections import defaultdict
 from typing import Dict
 
+from dotenv import load_dotenv
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
 from ludo_rl.utils.move_utils import MoveUtils
+from ludo_rl.utils.opponents import build_opponent_combinations
+
+load_dotenv()
 
 
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument(
-        "--model", default="./training/models/maskable_ppo_ludo_rl_final.zip"
+        "--model",
+        type=str,
+        default="training/models/best_model.zip",
+        help="Path to saved MaskablePPO model",
     )
-    p.add_argument("--n-episodes", type=int, default=200)
+    p.add_argument(
+        "--n-episodes",
+        type=int,
+        default=os.getenv("EVAL_EPISODES", 100),
+        help="Number of evaluation episodes",
+    )
     p.add_argument("--fixed-num-players", type=int, default=2)
     p.add_argument(
         "--opponent",
         type=str,
+        nargs="+",
         default=None,
         help="Name of opponent strategy to use for all opponents (optional)",
     )
+    p.add_argument("--seed", type=int, default=42, help="Random seed for env")
     return p.parse_args()
 
 
@@ -46,13 +61,18 @@ def run_eval(
     cfg.fixed_num_players = fixed_num_players
 
     # single-process env for easy introspection
-    base_env = LudoRLEnv(cfg)
-    env = ActionMasker(base_env, MoveUtils.get_action_mask_for_env)
+    env = LudoRLEnv(cfg)
+    env = ActionMasker(env, MoveUtils.get_action_mask_for_env)
+    opponents_counter: Dict[str, int] = defaultdict(int)
 
     # set opponents if requested (will be applied on reset)
-    if opponent:
-        # should match number of opponents (players-1)
-        env.opponents = [opponent] * (fixed_num_players - 1)
+    opponents = None
+    if opponent is None:
+        opponent = cfg.opponents.evaluation_candidates
+    print("Using opponents:", opponent)
+    opponents = build_opponent_combinations(
+        opponent, n_episodes, fixed_num_players - 1, True
+    )
 
     print(f"Loading model from {model_path}")
     model = MaskablePPO.load(model_path, device="cpu")
@@ -63,9 +83,12 @@ def run_eval(
     finishes = []
     breakdown_sums: Dict[str, float] = defaultdict(float)
     breakdown_counts: Dict[str, int] = defaultdict(int)
-
+    seed = args.seed
     for ep in range(n_episodes):
-        reset_ret = env.reset()
+        curr_opponents = opponents[ep]
+
+        reset_ret = env.reset(seed=seed, options={"opponents": curr_opponents})
+        seed += 1
         # Gym returns (obs, info) while SB3 VecEnv expects obs only. We're using raw env.
         if isinstance(reset_ret, tuple) and len(reset_ret) == 2:
             obs, _ = reset_ret
@@ -114,6 +137,11 @@ def run_eval(
         if is_win:
             wins += 1
 
+        print(
+            f"Episode {ep + 1}/{n_episodes}, opponents: {curr_opponents} - Win: {is_win} - Reward: {total_reward:.2f}"
+        )
+        opponents_counter[str(curr_opponents)] += is_win
+
         rewards.append(total_reward)
         captures.append(ep_captures)
         finishes.append(ep_finishes)
@@ -143,6 +171,12 @@ def run_eval(
     for k, total in sorted(breakdown_sums.items(), key=lambda x: -x[1]):
         cnt = breakdown_counts.get(k, 1)
         print(f"  {k}: {total / cnt:.4f} (mean over {cnt} episodes)")
+
+    print("Opponent winning counts:")
+    for k, v in sorted(opponents_counter.items(), key=lambda x: -x[1]):
+        print(
+            f"  {k}: {v} wins - {v / n_episodes // len(curr_opponents):.3f} win rate - contrib {v / max(1, wins):.3f} of total wins"
+        )
 
 
 if __name__ == "__main__":

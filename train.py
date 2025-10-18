@@ -44,10 +44,6 @@ def make_env(
             env = LudoRLEnvHybrid(cfg)
         else:
             env = LudoRLEnv(cfg)
-        # Return raw env here. The caller will wrap with ActionMasker only for
-        # single-process environments (DummyVecEnv). When using SubprocVecEnv
-        # we rely on the env.action_masks() API implemented on the envs so
-        # MaskablePPO can access masks across subprocess boundaries.
         return env
 
     return _init
@@ -98,7 +94,7 @@ def main():
 
     # Separate eval env with same wrappers (always classic for evaluation vs baselines)
     # For evaluation we prefer single-process env for deterministic mask wrapping
-    eval_raw = make_env(999, env_cfg, 42, "classic")()
+    eval_raw = make_env(999, env_cfg, None, "classic")()
     eval_env = DummyVecEnv(
         [lambda: ActionMasker(eval_raw, MoveUtils.get_action_mask_for_env)]
     )
