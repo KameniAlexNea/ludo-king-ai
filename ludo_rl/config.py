@@ -15,10 +15,10 @@ class RewardConfig:
     lose: float = -100.0
     draw: float = -30.0
     # Per-token rewards (MASSIVELY REDUCED per Gemini analysis - was 1.0, reduce 10x)
-    finish_token: float = 0.1
+    finish_token: float = 0.3
     # Events
     # Per-capture reward increased
-    capture: float = 0.3
+    capture: float = 0.5
     # Being captured is penalized more strongly to discourage unsafe play
     got_captured: float = -0.5
     all_captured: float = -1.0
@@ -55,9 +55,9 @@ class ObservationConfig:
 class OpponentConfig:
     candidates: List[str] = field(
         default_factory=lambda: [
-            "random",
-            "weighted_random",
-            "optimist",
+            # "random",
+            # "weighted_random",
+            # "optimist",
             "probabilistic_v2",
             "probabilistic_v3",
             "probabilistic",

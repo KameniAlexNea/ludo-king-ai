@@ -12,11 +12,11 @@ class AdvRewardConfig:
     """Advanced reward configuration for strategic Ludo components."""
 
     # Opportunity rewards (MASSIVELY REDUCED per Gemini analysis to prevent masking terminal signal)
-    capture_opportunity_taken: float = 0.025  # was 0.1, reduce 4x per analysis
+    capture_opportunity_taken: float = 0.1  # was 0.1, reduce 4x per analysis
     capture_opportunity_missed: float = -0.05  # was -0.3, applies at episode end only
     exit_opportunity_taken: float = 0.03  # was 0.1, reduce 3x per analysis
-    exit_opportunity_missed: float = -0.05  # was -0.2, applies at episode end only
-    finish_opportunity_taken: float = 0.04  # was 0.2, reduce 5x per analysis
+    exit_opportunity_missed: float = -0.01  # was -0.2, applies at episode end only
+    finish_opportunity_taken: float = 0.15  # was 0.2, reduce 5x per analysis
     finish_opportunity_missed: float = -0.05  # was -0.1, applies at episode end only
 
     # Opportunity utilization efficiency bonuses (DRASTICALLY REDUCED)

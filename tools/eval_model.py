@@ -24,7 +24,7 @@ def parse_args():
         "--model", default="./training/models/maskable_ppo_ludo_rl_final.zip"
     )
     p.add_argument("--n-episodes", type=int, default=200)
-    p.add_argument("--fixed-num-players", type=int, default=4)
+    p.add_argument("--fixed-num-players", type=int, default=2)
     p.add_argument(
         "--opponent",
         type=str,
