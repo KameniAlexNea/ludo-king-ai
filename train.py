@@ -1,16 +1,16 @@
-import os
-
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import copy
 import math
+import os
 from typing import Optional
 
+os.environ["CUDA_VISIBLE_DEVICES"] = ""  # Use GPUs 0 and 1
 import gymnasium as gym
+import torch
+from dotenv import load_dotenv
 from loguru import logger
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 
@@ -24,6 +24,8 @@ from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
 from ludo_rl.trains.training_args import parse_args
 from ludo_rl.utils.move_utils import MoveUtils
+
+load_dotenv()
 
 
 def make_env(
@@ -42,14 +44,8 @@ def make_env(
             env = LudoRLEnvHybrid(cfg)
         else:
             env = LudoRLEnv(cfg)
-        # Return raw env here. The caller will wrap with ActionMasker only for
-        # single-process environments (DummyVecEnv). When using SubprocVecEnv
-        # we rely on the env.action_masks() API implemented on the envs so
-        # MaskablePPO can access masks across subprocess boundaries.
         return env
 
-    if seed is not None:
-        set_random_seed(seed)
     return _init
 
 
@@ -59,6 +55,7 @@ def main():
     os.makedirs(args.model_dir, exist_ok=True)
 
     env_cfg = EnvConfig(max_turns=args.max_turns)
+    logger.info(f"Config used: {env_cfg}")
 
     # For selfplay and hybrid, force 4 players since they require specific opponent setups
     if args.env_type in ["selfplay", "hybrid"]:
@@ -97,7 +94,7 @@ def main():
 
     # Separate eval env with same wrappers (always classic for evaluation vs baselines)
     # For evaluation we prefer single-process env for deterministic mask wrapping
-    eval_raw = make_env(999, env_cfg, 42, "classic")()
+    eval_raw = make_env(999, env_cfg, None, "classic")()
     eval_env = DummyVecEnv(
         [lambda: ActionMasker(eval_raw, MoveUtils.get_action_mask_for_env)]
     )
@@ -121,14 +118,14 @@ def main():
 
     # Set up learning rate (use callable for annealing)
     if args.lr_anneal_enabled:
-        lr_change = 300_000 / args.total_steps
+        lr_change = 0.03
 
         def lr_schedule(progress_remaining: float) -> float:
-            lr_min = args.lr_final
-            lr_max = args.learning_rate
+            lr_min = min(args.lr_final, args.learning_rate)
+            lr_max = max(args.lr_final, args.learning_rate)
             progress = 1 - progress_remaining
             if progress < lr_change:
-                return 1e-6 + (lr_max - 1e-6) * (progress / lr_change)
+                return lr_min + (lr_max - lr_min) * (progress / lr_change)
             else:
                 adjusted_progress = (progress - lr_change) / (1 - lr_change)
                 return lr_max + 0.5 * (lr_max - lr_min) * (
@@ -140,17 +137,35 @@ def main():
         learning_rate = args.learning_rate
 
     # Optionally use a custom feature extractor when discrete observations are enabled
-    policy_kwargs = {}
+    policy_kwargs = {
+        "net_arch": [512, 256, 128],
+        "activation_fn": torch.nn.LeakyReLU,
+    }
     try:
-        if getattr(env_cfg, "obs", None) and getattr(env_cfg.obs, "discrete", False):
+        if env_cfg.obs.discrete:
             from ludo_rl.features.multidiscrete_extractor import (
                 MultiDiscreteFeatureExtractor,
             )
 
-            policy_kwargs = {
-                "features_extractor_class": MultiDiscreteFeatureExtractor,
-                "features_extractor_kwargs": {"embed_dim": args.embed_dim},
-            }
+            policy_kwargs.update(
+                {
+                    "features_extractor_class": MultiDiscreteFeatureExtractor,
+                    "features_extractor_kwargs": {"embed_dim": args.embed_dim},
+                }
+            )
+            logger.info(
+                "Using MultiDiscreteFeatureExtractor for discrete observations."
+            )
+        elif False:  # deactivate continous feature for the moment
+            from ludo_rl.features.continous_extraction import ContinuousFeatureExtractor
+
+            policy_kwargs.update(
+                {
+                    "features_extractor_class": ContinuousFeatureExtractor,
+                    "features_extractor_kwargs": {"embed_dim": 64},
+                }
+            )
+            logger.info("Using ContinuousFeatureExtractor for continuous observations.")
     except ImportError:
         # If feature extractor import fails, fall back to default
         logger.warning("Failed to import MultiDiscreteFeatureExtractor, using default.")
@@ -170,7 +185,7 @@ def main():
                     "learning_rate": learning_rate,
                     "n_steps": args.n_steps,
                 },
-                device="auto",
+                device="cpu",
             )
             # Update any changed hyperparameters
             model.ent_coef = args.ent_coef
@@ -192,8 +207,9 @@ def main():
             vf_coef=args.vf_coef,
             tensorboard_log=args.logdir,
             verbose=1,
-            device="auto",
-            gamma=0.995,
+            device="cpu",
+            gamma=args.gamma,
+            gae_lambda=args.gae_lambda,
             policy_kwargs=policy_kwargs,
         )
 
@@ -211,7 +227,7 @@ def main():
     eval_cb = SimpleBaselineEvalCallback(
         baselines=[s.strip() for s in args.eval_baselines.split(",") if s.strip()],
         n_games=args.eval_games,
-        eval_freq=args.eval_freq,
+        eval_freq=args.eval_freq // args.n_envs,
         env_cfg=env_cfg,
         verbose=1,
         eval_env=eval_env,
@@ -234,9 +250,9 @@ def main():
         callbacks.append(hybrid_cb)
 
     # Add checkpointing if enabled
-    if args.save_freq and args.save_freq > 0:
+    if args.checkpoint_freq and args.checkpoint_freq > 0:
         ckpt_cb = CheckpointCallback(
-            save_freq=args.save_freq // args.n_envs,
+            save_freq=args.checkpoint_freq // args.n_envs,
             save_path=args.model_dir,
             name_prefix=args.checkpoint_prefix,
             save_replay_buffer=True,
@@ -244,6 +260,15 @@ def main():
             verbose=1,
         )
         callbacks.append(ckpt_cb)
+
+    final_model_path = os.path.join(args.model_dir, "maskable_ppo_ludo_rl_start")
+    try:
+        model.save(final_model_path)
+        logger.info(f"Training started. Initial model saved to {final_model_path}.zip")
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to save initial model to {final_model_path}: {e}"
+        ) from e
 
     model.learn(total_timesteps=args.total_steps, callback=callbacks)
 

@@ -1,39 +1,28 @@
 import os
+
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import copy
-import math
+import json
 from typing import Optional
 
 import gymnasium as gym
-from loguru import logger
+from huggingface_sb3 import package_to_hub
 from sb3_contrib import MaskablePPO
-from sb3_contrib.common.wrappers import ActionMasker
-from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.utils import set_random_seed
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
-from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
+from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 
-from ludo_rl.callbacks.annealing import AnnealingCallback
-from ludo_rl.callbacks.curriculum import ProgressCallback
-from ludo_rl.callbacks.eval_baselines import SimpleBaselineEvalCallback
-from ludo_rl.callbacks.hybrid_switch import HybridSwitchCallback
-from ludo_rl.config import EnvConfig, TrainConfig
+from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.ludo_env import LudoRLEnv
+from ludo_rl.ludo_env.ludo_env_base import LudoRLEnvBase
 from ludo_rl.ludo_env.ludo_env_hybrid import LudoRLEnvHybrid
 from ludo_rl.ludo_env.ludo_env_selfplay import LudoRLEnvSelfPlay
-from ludo_rl.trains.training_args import parse_args
-from ludo_rl.utils.move_utils import MoveUtils
 
-from huggingface_sb3 import package_to_hub
-
-import gymnasium as gym
-from ludo_rl.config import EnvConfig
-from ludo_rl.ludo_env.ludo_env_base import LudoRLEnvBase
 
 class LudoRLEnvBaseRegistered(LudoRLEnvBase):
     def __init__(self):
         cfg = EnvConfig(max_turns=500)
         super().__init__(cfg)
+
 
 env_id = "LudoRLEnvBase-v0"
 model_path = "saved_states/models/14_10_2025/best_model.zip"
@@ -41,6 +30,7 @@ gym.register(
     id=env_id,
     entry_point=LudoRLEnvBaseRegistered,
 )
+
 
 def make_env(
     rank: int,
@@ -65,29 +55,31 @@ def make_env(
         env.render_mode = "rgb_array"
         # gym.make()
         env = gym.wrappers.RecordEpisodeStatistics(env)
-        env = gym.wrappers.RecordVideo(env, "training/videos", episode_trigger=lambda t: t % 1 == 0)
+        env = gym.wrappers.RecordVideo(
+            env, "training/videos", episode_trigger=lambda t: t % 1 == 0
+        )
         return env
 
     if seed is not None:
         set_random_seed(seed)
     return _init
 
+
 env_cfg = EnvConfig(max_turns=500)
 
 eval_env = make_env(999, env_cfg, 42, "classic")()
 eval_env = DummyVecEnv([lambda: eval_env])
 eval_env = VecMonitor(eval_env)
-n_eval_episodes=1000
+n_eval_episodes = 1000
 
 model = MaskablePPO.load(
-	model_path,
-	device="auto",
+    model_path,
+    device="auto",
 )
-
-import json
 
 # Monkey patch json.dump to automatically convert numpy types
 original_dump = json.dump
+
 
 def custom_dump(obj, fp, **kwargs):
     def convert(value):
@@ -95,13 +87,14 @@ def custom_dump(obj, fp, **kwargs):
             return {k: convert(v) for k, v in value.items()}
         elif isinstance(value, list):
             return [convert(item) for item in value]
-        elif hasattr(value, 'item'):  # numpy types
+        elif hasattr(value, "item"):  # numpy types
             return value.item()
         else:
             return value
-    
+
     converted_obj = convert(obj)
     original_dump(converted_obj, fp, **kwargs)
+
 
 json.dump = custom_dump
 
@@ -114,6 +107,6 @@ package_to_hub(
     eval_env=eval_env,
     repo_id="alexneakameni/ppo-ludo-king-ai",
     commit_message="PPO Ludo King AI",
-	n_eval_episodes=n_eval_episodes,
+    n_eval_episodes=n_eval_episodes,
     logs="saved_states/",
 )

@@ -105,6 +105,7 @@ class RiskOpportunityCalculator:
         agent_color: PlayerColor,
         move: MoveResult,
         cfg: EnvConfig = None,
+        episode_info: Dict = None,
         return_breakdown: bool = False,
         is_illegal: bool = False,
     ) -> float | Tuple[float, Dict[str, float]]:
@@ -133,6 +134,7 @@ class MergedRewardCalculator:
         agent_color: PlayerColor,
         move: MoveResult,
         cfg: EnvConfig,
+        episode_info: Dict = None,
         return_breakdown: bool = False,
         is_illegal: bool = False,
     ) -> float:
@@ -144,6 +146,7 @@ class MergedRewardCalculator:
             cfg=cfg,
             return_breakdown=True,
             is_illegal=is_illegal,
+            episode_info=episode_info,
         )
         # Get base reward breakdown for non-overlapping components
         _, base_breakdown = self.reward_calculator.compute(
@@ -153,6 +156,7 @@ class MergedRewardCalculator:
             cfg=cfg,
             return_breakdown=True,
             is_illegal=is_illegal,
+            episode_info=episode_info,
         )
 
         # Components already handled by RO: progress, safe_zone, capture, finish, extra_turn, exit_start

@@ -1,3 +1,5 @@
+from typing import Dict
+
 from ludo_engine import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
@@ -43,6 +45,7 @@ class SparseRewardCalculator:
         agent_color: PlayerColor,
         move: MoveResult,
         cfg: EnvConfig,
+        episode_info: Dict = None,
         return_breakdown: bool = False,
         is_illegal: bool = False,
     ) -> tuple[float, dict]:

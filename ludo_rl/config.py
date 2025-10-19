@@ -2,38 +2,44 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 @dataclass
 class RewardConfig:
     # Terminal
     # Terminal (win-focused preset)
-    win: float = 50.0
-    lose: float = -50.0
-    draw: float = -15.0
-    # Reduce heavy shaping on finishing tokens
-    finish_token: float = 10.0
+    win: float = 100.0
+    lose: float = -100.0
+    draw: float = -30.0
+    # Per-token rewards (MASSIVELY REDUCED per Gemini analysis - was 1.0, reduce 10x)
+    finish_token: float = 0.3
     # Events
     # Per-capture reward increased
-    capture: float = 3.0
+    capture: float = 0.5
     # Being captured is penalized more strongly to discourage unsafe play
-    got_captured: float = -5.0
-    all_captured: float = -10.0
-    # Reward for leaving home increased
-    exit_start: float = 2.0
-    diversity_bonus: float = 0.1
-    extra_turn: float = 0.5
+    got_captured: float = -0.5
+    all_captured: float = -1.0
+    # Reward for leaving home (REDUCED - it's required, not strategic, was 0.2 now 0.05 per Gemini)
+    exit_start: float = 0.05
+    # Diversity bonus (REDUCED - low-signal heuristic, was 0.01 now 0.002 per Gemini)
+    diversity_bonus: float = 0.002
+    extra_turn: float = 0.05
     # Shaping
-    # Increase shaping to make rewards denser
-    progress_scale: float = 0.05
-    safe_zone_reward: float = 2.0
+    # Reduce progress_scale 5x per analysis (was 0.005, now 0.001)
+    progress_scale: float = 0.001
+    # Safe zone reward (REDUCED - disproportionately large vs capture opportunities, was 0.2 now 0.02 per Gemini)
+    safe_zone_reward: float = 0.02
     # Constraints
-    illegal_action: float = -2.0
+    illegal_action: float = -0.2
     # Reduce time penalty to encourage longer games if needed, but keep small
-    time_penalty: float = -0.1
+    time_penalty: float = -0.01
     # reward signal function
-    reward_type: Literal["sparse", "merged", "risk_opportunity"] = os.getenv(
-        "REWARD_TYPE", "sparse"
-    )  # "sparse", "merged", "risk_opportunity"
+    reward_type: Literal["sparse", "merged", "risk_opportunity", "sparse_adv"] = (
+        os.getenv("REWARD_TYPE", "sparse")
+    )  # "sparse", "merged", "risk_opportunity", "sparse_adv"
 
 
 @dataclass
@@ -117,6 +123,8 @@ class TrainConfig:
     batch_size: int = 512
     ent_coef: float = 0.2
     vf_coef: float = 0.5
+    gamma: float = 0.999
+    gae_lambda: float = 0.95
     logdir: str = "./training/logs"
     model_dir: str = "./training/models"
     max_turns: int = 500
@@ -132,7 +140,6 @@ class TrainConfig:
     capture_scale_anneal_steps: int = 1_500_000
     # Additional training options
     checkpoint_freq: int = 100_000
-    save_freq: int = 100_000
     checkpoint_prefix: str = "ppo_ludo"
     lr_anneal_enabled: bool = False
     anneal_log_freq: int = 50_000

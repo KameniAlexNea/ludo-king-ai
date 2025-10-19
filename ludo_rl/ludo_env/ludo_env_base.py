@@ -1,5 +1,5 @@
 import random
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 import gymnasium as gym
@@ -15,6 +15,7 @@ from ludo_engine.models import (
 )
 from ludo_engine.strategies.base import Strategy
 from ludo_engine.strategies.strategy import StrategyFactory
+from stable_baselines3.common.utils import set_random_seed
 
 from ludo_rl.config import EnvConfig
 from ludo_rl.ludo_env.observation import (
@@ -22,6 +23,7 @@ from ludo_rl.ludo_env.observation import (
     DiscreteObservationBuilder,
     ObservationBuilderBase,
 )
+from ludo_rl.rewards.reward_adv_calculator import AdvancedRewardCalculator
 from ludo_rl.rewards.reward_calculator import SparseRewardCalculator
 from ludo_rl.rewards.risk_opportunity import (
     MergedRewardCalculator,
@@ -62,6 +64,10 @@ class StepInfo:
     episode_finish_ops_taken: int
     episode_home_exit_ops_available: int
     episode_home_exit_ops_taken: int
+    is_game_over: bool = False  # Whether the game has ended
+    agent_won: bool = (
+        False  # Whether the agent won (only relevant when is_game_over=True)
+    )
 
 
 class LudoRLEnvBase(gym.Env):
@@ -106,6 +112,8 @@ class LudoRLEnvBase(gym.Env):
             reward_class = RiskOpportunityCalculator
         elif self.cfg.reward.reward_type == "merged":
             reward_class = MergedRewardCalculator
+        elif self.cfg.reward.reward_type == "sparse_adv":
+            reward_class = AdvancedRewardCalculator
         else:
             raise ValueError(f"Unknown reward type: {self.cfg.reward.reward_type}")
         self.reward_calc = reward_class()
@@ -179,6 +187,10 @@ class LudoRLEnvBase(gym.Env):
         self.on_reset_before_attach(options)
         self.attach_opponents(options)
 
+        # Reset reward calculator's episode state (if it supports it)
+        if hasattr(self.reward_calc, "reset_for_new_episode"):
+            self.reward_calc.reset_for_new_episode()
+
         # Start the first agent turn
         self._advance_to_agent_turn()
         self._roll_dice_for_agent()
@@ -191,9 +203,10 @@ class LudoRLEnvBase(gym.Env):
 
     def _setup_random_seed(self, seed: Optional[int]) -> None:
         """Set up random seeds for reproducibility."""
+        if seed is None:
+            return
+        set_random_seed(seed)
         self.rng.seed(seed)
-        random.seed(seed)
-        np.random.seed(seed)
 
     def _initialize_game_state(self) -> None:
         """Initialize the game and agent color."""
@@ -340,11 +353,6 @@ class LudoRLEnvBase(gym.Env):
         if not (move_result and move_result.extra_turn) and not self.game.game_over:
             self._handle_opponent_turns()
 
-        # Calculate reward and check termination
-        reward, reward_breakdown = self._calculate_reward(
-            move_result,
-            is_illegal,
-        )
         terminated = self._check_termination(move_result)
         truncated = self._check_truncation()
 
@@ -360,6 +368,11 @@ class LudoRLEnvBase(gym.Env):
 
         obs = self._build_observation()
         step_info = self._build_step_info(move_result, is_illegal)
+
+        # Calculate reward and check termination
+        reward, reward_breakdown = self._calculate_reward(
+            move_result, is_illegal, step_info
+        )
 
         info_dict = step_info.__dict__
         info_dict["reward_breakdown"] = reward_breakdown
@@ -503,9 +516,7 @@ class LudoRLEnvBase(gym.Env):
         return player.make_strategic_decision(context)
 
     def _calculate_reward(
-        self,
-        move_result: Optional[MoveResult],
-        is_illegal: bool,
+        self, move_result: Optional[MoveResult], is_illegal: bool, step_info: StepInfo
     ) -> tuple[float, Dict[str, float]]:
         """Calculate the reward for the current step."""
         return self.reward_calc.compute(
@@ -515,6 +526,7 @@ class LudoRLEnvBase(gym.Env):
             self.cfg,
             return_breakdown=True,
             is_illegal=is_illegal,
+            episode_info=asdict(step_info),
         )
 
     def _check_termination(self, move_result: MoveResult) -> bool:
@@ -552,6 +564,12 @@ class LudoRLEnvBase(gym.Env):
         agent_player = self.game.get_player_from_color(self.agent_color)
         finished_tokens = agent_player.get_finished_tokens_count()
 
+        # Check if game is over and if agent won
+        is_game_over = self.game.game_over or (self.game.winner is not None)
+        agent_won = False
+        if is_game_over and self.game.winner is not None:
+            agent_won = self.game.winner.color == self.agent_color
+
         return StepInfo(
             illegal_action=is_illegal,
             illegal_actions_total=self.illegal_actions,
@@ -567,6 +585,8 @@ class LudoRLEnvBase(gym.Env):
             episode_finish_ops_taken=self.episode_stats.finish_ops_taken,
             episode_home_exit_ops_available=self.episode_stats.home_exit_ops_available,
             episode_home_exit_ops_taken=self.episode_stats.home_exit_ops_taken,
+            is_game_over=is_game_over,
+            agent_won=agent_won,
         )
 
     # ---- action masking API for MaskablePPO/SubprocVecEnv -----------------

@@ -76,7 +76,7 @@ class LudoRLEnvSelfPlay(LudoRLEnvBase):
             FrozenPolicyStrategy(
                 policy=self._frozen_policy,
                 obs_builder=self._opponent_builders[color],
-                deterministic=True,
+                deterministic=False,
                 obs_normalizer=self.obs_normalizer,
             )
             for color in ALL_COLORS

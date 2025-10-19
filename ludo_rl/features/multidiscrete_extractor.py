@@ -12,7 +12,7 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
     opponents_positions (discrete ranks), opponents_active (binary), and dice (discrete).
     """
 
-    def __init__(self, observation_space: gym.Space, embed_dim: int = 8):
+    def __init__(self, observation_space: gym.Space, embed_dim: int = 64):
         if not isinstance(observation_space, gym.spaces.Dict):
             raise ValueError(
                 "MultiDiscreteFeatureExtractor requires a Dict observation_space"
@@ -42,10 +42,18 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
             "dice": {"n": 7, "size": 1},  # 1 dice value, 0-6
         }
 
-        # Calculate total feature dimension
-        total_features = sum(
-            config["size"] * embed_dim for config in self.component_configs.values()
+        # Calculate total feature dimension: agent features concatenated + aggregated opponent features
+        agent_keys = ["agent_color", "agent_progress", "agent_vulnerable", "dice"]
+        agent_features = (
+            sum(
+                config["size"]
+                for key, config in self.component_configs.items()
+                if key in agent_keys
+            )
+            * embed_dim
         )
+        opponent_features = 1 * embed_dim  # Aggregated opponent vector
+        total_features = agent_features + opponent_features
         super().__init__(observation_space, features_dim=total_features)
 
         self.embed_dim = embed_dim
@@ -61,26 +69,48 @@ class MultiDiscreteFeatureExtractor(BaseFeaturesExtractor):
             }
         )
 
+        # Multi-head attention for processing embeddings
+        self.attention = nn.MultiheadAttention(
+            embed_dim, num_heads=embed_dim // 4, batch_first=True
+        )
+
     def forward(self, observations: dict) -> torch.Tensor:
-        """Process Dict observation into concatenated embeddings."""
-        features = []
+        """Process Dict observation into concatenated agent features + aggregated opponent features with attention."""
+        agent_embeddings = []
+        opponent_embeddings = []
+        agent_keys = {"agent_color", "agent_progress", "agent_vulnerable", "dice"}
 
-        # Process each component
+        # Process each component and collect embeddings
         for key, config in self.component_configs.items():
-            obs_tensor = observations[key]  # Shape: (batch, size)
+            obs_tensor = observations[key]  # Shape: (batch, n * size)
             n, size = config["n"], config["size"]
+            batch = obs_tensor.size(0)
 
-            # Embed each position in this component
-            embeddings = []
-            for i in range(size):
-                emb = self.embed_by_n[str(n)](obs_tensor[:, i].long())
-                embeddings.append(emb)
+            # Reshape to (batch, size, n) and argmax to get discrete indices
+            obs_reshaped = obs_tensor.view(batch, size, n)
+            discrete_values = torch.argmax(obs_reshaped, dim=-1)  # (batch, size)
 
-            # Concatenate embeddings for this component
-            component_features = torch.cat(
-                embeddings, dim=1
-            )  # (batch, size * embed_dim)
-            features.append(component_features)
+            # Embed all discrete values at once
+            embs = self.embed_by_n[str(n)](discrete_values)  # (batch, size, embed_dim)
 
-        # Concatenate all component features
-        return torch.cat(features, dim=1)  # (batch, total_features)
+            if key in agent_keys:
+                # For agent, unbind and extend to list for later concatenation
+                agent_embeddings.extend(embs.unbind(dim=1))
+            else:
+                # For opponents, unbind and extend
+                opponent_embeddings.extend(embs.unbind(dim=1))
+
+        # Concatenate agent embeddings: (batch, agent_features)
+        agent_features = torch.cat(agent_embeddings, dim=1)
+
+        # Stack opponent embeddings: (batch, num_opponent_embeddings, embed_dim)
+        opp_tensor = torch.stack(opponent_embeddings, dim=1)
+
+        # Apply attention to opponent embeddings
+        attended_opp, _ = self.attention(opp_tensor, opp_tensor, opp_tensor)
+
+        # Aggregate opponent features (mean pooling for permutation invariance)
+        opp_aggregated = attended_opp.mean(dim=1)  # (batch, embed_dim)
+
+        # Concatenate agent and aggregated opponent features
+        return torch.cat([agent_features, opp_aggregated], dim=1)

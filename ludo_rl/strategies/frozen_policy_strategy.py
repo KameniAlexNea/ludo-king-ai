@@ -21,7 +21,7 @@ class FrozenPolicyStrategy(Strategy):
         self,
         policy: Optional[MaskableActorCriticPolicy],
         obs_builder: ObservationBuilderBase,
-        deterministic: bool = True,
+        deterministic: bool = False,
         obs_normalizer: Optional[VecNormalize] = None,
     ):
         super().__init__(
@@ -30,7 +30,7 @@ class FrozenPolicyStrategy(Strategy):
         )
         self.policy = policy
         self.obs_builder = obs_builder
-        self.deterministic = deterministic
+        self.deterministic = False
         self.obs_normalizer = obs_normalizer
 
     @staticmethod
@@ -40,9 +40,9 @@ class FrozenPolicyStrategy(Strategy):
         Maskable policies expect a boolean/float mask broadcastable to the batch
         dimension. We'll return float tensor and expand later.
         """
-        mask = torch.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=torch.float32)
+        mask = torch.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=torch.bool)
         for mv in valid_moves:
-            mask[mv.token_id] = 1.0
+            mask[mv.token_id] = True
         return mask
 
     def decide(self, game_context: AIDecisionContext) -> int:  # type: ignore[override]

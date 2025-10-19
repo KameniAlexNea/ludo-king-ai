@@ -15,13 +15,7 @@ def parse_args() -> TrainConfig:
     p.add_argument(
         "--checkpoint-freq",
         type=int,
-        default=TrainConfig.eval_freq,
-        help="Evaluate every N steps; 0 disables",
-    )
-    p.add_argument(
-        "--save-freq",
-        type=int,
-        default=TrainConfig.save_freq,
+        default=TrainConfig.checkpoint_freq,
         help="Checkpoint every N steps; 0 disables",
     )
     p.add_argument(
@@ -41,6 +35,8 @@ def parse_args() -> TrainConfig:
     p.add_argument("--batch-size", type=int, default=TrainConfig.batch_size)
     p.add_argument("--ent-coef", type=float, default=TrainConfig.ent_coef)
     p.add_argument("--vf-coef", type=float, default=TrainConfig.vf_coef)
+    p.add_argument("--gamma", type=float, default=TrainConfig.gamma)
+    p.add_argument("--gae-lambda", type=float, default=TrainConfig.gae_lambda)
     p.add_argument("--max-turns", type=int, default=TrainConfig.max_turns)
     # Annealing overrides
     p.add_argument(
