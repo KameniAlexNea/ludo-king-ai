@@ -12,6 +12,7 @@ from collections import defaultdict
 from typing import Dict
 
 from dotenv import load_dotenv
+from loguru import logger
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 
@@ -68,13 +69,13 @@ def run_eval(
     # set opponents if requested (will be applied on reset)
     opponents = None
     if opponent is None:
-        opponent = cfg.opponents.evaluation_candidates
-    print("Using opponents:", opponent)
+        opponent = cfg.opponents.candidates
+    logger.info("Using opponents: {}", opponent)
     opponents = build_opponent_combinations(
         opponent, n_episodes, fixed_num_players - 1, True
     )
 
-    print(f"Loading model from {model_path}")
+    logger.info("Loading model from {}", model_path)
     model = MaskablePPO.load(model_path, device="cpu")
 
     rewards = []
@@ -136,9 +137,14 @@ def run_eval(
 
         if is_win:
             wins += 1
-
-        print(
-            f"Episode {ep + 1}/{n_episodes}, opponents: {curr_opponents} - Win: {is_win} - Reward: {total_reward:.2f}"
+        winner_msg = "WIN" if is_win else "LOSE"
+        logger.info(
+            "Episode {}/{} - Opponents: {} - {} - Reward: {:.2f}",
+            ep + 1,
+            n_episodes,
+            curr_opponents,
+            winner_msg,
+            total_reward,
         )
         opponents_counter[str(curr_opponents)] += is_win
 
@@ -175,7 +181,7 @@ def run_eval(
     print("Opponent winning counts:")
     for k, v in sorted(opponents_counter.items(), key=lambda x: -x[1]):
         print(
-            f"  {k}: {v} wins - {v / n_episodes // len(curr_opponents):.3f} win rate - contrib {v / max(1, wins):.3f} of total wins"
+            f"  {k}: {v} wins - {v / (n_episodes / len(opponents_counter)):.3f} win rate - contrib {v / max(1, wins):.3f} of total wins"
         )
 
 

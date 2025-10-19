@@ -55,9 +55,9 @@ class ObservationConfig:
 class OpponentConfig:
     candidates: List[str] = field(
         default_factory=lambda: [
-            # "random",
-            # "weighted_random",
-            # "optimist",
+            "random",
+            "weighted_random",
+            "optimist",
             "probabilistic_v2",
             "probabilistic_v3",
             "probabilistic",
