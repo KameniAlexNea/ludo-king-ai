@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 
+import torch
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.callbacks import CheckpointCallback
@@ -32,6 +33,13 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
     parser.add_argument("--seed", type=int, default=defaults.seed, nargs="?")
     parser.add_argument("--device", type=str, default=defaults.device)
     parser.add_argument("--save-steps", type=int, default=defaults.save_steps)
+    parser.add_argument(
+        "--net-arch",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Optional custom policy net architecture, e.g. --net-arch 512 256.",
+    )
     parser.add_argument("--max-turns", type=int, default=env_defaults.max_turns)
     parser.add_argument(
         "--fixed-agent-color",
@@ -62,6 +70,7 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         seed=args.seed,
         device=args.device,
         save_steps=args.save_steps,
+        net_arch=tuple(args.net_arch) if args.net_arch else None,
     )
 
     env_cfg = EnvConfig(
@@ -94,6 +103,10 @@ def main() -> None:
     vec_env = DummyVecEnv([make_env])
     vec_env = VecMonitor(vec_env, train_cfg.logdir)
 
+    # Optionally use a custom feature extractor when discrete observations are enabled
+    policy_kwargs = {"activation_fn": torch.nn.LeakyReLU}
+    if train_cfg.net_arch:
+        policy_kwargs["net_arch"] = list(train_cfg.net_arch)
     model = MaskablePPO(
         "MultiInputPolicy",
         vec_env,
@@ -108,6 +121,7 @@ def main() -> None:
         verbose=1,
         seed=train_cfg.seed,
         device=train_cfg.device,
+        policy_kwargs=policy_kwargs,
     )
 
     checkpoint_callback = None

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Sequence
 
 
 @dataclass
@@ -58,3 +58,4 @@ class TrainConfig:
     seed: Optional[int] = None
     device: str = "cpu"
     save_steps: int = 0
+    net_arch: Optional[Sequence[int]] = None
