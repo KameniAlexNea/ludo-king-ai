@@ -18,9 +18,9 @@ from ludo_engine.models import (
 )
 from ludo_engine.strategies.strategy import StrategyFactory
 
-from models.config import EnvConfig
-from models.observation import make_observation_builder
-from models.reward import AdvancedRewardCalculator
+from .config import EnvConfig
+from .observation import make_observation_builder
+from .reward import AdvancedRewardCalculator
 
 
 def _make_mask(valid_moves: Optional[list[ValidMove]]) -> np.ndarray:

@@ -12,8 +12,8 @@ from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-from models.config import EnvConfig
-from models.ludo_env import LudoRLEnv
+from .config import EnvConfig
+from .ludo_env import LudoRLEnv
 
 
 def _mask_fn(env: LudoRLEnv):

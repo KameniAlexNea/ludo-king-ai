@@ -9,7 +9,7 @@ import numpy as np
 from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
 
-from models.config import EnvConfig
+from .config import EnvConfig
 
 _TOTAL_PATH = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
 _DICE_RANGE = range(GameConstants.DICE_MIN, GameConstants.DICE_MAX + 1)

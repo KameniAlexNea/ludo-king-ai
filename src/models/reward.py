@@ -8,7 +8,7 @@ from typing import Dict, Optional
 from ludo_engine.core import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
-from models.config import EnvConfig
+from .config import EnvConfig
 
 _TOTAL_PATH = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
 
