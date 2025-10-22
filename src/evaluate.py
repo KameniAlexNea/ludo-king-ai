@@ -6,7 +6,7 @@ import argparse
 from typing import Sequence
 
 from sb3_contrib import MaskablePPO
-
+import pandas as pd
 from models.config import EnvConfig
 from models.eval_utils import EvalStats, evaluate_against
 

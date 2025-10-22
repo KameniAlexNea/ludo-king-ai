@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Dict, List, Sequence
 
+from ludo_engine import LudoGame
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.vec_env import DummyVecEnv
 
@@ -93,6 +94,9 @@ def evaluate_against(
             done = False
             episode_reward = 0.0
             steps = 0
+            base_env: LudoRLEnv = env.envs[0].unwrapped
+            game: LudoGame = base_env.game
+            agent_color = base_env.agent_color
             while not done:
                 action, _ = model.predict(observation, deterministic=deterministic)
                 observation, reward, dones, infos = env.step(action)
@@ -100,9 +104,8 @@ def evaluate_against(
                 steps += 1
                 done = bool(dones[0])
                 if done:
-                    base_env: LudoRLEnv = env.envs[0].unwrapped
-                    winner = getattr(base_env.game, "winner", None)
-                    if winner is not None and winner.color == base_env.agent_color:
+                    winner = game.winner
+                    if winner is not None and winner.color == agent_color:
                         stats.update(episode_reward, steps, "win")
                     elif winner is None:
                         stats.update(episode_reward, steps, "draw")
