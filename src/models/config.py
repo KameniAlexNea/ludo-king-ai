@@ -57,3 +57,4 @@ class TrainConfig:
     model_dir: str = "./training/models"
     seed: Optional[int] = None
     device: str = "cpu"
+    save_steps: int = 0

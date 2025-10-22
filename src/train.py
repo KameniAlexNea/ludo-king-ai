@@ -7,6 +7,7 @@ import os
 
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
+from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 
 from models.config import EnvConfig, TrainConfig
@@ -30,6 +31,7 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
     parser.add_argument("--model-dir", type=str, default=defaults.model_dir)
     parser.add_argument("--seed", type=int, default=defaults.seed, nargs="?")
     parser.add_argument("--device", type=str, default=defaults.device)
+    parser.add_argument("--save-steps", type=int, default=defaults.save_steps)
     parser.add_argument("--max-turns", type=int, default=env_defaults.max_turns)
     parser.add_argument(
         "--fixed-agent-color",
@@ -59,6 +61,7 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         model_dir=args.model_dir,
         seed=args.seed,
         device=args.device,
+        save_steps=args.save_steps,
     )
 
     env_cfg = EnvConfig(
@@ -107,7 +110,20 @@ def main() -> None:
         device=train_cfg.device,
     )
 
-    model.learn(total_timesteps=train_cfg.total_steps)
+    checkpoint_callback = None
+    if train_cfg.save_steps and train_cfg.save_steps > 0:
+        checkpoint_callback = CheckpointCallback(
+            save_freq=train_cfg.save_steps,
+            save_path=train_cfg.model_dir,
+            name_prefix="ppo_checkpoint",
+            save_replay_buffer=False,
+            save_vecnormalize=False,
+        )
+
+    model.learn(
+        total_timesteps=train_cfg.total_steps,
+        callback=checkpoint_callback,
+    )
 
     save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal")
     model.save(save_path)
