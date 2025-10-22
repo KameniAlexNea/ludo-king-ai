@@ -12,13 +12,14 @@ from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, Player
 from models.config import EnvConfig
 
 _TOTAL_PATH = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
+_DICE_RANGE = range(GameConstants.DICE_MIN, GameConstants.DICE_MAX + 1)
 
 
 def _progress_fraction(position: int, start_pos: int) -> float:
     """Return progress in [0, 1] for the token relative to its start square."""
-    if position == GameConstants.HOME_POSITION:
+    if _is_home(position):
         return 0.0
-    if position == GameConstants.FINISH_POSITION:
+    if _is_finished(position):
         return 1.0
     if position >= GameConstants.HOME_COLUMN_START:
         steps = GameConstants.MAIN_BOARD_SIZE + (
@@ -47,17 +48,19 @@ def _threat_steps_to_agent(
     """Return minimal forward steps opponents need to capture this token."""
     if not _is_on_main_board(token_position):
         return None
+
     min_steps: int | None = None
     for player in game.players:
         if player.color == agent_color:
             continue
         for token in player.tokens:
-            opp_pos = token.position
-            if not _is_on_main_board(opp_pos):
+            opponent_pos = token.position
+            if not _is_on_main_board(opponent_pos):
                 continue
-            steps = (token_position - opp_pos) % GameConstants.MAIN_BOARD_SIZE
-            if 0 < steps <= 6:
-                min_steps = steps if min_steps is None else min(min_steps, steps)
+            steps = (token_position - opponent_pos) % GameConstants.MAIN_BOARD_SIZE
+            if steps == 0 or steps > GameConstants.DICE_MAX:
+                continue
+            min_steps = steps if min_steps is None else min(min_steps, steps)
     return min_steps
 
 
@@ -86,10 +89,7 @@ class ObservationBuilderBase:
 
     @staticmethod
     def _is_vulnerable(position: int) -> bool:
-        return not (
-            position == GameConstants.HOME_POSITION
-            or BoardConstants.is_safe_position(position)
-        )
+        return not (_is_home(position) or BoardConstants.is_safe_position(position))
 
 
 @dataclass
@@ -100,63 +100,57 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
         agent_color_onehot = np.zeros(len(ALL_COLORS), dtype=np.float32)
         agent_color_onehot[ALL_COLORS.index(self.agent_color)] = 1.0
 
+        agent_tokens = self._agent.tokens
+        agent_positions = [token.position for token in agent_tokens]
         agent_progress = np.array(
-            [
-                _progress_fraction(t.position, self._start_pos)
-                for t in self._agent.tokens
-            ],
+            [_progress_fraction(pos, self._start_pos) for pos in agent_positions],
             dtype=np.float32,
         )
-        agent_distance_to_finish = np.clip(1.0 - agent_progress, 0.0, 1.0)
+        agent_distance_to_finish = 1.0 - agent_progress
 
-        agent_vulnerable = np.array(
-            [float(self._is_vulnerable(t.position)) for t in self._agent.tokens],
-            dtype=np.float32,
-        )
-        agent_safe = 1.0 - agent_vulnerable
-
-        agent_home = np.array(
-            [float(_is_home(t.position)) for t in self._agent.tokens],
-            dtype=np.float32,
-        )
         agent_on_board = np.array(
-            [float(_is_on_main_board(t.position)) for t in self._agent.tokens],
+            [_is_on_main_board(pos) for pos in agent_positions], dtype=np.float32
+        )
+        agent_home = np.array(
+            [_is_home(pos) for pos in agent_positions], dtype=np.float32
+        )
+        agent_finished = np.array(
+            [_is_finished(pos) for pos in agent_positions], dtype=np.float32
+        )
+        agent_safe = np.array(
+            [BoardConstants.is_safe_position(pos) for pos in agent_positions],
             dtype=np.float32,
         )
+        agent_vulnerable = 1.0 - agent_safe
 
         valid_moves = self.game.get_valid_moves(self._agent, dice)
         capture_flags = np.zeros(tokens_per_player, dtype=np.float32)
         finish_flags = np.zeros(tokens_per_player, dtype=np.float32)
-        for mv in valid_moves:
-            idx = mv.token_id
-            if getattr(mv, "captures_opponent", False):
-                capture_flags[idx] = 1.0
-            if (
-                getattr(mv, "finished_token", False)
-                or getattr(mv, "target_position", None) == GameConstants.FINISH_POSITION
-            ):
-                finish_flags[idx] = 1.0
+        for move in valid_moves:
+            index = move.token_id
+            if move.captures_opponent:
+                capture_flags[index] = 1.0
+            if _is_finished(move.target_position):
+                finish_flags[index] = 1.0
 
         threat_scores = np.zeros(tokens_per_player, dtype=np.float32)
-        for i, token in enumerate(self._agent.tokens):
-            if not agent_vulnerable[i]:
+        for idx, pos in enumerate(agent_positions):
+            if not agent_vulnerable[idx]:
                 continue
-            steps = _threat_steps_to_agent(self.game, self.agent_color, token.position)
+            steps = _threat_steps_to_agent(self.game, self.agent_color, pos)
             if steps is not None:
-                threat_scores[i] = (7 - steps) / 6.0
+                threat_scores[idx] = (
+                    GameConstants.DICE_MAX + 1 - steps
+                ) / GameConstants.DICE_MAX
 
-        agent_tokens_at_home = float(agent_home.sum() / max(1, tokens_per_player))
-        agent_tokens_finished = float(
-            sum(float(_is_finished(t.position)) for t in self._agent.tokens)
-            / max(1, tokens_per_player)
-        )
-        agent_tokens_on_safe = float(agent_safe.sum() / max(1, tokens_per_player))
+        agent_tokens_at_home = float(agent_home.mean())
+        agent_tokens_finished = float(agent_finished.mean())
+        agent_tokens_on_safe = float(agent_safe.mean())
         agent_total_progress = float(agent_progress.sum())
 
         opp_positions: List[float] = []
         opp_active: List[float] = []
-        opponent_total_progress = 0.0
-        opponent_best_progress = 0.0
+        opponent_progress_totals: List[float] = []
         opponent_home_count = 0.0
         opponent_finished_count = 0.0
         opponent_safe_count = 0.0
@@ -164,75 +158,67 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
             if color in self._present_colors:
                 player = self.game.get_player_from_color(color)
                 start_pos = BoardConstants.START_POSITIONS[color]
-                progresses = [
-                    _progress_fraction(t.position, start_pos) for t in player.tokens
-                ]
-                opp_positions.extend(progresses)
+                progresses = np.array(
+                    [_progress_fraction(t.position, start_pos) for t in player.tokens],
+                    dtype=np.float32,
+                )
+                opp_positions.extend(progresses.tolist())
                 opp_active.append(1.0)
-                total_progress = float(sum(progresses))
-                opponent_total_progress += total_progress
-                opponent_best_progress = max(opponent_best_progress, total_progress)
+                opponent_progress_totals.append(float(progresses.sum()))
                 opponent_home_count += sum(_is_home(t.position) for t in player.tokens)
                 opponent_finished_count += sum(
                     _is_finished(t.position) for t in player.tokens
                 )
                 opponent_safe_count += sum(
-                    not self._is_vulnerable(t.position) for t in player.tokens
+                    self._is_vulnerable(t.position) for t in player.tokens
                 )
             else:
                 opp_positions.extend([0.0] * tokens_per_player)
                 opp_active.append(0.0)
 
-        total_opponent_tokens = max(1.0, tokens_per_player * len(self._opponent_colors))
+        opponent_total_progress = float(sum(opponent_progress_totals))
+        opponent_best_progress = float(max(opponent_progress_totals, default=0.0))
+
+        total_opponent_tokens = float(
+            tokens_per_player * max(1, len(self._opponent_colors))
+        )
         opponent_tokens_at_home = float(opponent_home_count / total_opponent_tokens)
         opponent_tokens_finished = float(
             opponent_finished_count / total_opponent_tokens
         )
         opponent_tokens_on_safe = float(opponent_safe_count / total_opponent_tokens)
 
-        all_totals = [(self.agent_color, agent_total_progress)] + [
-            (
-                color,
-                sum(
-                    _progress_fraction(
-                        t.position, BoardConstants.START_POSITIONS[color]
-                    )
-                    for t in self.game.get_player_from_color(color).tokens
-                ),
-            )
-            for color in self._opponent_colors
-        ]
-        all_totals.sort(key=lambda pair: pair[1], reverse=True)
-        rank_index = next(
-            (idx for idx, pair in enumerate(all_totals) if pair[0] == self.agent_color),
-            0,
-        )
+        totals_with_agent = [agent_total_progress] + opponent_progress_totals
+        sorted_totals = sorted(totals_with_agent, reverse=True)
         agent_rank = (
-            rank_index / max(1, len(all_totals) - 1) if len(all_totals) > 1 else 0.0
+            sorted_totals.index(agent_total_progress) / max(1, len(sorted_totals) - 1)
+            if len(sorted_totals) > 1
+            else 0.0
         )
         progress_lead = agent_total_progress - max(
-            (val for color, val in all_totals if color != self.agent_color),
-            default=0.0,
+            opponent_progress_totals, default=0.0
         )
 
         max_dice = GameConstants.DICE_MAX
         dice_vec = np.zeros(max_dice, dtype=np.float32)
-        if 1 <= dice <= max_dice:
+        if dice in _DICE_RANGE:
             dice_vec[dice - 1] = 1.0
         dice_value_norm = np.array(
-            [dice / max_dice if 1 <= dice <= max_dice else 0.0], dtype=np.float32
+            [dice / max_dice if dice in _DICE_RANGE else 0.0], dtype=np.float32
         )
-        dice_is_six = np.array([1.0 if dice == 6 else 0.0], dtype=np.float32)
+        dice_is_six = np.array(
+            [1.0 if dice == GameConstants.EXIT_HOME_ROLL else 0.0], dtype=np.float32
+        )
         dice_is_even = np.array(
-            [1.0 if dice > 0 and dice % 2 == 0 else 0.0], dtype=np.float32
+            [1.0 if dice in _DICE_RANGE and dice % 2 == 0 else 0.0], dtype=np.float32
         )
         home_exit_ready = np.array(
-            [1.0 if dice == 6 and agent_tokens_at_home > 0 else 0.0],
+            [1.0 if dice == GameConstants.EXIT_HOME_ROLL and agent_home.any() else 0.0],
             dtype=np.float32,
         )
 
-        capture_any = np.array([float(capture_flags.max())], dtype=np.float32)
-        finish_any = np.array([float(finish_flags.max())], dtype=np.float32)
+        capture_any = np.array([capture_flags.max()], dtype=np.float32)
+        finish_any = np.array([finish_flags.max()], dtype=np.float32)
 
         return {
             "agent_color": agent_color_onehot,
