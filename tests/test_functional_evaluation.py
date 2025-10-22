@@ -24,7 +24,7 @@ class TestEvaluationFunctionality(unittest.TestCase):
         opponents = ["random", "probabilistic_v2", "killer"]
         games_per_opponent = 2
 
-        with patch('models.eval_utils.evaluate_against') as mock_evaluate:
+        with patch('src.models.eval_utils.evaluate_against') as mock_evaluate:
             # Mock different performance against different opponents
             mock_evaluate.side_effect = [
                 Mock(opponent="random", win_rate=0.6, avg_reward=5.0, avg_length=25.0),
@@ -48,7 +48,7 @@ class TestEvaluationFunctionality(unittest.TestCase):
         mock_model = Mock()
 
         # Mock evaluation results
-        with patch('models.eval_utils.evaluate_against') as mock_evaluate:
+        with patch('src.models.eval_utils.evaluate_against') as mock_evaluate:
             stats = Mock()
             stats.opponent = "random"
             stats.episodes = 10
@@ -92,7 +92,7 @@ class TestEvaluationFunctionality(unittest.TestCase):
         opponents = ["weak", "medium", "strong"]
         games_per_opponent = 5
 
-        with patch('models.eval_utils.evaluate_against') as mock_evaluate:
+        with patch('src.models.eval_utils.evaluate_against') as mock_evaluate:
             # Mock varying performance levels
             mock_evaluate.side_effect = [
                 Mock(opponent="weak", win_rate=0.8, avg_reward=8.0),      # Good against weak
@@ -118,7 +118,7 @@ class TestEvaluationFunctionality(unittest.TestCase):
         """Test that deterministic and stochastic settings are passed correctly."""
         mock_model = Mock()
 
-        with patch('models.eval_utils.evaluate_against') as mock_evaluate:
+        with patch('src.models.eval_utils.evaluate_against') as mock_evaluate:
             mock_evaluate.return_value = Mock(opponent="test", win_rate=0.5)
 
             # Test deterministic
