@@ -28,7 +28,7 @@ FIXED_COLOR=${FIXED_COLOR:-RED}
 PI_NET_ARCH=${PI_NET_ARCH:-"64 64"}
 VF_NET_ARCH=${VF_NET_ARCH:-"256 256"}
 N_ENVS=${N_ENVS:-16}
-EVAL_FREQ=${EVAL_FREQ:-50000}
+EVAL_FREQ=${EVAL_FREQ:-100000}
 EVAL_EPISODES=${EVAL_EPISODES:-20}
 EVAL_OPPONENTS=${EVAL_OPPONENTS:-}
 EVAL_DETERMINISTIC=${EVAL_DETERMINISTIC:-}
@@ -78,8 +78,7 @@ fi
 if [[ -n "${EVAL_DETERMINISTIC}" ]]; then
     case "${EVAL_DETERMINISTIC,,}" in
         true|1|yes)
-            TRAIN_ARGS+=(--eval-deterministic)
-            ;;
+            ;; # deterministic is the default; no extra flag needed
         false|0|no)
             TRAIN_ARGS+=(--eval-stochastic)
             ;;
@@ -92,6 +91,7 @@ fi
 OUTPUT_FILE="${LOGDIR}/training.log"
 
 echo "Launching training. Logs: ${OUTPUT_FILE}" >&2
+echo "Command: python ${ROOT_DIR}/src/train.py ${TRAIN_ARGS[*]}" >&2
 
 nohup python "${ROOT_DIR}/src/train.py" "${TRAIN_ARGS[@]}" \
     >>"${OUTPUT_FILE}" 2>&1 &

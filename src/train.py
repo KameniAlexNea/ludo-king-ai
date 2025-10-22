@@ -10,10 +10,7 @@ import os
 import torch
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
-from stable_baselines3.common.callbacks import (
-    BaseCallback,
-    CheckpointCallback,
-)
+from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from models.config import EnvConfig, TrainConfig
@@ -105,18 +102,12 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         default=",".join(defaults.eval_opponents),
         help="Comma separated list of opponent strategies for evaluation runs.",
     )
-    parser.set_defaults(eval_deterministic=defaults.eval_deterministic)
-    parser.add_argument(
-        "--eval-deterministic",
-        dest="eval_deterministic",
-        action="store_true",
-        help="Use deterministic actions during evaluation (default).",
-    )
     parser.add_argument(
         "--eval-stochastic",
         dest="eval_deterministic",
         action="store_false",
-        help="Use stochastic actions during evaluation (overrides deterministic default).",
+        default=defaults.eval_deterministic,
+        help="Use stochastic actions during evaluation instead of deterministic default.",
     )
 
     args = parser.parse_args()

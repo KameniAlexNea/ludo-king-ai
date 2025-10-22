@@ -63,7 +63,7 @@ class TrainConfig:
     pi_net_arch: Tuple[int, ...] = (64, 64)
     vf_net_arch: Tuple[int, ...] = (256, 256)
     n_envs: int = 16
-    eval_freq: int = 50_000
+    eval_freq: int = 100_000
     eval_episodes: int = 20
-    eval_opponents: tuple[str, ...] = ("probabilistic_v3",)
+    eval_opponents: tuple[str, ...] = ("probabilistic_v3", "balanced", "killer", "cautious", "winner")
     eval_deterministic: bool = True
