@@ -146,7 +146,7 @@ def main() -> None:
     checkpoint_callback = None
     if train_cfg.save_steps and train_cfg.save_steps > 0:
         checkpoint_callback = CheckpointCallback(
-            save_freq=train_cfg.save_steps,
+            save_freq=train_cfg.save_steps // train_cfg.n_envs,
             save_path=train_cfg.model_dir,
             name_prefix="ppo_checkpoint",
             save_replay_buffer=False,

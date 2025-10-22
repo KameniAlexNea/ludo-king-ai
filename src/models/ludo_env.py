@@ -259,9 +259,12 @@ class LudoRLEnv(gym.Env):
         ordered = colors[pivot:] + colors[:pivot]
         self.game = LudoGame(ordered)
 
-        for player in self.game.players:
+        opponent_names = self.cfg.opponent_strategy.split(",")
+        for i, player in enumerate(self.game.players):
             if player.color != self.agent_color:
-                strategy = StrategyFactory.create_strategy(self.cfg.opponent_strategy)
+                strategy = StrategyFactory.create_strategy(
+                    opponent_names[i % len(opponent_names)]
+                )
                 player.set_strategy(strategy)
 
         self._obs_builder = make_observation_builder(
