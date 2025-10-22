@@ -6,20 +6,18 @@ import argparse
 import copy
 import math
 import os
-from collections.abc import Mapping
 
 import torch
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.callbacks import (
     BaseCallback,
-    CallbackList,
     CheckpointCallback,
 )
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from models.config import EnvConfig, TrainConfig
-from models.eval_utils import evaluate_against_many, PeriodicEvalCallback
+from models.eval_utils import evaluate_against_many
 from models.ludo_env import LudoRLEnv
 
 
@@ -55,28 +53,18 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
     parser.add_argument("--device", type=str, default=defaults.device)
     parser.add_argument("--save-steps", type=int, default=defaults.save_steps)
     parser.add_argument(
-        "--net-arch",
-        type=int,
-        nargs="+",
-        default=None,
-        help=(
-            "Optional custom policy net architecture shared between policy and value, "
-            "e.g. --net-arch 512 256."
-        ),
-    )
-    parser.add_argument(
         "--pi-net-arch",
         type=int,
         nargs="+",
-        default=None,
-        help="Optional policy branch architecture, e.g. --pi-net-arch 256 128.",
+        default=list(defaults.pi_net_arch),
+        help="Policy branch architecture, e.g. --pi-net-arch 256 128.",
     )
     parser.add_argument(
         "--vf-net-arch",
         type=int,
         nargs="+",
-        default=None,
-        help="Optional value branch architecture, e.g. --vf-net-arch 256 128.",
+        default=list(defaults.vf_net_arch),
+        help="Value branch architecture, e.g. --vf-net-arch 256 128.",
     )
     parser.add_argument(
         "--n-envs",
@@ -103,7 +91,7 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         "--eval-freq",
         type=int,
         default=defaults.eval_freq,
-        help="Run evaluations every N timesteps (0 disables evaluations).",
+        help="Run evaluations every N timesteps.",
     )
     parser.add_argument(
         "--eval-episodes",
@@ -133,21 +121,6 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
 
     args = parser.parse_args()
 
-    if args.net_arch and (args.pi_net_arch or args.vf_net_arch):
-        parser.error(
-            "--net-arch cannot be used together with --pi-net-arch/--vf-net-arch"
-        )
-
-    net_arch = None
-    if args.pi_net_arch or args.vf_net_arch:
-        net_arch = {}
-        if args.pi_net_arch:
-            net_arch["pi"] = tuple(args.pi_net_arch)
-        if args.vf_net_arch:
-            net_arch["vf"] = tuple(args.vf_net_arch)
-    elif args.net_arch:
-        net_arch = tuple(args.net_arch)
-
     eval_opponents = tuple(
         opponent.strip()
         for opponent in args.eval_opponents.split(",")
@@ -155,6 +128,11 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
     )
     if not eval_opponents:
         eval_opponents = defaults.eval_opponents
+    if args.eval_freq <= 0:
+        parser.error("--eval-freq must be positive")
+
+    if args.save_steps <= 0:
+        parser.error("--save-steps must be positive")
 
     train_cfg = TrainConfig(
         total_steps=args.total_steps,
@@ -170,12 +148,13 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         seed=args.seed,
         device=args.device,
         save_steps=args.save_steps,
-        net_arch=net_arch,
         n_envs=max(1, args.n_envs),
-        eval_freq=max(0, args.eval_freq),
+        eval_freq=args.eval_freq,
         eval_episodes=max(1, args.eval_episodes),
         eval_opponents=eval_opponents,
         eval_deterministic=args.eval_deterministic,
+        pi_net_arch=tuple(args.pi_net_arch),
+        vf_net_arch=tuple(args.vf_net_arch),
     )
 
     env_cfg = EnvConfig(
@@ -194,6 +173,63 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
 
 def _mask_fn(env: LudoRLEnv):
     return env.valid_action_mask()
+
+
+class PeriodicEvalCallback(BaseCallback):
+    """Run lightweight policy evaluations at a fixed timestep cadence."""
+
+    def __init__(
+        self,
+        env_cfg: EnvConfig,
+        opponents: tuple[str, ...],
+        episodes: int,
+        eval_freq: int,
+        deterministic: bool,
+    ) -> None:
+        if eval_freq <= 0:
+            raise ValueError("eval_freq must be positive")
+        super().__init__(verbose=1)
+        self.base_cfg = copy.deepcopy(env_cfg)
+        self.opponents = opponents
+        self.episodes = episodes
+        self.eval_freq = eval_freq
+        self.deterministic = deterministic
+        self._next_eval = eval_freq
+        self._last_eval_step = 0
+
+    def _run_eval(self) -> None:
+        summaries = evaluate_against_many(
+            self.model,
+            self.opponents,
+            self.episodes,
+            self.base_cfg,
+            self.deterministic,
+        )
+        step = int(self.num_timesteps)
+        if self.verbose > 0:
+            print(f"\n[Eval] timesteps={step}")
+            for summary in summaries:
+                print(
+                    f"  vs {summary.opponent}: win_rate={summary.win_rate:.3f} "
+                    f"avg_reward={summary.avg_reward:.2f} avg_length={summary.avg_length:.1f}"
+                )
+        for summary in summaries:
+            prefix = f"eval/{summary.opponent}"
+            self.logger.record(f"{prefix}/win_rate", summary.win_rate)
+            self.logger.record(f"{prefix}/avg_reward", summary.avg_reward)
+            self.logger.record(f"{prefix}/avg_length", summary.avg_length)
+        self.logger.dump(step)
+        self._last_eval_step = step
+
+    def _on_step(self) -> bool:
+        if self.num_timesteps >= self._next_eval:
+            self._run_eval()
+            self._next_eval += self.eval_freq
+        return True
+
+    def _on_training_end(self) -> None:
+        if int(self.num_timesteps) != self._last_eval_step:
+            self._run_eval()
 
 
 def main() -> None:
@@ -219,25 +255,13 @@ def main() -> None:
         vec_env = DummyVecEnv([make_env_fn(0)])
     vec_env = VecMonitor(vec_env, train_cfg.logdir)
 
-    policy_kwargs = {"activation_fn": torch.nn.ReLU}
-    if train_cfg.net_arch:
-        if isinstance(train_cfg.net_arch, Mapping):
-            net_arch_cfg = {}
-            if "pi" in train_cfg.net_arch:
-                net_arch_cfg["pi"] = list(train_cfg.net_arch["pi"])
-            if "vf" in train_cfg.net_arch:
-                net_arch_cfg["vf"] = list(train_cfg.net_arch["vf"])
-            if not net_arch_cfg:
-                raise ValueError(
-                    "net_arch mapping must contain at least one of 'pi' or 'vf'."
-                )
-            policy_kwargs["net_arch"] = net_arch_cfg
-        else:
-            shared_layers = list(train_cfg.net_arch)
-            policy_kwargs["net_arch"] = {
-                "pi": shared_layers.copy(),
-                "vf": shared_layers.copy(),
-            }
+    policy_kwargs = {
+        "activation_fn": torch.nn.ReLU,
+        "net_arch": {
+            "pi": list(train_cfg.pi_net_arch),
+            "vf": list(train_cfg.vf_net_arch),
+        },
+    }
 
     model = MaskablePPO(
         "MultiInputPolicy",
@@ -258,45 +282,28 @@ def main() -> None:
         policy_kwargs=policy_kwargs,
     )
 
-    checkpoint_callback = None
-    if train_cfg.save_steps and train_cfg.save_steps > 0:
-        checkpoint_callback = CheckpointCallback(
-            save_freq=max(1, train_cfg.save_steps // train_cfg.n_envs),
-            save_path=train_cfg.model_dir,
-            name_prefix="ppo_checkpoint",
-            save_replay_buffer=False,
-            save_vecnormalize=False,
-        )
+    checkpoint_callback = CheckpointCallback(
+        save_freq=max(1, train_cfg.save_steps // train_cfg.n_envs),
+        save_path=train_cfg.model_dir,
+        name_prefix="ludo_ppo",
+        save_replay_buffer=False,
+        save_vecnormalize=False,
+    )
 
-    eval_callback = None
-    if train_cfg.eval_freq > 0 and train_cfg.eval_opponents:
-        eval_callback = PeriodicEvalCallback(
-            env_cfg=env_cfg,
-            opponents=train_cfg.eval_opponents,
-            episodes=train_cfg.eval_episodes,
-            eval_freq=train_cfg.eval_freq,
-            deterministic=train_cfg.eval_deterministic,
-        )
+    eval_callback = PeriodicEvalCallback(
+        env_cfg=env_cfg,
+        opponents=train_cfg.eval_opponents,
+        episodes=train_cfg.eval_episodes,
+        eval_freq=train_cfg.eval_freq,
+        deterministic=train_cfg.eval_deterministic,
+    )
 
     save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal.zip")
     model.save(save_path)
 
-    callbacks: list[BaseCallback] = []
-    if eval_callback is not None:
-        callbacks.append(eval_callback)
-    if checkpoint_callback is not None:
-        callbacks.append(checkpoint_callback)
-
-    if not callbacks:
-        callback_arg: BaseCallback | None = None
-    elif len(callbacks) == 1:
-        callback_arg = callbacks[0]
-    else:
-        callback_arg = CallbackList(callbacks)
-
     model.learn(
         total_timesteps=train_cfg.total_steps,
-        callback=callback_arg,
+        callback=[eval_callback, checkpoint_callback],
     )
 
     save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal.zip")

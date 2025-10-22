@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Dict, List, Sequence
 
@@ -10,12 +11,6 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 from models.config import EnvConfig
 from models.ludo_env import LudoRLEnv
-from stable_baselines3.common.callbacks import (
-    BaseCallback,
-    CallbackList,
-    CheckpointCallback,
-)
-from copy import deepcopy
 
 
 def _mask_fn(env: LudoRLEnv):
@@ -82,8 +77,14 @@ def build_eval_env(opponent: str, cfg: EnvConfig) -> DummyVecEnv:
     return DummyVecEnv([_init])
 
 
-def evaluate_against(model, opponent: str, games: int, base_cfg: EnvConfig, deterministic: bool) -> EvalStats:
-    env = build_eval_env(opponent, base_cfg)
+def evaluate_against(
+    model,
+    opponent: str,
+    games: int,
+    base_cfg: EnvConfig,
+    deterministic: bool,
+) -> EvalStats:
+    env = build_eval_env(opponent, deepcopy(base_cfg))
     stats = EvalStats(opponent=opponent, episodes=games)
 
     try:
@@ -113,57 +114,14 @@ def evaluate_against(model, opponent: str, games: int, base_cfg: EnvConfig, dete
     return stats
 
 
-def evaluate_against_many(model, opponents: Sequence[str], games: int, base_cfg: EnvConfig, deterministic: bool) -> List[EvalStats]:
-    return [evaluate_against(model, opponent, games, base_cfg, deterministic) for opponent in opponents]
-
-
-class PeriodicEvalCallback(BaseCallback):
-    """Runs lightweight policy evaluations at a fixed timestep cadence."""
-
-    def __init__(
-        self,
-        env_cfg: EnvConfig,
-        opponents: tuple[str, ...],
-        episodes: int,
-        eval_freq: int,
-        deterministic: bool,
-    ) -> None:
-        super().__init__(verbose=1)
-        self.base_cfg = deepcopy(env_cfg)
-        self.opponents = opponents
-        self.episodes = episodes
-        self.eval_freq = max(0, eval_freq)
-        self.deterministic = deterministic
-        self._next_eval = self.eval_freq if self.eval_freq > 0 else None
-
-    def _run_eval(self) -> None:
-        summaries = evaluate_against_many(
-            self.model,
-            self.opponents,
-            self.episodes,
-            self.base_cfg,
-            self.deterministic,
-        )
-        step = int(self.num_timesteps)
-        if self.verbose > 0:
-            print(f"\n[Eval] timesteps={step}")
-            for summary in summaries:
-                print(
-                    f"  vs {summary.opponent}: win_rate={summary.win_rate:.3f} "
-                    f"avg_reward={summary.avg_reward:.2f} avg_length={summary.avg_length:.1f}"
-                )
-        for summary in summaries:
-            prefix = f"eval/{summary.opponent}"
-            self.logger.record(f"{prefix}/win_rate", summary.win_rate)
-            self.logger.record(f"{prefix}/avg_reward", summary.avg_reward)
-            self.logger.record(f"{prefix}/avg_length", summary.avg_length)
-        self.logger.dump(step)
-
-    def _on_step(self) -> bool:
-        if self.eval_freq <= 0 or self._next_eval is None:
-            return True
-        if self.num_timesteps < self._next_eval:
-            return True
-        self._run_eval()
-        self._next_eval += self.eval_freq
-        return True
+def evaluate_against_many(
+    model,
+    opponents: Sequence[str],
+    games: int,
+    base_cfg: EnvConfig,
+    deterministic: bool,
+) -> List[EvalStats]:
+    return [
+        evaluate_against(model, opponent, games, base_cfg, deterministic)
+        for opponent in opponents
+    ]

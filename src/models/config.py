@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Sequence
-
-
-NetArchSpec = Sequence[int] | Mapping[str, Sequence[int]]
+from typing import Optional, Tuple
 
 
 @dataclass
@@ -62,13 +59,11 @@ class TrainConfig:
     model_dir: str = "./training/models"
     seed: Optional[int] = None
     device: str = "cpu"
-    save_steps: int = 0
-    net_arch: Optional[NetArchSpec] = {
-        "pi": [64, 64],
-        "vf": [256, 256],
-    }
+    save_steps: int = 100_000
+    pi_net_arch: Tuple[int, ...] = (64, 64)
+    vf_net_arch: Tuple[int, ...] = (256, 256)
     n_envs: int = 16
-    eval_freq: int = 0
+    eval_freq: int = 50_000
     eval_episodes: int = 20
-    eval_opponents: tuple[str, ...] = ("probabilistic_v3", "killer", "cautious", "defensive", "balanced")
-    eval_deterministic: bool = False
+    eval_opponents: tuple[str, ...] = ("probabilistic_v3",)
+    eval_deterministic: bool = True
