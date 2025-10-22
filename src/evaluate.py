@@ -19,7 +19,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--opponents",
         type=str,
-        default="probabilistic_v3,killer,cautious",
+        default="probabilistic_v3,killer,cautious,optimist,hybrid_prob",
         help="Comma-separated list of opponent strategies to evaluate against.",
     )
     parser.add_argument(
@@ -69,15 +69,9 @@ def main() -> None:
         for opponent in opponents
     ]
 
-    print("Opponent,Games,WinRate,LossRate,DrawRate,AvgReward,AvgLength")
-    for summary in summaries:
-        data = summary.as_dict()
-        print(
-            f"{data['opponent']},{int(data['episodes'])},"
-            f"{data['win_rate']:.3f},{data['loss_rate']:.3f},"
-            f"{data['draw_rate']:.3f},{data['avg_reward']:.2f},"
-            f"{data['avg_length']:.1f}"
-        )
+    df = pd.DataFrame([summary.as_dict() for summary in summaries])
+    df["episodes"] = df["episodes"].astype(int)
+    print(df.to_string(index=False))
 
 
 if __name__ == "__main__":

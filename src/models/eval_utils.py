@@ -5,10 +5,11 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Dict, List, Sequence
-
+from stable_baselines3.common.utils import set_random_seed
 from ludo_engine import LudoGame
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.vec_env import DummyVecEnv
+from sb3_contrib import MaskablePPO
 
 from models.config import EnvConfig
 from models.ludo_env import LudoRLEnv
@@ -79,7 +80,7 @@ def build_eval_env(opponent: str, cfg: EnvConfig) -> DummyVecEnv:
 
 
 def evaluate_against(
-    model,
+    model: MaskablePPO,
     opponent: str,
     games: int,
     base_cfg: EnvConfig,
@@ -89,7 +90,10 @@ def evaluate_against(
     stats = EvalStats(opponent=opponent, episodes=games)
 
     try:
+        seed = base_cfg.seed or 0
         for _ in range(games):
+            set_random_seed(seed)
+            seed += 1
             observation = env.reset()
             done = False
             episode_reward = 0.0

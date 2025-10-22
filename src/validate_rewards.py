@@ -30,10 +30,9 @@ from ludo_engine.strategies.strategy import StrategyFactory
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ludo_rl.config import EnvConfig
-from ludo_rl.rewards.reward_adv_calculator import (
-    AdvancedRewardCalculator,
-    AdvRewardConfig,
+from models.config import EnvConfig
+from models.reward import (
+    AdvancedRewardCalculator
 )
 
 
@@ -402,7 +401,7 @@ def main():
 
     cfg = EnvConfig()
     cfg.fixed_num_players = args.num_players
-    reward_calc = AdvancedRewardCalculator(AdvRewardConfig())
+    reward_calc = AdvancedRewardCalculator()
 
     # Run matchups
     matchups = [
