@@ -25,15 +25,13 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from ludo_engine import LudoGame
-from ludo_engine.models import ALL_COLORS, GameConstants, MoveType, PlayerColor
+from ludo_engine.models import ALL_COLORS, PlayerColor
 from ludo_engine.strategies.strategy import StrategyFactory
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.config import EnvConfig
-from models.reward import (
-    AdvancedRewardCalculator
-)
+from models.reward import AdvancedRewardCalculator
 
 
 def parse_args():
@@ -80,45 +78,18 @@ def categorize_rewards(breakdown: Dict[str, float]) -> Dict[str, Dict[str, float
     """Categorize reward components into logical groups."""
     categories = {
         "Terminal": {},
-        "Shaping - Opportunities": {},
-        "Shaping - Risk Management": {},
-        "Shaping - Strategic": {},
-        "Shaping - Planning": {},
         "Basic Events": {},
         "Penalties": {},
     }
 
     categorization = {
-        # Terminal
         "terminal": "Terminal",
-        # Opportunities
-        "capture_opportunity_taken": "Shaping - Opportunities",
-        "capture_opportunity_missed": "Shaping - Opportunities",
-        "exit_opportunity_taken": "Shaping - Opportunities",
-        "exit_opportunity_missed": "Shaping - Opportunities",
-        "finish_opportunity_taken": "Shaping - Opportunities",
-        "finish_opportunity_missed": "Shaping - Opportunities",
-        # Risk management
-        "vulnerability_reduction": "Shaping - Risk Management",
-        "vulnerability_increase": "Shaping - Risk Management",
-        # Strategic
-        "blocking_bonus": "Shaping - Strategic",
-        "safe_zone": "Shaping - Strategic",
-        # Planning
-        "progress_efficiency": "Shaping - Planning",
-        "opponent_pressure_relief": "Shaping - Planning",
-        # Basic events
         "progress": "Basic Events",
         "capture": "Basic Events",
         "finish": "Basic Events",
-        "exit_start": "Basic Events",
-        "extra_turn": "Basic Events",
-        "diversity_bonus": "Basic Events",
-        # Penalties
+        "got_captured": "Penalties",
         "illegal": "Penalties",
         "time_penalty": "Penalties",
-        "got_captured": "Penalties",
-        "all_captured": "Penalties",
     }
 
     for key, value in breakdown.items():
@@ -168,41 +139,19 @@ def run_game(
     # Initialize reward calc
     reward_calc.reset_for_new_episode()
 
-    # Track opportunities per color
-    color_stats = {
-        color: {
-            "capture_ops_available": 0,
-            "capture_ops_taken": 0,
-            "finish_ops_available": 0,
-            "finish_ops_taken": 0,
-            "home_exit_ops_available": 0,
-            "home_exit_ops_taken": 0,
-        }
-        for color in colors
-    }
-
     # Play game
     max_turns = 500
     turn = 0
+    last_color = None
     while not game.game_over and turn < max_turns:
         player = game.get_current_player()
         current_color = player.color
+        last_color = current_color
 
         # Roll dice and get valid moves
         dice = game.roll_dice()
         ai_context = game.get_ai_decision_context(dice)
-        valid_moves = ai_context.valid_moves if ai_context else []
-
-        # Track available opportunities
-        color_stats[current_color]["capture_ops_available"] += sum(
-            1 for m in valid_moves if m.captures_opponent
-        )
-        color_stats[current_color]["finish_ops_available"] += sum(
-            1 for m in valid_moves if m.target_position == GameConstants.FINISH_POSITION
-        )
-        color_stats[current_color]["home_exit_ops_available"] += sum(
-            1 for m in valid_moves if m.move_type == MoveType.EXIT_HOME
-        )
+        # valid_moves = ai_context.valid_moves if ai_context else []
 
         # Use the player's built-in strategic decision making
         token_id = player.make_strategic_decision(ai_context)
@@ -216,45 +165,15 @@ def run_game(
         # Execute move
         move_result = game.execute_move(player, token_id, dice)
 
-        # Track taken opportunities - find which move was executed
-        chosen_move = next((m for m in valid_moves if m.token_id == token_id), None)
-        if chosen_move:
-            if chosen_move.captures_opponent:
-                color_stats[current_color]["capture_ops_taken"] += 1
-            if chosen_move.target_position == GameConstants.FINISH_POSITION:
-                color_stats[current_color]["finish_ops_taken"] += 1
-            if chosen_move.move_type == MoveType.EXIT_HOME:
-                color_stats[current_color]["home_exit_ops_taken"] += 1
-
-        # Build episode_info dict from accumulated stats
-        episode_info = {
-            "episode_capture_ops_available": color_stats[current_color][
-                "capture_ops_available"
-            ],
-            "episode_capture_ops_taken": color_stats[current_color][
-                "capture_ops_taken"
-            ],
-            "episode_home_exit_ops_available": color_stats[current_color][
-                "home_exit_ops_available"
-            ],
-            "episode_home_exit_ops_taken": color_stats[current_color][
-                "home_exit_ops_taken"
-            ],
-            "episode_finish_ops_available": color_stats[current_color][
-                "finish_ops_available"
-            ],
-            "episode_finish_ops_taken": color_stats[current_color]["finish_ops_taken"],
-        }
-
         # Compute reward
         reward, breakdown = reward_calc.compute(
             game=game,
             agent_color=current_color,
-            move=move_result,
+            move_result=move_result,
             cfg=cfg,
-            episode_info=episode_info,
-            return_breakdown=True,
             is_illegal=False,
+            opponent_captures=0,
+            terminated=False,
         )
 
         rewards_by_color[current_color] += reward
@@ -265,6 +184,21 @@ def run_game(
         if not move_result.extra_turn:
             game.next_turn()
         turn += 1
+
+    # Add terminal reward if game ended
+    if game.game_over and last_color is not None:
+        reward, breakdown = reward_calc.compute(
+            game=game,
+            agent_color=last_color,
+            move_result=None,
+            cfg=cfg,
+            is_illegal=False,
+            opponent_captures=0,
+            terminated=True,
+        )
+        rewards_by_color[last_color] += reward
+        for k, v in breakdown.items():
+            breakdowns_by_color[last_color][k] += v
 
     winner_color = game.winner.color if game.winner else None
     return (winner_color, rewards_by_color, breakdowns_by_color)
@@ -400,7 +334,6 @@ def main():
     print(format_header("REWARD VALIDATION - OPPONENT COMPARISON"))
 
     cfg = EnvConfig()
-    cfg.fixed_num_players = args.num_players
     reward_calc = AdvancedRewardCalculator()
 
     # Run matchups

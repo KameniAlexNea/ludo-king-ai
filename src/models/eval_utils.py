@@ -5,11 +5,12 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Dict, List, Sequence
-from stable_baselines3.common.utils import set_random_seed
+
 from ludo_engine import LudoGame
-from sb3_contrib.common.wrappers import ActionMasker
-from stable_baselines3.common.vec_env import DummyVecEnv
 from sb3_contrib import MaskablePPO
+from sb3_contrib.common.wrappers import ActionMasker
+from stable_baselines3.common.utils import set_random_seed
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 from models.config import EnvConfig
 from models.ludo_env import LudoRLEnv
