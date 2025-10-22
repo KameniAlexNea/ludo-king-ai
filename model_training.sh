@@ -29,6 +29,10 @@ NET_ARCH=${NET_ARCH:-"512 256 128"}
 PI_NET_ARCH=${PI_NET_ARCH:-}
 VF_NET_ARCH=${VF_NET_ARCH:-}
 N_ENVS=${N_ENVS:-16}
+EVAL_FREQ=${EVAL_FREQ:-0}
+EVAL_EPISODES=${EVAL_EPISODES:-20}
+EVAL_OPPONENTS=${EVAL_OPPONENTS:-}
+EVAL_DETERMINISTIC=${EVAL_DETERMINISTIC:-}
 
 mkdir -p "${LOGDIR}" "${MODELDIR}"
 
@@ -48,6 +52,8 @@ TRAIN_ARGS=(
     --max-turns "${MAX_TURNS}"
     --opponent-strategy "${OPPONENT_STRATEGY}"
     --n-envs "${N_ENVS}"
+    --eval-freq "${EVAL_FREQ}"
+    --eval-episodes "${EVAL_EPISODES}"
 )
 
 if [[ -n "${FIXED_COLOR}" ]]; then
@@ -72,6 +78,24 @@ if [[ -n "${NET_ARCH}" && -z "${PI_NET_ARCH}" && -z "${VF_NET_ARCH}" ]]; then
     TRAIN_ARGS+=(--net-arch "${NET_ARCH_VALUES[@]}")
 elif [[ -n "${NET_ARCH}" ]]; then
     echo "Warning: NET_ARCH is ignored when PI_NET_ARCH or VF_NET_ARCH is provided." >&2
+fi
+
+if [[ -n "${EVAL_OPPONENTS}" ]]; then
+    TRAIN_ARGS+=(--eval-opponents "${EVAL_OPPONENTS}")
+fi
+
+if [[ -n "${EVAL_DETERMINISTIC}" ]]; then
+    case "${EVAL_DETERMINISTIC,,}" in
+        true|1|yes)
+            TRAIN_ARGS+=(--eval-deterministic)
+            ;;
+        false|0|no)
+            TRAIN_ARGS+=(--eval-stochastic)
+            ;;
+        *)
+            echo "Warning: EVAL_DETERMINISTIC='${EVAL_DETERMINISTIC}' not understood; skipping." >&2
+            ;;
+    esac
 fi
 
 OUTPUT_FILE="${LOGDIR}/training.log"

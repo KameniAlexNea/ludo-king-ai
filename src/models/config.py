@@ -50,9 +50,9 @@ class EnvConfig:
 class TrainConfig:
     """High level hyper-parameters for PPO training."""
 
-    total_steps: int = 500_000
-    learning_rate: float = 3e-4
-    n_steps: int = 1024
+    total_steps: int = 5_000_000
+    learning_rate: float = 1e-4
+    n_steps: int = 512
     batch_size: int = 256
     ent_coef: float = 0.01
     vf_coef: float = 0.5
@@ -63,5 +63,12 @@ class TrainConfig:
     seed: Optional[int] = None
     device: str = "cpu"
     save_steps: int = 0
-    net_arch: Optional[NetArchSpec] = None
-    n_envs: int = 8
+    net_arch: Optional[NetArchSpec] = {
+        "pi": [64, 64],
+        "vf": [256, 256],
+    }
+    n_envs: int = 16
+    eval_freq: int = 0
+    eval_episodes: int = 20
+    eval_opponents: tuple[str, ...] = ("probabilistic_v3", "killer", "cautious", "defensive", "balanced")
+    eval_deterministic: bool = False

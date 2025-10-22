@@ -11,10 +11,15 @@ from collections.abc import Mapping
 import torch
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import (
+    BaseCallback,
+    CallbackList,
+    CheckpointCallback,
+)
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from models.config import EnvConfig, TrainConfig
+from models.eval_utils import evaluate_against_many, PeriodicEvalCallback
 from models.ludo_env import LudoRLEnv
 
 
@@ -23,11 +28,10 @@ def lr_schedule(lr_min, lr_max, lr_warmup) -> float:
         progress = 1 - progress_remaining
         if progress < lr_warmup:
             return lr_min + (lr_max - lr_min) * (progress / lr_warmup)
-        else:
-            adjusted_progress = (progress - lr_warmup) / (1 - lr_warmup)
-            return lr_max + 0.5 * (lr_max - lr_min) * (
-                1 + math.cos(math.pi * adjusted_progress)
-            )
+        adjusted_progress = (progress - lr_warmup) / (1 - lr_warmup)
+        return lr_max + 0.5 * (lr_max - lr_min) * (
+            1 + math.cos(math.pi * adjusted_progress)
+        )
 
     return function
 
@@ -55,7 +59,10 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         type=int,
         nargs="+",
         default=None,
-        help="Optional custom policy net architecture shared between policy and value, e.g. --net-arch 512 256.",
+        help=(
+            "Optional custom policy net architecture shared between policy and value, "
+            "e.g. --net-arch 512 256."
+        ),
     )
     parser.add_argument(
         "--pi-net-arch",
@@ -75,7 +82,9 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         "--n-envs",
         type=int,
         default=defaults.n_envs,
-        help="Number of parallel environments (>=1). Eight CPU workers are a good default.",
+        help=(
+            "Number of parallel environments (>=1). Eight CPU workers are a good default."
+        ),
     )
     parser.add_argument("--max-turns", type=int, default=env_defaults.max_turns)
     parser.add_argument(
@@ -89,6 +98,37 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         type=str,
         default=env_defaults.opponent_strategy,
         help="Strategy name understood by ludo_engine.StrategyFactory.",
+    )
+    parser.add_argument(
+        "--eval-freq",
+        type=int,
+        default=defaults.eval_freq,
+        help="Run evaluations every N timesteps (0 disables evaluations).",
+    )
+    parser.add_argument(
+        "--eval-episodes",
+        type=int,
+        default=defaults.eval_episodes,
+        help="Number of evaluation games per opponent when evaluations run.",
+    )
+    parser.add_argument(
+        "--eval-opponents",
+        type=str,
+        default=",".join(defaults.eval_opponents),
+        help="Comma separated list of opponent strategies for evaluation runs.",
+    )
+    parser.set_defaults(eval_deterministic=defaults.eval_deterministic)
+    parser.add_argument(
+        "--eval-deterministic",
+        dest="eval_deterministic",
+        action="store_true",
+        help="Use deterministic actions during evaluation (default).",
+    )
+    parser.add_argument(
+        "--eval-stochastic",
+        dest="eval_deterministic",
+        action="store_false",
+        help="Use stochastic actions during evaluation (overrides deterministic default).",
     )
 
     args = parser.parse_args()
@@ -108,6 +148,14 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
     elif args.net_arch:
         net_arch = tuple(args.net_arch)
 
+    eval_opponents = tuple(
+        opponent.strip()
+        for opponent in args.eval_opponents.split(",")
+        if opponent.strip()
+    )
+    if not eval_opponents:
+        eval_opponents = defaults.eval_opponents
+
     train_cfg = TrainConfig(
         total_steps=args.total_steps,
         learning_rate=args.learning_rate,
@@ -124,6 +172,10 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         save_steps=args.save_steps,
         net_arch=net_arch,
         n_envs=max(1, args.n_envs),
+        eval_freq=max(0, args.eval_freq),
+        eval_episodes=max(1, args.eval_episodes),
+        eval_opponents=eval_opponents,
+        eval_deterministic=args.eval_deterministic,
     )
 
     env_cfg = EnvConfig(
@@ -167,8 +219,7 @@ def main() -> None:
         vec_env = DummyVecEnv([make_env_fn(0)])
     vec_env = VecMonitor(vec_env, train_cfg.logdir)
 
-    # Optionally use a custom feature extractor when discrete observations are enabled
-    policy_kwargs = {"activation_fn": torch.nn.LeakyReLU}
+    policy_kwargs = {"activation_fn": torch.nn.ReLU}
     if train_cfg.net_arch:
         if isinstance(train_cfg.net_arch, Mapping):
             net_arch_cfg = {}
@@ -187,6 +238,7 @@ def main() -> None:
                 "pi": shared_layers.copy(),
                 "vf": shared_layers.copy(),
             }
+
     model = MaskablePPO(
         "MultiInputPolicy",
         vec_env,
@@ -209,18 +261,42 @@ def main() -> None:
     checkpoint_callback = None
     if train_cfg.save_steps and train_cfg.save_steps > 0:
         checkpoint_callback = CheckpointCallback(
-            save_freq=train_cfg.save_steps // train_cfg.n_envs,
+            save_freq=max(1, train_cfg.save_steps // train_cfg.n_envs),
             save_path=train_cfg.model_dir,
             name_prefix="ppo_checkpoint",
-            save_replay_buffer=True,
+            save_replay_buffer=False,
             save_vecnormalize=False,
         )
+
+    eval_callback = None
+    if train_cfg.eval_freq > 0 and train_cfg.eval_opponents:
+        eval_callback = PeriodicEvalCallback(
+            env_cfg=env_cfg,
+            opponents=train_cfg.eval_opponents,
+            episodes=train_cfg.eval_episodes,
+            eval_freq=train_cfg.eval_freq,
+            deterministic=train_cfg.eval_deterministic,
+        )
+
     save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal.zip")
     model.save(save_path)
 
+    callbacks: list[BaseCallback] = []
+    if eval_callback is not None:
+        callbacks.append(eval_callback)
+    if checkpoint_callback is not None:
+        callbacks.append(checkpoint_callback)
+
+    if not callbacks:
+        callback_arg: BaseCallback | None = None
+    elif len(callbacks) == 1:
+        callback_arg = callbacks[0]
+    else:
+        callback_arg = CallbackList(callbacks)
+
     model.learn(
         total_timesteps=train_cfg.total_steps,
-        callback=checkpoint_callback,
+        callback=callback_arg,
     )
 
     save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal.zip")
