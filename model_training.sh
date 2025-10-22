@@ -26,6 +26,7 @@ MAX_TURNS=${MAX_TURNS:-500}
 OPPONENT_STRATEGY=${OPPONENT_STRATEGY:-probabilistic_v3}
 FIXED_COLOR=${FIXED_COLOR:-}
 NET_ARCH=${NET_ARCH:-"512 256 128"}
+N_ENVS=${N_ENVS:-16}
 
 mkdir -p "${LOGDIR}" "${MODELDIR}"
 
@@ -44,6 +45,7 @@ TRAIN_ARGS=(
     --save-steps "${SAVE_STEPS}"
     --max-turns "${MAX_TURNS}"
     --opponent-strategy "${OPPONENT_STRATEGY}"
+    --n-envs "${N_ENVS}"
 )
 
 if [[ -n "${FIXED_COLOR}" ]]; then

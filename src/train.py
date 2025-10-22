@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import os
 
 import torch
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from models.config import EnvConfig, TrainConfig
 from models.ludo_env import LudoRLEnv
@@ -39,6 +40,12 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         nargs="+",
         default=None,
         help="Optional custom policy net architecture, e.g. --net-arch 512 256.",
+    )
+    parser.add_argument(
+        "--n-envs",
+        type=int,
+        default=defaults.n_envs,
+        help="Number of parallel environments (>=1). Eight CPU workers are a good default.",
     )
     parser.add_argument("--max-turns", type=int, default=env_defaults.max_turns)
     parser.add_argument(
@@ -71,6 +78,7 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         device=args.device,
         save_steps=args.save_steps,
         net_arch=tuple(args.net_arch) if args.net_arch else None,
+        n_envs=max(1, args.n_envs),
     )
 
     env_cfg = EnvConfig(
@@ -97,10 +105,21 @@ def main() -> None:
     os.makedirs(train_cfg.logdir, exist_ok=True)
     os.makedirs(train_cfg.model_dir, exist_ok=True)
 
-    def make_env():
-        return ActionMasker(LudoRLEnv(env_cfg), _mask_fn)
+    def make_env_fn(rank: int):
+        def _init():
+            cfg_copy = copy.deepcopy(env_cfg)
+            env = LudoRLEnv(cfg_copy)
+            if cfg_copy.seed is not None:
+                env.reset(seed=cfg_copy.seed + rank)
+            return ActionMasker(env, _mask_fn)
 
-    vec_env = DummyVecEnv([make_env])
+        return _init
+
+    if train_cfg.n_envs > 1:
+        env_fns = [make_env_fn(i) for i in range(train_cfg.n_envs)]
+        vec_env = SubprocVecEnv(env_fns)
+    else:
+        vec_env = DummyVecEnv([make_env_fn(0)])
     vec_env = VecMonitor(vec_env, train_cfg.logdir)
 
     # Optionally use a custom feature extractor when discrete observations are enabled
@@ -133,13 +152,15 @@ def main() -> None:
             save_replay_buffer=False,
             save_vecnormalize=False,
         )
+    save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal.zip")
+    model.save(save_path)
 
     model.learn(
         total_timesteps=train_cfg.total_steps,
         callback=checkpoint_callback,
     )
 
-    save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal")
+    save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal.zip")
     model.save(save_path)
 
 

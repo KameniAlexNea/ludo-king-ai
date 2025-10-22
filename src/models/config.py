@@ -59,3 +59,4 @@ class TrainConfig:
     device: str = "cpu"
     save_steps: int = 0
     net_arch: Optional[Sequence[int]] = None
+    n_envs: int = 8
