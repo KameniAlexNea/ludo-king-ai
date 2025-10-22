@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import math
 import os
 
 import torch
@@ -14,6 +15,20 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMoni
 
 from models.config import EnvConfig, TrainConfig
 from models.ludo_env import LudoRLEnv
+
+
+def lr_schedule(lr_min, lr_max, lr_warmup) -> float:
+    def function(progress_remaining: float) -> float:
+        progress = 1 - progress_remaining
+        if progress < lr_warmup:
+            return lr_min + (lr_max - lr_min) * (progress / lr_warmup)
+        else:
+            adjusted_progress = (progress - lr_warmup) / (1 - lr_warmup)
+            return lr_max + 0.5 * (lr_max - lr_min) * (
+                1 + math.cos(math.pi * adjusted_progress)
+            )
+
+    return function
 
 
 def _parse_args() -> tuple[TrainConfig, EnvConfig]:
@@ -129,7 +144,9 @@ def main() -> None:
     model = MaskablePPO(
         "MultiInputPolicy",
         vec_env,
-        learning_rate=train_cfg.learning_rate,
+        learning_rate=lr_schedule(
+            lr_min=5e-6, lr_max=train_cfg.learning_rate, lr_warmup=0.05
+        ),
         n_steps=train_cfg.n_steps,
         batch_size=train_cfg.batch_size,
         ent_coef=train_cfg.ent_coef,
