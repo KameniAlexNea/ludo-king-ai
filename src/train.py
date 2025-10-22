@@ -1,4 +1,5 @@
 """Simple training entry-point that wires the minimal environment with MaskablePPO."""
+
 from __future__ import annotations
 
 import argparse

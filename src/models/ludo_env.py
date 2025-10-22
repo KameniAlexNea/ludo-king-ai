@@ -1,4 +1,5 @@
 """Minimal gymnasium environment for classic Ludo training."""
+
 from __future__ import annotations
 
 import random
@@ -59,16 +60,24 @@ class LudoRLEnv(gym.Env):
         else:
             self.observation_space = spaces.Dict(
                 {
-                    "agent_color": spaces.Box(low=0.0, high=1.0, shape=(len(ALL_COLORS),), dtype=np.float32),
-                    "agent_progress": spaces.Box(low=0.0, high=1.0, shape=(tokens,), dtype=np.float32),
-                    "agent_vulnerable": spaces.Box(low=0.0, high=1.0, shape=(tokens,), dtype=np.float32),
+                    "agent_color": spaces.Box(
+                        low=0.0, high=1.0, shape=(len(ALL_COLORS),), dtype=np.float32
+                    ),
+                    "agent_progress": spaces.Box(
+                        low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                    ),
+                    "agent_vulnerable": spaces.Box(
+                        low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                    ),
                     "opponents_positions": spaces.Box(
                         low=0.0,
                         high=1.0,
                         shape=(tokens * opponents,),
                         dtype=np.float32,
                     ),
-                    "opponents_active": spaces.Box(low=0.0, high=1.0, shape=(opponents,), dtype=np.float32),
+                    "opponents_active": spaces.Box(
+                        low=0.0, high=1.0, shape=(opponents,), dtype=np.float32
+                    ),
                     "dice": spaces.Box(low=0.0, high=1.0, shape=(6,), dtype=np.float32),
                 }
             )
@@ -122,7 +131,9 @@ class LudoRLEnv(gym.Env):
                 is_illegal = True
                 chosen = self.rng.choice(list(valid_tokens))
             agent_player = self.game.get_current_player()
-            move_result = self.game.execute_move(agent_player, chosen, self.pending_dice)
+            move_result = self.game.execute_move(
+                agent_player, chosen, self.pending_dice
+            )
 
         self.turn_count += 1
         terminated = self.game.game_over or (self.game.winner is not None)
@@ -185,7 +196,9 @@ class LudoRLEnv(gym.Env):
                 strategy = StrategyFactory.create_strategy(self.cfg.opponent_strategy)
                 player.set_strategy(strategy)
 
-        self._obs_builder = make_observation_builder(self.cfg, self.game, self.agent_color)
+        self._obs_builder = make_observation_builder(
+            self.cfg, self.game, self.agent_color
+        )
 
     def _ensure_agent_turn(self) -> None:
         if self.game is None:

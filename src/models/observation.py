@@ -1,4 +1,5 @@
 """Observation builders for the minimal Ludo environment."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,12 +7,7 @@ from typing import Dict, Iterable, List
 
 import numpy as np
 from ludo_engine.core import LudoGame
-from ludo_engine.models import (
-    ALL_COLORS,
-    BoardConstants,
-    GameConstants,
-    PlayerColor,
-)
+from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
 
 from models.config import EnvConfig
 
@@ -25,7 +21,9 @@ def _progress_fraction(position: int, start_pos: int) -> float:
     if position == GameConstants.FINISH_POSITION:
         return 1.0
     if position >= GameConstants.HOME_COLUMN_START:
-        steps = GameConstants.MAIN_BOARD_SIZE + (position - GameConstants.HOME_COLUMN_START + 1)
+        steps = GameConstants.MAIN_BOARD_SIZE + (
+            position - GameConstants.HOME_COLUMN_START + 1
+        )
     else:
         steps = (position - start_pos) % GameConstants.MAIN_BOARD_SIZE
     return float(steps) / float(_TOTAL_PATH)
@@ -73,7 +71,10 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
         agent_color_onehot[ALL_COLORS.index(self.agent_color)] = 1.0
 
         agent_progress = np.array(
-            [_progress_fraction(t.position, self._start_pos) for t in self._agent.tokens],
+            [
+                _progress_fraction(t.position, self._start_pos)
+                for t in self._agent.tokens
+            ],
             dtype=np.float32,
         )
         agent_vulnerable = np.array(
@@ -153,7 +154,9 @@ class DiscreteObservationBuilder(ObservationBuilderBase):
         }
 
 
-def make_observation_builder(cfg: EnvConfig, game: LudoGame, agent_color: PlayerColor) -> ObservationBuilderBase:
+def make_observation_builder(
+    cfg: EnvConfig, game: LudoGame, agent_color: PlayerColor
+) -> ObservationBuilderBase:
     """Factory helper that picks the continuous or discrete builder."""
     if cfg.obs.discrete:
         return DiscreteObservationBuilder(cfg, game, agent_color)

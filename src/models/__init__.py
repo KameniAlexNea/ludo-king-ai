@@ -1,6 +1,6 @@
 """Minimal Ludo RL package."""
 
-from .config import EnvConfig, RewardConfig, ObservationConfig, TrainConfig
+from .config import EnvConfig, ObservationConfig, RewardConfig, TrainConfig
 
 __all__ = [
     "EnvConfig",

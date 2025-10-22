@@ -1,4 +1,5 @@
 """Minimal reward calculator used by the simplified Ludo environment."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,7 +19,9 @@ def _progress_fraction(position: int, start_pos: int) -> float:
     if position == GameConstants.FINISH_POSITION:
         return 1.0
     if position >= GameConstants.HOME_COLUMN_START:
-        steps = GameConstants.MAIN_BOARD_SIZE + (position - GameConstants.HOME_COLUMN_START + 1)
+        steps = GameConstants.MAIN_BOARD_SIZE + (
+            position - GameConstants.HOME_COLUMN_START + 1
+        )
     else:
         steps = (position - start_pos) % GameConstants.MAIN_BOARD_SIZE
     return float(steps) / float(_TOTAL_PATH)
@@ -75,7 +78,10 @@ class AdvancedRewardCalculator:
                 breakdown.capture = captures * cfg.reward.capture
                 reward += breakdown.capture
 
-            if move_result.finished_token or move_result.new_position == GameConstants.FINISH_POSITION:
+            if (
+                move_result.finished_token
+                or move_result.new_position == GameConstants.FINISH_POSITION
+            ):
                 breakdown.finish = cfg.reward.finish_token
                 reward += breakdown.finish
 

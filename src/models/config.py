@@ -1,4 +1,5 @@
 """Minimal configuration dataclasses for the simplified Ludo RL setup."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
