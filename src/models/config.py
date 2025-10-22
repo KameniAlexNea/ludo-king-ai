@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Sequence
+from typing import Mapping, Optional, Sequence
+
+
+NetArchSpec = Sequence[int] | Mapping[str, Sequence[int]]
 
 
 @dataclass
@@ -60,5 +63,5 @@ class TrainConfig:
     seed: Optional[int] = None
     device: str = "cpu"
     save_steps: int = 0
-    net_arch: Optional[Sequence[int]] = None
+    net_arch: Optional[NetArchSpec] = None
     n_envs: int = 8

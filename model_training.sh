@@ -26,6 +26,8 @@ MAX_TURNS=${MAX_TURNS:-500}
 OPPONENT_STRATEGY=${OPPONENT_STRATEGY:-probabilistic_v3}
 FIXED_COLOR=${FIXED_COLOR:-}
 NET_ARCH=${NET_ARCH:-"512 256 128"}
+PI_NET_ARCH=${PI_NET_ARCH:-}
+VF_NET_ARCH=${VF_NET_ARCH:-}
 N_ENVS=${N_ENVS:-16}
 
 mkdir -p "${LOGDIR}" "${MODELDIR}"
@@ -52,10 +54,24 @@ if [[ -n "${FIXED_COLOR}" ]]; then
     TRAIN_ARGS+=(--fixed-agent-color "${FIXED_COLOR}")
 fi
 
-if [[ -n "${NET_ARCH}" ]]; then
+if [[ -n "${PI_NET_ARCH}" ]]; then
+    # shellcheck disable=SC2206
+    PI_NET_ARCH_VALUES=(${PI_NET_ARCH})
+    TRAIN_ARGS+=(--pi-net-arch "${PI_NET_ARCH_VALUES[@]}")
+fi
+
+if [[ -n "${VF_NET_ARCH}" ]]; then
+    # shellcheck disable=SC2206
+    VF_NET_ARCH_VALUES=(${VF_NET_ARCH})
+    TRAIN_ARGS+=(--vf-net-arch "${VF_NET_ARCH_VALUES[@]}")
+fi
+
+if [[ -n "${NET_ARCH}" && -z "${PI_NET_ARCH}" && -z "${VF_NET_ARCH}" ]]; then
     # shellcheck disable=SC2206
     NET_ARCH_VALUES=(${NET_ARCH})
     TRAIN_ARGS+=(--net-arch "${NET_ARCH_VALUES[@]}")
+elif [[ -n "${NET_ARCH}" ]]; then
+    echo "Warning: NET_ARCH is ignored when PI_NET_ARCH or VF_NET_ARCH is provided." >&2
 fi
 
 OUTPUT_FILE="${LOGDIR}/training.log"

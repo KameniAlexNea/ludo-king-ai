@@ -6,6 +6,7 @@ import argparse
 import copy
 import math
 import os
+from collections.abc import Mapping
 
 import torch
 from sb3_contrib import MaskablePPO
@@ -54,7 +55,21 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         type=int,
         nargs="+",
         default=None,
-        help="Optional custom policy net architecture, e.g. --net-arch 512 256.",
+        help="Optional custom policy net architecture shared between policy and value, e.g. --net-arch 512 256.",
+    )
+    parser.add_argument(
+        "--pi-net-arch",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Optional policy branch architecture, e.g. --pi-net-arch 256 128.",
+    )
+    parser.add_argument(
+        "--vf-net-arch",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Optional value branch architecture, e.g. --vf-net-arch 256 128.",
     )
     parser.add_argument(
         "--n-envs",
@@ -78,6 +93,21 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
 
     args = parser.parse_args()
 
+    if args.net_arch and (args.pi_net_arch or args.vf_net_arch):
+        parser.error(
+            "--net-arch cannot be used together with --pi-net-arch/--vf-net-arch"
+        )
+
+    net_arch = None
+    if args.pi_net_arch or args.vf_net_arch:
+        net_arch = {}
+        if args.pi_net_arch:
+            net_arch["pi"] = tuple(args.pi_net_arch)
+        if args.vf_net_arch:
+            net_arch["vf"] = tuple(args.vf_net_arch)
+    elif args.net_arch:
+        net_arch = tuple(args.net_arch)
+
     train_cfg = TrainConfig(
         total_steps=args.total_steps,
         learning_rate=args.learning_rate,
@@ -92,7 +122,7 @@ def _parse_args() -> tuple[TrainConfig, EnvConfig]:
         seed=args.seed,
         device=args.device,
         save_steps=args.save_steps,
-        net_arch=tuple(args.net_arch) if args.net_arch else None,
+        net_arch=net_arch,
         n_envs=max(1, args.n_envs),
     )
 
@@ -140,7 +170,23 @@ def main() -> None:
     # Optionally use a custom feature extractor when discrete observations are enabled
     policy_kwargs = {"activation_fn": torch.nn.LeakyReLU}
     if train_cfg.net_arch:
-        policy_kwargs["net_arch"] = list(train_cfg.net_arch)
+        if isinstance(train_cfg.net_arch, Mapping):
+            net_arch_cfg = {}
+            if "pi" in train_cfg.net_arch:
+                net_arch_cfg["pi"] = list(train_cfg.net_arch["pi"])
+            if "vf" in train_cfg.net_arch:
+                net_arch_cfg["vf"] = list(train_cfg.net_arch["vf"])
+            if not net_arch_cfg:
+                raise ValueError(
+                    "net_arch mapping must contain at least one of 'pi' or 'vf'."
+                )
+            policy_kwargs["net_arch"] = net_arch_cfg
+        else:
+            shared_layers = list(train_cfg.net_arch)
+            policy_kwargs["net_arch"] = {
+                "pi": shared_layers.copy(),
+                "vf": shared_layers.copy(),
+            }
     model = MaskablePPO(
         "MultiInputPolicy",
         vec_env,
@@ -166,7 +212,7 @@ def main() -> None:
             save_freq=train_cfg.save_steps // train_cfg.n_envs,
             save_path=train_cfg.model_dir,
             name_prefix="ppo_checkpoint",
-            save_replay_buffer=False,
+            save_replay_buffer=True,
             save_vecnormalize=False,
         )
     save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal.zip")
