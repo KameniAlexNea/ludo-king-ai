@@ -20,7 +20,7 @@ from ludo_engine.strategies.strategy import StrategyFactory
 
 from models.config import EnvConfig
 from models.observation import make_observation_builder
-from models.reward_adv_calculator import AdvancedRewardCalculator
+from models.reward import AdvancedRewardCalculator
 
 
 def _make_mask(valid_moves: Optional[list[ValidMove]]) -> np.ndarray:
@@ -78,7 +78,7 @@ class LudoRLEnv(gym.Env):
                     "opponents_active": spaces.Box(
                         low=0.0, high=1.0, shape=(opponents,), dtype=np.float32
                     ),
-                    "dice": spaces.Box(low=0.0, high=1.0, shape=(6,), dtype=np.float32),
+                    "dice": spaces.Box(low=0.0, high=1.0, shape=(GameConstants.DICE_MAX,), dtype=np.float32),
                 }
             )
 

@@ -36,7 +36,7 @@ class EnvConfig:
     seed: Optional[int] = None
     randomize_agent: bool = True
     fixed_agent_color: Optional[str] = None
-    opponent_strategy: str = "random"
+    opponent_strategy: str = "probabilistic_v3"
     reward: RewardConfig = field(default_factory=RewardConfig)
     obs: ObservationConfig = field(default_factory=ObservationConfig)
 
