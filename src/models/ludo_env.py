@@ -43,44 +43,112 @@ class LudoRLEnv(gym.Env):
 
         tokens = GameConstants.TOKENS_PER_PLAYER
         opponents = len(ALL_COLORS) - 1
+        token_total_max = float(tokens)
+        opponent_total_max = float(tokens * opponents)
 
-        if self.cfg.obs.discrete:
-            self.observation_space = spaces.Dict(
-                {
-                    "agent_color": spaces.MultiDiscrete([2] * len(ALL_COLORS)),
-                    "agent_progress": spaces.MultiDiscrete([_TOTAL_STEPS()] * tokens),
-                    "agent_vulnerable": spaces.MultiDiscrete([2] * tokens),
-                    "opponents_positions": spaces.MultiDiscrete(
-                        [_TOTAL_STEPS()] * (tokens * opponents)
-                    ),
-                    "opponents_active": spaces.MultiDiscrete([2] * opponents),
-                    "dice": spaces.MultiDiscrete([7]),
-                }
-            )
-        else:
-            self.observation_space = spaces.Dict(
-                {
-                    "agent_color": spaces.Box(
-                        low=0.0, high=1.0, shape=(len(ALL_COLORS),), dtype=np.float32
-                    ),
-                    "agent_progress": spaces.Box(
-                        low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
-                    ),
-                    "agent_vulnerable": spaces.Box(
-                        low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
-                    ),
-                    "opponents_positions": spaces.Box(
-                        low=0.0,
-                        high=1.0,
-                        shape=(tokens * opponents,),
-                        dtype=np.float32,
-                    ),
-                    "opponents_active": spaces.Box(
-                        low=0.0, high=1.0, shape=(opponents,), dtype=np.float32
-                    ),
-                    "dice": spaces.Box(low=0.0, high=1.0, shape=(GameConstants.DICE_MAX,), dtype=np.float32),
-                }
-            )
+        self.observation_space = spaces.Dict(
+            {
+                "agent_color": spaces.Box(
+                    low=0.0, high=1.0, shape=(len(ALL_COLORS),), dtype=np.float32
+                ),
+                "agent_progress": spaces.Box(
+                    low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                ),
+                "agent_distance_to_finish": spaces.Box(
+                    low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                ),
+                "agent_vulnerable": spaces.Box(
+                    low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                ),
+                "agent_safe": spaces.Box(
+                    low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                ),
+                "agent_home": spaces.Box(
+                    low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                ),
+                "agent_on_board": spaces.Box(
+                    low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                ),
+                "agent_capture_available": spaces.Box(
+                    low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                ),
+                "agent_finish_available": spaces.Box(
+                    low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                ),
+                "agent_threat_level": spaces.Box(
+                    low=0.0, high=1.0, shape=(tokens,), dtype=np.float32
+                ),
+                "agent_tokens_at_home": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "agent_tokens_finished": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "agent_tokens_on_safe": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "agent_total_progress": spaces.Box(
+                    low=0.0, high=token_total_max, shape=(1,), dtype=np.float32
+                ),
+                "opponents_positions": spaces.Box(
+                    low=0.0,
+                    high=1.0,
+                    shape=(tokens * opponents,),
+                    dtype=np.float32,
+                ),
+                "opponents_active": spaces.Box(
+                    low=0.0, high=1.0, shape=(opponents,), dtype=np.float32
+                ),
+                "opponent_total_progress": spaces.Box(
+                    low=0.0,
+                    high=opponent_total_max,
+                    shape=(1,),
+                    dtype=np.float32,
+                ),
+                "opponent_best_progress": spaces.Box(
+                    low=0.0, high=token_total_max, shape=(1,), dtype=np.float32
+                ),
+                "opponent_tokens_at_home": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "opponent_tokens_finished": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "opponent_tokens_on_safe": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "progress_lead": spaces.Box(
+                    low=-token_total_max,
+                    high=token_total_max,
+                    shape=(1,),
+                    dtype=np.float32,
+                ),
+                "agent_rank": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "dice": spaces.Box(
+                    low=0.0, high=1.0, shape=(GameConstants.DICE_MAX,), dtype=np.float32
+                ),
+                "dice_value_norm": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "dice_is_six": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "dice_is_even": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "home_exit_ready": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "capture_any": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+                "finish_any": spaces.Box(
+                    low=0.0, high=1.0, shape=(1,), dtype=np.float32
+                ),
+            }
+        )
 
         self.action_space = spaces.Discrete(tokens)
 
@@ -277,7 +345,3 @@ class LudoRLEnv(gym.Env):
     def valid_action_mask(self) -> np.ndarray:
         """Return copy of the latest action mask."""
         return self.action_mask.copy()
-
-
-def _TOTAL_STEPS() -> int:
-    return GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE + 1
