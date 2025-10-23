@@ -1,7 +1,10 @@
-from models.eval_utils import evaluate_against_many
 import copy
-from models.config import EnvConfig
+
 from stable_baselines3.common.callbacks import BaseCallback
+
+from models.config import EnvConfig
+from models.eval_utils import evaluate_against_many
+
 
 class PeriodicEvalCallback(BaseCallback):
     """Run lightweight policy evaluations at a fixed timestep cadence."""
@@ -58,4 +61,3 @@ class PeriodicEvalCallback(BaseCallback):
     def _on_training_end(self) -> None:
         if int(self.num_timesteps) != self._last_eval_step:
             self._run_eval()
-

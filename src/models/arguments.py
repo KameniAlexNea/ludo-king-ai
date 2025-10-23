@@ -1,7 +1,7 @@
-
 import argparse
 
 from models.config import EnvConfig, TrainConfig
+
 
 def parse_args() -> tuple[TrainConfig, EnvConfig]:
     defaults = TrainConfig()

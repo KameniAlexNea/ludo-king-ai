@@ -162,6 +162,8 @@ class LudoRLEnv(gym.Env):
         self._opponent_captures = 0
         self.reward_calc = AdvancedRewardCalculator()
 
+        self.opponent_names = self.cfg.opponent_strategy.split(",")
+
     # gym API ---------------------------------------------------------------
     def reset(self, *, seed: Optional[int] = None, options: Optional[Dict] = None):
         super().reset(seed=seed)
@@ -259,11 +261,10 @@ class LudoRLEnv(gym.Env):
         ordered = colors[pivot:] + colors[:pivot]
         self.game = LudoGame(ordered)
 
-        opponent_names = self.cfg.opponent_strategy.split(",")
-        for i, player in enumerate(self.game.players):
+        for player in self.game.players:
             if player.color != self.agent_color:
                 strategy = StrategyFactory.create_strategy(
-                    opponent_names[i % len(opponent_names)]
+                    random.choice(self.opponent_names)
                 )
                 player.set_strategy(strategy)
 
