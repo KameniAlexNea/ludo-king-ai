@@ -34,7 +34,7 @@ def _make_mask(valid_moves: Optional[list[ValidMove]]) -> np.ndarray:
     return mask
 
 
-def env(cfg: Optional[EnvConfig] = None):
+def make_aec_env(cfg: Optional[EnvConfig] = None):
     """Factory function for creating wrapped environment."""
     env = raw_env(cfg)
     # Add standard wrappers

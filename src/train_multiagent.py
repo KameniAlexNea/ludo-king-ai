@@ -18,7 +18,7 @@ from stable_baselines3.common.vec_env import VecMonitor
 from models.arguments import parse_args
 from models.callbacks import PeriodicEvalCallback
 from models.config import MultiAgentConfig
-from models.ludo_env_aec import env as make_aec_env
+from models.ludo_env_aec import make_aec_env
 
 
 def lr_schedule(lr_min, lr_max, lr_warmup) -> float:
@@ -192,7 +192,7 @@ def main() -> None:
 
     # Policy configuration
     policy_kwargs = {
-        "activation_fn": torch.nn.ReLU,
+        "activation_fn": torch.nn.Tanh,
         "net_arch": {
             "pi": list(train_cfg.pi_net_arch),
             "vf": list(train_cfg.vf_net_arch),
