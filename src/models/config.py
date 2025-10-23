@@ -71,3 +71,31 @@ class TrainConfig:
         "winner",
     )
     eval_deterministic: bool = True
+
+
+@dataclass
+class MultiAgentConfig:
+    """Configuration specific to multi-agent training."""
+
+    # Policy sharing: all agents share the same policy network
+    shared_policy: bool = True
+
+    # Self-play configuration
+    enable_self_play: bool = True
+    opponent_pool_size: int = 5  # Keep last N model versions as opponents
+    save_opponent_freq: int = 250_000  # Save opponent every N timesteps
+
+    # Opponent mix during training
+    # If True, use mix of self-play + fixed opponents
+    # If False, only self-play
+    use_fixed_opponents: bool = True
+    fixed_opponent_ratio: float = 0.3  # 30% fixed opponents, 70% self-play
+
+    # Policy update strategy
+    # "synchronous": all agents updated together (default for shared policy)
+    # "asynchronous": agents can be updated at different rates
+    update_strategy: str = "synchronous"
+
+    # Population-based training
+    enable_population: bool = False
+    population_size: int = 3  # Maintain N distinct policies

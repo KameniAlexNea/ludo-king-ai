@@ -843,9 +843,11 @@ dependencies = [
     { name = "gymnasium", extra = ["other"] },
     { name = "loguru" },
     { name = "ludo-king-engine" },
+    { name = "pettingzoo" },
     { name = "python-dotenv" },
     { name = "sb3-contrib" },
     { name = "stable-baselines3" },
+    { name = "supersuit" },
     { name = "tensorboard" },
     { name = "tox" },
 ]
@@ -856,9 +858,11 @@ requires-dist = [
     { name = "gymnasium", extras = ["other"], specifier = ">=0.29.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "ludo-king-engine", specifier = ">=0.1.3" },
+    { name = "pettingzoo", specifier = ">=1.24.0" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "sb3-contrib", specifier = ">=2.7.0" },
     { name = "stable-baselines3", specifier = ">=2.3.0" },
+    { name = "supersuit", specifier = ">=3.9.0" },
     { name = "tensorboard", specifier = ">=2.20.0" },
     { name = "tox", specifier = ">=4.29.0" },
 ]
@@ -1389,6 +1393,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pettingzoo"
+version = "1.25.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gymnasium" },
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/38/cb/cbb8d0e973b284f709ce93a80354d464588301957220f031c51324b464b2/pettingzoo-1.25.0.tar.gz", hash = "sha256:4b8a8552eab07a9c8f37dca094e59ee194003c57e2a7e7348bdf7c62049eecf6", size = 723959, upload_time = "2025-04-22T14:37:37.36Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/9a/33fb244264573687ef27b2f436ae98b524c5e8e5edc7c36183a59c5b4748/pettingzoo-1.25.0-py3-none-any.whl", hash = "sha256:f385bccbebdad73a0c3da884344aea6e2614aa962b653c790b06ef9ab162d651", size = 852489, upload_time = "2025-04-22T14:37:36.036Z" },
+]
+
+[[package]]
 name = "pillow"
 version = "11.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1877,6 +1894,20 @@ wheels = [
 ]
 
 [[package]]
+name = "supersuit"
+version = "3.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gymnasium" },
+    { name = "numpy" },
+    { name = "tinyscaler" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7c/68/16b774842f9be011d2accc6ab86bc3808854a36ce5456e4e19b9ad7c484b/supersuit-3.10.0.tar.gz", hash = "sha256:85cc4723e2ee4fc7284e0e5586d9e20360ee073bc0d8b997fe48686c83cd348a", size = 34350, upload_time = "2025-04-22T16:01:24.921Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b5/6e/fce0b8179ba9e99c40cd3fb013657110e4d5ca894de3f9aa4962b6a9d86c/supersuit-3.10.0-py3-none-any.whl", hash = "sha256:fd0b9e351808d3efaedafcbe48a6beb1f6a87828ccfeaf410af4b87e32882a7f", size = 50180, upload_time = "2025-04-22T16:01:23.654Z" },
+]
+
+[[package]]
 name = "sympy"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1916,6 +1947,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7a/13/e503968fefabd4c6b2650af21e110aa8466fe21432cd7c43a84577a89438/tensorboard_data_server-0.7.2-py3-none-any.whl", hash = "sha256:7e0610d205889588983836ec05dc098e80f97b7e7bbff7e994ebb78f578d0ddb", size = 2356, upload_time = "2023-10-23T21:23:32.16Z" },
     { url = "https://files.pythonhosted.org/packages/b7/85/dabeaf902892922777492e1d253bb7e1264cadce3cea932f7ff599e53fea/tensorboard_data_server-0.7.2-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:9fe5d24221b29625dbc7328b0436ca7fc1c23de4acf4d272f1180856e32f9f60", size = 4823598, upload_time = "2023-10-23T21:23:33.714Z" },
     { url = "https://files.pythonhosted.org/packages/73/c6/825dab04195756cf8ff2e12698f22513b3db2f64925bdd41671bfb33aaa5/tensorboard_data_server-0.7.2-py3-none-manylinux_2_31_x86_64.whl", hash = "sha256:ef687163c24185ae9754ed5650eb5bc4d84ff257aabdc33f0cc6f74d8ba54530", size = 6590363, upload_time = "2023-10-23T21:23:35.583Z" },
+]
+
+[[package]]
+name = "tinyscaler"
+version = "1.2.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0d/59/6b6495fe9bb3153306a4bd6dd24c78ff74eaf64f90fc6e545ede0574cfbe/tinyscaler-1.2.8.tar.gz", hash = "sha256:0ce3b77562f1db74b2035ccaf62807af043333ce655e71effd6ec85fbf8ded06", size = 156935, upload_time = "2024-08-02T19:25:10.976Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/01/c9/a2dbce5c9ecfaff4887bc0f5ff2288c678e25810801e84ddd737d4c0f3e8/tinyscaler-1.2.8-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:57ad9b0203e984ad140b31f0fe82f8bd82e4c31574461264a9a6e7f7d105eb50", size = 178323, upload_time = "2024-08-02T19:24:46.023Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/0e/c52b316dccb2181521a5faca6ef404670e567dddb6f38cbd72175af23d49/tinyscaler-1.2.8-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a7dbf9f80ba08918c304261e2f8e3356eccbc925364b706cef2997f0abf0fc91", size = 563254, upload_time = "2024-08-02T19:24:47.904Z" },
+    { url = "https://files.pythonhosted.org/packages/21/8f/c064ace9fe32a3968eedd1ae19f079020f0fdd55e811dfd1c7a2b6cc442f/tinyscaler-1.2.8-cp311-cp311-win_amd64.whl", hash = "sha256:93869b729bc2d596e2b2e0803d2f9e0e1a0baced6c96b8c21af178b3061b3fba", size = 83955, upload_time = "2024-08-02T19:24:49.772Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/65/06fa456d375b71672affd292dd79f199b21a574eb0501afa142f85133b99/tinyscaler-1.2.8-cp312-cp312-macosx_10_9_universal2.whl", hash = "sha256:fcafd6a8b7ac8c8eabc560f99f987e3e9c00b32a5f3472b28ee865db9bf264b2", size = 179781, upload_time = "2024-08-02T19:24:52.129Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/cf/528a73de4ad128de99bf7cc0e80f236aeeb36fda1e2768a7eb73210a91ff/tinyscaler-1.2.8-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7474fe93740b0aa045e4e2ad60f8df6d5d570c4ea903c6d63ca3868efd8f4e22", size = 563642, upload_time = "2024-08-02T19:24:54.1Z" },
+    { url = "https://files.pythonhosted.org/packages/68/d0/0b0abfde6acdf79b41ea685067a52d3e47f3b1fb4a0f4f49d9c6f281a3c7/tinyscaler-1.2.8-cp312-cp312-win_amd64.whl", hash = "sha256:6a7c18d9c082f30193bd23a6eb8ad84d2ee9b224138c8c25a76db96cba71a473", size = 83779, upload_time = "2024-08-02T19:24:56.186Z" },
 ]
 
 [[package]]
