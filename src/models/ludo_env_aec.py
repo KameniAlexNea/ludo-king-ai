@@ -111,6 +111,7 @@ class raw_env(AECEnv):
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
         """Reset environment to initial state."""
+        super().reset(seed=seed, options=options)
         if seed is not None:
             np.random.seed(seed)
 
@@ -315,13 +316,6 @@ class raw_env(AECEnv):
             error=None,
             game_won=False,
         )
-
-    def _was_dead_step(self, action: int):
-        """Handle step for agent that's already done."""
-        # Agent is already terminated/truncated, do nothing
-        # But we need to advance to next agent
-        if self.agents:
-            self.agent_selection = self._agent_selector.next()
 
     def render(self):
         """Render the environment (optional)."""

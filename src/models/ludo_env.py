@@ -62,7 +62,7 @@ class LudoRLEnv(gym.Env):
 
     # gym API ---------------------------------------------------------------
     def reset(self, *, seed: Optional[int] = None, options: Optional[Dict] = None):
-        super().reset(seed=seed)
+        super().reset(seed=seed, options=options)
         if seed is not None:
             self.rng.seed(seed)
         elif self.cfg.seed is not None:
