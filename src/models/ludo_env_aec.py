@@ -186,6 +186,10 @@ class raw_env(AECEnv):
         color = self._agent_color_map[agent]
         player = self.game.get_player_from_color(color)
 
+        # PettingZoo requires per-step rewards to be reset before assigning new ones
+        for name in self.agents:
+            self.rewards[name] = 0.0
+
         # Execute move
         dice = self._pending_dice.get(agent, 0)
         valid_moves = self._pending_valid_moves.get(agent, [])
