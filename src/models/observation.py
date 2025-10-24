@@ -265,8 +265,15 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
             "finish_any": finish_any,
         }
 
+class FlattenedObservationBuilder(ContinuousObservationBuilder):
+    def build(self, dice: int) -> np.ndarray:
+        obs_dict = super().build(dice)
+        flat_obs = np.concatenate(list(obs_dict.values())).astype(np.float32)
+        return flat_obs
 
 def make_observation_builder(
     cfg: EnvConfig, game: LudoGame, agent_color: PlayerColor
 ) -> ObservationBuilderBase:
+    if cfg.multi_agent:
+        return FlattenedObservationBuilder(cfg, game, agent_color)
     return ContinuousObservationBuilder(cfg, game, agent_color)

@@ -39,6 +39,7 @@ class EnvConfig:
     opponent_strategy: str = "probabilistic_v3,probabilistic_v2,probabilistic,hybrid_prob,killer,cautious,defensive,balanced,winner,optimist,random,weighted_random"
     reward: RewardConfig = field(default_factory=RewardConfig)
     obs: ObservationConfig = field(default_factory=ObservationConfig)
+    multi_agent: bool = False
 
 
 @dataclass

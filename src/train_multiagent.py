@@ -160,6 +160,7 @@ def create_multiagent_env(env_cfg, n_envs: int = 4, max_cycles: int = 300):
 
 def main() -> None:
     train_cfg, env_cfg = parse_args()
+    env_cfg.multi_agent = True
 
     # Multi-agent specific config
     ma_cfg = MultiAgentConfig()

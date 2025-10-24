@@ -111,18 +111,7 @@ class raw_env(AECEnv, EzPickle):
         tokens = GameConstants.TOKENS_PER_PLAYER
 
         # Get base observation space configuration
-        base_obs_space = get_flat_space_config()
-
-        # Wrap observation space as Dict with observation and action_mask
-        # This follows PettingZoo best practices (like chess_v6)
-        observation_space = spaces.Dict(
-            {
-                "observation": base_obs_space,
-                "action_mask": spaces.Box(
-                    low=0, high=1, shape=(tokens,), dtype=np.int8
-                ),
-            }
-        )
+        observation_space = get_flat_space_config()
 
         action_space = spaces.Discrete(tokens)
 
