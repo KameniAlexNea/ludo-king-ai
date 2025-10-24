@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+from pathlib import Path
 from typing import Dict, Optional
 
 import gymnasium as gym
@@ -20,8 +21,9 @@ from ludo_engine.models import (
 from pettingzoo import AECEnv
 from pettingzoo.utils import wrappers
 from pettingzoo.utils.agent_selector import AgentSelector
+from sb3_contrib import MaskablePPO
 
-from .config import EnvConfig
+from ..configs.config import EnvConfig, MultiAgentConfig
 from .observation import make_observation_builder
 from .reward import AdvancedRewardCalculator
 from .spaces import get_flat_space_config
@@ -215,15 +217,7 @@ class raw_env(AECEnv, EzPickle):
             # No valid moves, skip turn
             move_result = self._no_move_result(player, dice)
         else:
-            valid_tokens = {m.token_id for m in valid_moves}
-
-            if action not in valid_tokens:
-                # Illegal move detected
-                # Note: TerminateIllegalWrapper will handle this if enabled
-                is_illegal = True
-                # Choose random valid move as fallback
-                action = np.random.choice(list(valid_tokens))
-
+            # Action is valid (TerminateIllegalWrapper ensures this)
             move_result = self.game.execute_move(player, action, dice)
 
         self._last_move_results[agent] = move_result
@@ -284,6 +278,7 @@ class raw_env(AECEnv, EzPickle):
                 is_illegal=(ag == current_agent and is_illegal),
                 opponent_captures=self._opponent_captures.get(ag, 0),
                 terminated=game_over,
+                turn_count=self.turn_count,
             )
 
             self.rewards[ag] = reward
@@ -306,6 +301,7 @@ class raw_env(AECEnv, EzPickle):
             is_illegal=is_illegal,
             opponent_captures=self._opponent_captures.get(agent, 0),
             terminated=False,
+            turn_count=self.turn_count,
         )
 
         self.rewards[agent] = reward
@@ -423,12 +419,65 @@ class raw_env(AECEnv, EzPickle):
         self.game.board.reset_token_positions()
 
 
+class OpponentPoolManager:
+    """Manages a pool of opponent models for self-play training."""
+
+    def __init__(self, pool_dir: str, pool_size: int = 5):
+        self.pool_dir = Path(pool_dir)
+        self.pool_dir.mkdir(parents=True, exist_ok=True)
+        self.pool_size = pool_size
+        self.opponents: list[str] = []
+        self._load_existing_opponents()
+
+    def _load_existing_opponents(self):
+        """Load existing opponent models from disk."""
+        if not self.pool_dir.exists():
+            return
+
+        opponent_files = sorted(
+            self.pool_dir.glob("opponent_*.zip"), key=lambda p: p.stat().st_mtime
+        )
+        self.opponents = [str(f) for f in opponent_files[-self.pool_size :]]
+
+    def add_opponent(self, model_path: str, timestep: int):
+        """Add a new opponent to the pool."""
+        opponent_path = self.pool_dir / f"opponent_{timestep}.zip"
+
+        # Copy model to opponent pool
+        import shutil
+
+        shutil.copy(model_path, opponent_path)
+
+        self.opponents.append(str(opponent_path))
+
+        # Maintain pool size by removing oldest
+        if len(self.opponents) > self.pool_size:
+            old_opponent = Path(self.opponents.pop(0))
+            if old_opponent.exists():
+                old_opponent.unlink()
+
+    def sample_opponent(self) -> Optional[str]:
+        """Sample a random opponent from the pool."""
+        if not self.opponents:
+            return None
+        return np.random.choice(self.opponents)
+
+    def get_all_opponents(self) -> list[str]:
+        """Return all opponents in the pool."""
+        return self.opponents.copy()
+
+
 class TurnBasedSelfPlayEnv(gym.Env):
     """Gym-compatible wrapper that centralizes control of the AEC Ludo environment."""
 
     metadata = {"render_modes": ["human", "ansi"], "name": "LudoTurnBased-v0"}
 
-    def __init__(self, base_env: raw_env):
+    def __init__(
+        self,
+        base_env: raw_env,
+        opponent_pool: Optional[OpponentPoolManager] = None,
+        ma_cfg: Optional[MultiAgentConfig] = None,
+    ):
         super().__init__()
         self.base_env = base_env
         self.possible_agents = list(base_env.possible_agents)
@@ -456,6 +505,12 @@ class TurnBasedSelfPlayEnv(gym.Env):
         self._current_agent: Optional[str] = None
         self._last_obs: Optional[dict[str, np.ndarray]] = None
         self._last_action_mask: Optional[np.ndarray] = None
+
+        # Self-play opponent management
+        self.opponent_pool = opponent_pool
+        self.ma_cfg = ma_cfg or MultiAgentConfig()
+        self.opponent_assignments: Dict[str, str] = {}
+        self.opponent_models: Dict[str, MaskablePPO] = {}
 
     def _sync_active_agent(self) -> None:
         while self.base_env.agents:
@@ -489,6 +544,22 @@ class TurnBasedSelfPlayEnv(gym.Env):
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         self.base_env.reset(seed=seed, options=options)
+
+        # Assign opponents for self-play
+        self.opponent_assignments = {}
+        if self.opponent_pool and self.ma_cfg.enable_self_play:
+            num_opponents = min(
+                self.ma_cfg.self_play_num_opponents, len(self.possible_agents) - 1
+            )
+            if num_opponents > 0:
+                agents_to_assign = np.random.choice(
+                    self.possible_agents, num_opponents, replace=False
+                )
+                for agent in agents_to_assign:
+                    opp = self.opponent_pool.sample_opponent()
+                    if opp:
+                        self.opponent_assignments[agent] = opp
+
         self._sync_active_agent()
 
         if self._current_agent is None:
@@ -501,22 +572,30 @@ class TurnBasedSelfPlayEnv(gym.Env):
 
     def step(self, action):
         if self._current_agent is None:
-            raise RuntimeError("Step called with no active agent")
+            # Episode already done (e.g., due to illegal move termination)
+            obs = self._build_terminal_obs()
+            return obs, 0.0, True, False, {"terminal_observation": obs}
 
         acting_agent = self._current_agent
         prev_obs = self._last_obs
 
-        self.base_env.step(int(action))
+        # If this agent is assigned an opponent, use opponent model action
+        if acting_agent in self.opponent_assignments:
+            opp_path = self.opponent_assignments[acting_agent]
+            if opp_path not in self.opponent_models:
+                self.opponent_models[opp_path] = MaskablePPO.load(opp_path)
+            opp_model = self.opponent_models[opp_path]
+            obs_dict = self._build_observation(acting_agent)
+            opp_action, _ = opp_model.predict(obs_dict, deterministic=True)
+            self.base_env.step(int(opp_action))
+        else:
+            self.base_env.step(int(action))
 
         reward = float(self.base_env.rewards.get(acting_agent, 0.0))
 
-        while self.base_env.agents and (
-            self.base_env.terminations[self.base_env.agent_selection]
-            or self.base_env.truncations[self.base_env.agent_selection]
-        ):
-            self.base_env.step(None)
+        self._sync_active_agent()
 
-        episode_done = len(self.base_env.agents) == 0
+        episode_done = self._current_agent is None
         terminated = episode_done and any(self.base_env.terminations.values())
         truncated = episode_done and any(self.base_env.truncations.values())
 
@@ -525,7 +604,6 @@ class TurnBasedSelfPlayEnv(gym.Env):
             self._current_agent = None
             self._last_action_mask = np.zeros_like(obs["action_mask"], dtype=np.int8)
         else:
-            self._sync_active_agent()
             assert self._current_agent is not None
             obs = self._build_observation(self._current_agent)
 

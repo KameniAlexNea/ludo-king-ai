@@ -8,7 +8,7 @@ from typing import Dict, Optional
 from ludo_engine.core import LudoGame
 from ludo_engine.models import BoardConstants, GameConstants, MoveResult, PlayerColor
 
-from .config import EnvConfig
+from ..configs.config import EnvConfig
 
 _TOTAL_PATH = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
 
@@ -57,11 +57,14 @@ class AdvancedRewardCalculator:
         is_illegal: bool = False,
         opponent_captures: int = 0,
         terminated: bool = False,
+        turn_count: int = 0,
     ) -> tuple[float, Dict[str, float]]:
         reward = 0.0
         breakdown = RewardBreakdown()
 
-        breakdown.time_penalty = cfg.reward.time_penalty
+        # Scale time penalty by remaining turns
+        remaining_ratio = max(0.0, (cfg.max_turns - turn_count) / cfg.max_turns)
+        breakdown.time_penalty = cfg.reward.time_penalty * remaining_ratio
         reward += breakdown.time_penalty
 
         if move_result is not None and move_result.success:

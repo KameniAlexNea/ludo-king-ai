@@ -17,7 +17,7 @@ class RewardConfig:
     capture: float = 2.0
     got_captured: float = -2.0
     illegal_action: float = -5.0
-    time_penalty: float = -0.02
+    time_penalty: float = -0.01
     progress_scale: float = 1.0
 
 
@@ -32,7 +32,7 @@ class ObservationConfig:
 class EnvConfig:
     """Runtime parameters for creating the classic Ludo environment."""
 
-    max_turns: int = 300
+    max_turns: int = 250
     seed: Optional[int] = None
     randomize_agent: bool = True
     fixed_agent_color: Optional[str] = None
@@ -47,8 +47,8 @@ class TrainConfig:
     """High level hyper-parameters for PPO training."""
 
     total_steps: int = 5_000_000
-    learning_rate: float = 1e-4
-    n_steps: int = 512
+    learning_rate: float = 5e-5
+    n_steps: int = 256
     batch_size: int = 256
     ent_coef: float = 0.01
     vf_coef: float = 0.5
@@ -85,6 +85,10 @@ class MultiAgentConfig:
     enable_self_play: bool = True
     opponent_pool_size: int = 5  # Keep last N model versions as opponents
     save_opponent_freq: int = 250_000  # Save opponent every N timesteps
+    self_play_num_opponents: int = 2  # Number of agents to assign from opponent pool
+    self_play_opponent_fallback: str = (
+        "balanced"  # Fallback scripted bot if no opponents
+    )
 
     # Opponent mix during training
     # If True, use mix of self-play + fixed opponents

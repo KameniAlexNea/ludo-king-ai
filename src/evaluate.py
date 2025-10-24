@@ -8,8 +8,8 @@ from typing import Sequence
 import pandas as pd
 from sb3_contrib import MaskablePPO
 
-from models.config import EnvConfig
-from models.eval_utils import EvalStats, evaluate_against
+from models.analysis.eval_utils import EvalStats, evaluate_against
+from models.configs.config import EnvConfig
 
 
 def _parse_args() -> argparse.Namespace:
@@ -68,7 +68,9 @@ def main() -> None:
 
     model: MaskablePPO = MaskablePPO.load(args.model, device=args.device)
     print(model.policy)
-    env_cfg = EnvConfig(max_turns=args.max_turns, seed=args.seed, multi_agent=args.multi_agent)
+    env_cfg = EnvConfig(
+        max_turns=args.max_turns, seed=args.seed, multi_agent=args.multi_agent
+    )
 
     summaries: Sequence[EvalStats] = [
         evaluate_against(model, opponent, args.games, env_cfg, args.deterministic)

@@ -100,6 +100,9 @@ def get_space_config():
             ),
             "capture_any": spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32),
             "finish_any": spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32),
+            "agent_index": spaces.Box(
+                low=0.0, high=float(len(ALL_COLORS) - 1), shape=(1,), dtype=np.float32
+            ),
         }
     )
 

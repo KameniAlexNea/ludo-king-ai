@@ -16,16 +16,16 @@ from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-from .config import EnvConfig
-from .ludo_env import LudoRLEnv
-from .spaces import get_flat_space_config, get_space_config
+from ..configs.config import EnvConfig
+from ..envs.ludo_env import LudoRLEnv
+from ..envs.spaces import get_flat_space_config, get_space_config
 
 
 def _mask_fn(env: LudoRLEnv):
     return env.valid_action_mask()
 
 
-class SharedPolicyEvalWrapper(gym.Wrapper):
+class SharedPolicyEvalEnv(gym.Wrapper):
     """Adapts the single-agent eval env to the shared-policy observation format."""
 
     def __init__(self, env: gym.Env, num_agents: int = 4):
@@ -90,16 +90,19 @@ class SharedPolicyEvalWrapper(gym.Wrapper):
                 "agent_index": self._agent_index.copy(),
             }
         flat_values = []
+        agent_index = 0
         for key in self._obs_keys:
             if key not in obs:
                 raise KeyError(f"Observation missing expected key '{key}'")
             value = np.asarray(obs[key], dtype=np.float32).ravel()
+            if key == "agent_index":
+                agent_index = int(value[0])
             flat_values.append(value)
         flat_obs = np.concatenate(flat_values).astype(np.float32, copy=False)
         return {
             "observation": flat_obs,
             "action_mask": mask.astype(np.int8, copy=False),
-            "agent_index": self._agent_index.copy(),
+            "agent_index": np.array(agent_index, dtype=np.int64),
         }
 
 
@@ -154,7 +157,7 @@ def build_eval_env(opponent: str, cfg: EnvConfig) -> DummyVecEnv:
         env = LudoRLEnv(opponent_cfg)
         env = ActionMasker(env, _mask_fn)
         if cfg.multi_agent:
-            env = SharedPolicyEvalWrapper(env)
+            env = SharedPolicyEvalEnv(env)
         return env
 
     return DummyVecEnv([_init])

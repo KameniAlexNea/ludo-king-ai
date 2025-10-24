@@ -1,6 +1,6 @@
 import argparse
 
-from models.config import EnvConfig, TrainConfig
+from models.configs.config import EnvConfig, TrainConfig
 
 
 def parse_args() -> tuple[TrainConfig, EnvConfig]:

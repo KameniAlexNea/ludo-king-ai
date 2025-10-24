@@ -18,7 +18,7 @@ from ludo_engine.models import (
 )
 from ludo_engine.strategies.strategy import StrategyFactory
 
-from .config import EnvConfig
+from ..configs.config import EnvConfig
 from .observation import make_observation_builder
 from .reward import AdvancedRewardCalculator
 from .spaces import get_flat_space_config, get_space_config

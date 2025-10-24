@@ -8,19 +8,18 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 import supersuit as ss
 import torch
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 
+from models.analysis.eval_utils import evaluate_against_many
 from models.arguments import parse_args
-from models.callbacks import PeriodicEvalCallback
-from models.config import EnvConfig, MultiAgentConfig
-from models.eval_utils import evaluate_against_many
-from models.ludo_env_aec import TurnBasedSelfPlayEnv
-from models.ludo_env_aec import env as make_aec_env
+from models.callbacks.callbacks import PeriodicEvalCallback
+from models.configs.config import EnvConfig, MultiAgentConfig
+from models.envs.ludo_env_aec import OpponentPoolManager, TurnBasedSelfPlayEnv
+from models.envs.ludo_env_aec import env as make_aec_env
 
 
 def lr_schedule(lr_min, lr_max, lr_warmup) -> float:
@@ -36,54 +35,6 @@ def lr_schedule(lr_min, lr_max, lr_warmup) -> float:
         )
 
     return function
-
-
-class OpponentPoolManager:
-    """Manages a pool of opponent models for self-play training."""
-
-    def __init__(self, pool_dir: str, pool_size: int = 5):
-        self.pool_dir = Path(pool_dir)
-        self.pool_dir.mkdir(parents=True, exist_ok=True)
-        self.pool_size = pool_size
-        self.opponents: list[str] = []
-        self._load_existing_opponents()
-
-    def _load_existing_opponents(self):
-        """Load existing opponent models from disk."""
-        if not self.pool_dir.exists():
-            return
-
-        opponent_files = sorted(
-            self.pool_dir.glob("opponent_*.zip"), key=lambda p: p.stat().st_mtime
-        )
-        self.opponents = [str(f) for f in opponent_files[-self.pool_size :]]
-
-    def add_opponent(self, model_path: str, timestep: int):
-        """Add a new opponent to the pool."""
-        opponent_path = self.pool_dir / f"opponent_{timestep}.zip"
-
-        # Copy model to opponent pool
-        import shutil
-
-        shutil.copy(model_path, opponent_path)
-
-        self.opponents.append(str(opponent_path))
-
-        # Maintain pool size by removing oldest
-        if len(self.opponents) > self.pool_size:
-            old_opponent = Path(self.opponents.pop(0))
-            if old_opponent.exists():
-                old_opponent.unlink()
-
-    def sample_opponent(self) -> Optional[str]:
-        """Sample a random opponent from the pool."""
-        if not self.opponents:
-            return None
-        return np.random.choice(self.opponents)
-
-    def get_all_opponents(self) -> list[str]:
-        """Return all opponents in the pool."""
-        return self.opponents.copy()
 
 
 class SelfPlayCallback(CheckpointCallback):
@@ -118,13 +69,21 @@ class SelfPlayCallback(CheckpointCallback):
         return result
 
 
-def create_multiagent_env(env_cfg: EnvConfig, n_envs: int = 4, max_cycles: int = 300):
+def create_multiagent_env(
+    env_cfg: EnvConfig,
+    n_envs: int = 4,
+    max_cycles: int = 300,
+    opponent_pool: Optional[OpponentPoolManager] = None,
+    ma_cfg: Optional[MultiAgentConfig] = None,
+):
     """Create a vectorized multi-agent environment using SuperSuit.
 
     Args:
         env_cfg: Environment configuration
         n_envs: Number of parallel environments
         max_cycles: Maximum cycles per episode (maps to max_turns)
+        opponent_pool: Pool of opponent models for self-play
+        ma_cfg: Multi-agent configuration
 
     Returns:
         Vectorized environment compatible with SB3
@@ -138,7 +97,9 @@ def create_multiagent_env(env_cfg: EnvConfig, n_envs: int = 4, max_cycles: int =
                 cfg_copy.max_turns = max_cycles
             base_env = make_aec_env(cfg_copy)
             base_env = ss.pad_action_space_v0(base_env)
-            return TurnBasedSelfPlayEnv(base_env)
+            return TurnBasedSelfPlayEnv(
+                base_env, opponent_pool=opponent_pool, ma_cfg=ma_cfg
+            )
 
         return _init
 
@@ -171,7 +132,11 @@ def main() -> None:
     # Create vectorized multi-agent environment
     print("Creating multi-agent environment...")
     vec_env = create_multiagent_env(
-        env_cfg_copy, n_envs=train_cfg.n_envs, max_cycles=env_cfg_copy.max_turns
+        env_cfg_copy,
+        n_envs=train_cfg.n_envs,
+        max_cycles=env_cfg_copy.max_turns,
+        opponent_pool=opponent_pool,
+        ma_cfg=ma_cfg,
     )
 
     # Wrap with monitor for logging

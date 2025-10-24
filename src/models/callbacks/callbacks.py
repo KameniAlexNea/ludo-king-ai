@@ -2,8 +2,8 @@ import copy
 
 from stable_baselines3.common.callbacks import BaseCallback
 
-from models.config import EnvConfig
-from models.eval_utils import evaluate_against_many
+from ..analysis.eval_utils import evaluate_against_many
+from ..configs.config import EnvConfig
 
 
 class PeriodicEvalCallback(BaseCallback):

@@ -13,8 +13,8 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from models.arguments import parse_args
-from models.callbacks import PeriodicEvalCallback
-from models.ludo_env import LudoRLEnv
+from models.callbacks.callbacks import PeriodicEvalCallback
+from models.envs.ludo_env import LudoRLEnv
 
 
 def lr_schedule(lr_min, lr_max, lr_warmup) -> float:

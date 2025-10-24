@@ -30,8 +30,8 @@ from ludo_engine.strategies.strategy import StrategyFactory
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models.config import EnvConfig
-from models.reward import AdvancedRewardCalculator
+from models.configs.config import EnvConfig
+from models.envs.reward import AdvancedRewardCalculator
 
 
 def parse_args():

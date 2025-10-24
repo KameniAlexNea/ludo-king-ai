@@ -9,7 +9,7 @@ import numpy as np
 from ludo_engine.core import LudoGame
 from ludo_engine.models import ALL_COLORS, BoardConstants, GameConstants, PlayerColor
 
-from .config import EnvConfig
+from ..configs.config import EnvConfig
 
 _TOTAL_PATH = GameConstants.MAIN_BOARD_SIZE + GameConstants.HOME_COLUMN_SIZE
 _DICE_RANGE = range(GameConstants.DICE_MIN, GameConstants.DICE_MAX + 1)
@@ -170,7 +170,7 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
                     _is_finished(t.position) for t in player.tokens
                 )
                 opponent_safe_count += sum(
-                    self._is_vulnerable(t.position) for t in player.tokens
+                    BoardConstants.is_safe_position(t.position) for t in player.tokens
                 )
             else:
                 opp_positions.extend([0.0] * tokens_per_player)
@@ -220,6 +220,10 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
         capture_any = np.array([capture_flags.max()], dtype=np.float32)
         finish_any = np.array([finish_flags.max()], dtype=np.float32)
 
+        agent_index = np.array(
+            [float(ALL_COLORS.index(self.agent_color))], dtype=np.float32
+        )
+
         return {
             "agent_color": agent_color_onehot,
             "agent_progress": agent_progress,
@@ -263,6 +267,7 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
             "home_exit_ready": home_exit_ready,
             "capture_any": capture_any,
             "finish_any": finish_any,
+            "agent_index": agent_index,
         }
 
 
