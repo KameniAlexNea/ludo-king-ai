@@ -21,7 +21,7 @@ from ludo_engine.strategies.strategy import StrategyFactory
 from .config import EnvConfig
 from .observation import make_observation_builder
 from .reward import AdvancedRewardCalculator
-from .spaces import get_space_config
+from .spaces import get_flat_space_config, get_space_config
 
 
 def _make_mask(valid_moves: Optional[list[ValidMove]]) -> np.ndarray:
@@ -44,7 +44,9 @@ class LudoRLEnv(gym.Env):
 
         tokens = GameConstants.TOKENS_PER_PLAYER
 
-        self.observation_space = get_space_config()
+        self.observation_space = (
+            get_flat_space_config if cfg.multi_agent else get_space_config
+        )()
 
         self.action_space = spaces.Discrete(tokens)
 

@@ -18,6 +18,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 from models.arguments import parse_args
 from models.callbacks import PeriodicEvalCallback
 from models.config import EnvConfig, MultiAgentConfig
+from models.eval_utils import evaluate_against_many
 from models.ludo_env_aec import TurnBasedSelfPlayEnv
 from models.ludo_env_aec import env as make_aec_env
 
@@ -253,6 +254,23 @@ def main() -> None:
     initial_path = os.path.join(train_cfg.model_dir, "ppo_ludo_multiagent_initial.zip")
     model.save(initial_path)
     print(f"Initial model saved to {initial_path}")
+
+    # Initial evaluation before training begins
+    print("\nRunning initial evaluation...")
+    eval_env_cfg = copy.deepcopy(env_cfg)
+    initial_eval = evaluate_against_many(
+        model,
+        train_cfg.eval_opponents,
+        train_cfg.eval_episodes,
+        eval_env_cfg,
+        train_cfg.eval_deterministic,
+    )
+    for summary in initial_eval:
+        print(
+            f"  vs {summary.opponent}: win_rate={summary.win_rate:.3f} "
+            f"avg_reward={summary.avg_reward:.2f} avg_length={summary.avg_length:.1f}"
+        )
+    model.logger.dump(0)
 
     # Train the model
     print(f"\nStarting training for {train_cfg.total_steps:,} timesteps...")

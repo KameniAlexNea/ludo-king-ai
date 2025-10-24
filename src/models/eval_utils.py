@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import copy
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Dict, List, Sequence
 
 import gymnasium as gym
 import numpy as np
-import copy
 from gymnasium import spaces
 from ludo_engine import LudoGame
 from sb3_contrib import MaskablePPO
@@ -80,7 +80,15 @@ class SharedPolicyEvalWrapper(gym.Wrapper):
         self._last_mask = mask
         return mask
 
-    def _convert_obs(self, obs: Dict[str, np.ndarray], mask: np.ndarray) -> Dict[str, np.ndarray]:
+    def _convert_obs(
+        self, obs: Dict[str, np.ndarray], mask: np.ndarray
+    ) -> Dict[str, np.ndarray]:
+        if not isinstance(obs, dict):  # already flatten observation
+            return {
+                "observation": obs,
+                "action_mask": mask.astype(np.int8, copy=False),
+                "agent_index": self._agent_index.copy(),
+            }
         flat_values = []
         for key in self._obs_keys:
             if key not in obs:
