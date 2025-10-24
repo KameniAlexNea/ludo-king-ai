@@ -1,5 +1,6 @@
 import numpy as np
 from gymnasium import spaces
+from gymnasium.spaces.utils import flatten_space
 from ludo_engine.models import ALL_COLORS, GameConstants
 
 
@@ -101,3 +102,19 @@ def get_space_config():
             "finish_any": spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32),
         }
     )
+
+
+def get_flat_space_config():
+    """Return a flattened Box observation space for Supersuit wrappers.
+
+    Supersuit homogenization expects observations to be described by a Box.
+    This helper flattens the structured Dict space so callers can opt into a
+    homogenization-friendly configuration without changing the underlying
+    observation dictionaries.
+    """
+
+    dict_space = get_space_config()
+    flat_space = flatten_space(dict_space)
+
+    # Ensure float32 consistency even if Gym defaults change in the future.
+    return spaces.Box(low=flat_space.low, high=flat_space.high, dtype=np.float32)

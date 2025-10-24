@@ -11,6 +11,7 @@ from typing import Optional
 import numpy as np
 import supersuit as ss
 import torch
+from pettingzoo.utils.conversions import aec_to_parallel
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import VecMonitor
@@ -137,7 +138,7 @@ def create_multiagent_env(env_cfg, n_envs: int = 4, max_cycles: int = 300):
         return env
 
     # Convert to parallel environment for easier vectorization
-    env = ss.aec_to_parallel_wrapper(make_env())
+    env = aec_to_parallel(make_env())
 
     # Black death wrapper - agents that are done return dummy values
     env = ss.black_death_v3(env)

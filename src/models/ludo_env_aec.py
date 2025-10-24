@@ -7,6 +7,7 @@ from typing import Dict, Optional
 
 import numpy as np
 from gymnasium import spaces
+from gymnasium.utils import EzPickle
 from ludo_engine.core import LudoGame, Player
 from ludo_engine.models import (
     ALL_COLORS,
@@ -17,34 +18,48 @@ from ludo_engine.models import (
 )
 from pettingzoo import AECEnv
 from pettingzoo.utils import wrappers
-from pettingzoo.utils.agent_selector import agent_selector
+from pettingzoo.utils.agent_selector import AgentSelector
 
 from .config import EnvConfig
 from .observation import make_observation_builder
 from .reward import AdvancedRewardCalculator
-from .spaces import get_space_config
+from .spaces import get_flat_space_config
 
 
 def _make_mask(valid_moves: Optional[list[ValidMove]]) -> np.ndarray:
-    """Create action mask from valid moves."""
-    mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=bool)
+    """Create action mask from valid moves.
+
+    Returns int8 array for compatibility with observation space definition.
+    In Ludo, when there are no valid moves (e.g., didn't roll 6 to start),
+    all actions are marked as valid since any action results in passing the turn.
+    """
+    mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
     if valid_moves:
         for move in valid_moves:
-            mask[move.token_id] = True
+            mask[move.token_id] = 1
+    else:
+        # No valid moves - mark all as valid (any action = pass turn)
+        # This prevents TerminateIllegalWrapper from terminating the game
+        mask[:] = 1
     return mask
 
 
+def env(cfg: Optional[EnvConfig] = None):
+    """Factory function for creating wrapped environment (standard name)."""
+    aec_env = raw_env(cfg)
+    # Add standard wrappers - TerminateIllegalWrapper automatically handles illegal moves
+    aec_env = wrappers.TerminateIllegalWrapper(aec_env, illegal_reward=-1)
+    aec_env = wrappers.AssertOutOfBoundsWrapper(aec_env)
+    aec_env = wrappers.OrderEnforcingWrapper(aec_env)
+    return aec_env
+
+
 def make_aec_env(cfg: Optional[EnvConfig] = None):
-    """Factory function for creating wrapped environment."""
-    env = raw_env(cfg)
-    # Add standard wrappers
-    env = wrappers.CaptureStdoutWrapper(env)
-    env = wrappers.AssertOutOfBoundsWrapper(env)
-    env = wrappers.OrderEnforcingWrapper(env)
-    return env
+    """Factory function for creating wrapped environment (legacy name)."""
+    return env(cfg)
 
 
-class raw_env(AECEnv):
+class raw_env(AECEnv, EzPickle):
     """PettingZoo AEC environment for 4-player Ludo with turn-based play.
 
     This environment enables multi-agent reinforcement learning where:
@@ -55,15 +70,22 @@ class raw_env(AECEnv):
     """
 
     metadata = {
-        "render_modes": ["human"],
+        "render_modes": ["human", "ansi"],
         "name": "LudoMultiAgent-v0",
         "is_parallelizable": False,  # Turn-based game
+        "render_fps": 2,
     }
 
-    def __init__(self, cfg: Optional[EnvConfig] = None):
+    def __init__(
+        self, cfg: Optional[EnvConfig] = None, render_mode: Optional[str] = None
+    ):
+        EzPickle.__init__(self, cfg, render_mode)
         super().__init__()
         self.cfg = cfg or EnvConfig()
-        self.render_mode = "human"  # Required by PettingZoo wrappers
+
+        # Validate render mode
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
+        self.render_mode = render_mode
 
         # Define agents (4 players)
         self.possible_agents = ["player_0", "player_1", "player_2", "player_3"]
@@ -88,8 +110,19 @@ class raw_env(AECEnv):
         # Define observation and action spaces
         tokens = GameConstants.TOKENS_PER_PLAYER
 
-        # Shared observation space for all agents
-        observation_space = get_space_config()
+        # Get base observation space configuration
+        base_obs_space = get_flat_space_config()
+
+        # Wrap observation space as Dict with observation and action_mask
+        # This follows PettingZoo best practices (like chess_v6)
+        observation_space = spaces.Dict(
+            {
+                "observation": base_obs_space,
+                "action_mask": spaces.Box(
+                    low=0, high=1, shape=(tokens,), dtype=np.int8
+                ),
+            }
+        )
 
         action_space = spaces.Discrete(tokens)
 
@@ -111,12 +144,11 @@ class raw_env(AECEnv):
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
         """Reset environment to initial state."""
-        super().reset(seed=seed, options=options)
         if seed is not None:
             np.random.seed(seed)
 
         # Reset game state
-        self.agents = self.possible_agents[:]
+        self.agents = self.possible_agents
         self.turn_count = 0
         self._pending_dice = {}
         self._pending_valid_moves = {}
@@ -136,7 +168,7 @@ class raw_env(AECEnv):
         self.reward_calc.reset_for_new_episode()
 
         # Set up agent selector for turn order
-        self._agent_selector = agent_selector(self.agents)
+        self._agent_selector = AgentSelector(self.agents)
         self.agent_selection = self._agent_selector.next()
 
         # Roll dice for first agent
@@ -186,9 +218,8 @@ class raw_env(AECEnv):
         color = self._agent_color_map[agent]
         player = self.game.get_player_from_color(color)
 
-        # PettingZoo requires per-step rewards to be reset before assigning new ones
-        for name in self.agents:
-            self.rewards[name] = 0.0
+        # Cast action to int
+        action = int(action)
 
         # Execute move
         dice = self._pending_dice.get(agent, 0)
@@ -200,14 +231,15 @@ class raw_env(AECEnv):
             move_result = self._no_move_result(player, dice)
         else:
             valid_tokens = {m.token_id for m in valid_moves}
-            chosen = int(action)
 
-            if chosen not in valid_tokens:
-                # Illegal move - penalize and choose random valid move
+            if action not in valid_tokens:
+                # Illegal move detected
+                # Note: TerminateIllegalWrapper will handle this if enabled
                 is_illegal = True
-                chosen = np.random.choice(list(valid_tokens))
+                # Choose random valid move as fallback
+                action = np.random.choice(list(valid_tokens))
 
-            move_result = self.game.execute_move(player, chosen, dice)
+            move_result = self.game.execute_move(player, action, dice)
 
         self._last_move_results[agent] = move_result
         self.turn_count += 1
@@ -221,60 +253,15 @@ class raw_env(AECEnv):
         game_over = self.game.game_over or (self.game.winner is not None)
         truncated = not game_over and self.turn_count >= self.cfg.max_turns
 
-        # Calculate rewards for all agents if game is over
+        # Handle game over
         if game_over or truncated:
-            for ag in self.agents:
-                ag_color = self._agent_color_map[ag]
-                ag_result = self._last_move_results.get(
-                    ag,
-                    self._no_move_result(self.game.get_player_from_color(ag_color), 0),
-                )
-
-                reward, breakdown = self.reward_calc.compute(
-                    game=self.game,
-                    agent_color=ag_color,
-                    move_result=ag_result,
-                    cfg=self.cfg,
-                    is_illegal=(ag == agent and is_illegal),
-                    opponent_captures=self._opponent_captures.get(ag, 0),
-                    terminated=game_over,
-                )
-
-                self.rewards[ag] = reward
-                self._cumulative_rewards[ag] += reward
-                self.terminations[ag] = game_over
-                self.truncations[ag] = truncated
-                self.infos[ag] = {
-                    "action_mask": self._action_masks.get(
-                        ag, np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=bool)
-                    ),
-                    "reward_breakdown": breakdown,
-                    "illegal_action": (ag == agent and is_illegal),
-                }
+            self._set_game_result(game_over, truncated, agent, is_illegal)
         else:
-            # Calculate reward for current agent
-            reward, breakdown = self.reward_calc.compute(
-                game=self.game,
-                agent_color=color,
-                move_result=move_result,
-                cfg=self.cfg,
-                is_illegal=is_illegal,
-                opponent_captures=self._opponent_captures.get(agent, 0),
-                terminated=False,
-            )
+            # Calculate reward for current agent only
+            self._update_agent_reward(agent, color, move_result, is_illegal)
 
-            self.rewards[agent] = reward
-            self._cumulative_rewards[agent] += reward
-            self.infos[agent] = {
-                "action_mask": self._action_masks.get(
-                    agent, np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=bool)
-                ),
-                "reward_breakdown": breakdown,
-                "illegal_action": is_illegal,
-            }
-
-            # Reset opponent captures for current agent
-            self._opponent_captures[agent] = 0
+        # Accumulate rewards
+        self._accumulate_rewards()
 
         # Advance to next agent or handle extra turn
         if not (game_over or truncated):
@@ -287,23 +274,99 @@ class raw_env(AECEnv):
                 self.agent_selection = self._agent_selector.next()
                 self._roll_dice_for_current()
         else:
-            # Game is over
+            # Game is over - no more agents
             self.agents = []
 
-    def observe(self, agent: str):
-        """Return observation for specified agent."""
-        if agent not in self._obs_builders:
-            return None
+        if self.render_mode == "human":
+            self.render()
 
+    def _set_game_result(
+        self, game_over: bool, truncated: bool, current_agent: str, is_illegal: bool
+    ) -> None:
+        """Set final rewards and termination flags for all agents when game ends."""
+        for ag in self.agents:
+            ag_color = self._agent_color_map[ag]
+            ag_result = self._last_move_results.get(
+                ag,
+                self._no_move_result(self.game.get_player_from_color(ag_color), 0),
+            )
+
+            reward, breakdown = self.reward_calc.compute(
+                game=self.game,
+                agent_color=ag_color,
+                move_result=ag_result,
+                cfg=self.cfg,
+                is_illegal=(ag == current_agent and is_illegal),
+                opponent_captures=self._opponent_captures.get(ag, 0),
+                terminated=game_over,
+            )
+
+            self.rewards[ag] = reward
+            self.terminations[ag] = game_over
+            self.truncations[ag] = truncated
+            self.infos[ag] = {
+                "reward_breakdown": breakdown,
+                "illegal_action": (ag == current_agent and is_illegal),
+            }
+
+    def _update_agent_reward(
+        self, agent: str, color: PlayerColor, move_result: MoveResult, is_illegal: bool
+    ) -> None:
+        """Update reward for current agent during gameplay."""
+        reward, breakdown = self.reward_calc.compute(
+            game=self.game,
+            agent_color=color,
+            move_result=move_result,
+            cfg=self.cfg,
+            is_illegal=is_illegal,
+            opponent_captures=self._opponent_captures.get(agent, 0),
+            terminated=False,
+        )
+
+        self.rewards[agent] = reward
+        self.infos[agent] = {
+            "reward_breakdown": breakdown,
+            "illegal_action": is_illegal,
+        }
+
+        # Reset opponent captures for current agent
+        self._opponent_captures[agent] = 0
+
+    def observe(self, agent: str):
+        """Return observation for specified agent.
+
+        Returns a dictionary with 'observation' and 'action_mask' keys,
+        following PettingZoo best practices (similar to chess_v6).
+        """
         dice_val = self._pending_dice.get(agent, 0)
         obs = self._obs_builders[agent].build(dice_val)
-        return obs
 
-    def action_mask(self, agent: str):
-        """Return action mask for specified agent."""
-        return self._action_masks.get(
-            agent, np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=bool)
-        )
+        # Get action mask (only valid for current agent's turn)
+        if agent == self.agent_selection:
+            action_mask = self._action_masks.get(
+                agent, np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
+            )
+        else:
+            # Not this agent's turn - no valid actions
+            action_mask = np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
+
+        return {
+            "observation": obs,
+            "action_mask": action_mask,
+        }
+
+    def action_mask(self, agent: str) -> np.ndarray:
+        """Return action mask for specified agent (convenience method).
+
+        This is a convenience method for backward compatibility.
+        Prefer accessing action_mask from observe() return dict.
+        """
+        if agent == self.agent_selection:
+            return self._action_masks.get(
+                agent, np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
+            )
+        else:
+            return np.zeros(GameConstants.TOKENS_PER_PLAYER, dtype=np.int8)
 
     def _no_move_result(self, player: Player, dice: int) -> MoveResult:
         """Create a MoveResult for when no valid moves are available."""
@@ -322,6 +385,54 @@ class raw_env(AECEnv):
         )
 
     def render(self):
-        """Render the environment (optional)."""
-        if self.game:
-            print(f"Turn {self.turn_count}, Current agent: {self.agent_selection}")
+        """Render the environment state.
+
+        Supports multiple render modes:
+        - None: No rendering
+        - "human": Print game state to console
+        - "ansi": Return string representation of game state
+        """
+        if self.render_mode is None:
+            return None
+        elif self.render_mode == "ansi":
+            return self._render_ansi()
+        elif self.render_mode == "human":
+            print(self._render_ansi())
+            return None
+        else:
+            raise ValueError(
+                f"{self.render_mode} is not a valid render mode. "
+                f"Available modes are: {self.metadata['render_modes']}"
+            )
+
+    def _render_ansi(self) -> str:
+        """Generate ANSI string representation of game state."""
+        if not self.game:
+            return "Game not initialized"
+
+        lines = []
+        lines.append(f"=== Ludo Game - Turn {self.turn_count} ===")
+        lines.append(f"Current player: {self.agent_selection}")
+
+        if self.agent_selection:
+            dice = self._pending_dice.get(self.agent_selection, 0)
+            lines.append(f"Dice roll: {dice}")
+
+        lines.append("\nPlayer positions:")
+        for agent in self.possible_agents:
+            if agent not in self._agent_color_map:
+                continue
+            color = self._agent_color_map[agent]
+            player = self.game.get_player_from_color(color)
+            token_positions = [t.position for t in player.tokens]
+            lines.append(f"  {agent} ({color.name}): {token_positions}")
+
+        if self.game.winner:
+            lines.append(f"\n*** Winner: {self._color_agent_map[self.game.winner]} ***")
+
+        return "\n".join(lines)
+
+    def close(self):
+        """Clean up environment resources."""
+        # No special cleanup needed for Ludo, but included for completeness
+        self.game.board.reset_token_positions()
