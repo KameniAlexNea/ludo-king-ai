@@ -52,6 +52,11 @@ def _parse_args() -> argparse.Namespace:
         default="cpu",
         help="Device to load the model on (cpu or cuda).",
     )
+    parser.add_argument(
+        "--multi-agent",
+        action="store_true",
+        help="Enable multi-agent evaluation.",
+    )
     return parser.parse_args()
 
 
@@ -63,7 +68,7 @@ def main() -> None:
 
     model: MaskablePPO = MaskablePPO.load(args.model, device=args.device)
     print(model.policy)
-    env_cfg = EnvConfig(max_turns=args.max_turns, seed=args.seed)
+    env_cfg = EnvConfig(max_turns=args.max_turns, seed=args.seed, multi_agent=args.multi_agent)
 
     summaries: Sequence[EvalStats] = [
         evaluate_against(model, opponent, args.games, env_cfg, args.deterministic)
