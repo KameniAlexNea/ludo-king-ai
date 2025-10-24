@@ -6,6 +6,10 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Dict, List, Sequence
 
+import gymnasium as gym
+import numpy as np
+import copy
+from gymnasium import spaces
 from ludo_engine import LudoGame
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
@@ -14,10 +18,81 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 from .config import EnvConfig
 from .ludo_env import LudoRLEnv
+from .spaces import get_flat_space_config, get_space_config
 
 
 def _mask_fn(env: LudoRLEnv):
     return env.valid_action_mask()
+
+
+class SharedPolicyEvalWrapper(gym.Wrapper):
+    """Adapts the single-agent eval env to the shared-policy observation format."""
+
+    def __init__(self, env: gym.Env, num_agents: int = 4):
+        super().__init__(env)
+        base_space = get_flat_space_config()
+        action_dim = int(env.action_space.n)
+        self._mask_shape = (action_dim,)
+        self._obs_keys = list(get_space_config().spaces.keys())
+        self.observation_space = spaces.Dict(
+            {
+                "observation": spaces.Box(
+                    low=base_space.low,
+                    high=base_space.high,
+                    dtype=np.float32,
+                ),
+                "action_mask": spaces.Box(
+                    low=0,
+                    high=1,
+                    shape=self._mask_shape,
+                    dtype=np.int8,
+                ),
+                "agent_index": spaces.Discrete(num_agents),
+            }
+        )
+        self._agent_index = np.array(0, dtype=np.int64)
+        self._last_mask = np.ones(self._mask_shape, dtype=np.int8)
+
+    def reset(self, *, seed: int | None = None, options: dict | None = None):
+        obs, info = self.env.reset(seed=seed, options=options)
+        mask = self._extract_mask(info)
+        converted = self._convert_obs(obs, mask)
+        info = {**info, "action_mask": mask.copy()}
+        return converted, info
+
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        mask = self._extract_mask(info)
+        converted = self._convert_obs(obs, mask)
+        info = {**info, "action_mask": mask.copy()}
+        return converted, reward, terminated, truncated, info
+
+    def action_masks(self) -> np.ndarray:
+        return self._last_mask.copy()
+
+    def _extract_mask(self, info: dict) -> np.ndarray:
+        if "action_mask" in info:
+            mask = np.asarray(info["action_mask"], dtype=np.int8)
+        elif hasattr(self.env, "action_masks"):
+            mask = np.asarray(self.env.action_masks(), dtype=np.int8)
+        else:
+            mask = np.ones(self._mask_shape, dtype=np.int8)
+        self._last_mask = mask
+        return mask
+
+    def _convert_obs(self, obs: Dict[str, np.ndarray], mask: np.ndarray) -> Dict[str, np.ndarray]:
+        flat_values = []
+        for key in self._obs_keys:
+            if key not in obs:
+                raise KeyError(f"Observation missing expected key '{key}'")
+            value = np.asarray(obs[key], dtype=np.float32).ravel()
+            flat_values.append(value)
+        flat_obs = np.concatenate(flat_values).astype(np.float32, copy=False)
+        return {
+            "observation": flat_obs,
+            "action_mask": mask.astype(np.int8, copy=False),
+            "agent_index": self._agent_index.copy(),
+        }
 
 
 @dataclass
@@ -66,16 +141,13 @@ class EvalStats:
 
 def build_eval_env(opponent: str, cfg: EnvConfig) -> DummyVecEnv:
     def _init():
-        opponent_cfg = EnvConfig(
-            max_turns=cfg.max_turns,
-            seed=cfg.seed,
-            randomize_agent=cfg.randomize_agent,
-            fixed_agent_color=cfg.fixed_agent_color,
-            opponent_strategy=opponent,
-            reward=cfg.reward,
-            obs=cfg.obs,
-        )
-        return ActionMasker(LudoRLEnv(opponent_cfg), _mask_fn)
+        opponent_cfg = copy.deepcopy(cfg)
+        opponent_cfg.opponent_strategy = opponent
+        env = LudoRLEnv(opponent_cfg)
+        env = ActionMasker(env, _mask_fn)
+        if cfg.multi_agent:
+            env = SharedPolicyEvalWrapper(env)
+        return env
 
     return DummyVecEnv([_init])
 
