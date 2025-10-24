@@ -11,15 +11,15 @@ from typing import Optional
 import numpy as np
 import supersuit as ss
 import torch
-from pettingzoo.utils.conversions import aec_to_parallel
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.vec_env import VecMonitor
+from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 
 from models.arguments import parse_args
 from models.callbacks import PeriodicEvalCallback
-from models.config import MultiAgentConfig
-from models.ludo_env_aec import make_aec_env
+from models.config import EnvConfig, MultiAgentConfig
+from models.ludo_env_aec import TurnBasedSelfPlayEnv
+from models.ludo_env_aec import env as make_aec_env
 
 
 def lr_schedule(lr_min, lr_max, lr_warmup) -> float:
@@ -117,7 +117,7 @@ class SelfPlayCallback(CheckpointCallback):
         return result
 
 
-def create_multiagent_env(env_cfg, n_envs: int = 4, max_cycles: int = 300):
+def create_multiagent_env(env_cfg: EnvConfig, n_envs: int = 4, max_cycles: int = 300):
     """Create a vectorized multi-agent environment using SuperSuit.
 
     Args:
@@ -130,32 +130,20 @@ def create_multiagent_env(env_cfg, n_envs: int = 4, max_cycles: int = 300):
     """
 
     # Create base PettingZoo environment
-    def make_env():
-        env = make_aec_env(env_cfg)
-        # Add action masking support
-        env = ss.pad_observations_v0(env)
-        env = ss.pad_action_space_v0(env)
-        return env
+    def make_env_fn():
+        def _init():
+            cfg_copy = copy.deepcopy(env_cfg)
+            if max_cycles is not None:
+                cfg_copy.max_turns = max_cycles
+            base_env = make_aec_env(cfg_copy)
+            base_env = ss.pad_action_space_v0(base_env)
+            return TurnBasedSelfPlayEnv(base_env)
 
-    # Convert to parallel environment for easier vectorization
-    env = aec_to_parallel(make_env())
+        return _init
 
-    # Black death wrapper - agents that are done return dummy values
-    env = ss.black_death_v3(env)
-
-    # Convert to gym-like environment (concatenates all agent obs/actions)
-    # This enables training a single shared policy across all agents
-    env = ss.pettingzoo_env_to_vec_env_v1(env)
-
-    # Concatenate multiple copies for parallel training
-    env = ss.concat_vec_envs_v1(
-        env,
-        num_vec_envs=n_envs,
-        num_cpus=min(n_envs, os.cpu_count() or 1),
-        base_class="stable_baselines3",
-    )
-
-    return env
+    env_fns = [make_env_fn() for _ in range(max(1, n_envs))]
+    vec_env = DummyVecEnv(env_fns)
+    return vec_env
 
 
 def main() -> None:
