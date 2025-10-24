@@ -270,7 +270,6 @@ def main() -> None:
             f"  vs {summary.opponent}: win_rate={summary.win_rate:.3f} "
             f"avg_reward={summary.avg_reward:.2f} avg_length={summary.avg_length:.1f}"
         )
-    model.logger.dump(0)
 
     # Train the model
     print(f"\nStarting training for {train_cfg.total_steps:,} timesteps...")
