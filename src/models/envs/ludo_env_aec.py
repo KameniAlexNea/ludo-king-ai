@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import functools
 from pathlib import Path
 from typing import Dict, Optional
@@ -135,7 +136,9 @@ class raw_env(AECEnv, EzPickle):
             np.random.seed(seed)
 
         # Reset game state
-        self.agents = self.possible_agents
+        self.agents = copy.deepcopy(self.possible_agents)
+        if len(self.agents) < 1:
+            print("Warning: No agents defined in environment.")
         self.turn_count = 0
         self._pending_dice = {}
         self._pending_valid_moves = {}
