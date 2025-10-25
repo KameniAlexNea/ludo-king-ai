@@ -6,8 +6,8 @@ from unittest.mock import Mock, patch
 import numpy as np
 from ludo_engine.models import GameConstants, PlayerColor
 
-from src.models.config import EnvConfig
-from src.models.ludo_env import LudoRLEnv
+from src.models.configs.config import EnvConfig
+from src.models.envs.ludo_env import LudoRLEnv
 
 
 class TestEnvironmentFunctionality(unittest.TestCase):

@@ -5,8 +5,8 @@ from unittest.mock import Mock
 
 from ludo_engine.models import PlayerColor
 
-from src.models.config import EnvConfig
-from src.models.reward import AdvancedRewardCalculator
+from src.models.configs.config import EnvConfig
+from src.models.envs.reward import AdvancedRewardCalculator
 
 
 class TestRewardFunctionality(unittest.TestCase):

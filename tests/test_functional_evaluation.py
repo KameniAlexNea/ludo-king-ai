@@ -5,8 +5,8 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from src.models.config import EnvConfig
-from src.models.eval_utils import evaluate_against_many
+from src.models.analysis.eval_utils import evaluate_against_many
+from src.models.configs.config import EnvConfig
 
 
 class TestEvaluationFunctionality(unittest.TestCase):
