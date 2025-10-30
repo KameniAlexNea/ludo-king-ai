@@ -124,6 +124,7 @@ class LudoRLEnv(gym.Env):
             is_illegal=is_illegal,
             opponent_captures=self._opponent_captures,
             terminated=terminated,
+            turn_count=self.turn_count,
         )
 
         observation = self._current_observation()

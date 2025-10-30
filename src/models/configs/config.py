@@ -100,7 +100,3 @@ class MultiAgentConfig:
     # "synchronous": all agents updated together (default for shared policy)
     # "asynchronous": agents can be updated at different rates
     update_strategy: str = "synchronous"
-
-    # Population-based training
-    enable_population: bool = False
-    population_size: int = 3  # Maintain N distinct policies

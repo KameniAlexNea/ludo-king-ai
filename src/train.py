@@ -58,7 +58,7 @@ def main() -> None:
     vec_env = VecMonitor(vec_env, train_cfg.logdir)
 
     policy_kwargs = {
-        "activation_fn": torch.nn.ReLU,
+        "activation_fn": torch.nn.Tanh,
         "net_arch": {
             "pi": list(train_cfg.pi_net_arch),
             "vf": list(train_cfg.vf_net_arch),
@@ -100,7 +100,7 @@ def main() -> None:
         deterministic=train_cfg.eval_deterministic,
     )
 
-    save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal.zip")
+    save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_initial.zip")
     model.save(save_path)
 
     model.learn(
@@ -108,7 +108,7 @@ def main() -> None:
         callback=[eval_callback, checkpoint_callback],
     )
 
-    save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_minimal.zip")
+    save_path = os.path.join(train_cfg.model_dir, "ppo_ludo_final.zip")
     model.save(save_path)
 
 
