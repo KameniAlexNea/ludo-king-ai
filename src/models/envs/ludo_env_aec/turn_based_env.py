@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 from typing import Dict, Optional
 
 import gymnasium as gym
@@ -9,7 +10,6 @@ import numpy as np
 from gymnasium import spaces
 from ludo_engine.strategies.strategy import Strategy, StrategyFactory
 from sb3_contrib import MaskablePPO
-import gc
 
 from ...configs.config import MultiAgentConfig
 from .opponent_pool import OpponentPoolManager
@@ -76,7 +76,9 @@ class TurnBasedSelfPlayEnv(gym.Env):
             valid_paths = set(self.opponent_pool.get_all_opponents())
         except Exception:
             valid_paths = set()
-        to_delete = [p for p in list(self.opponent_models.keys()) if p not in valid_paths]
+        to_delete = [
+            p for p in list(self.opponent_models.keys()) if p not in valid_paths
+        ]
         for path in to_delete:
             try:
                 model = self.opponent_models.pop(path, None)
@@ -141,12 +143,13 @@ class TurnBasedSelfPlayEnv(gym.Env):
             if agent == learning_agent:
                 continue
 
-            use_scripted = (
-                getattr(self.ma_cfg, "use_fixed_opponents", True)
-                and self.rng.random() < getattr(self.ma_cfg, "fixed_opponent_ratio", 0.3)
-            )
+            use_scripted = getattr(
+                self.ma_cfg, "use_fixed_opponents", True
+            ) and self.rng.random() < getattr(self.ma_cfg, "fixed_opponent_ratio", 0.3)
 
-            if use_scripted or not (self.opponent_pool and self.ma_cfg.enable_self_play):
+            if use_scripted or not (
+                self.opponent_pool and self.ma_cfg.enable_self_play
+            ):
                 # Fixed scripted opponent
                 strategies = self.ma_cfg.fixed_opponent_strategies
                 strategy_name = self.rng.choice(list(strategies))

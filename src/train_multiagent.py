@@ -11,11 +11,7 @@ from typing import Optional
 import torch
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.vec_env import (
-    DummyVecEnv,
-    SubprocVecEnv,
-    VecMonitor,
-)
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from models.analysis.eval_utils import evaluate_against_many
 from models.arguments import parse_args

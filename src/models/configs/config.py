@@ -104,4 +104,6 @@ class MultiAgentConfig:
 
     # Opponent model inference options
     opponent_model_device: str = "cpu"  # Load opponent models on CPU to save VRAM
-    opponent_stochastic_prob: float = 0.1  # Chance to use stochastic actions for opponents
+    opponent_stochastic_prob: float = (
+        0.1  # Chance to use stochastic actions for opponents
+    )

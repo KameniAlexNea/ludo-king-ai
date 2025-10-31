@@ -1,10 +1,11 @@
 import types
+
 import numpy as np
 import pytest
 from gymnasium import spaces
 
-from src.models.envs.ludo_env_aec.turn_based_env import TurnBasedSelfPlayEnv
 from src.models.envs.ludo_env_aec.opponent_pool import OpponentPoolManager
+from src.models.envs.ludo_env_aec.turn_based_env import TurnBasedSelfPlayEnv
 
 
 class FakeGame:
@@ -108,8 +109,8 @@ def test_turn_handoff_and_masks():
 
 def test_raw_env_illegal_action_handling():
     """Test that raw_env properly detects and handles illegal actions."""
-    from src.models.envs.ludo_env_aec.raw_env import raw_env
     from src.models.configs.config import EnvConfig
+    from src.models.envs.ludo_env_aec.raw_env import raw_env
     
     cfg = EnvConfig()
     cfg.seed = 42

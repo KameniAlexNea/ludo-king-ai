@@ -1,10 +1,11 @@
 import copy
 
+import torch
 from stable_baselines3.common.callbacks import BaseCallback
 
 from ..analysis.eval_utils import evaluate_against_many
 from ..configs.config import EnvConfig
-import torch
+
 
 class PeriodicEvalCallback(BaseCallback):
     """Run lightweight policy evaluations at a fixed timestep cadence."""
