@@ -7,6 +7,7 @@ from typing import Dict, Optional
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+from ludo_engine.strategies.strategy import Strategy, StrategyFactory
 from sb3_contrib import MaskablePPO
 
 from ...configs.config import MultiAgentConfig
@@ -55,7 +56,10 @@ class TurnBasedSelfPlayEnv(gym.Env):
 
         self.opponent_pool = opponent_pool
         self.ma_cfg = ma_cfg or MultiAgentConfig()
-        self.opponent_assignments: Dict[str, str] = {}
+        self.opponent_assignments: Dict[str, str] = {}  # agent -> model_path
+        self.scripted_assignments: Dict[
+            str, Strategy
+        ] = {}  # agent -> strategy_instance
         self.opponent_models: Dict[str, MaskablePPO] = {}
 
     def _sync_active_agent(self) -> None:
@@ -92,6 +96,8 @@ class TurnBasedSelfPlayEnv(gym.Env):
         self.base_env.reset(seed=seed, options=options)
 
         self.opponent_assignments = {}
+        self.scripted_assignments = {}
+
         if self.opponent_pool and self.ma_cfg.enable_self_play:
             num_opponents = min(
                 self.ma_cfg.self_play_num_opponents, len(self.possible_agents) - 1
@@ -104,6 +110,15 @@ class TurnBasedSelfPlayEnv(gym.Env):
                     opp = self.opponent_pool.sample_opponent()
                     if opp:
                         self.opponent_assignments[agent] = opp
+                        # Load model immediately if not already cached
+                        if opp not in self.opponent_models:
+                            self.opponent_models[opp] = MaskablePPO.load(opp)
+                    else:
+                        # Fallback to scripted opponent if pool is empty
+                        strategy = StrategyFactory.create_strategy(
+                            self.ma_cfg.self_play_opponent_fallback
+                        )
+                        self.scripted_assignments[agent] = strategy
 
         self._sync_active_agent()
 
@@ -124,14 +139,28 @@ class TurnBasedSelfPlayEnv(gym.Env):
         prev_obs = self._last_obs
 
         if acting_agent in self.opponent_assignments:
+            # Use opponent model from pool
             opp_path = self.opponent_assignments[acting_agent]
-            if opp_path not in self.opponent_models:
-                self.opponent_models[opp_path] = MaskablePPO.load(opp_path)
             opp_model = self.opponent_models[opp_path]
             obs_dict = self._build_observation(acting_agent)
             opp_action, _ = opp_model.predict(obs_dict, deterministic=True)
             self.base_env.step(int(opp_action))
+        elif acting_agent in self.scripted_assignments:
+            # Use scripted strategy as fallback
+            strategy = self.scripted_assignments[acting_agent]
+            agent_idx = self.agent_indices[acting_agent]
+            player = self.base_env.game.players[agent_idx]
+            dice = self.base_env._pending_dice.get(acting_agent, 0)
+            valid_moves = self.base_env._pending_valid_moves.get(acting_agent, [])
+
+            if valid_moves:
+                decision_context = self.base_env.game.get_ai_decision_context(dice)
+                chosen_token = strategy.decide(player, decision_context)
+            else:
+                chosen_token = 0
+            self.base_env.step(chosen_token)
         else:
+            # Learning agent controls this position
             self.base_env.step(int(action))
 
         reward = float(self.base_env.rewards.get(acting_agent, 0.0))
