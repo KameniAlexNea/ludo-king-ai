@@ -3,8 +3,6 @@
 import unittest
 from unittest.mock import Mock, patch
 
-import numpy as np
-
 from src.models.analysis.eval_utils import evaluate_against_many
 from src.models.configs.config import EnvConfig
 
@@ -24,15 +22,28 @@ class TestEvaluationFunctionality(unittest.TestCase):
         opponents = ["random", "probabilistic_v2", "killer"]
         games_per_opponent = 2
 
-        with patch('src.models.eval_utils.evaluate_against') as mock_evaluate:
+        with patch("src.models.eval_utils.evaluate_against") as mock_evaluate:
             # Mock different performance against different opponents
             mock_evaluate.side_effect = [
                 Mock(opponent="random", win_rate=0.6, avg_reward=5.0, avg_length=25.0),
-                Mock(opponent="probabilistic_v2", win_rate=0.3, avg_reward=-2.0, avg_length=30.0),
-                Mock(opponent="killer", win_rate=0.1, avg_reward=-10.0, avg_length=20.0),
+                Mock(
+                    opponent="probabilistic_v2",
+                    win_rate=0.3,
+                    avg_reward=-2.0,
+                    avg_length=30.0,
+                ),
+                Mock(
+                    opponent="killer", win_rate=0.1, avg_reward=-10.0, avg_length=20.0
+                ),
             ]
 
-            results = evaluate_against_many(mock_model, opponents, games_per_opponent, self.base_cfg, deterministic=True)
+            results = evaluate_against_many(
+                mock_model,
+                opponents,
+                games_per_opponent,
+                self.base_cfg,
+                deterministic=True,
+            )
 
             # Verify results for each opponent
             self.assertEqual(len(results), len(opponents))
@@ -48,7 +59,7 @@ class TestEvaluationFunctionality(unittest.TestCase):
         mock_model = Mock()
 
         # Mock evaluation results
-        with patch('src.models.eval_utils.evaluate_against') as mock_evaluate:
+        with patch("src.models.eval_utils.evaluate_against") as mock_evaluate:
             stats = Mock()
             stats.opponent = "random"
             stats.episodes = 10
@@ -72,7 +83,9 @@ class TestEvaluationFunctionality(unittest.TestCase):
 
             mock_evaluate.return_value = stats
 
-            result = evaluate_against_many(mock_model, ["random"], 10, self.base_cfg, deterministic=True)[0]
+            result = evaluate_against_many(
+                mock_model, ["random"], 10, self.base_cfg, deterministic=True
+            )[0]
 
             # Verify statistics
             self.assertEqual(result.win_rate, 0.6)
@@ -92,15 +105,27 @@ class TestEvaluationFunctionality(unittest.TestCase):
         opponents = ["weak", "medium", "strong"]
         games_per_opponent = 5
 
-        with patch('src.models.eval_utils.evaluate_against') as mock_evaluate:
+        with patch("src.models.eval_utils.evaluate_against") as mock_evaluate:
             # Mock varying performance levels
             mock_evaluate.side_effect = [
-                Mock(opponent="weak", win_rate=0.8, avg_reward=8.0),      # Good against weak
-                Mock(opponent="medium", win_rate=0.5, avg_reward=0.0),    # Even against medium
-                Mock(opponent="strong", win_rate=0.2, avg_reward=-5.0),   # Poor against strong
+                Mock(
+                    opponent="weak", win_rate=0.8, avg_reward=8.0
+                ),  # Good against weak
+                Mock(
+                    opponent="medium", win_rate=0.5, avg_reward=0.0
+                ),  # Even against medium
+                Mock(
+                    opponent="strong", win_rate=0.2, avg_reward=-5.0
+                ),  # Poor against strong
             ]
 
-            results = evaluate_against_many(mock_model, opponents, games_per_opponent, self.base_cfg, deterministic=True)
+            results = evaluate_against_many(
+                mock_model,
+                opponents,
+                games_per_opponent,
+                self.base_cfg,
+                deterministic=True,
+            )
 
             # Verify we get results for all opponents
             self.assertEqual(len(results), 3)
@@ -111,26 +136,40 @@ class TestEvaluationFunctionality(unittest.TestCase):
 
             # Verify win rates reflect expected difficulty
             win_rates = [r.win_rate for r in results]
-            self.assertGreater(win_rates[0], win_rates[1], "Should perform better against weak opponent")
-            self.assertGreater(win_rates[1], win_rates[2], "Should perform better against medium than strong opponent")
+            self.assertGreater(
+                win_rates[0],
+                win_rates[1],
+                "Should perform better against weak opponent",
+            )
+            self.assertGreater(
+                win_rates[1],
+                win_rates[2],
+                "Should perform better against medium than strong opponent",
+            )
 
     def test_deterministic_vs_stochastic_settings(self):
         """Test that deterministic and stochastic settings are passed correctly."""
         mock_model = Mock()
 
-        with patch('src.models.eval_utils.evaluate_against') as mock_evaluate:
+        with patch("src.models.eval_utils.evaluate_against") as mock_evaluate:
             mock_evaluate.return_value = Mock(opponent="test", win_rate=0.5)
 
             # Test deterministic
-            evaluate_against_many(mock_model, ["test"], 1, self.base_cfg, deterministic=True)
+            evaluate_against_many(
+                mock_model, ["test"], 1, self.base_cfg, deterministic=True
+            )
             mock_evaluate.assert_called_with(mock_model, "test", 1, self.base_cfg, True)
 
             # Reset mock
             mock_evaluate.reset_mock()
 
             # Test stochastic
-            evaluate_against_many(mock_model, ["test"], 1, self.base_cfg, deterministic=False)
-            mock_evaluate.assert_called_with(mock_model, "test", 1, self.base_cfg, False)
+            evaluate_against_many(
+                mock_model, ["test"], 1, self.base_cfg, deterministic=False
+            )
+            mock_evaluate.assert_called_with(
+                mock_model, "test", 1, self.base_cfg, False
+            )
 
 
 if __name__ == "__main__":

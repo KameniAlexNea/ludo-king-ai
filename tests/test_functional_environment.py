@@ -1,7 +1,7 @@
 """Functional tests for Ludo environment in realistic gameplay scenarios."""
 
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import numpy as np
 from ludo_engine.models import GameConstants, PlayerColor
@@ -64,17 +64,20 @@ class TestEnvironmentFunctionality(unittest.TestCase):
         for action in range(GameConstants.TOKENS_PER_PLAYER):
             if not action_mask[action]:
                 # Try taking invalid action - should be penalized
-                obs_copy = obs.copy()
-                info_copy = {"action_mask": action_mask.copy()}
-
-                with patch.object(self.env, 'pending_valid_moves', []):
+                with patch.object(self.env, "pending_valid_moves", []):
                     _, reward, _, _, _ = self.env.step(action)
-                    self.assertLess(reward, 0, f"Invalid action {action} should be penalized")
+                    self.assertLess(
+                        reward, 0, f"Invalid action {action} should be penalized"
+                    )
 
                 # Reset environment state
-                self.env.pending_valid_moves = self.env.game.get_valid_moves(
-                    self.env.game.get_current_player(), self.env.pending_dice
-                ) if self.env.pending_valid_moves else []
+                self.env.pending_valid_moves = (
+                    self.env.game.get_valid_moves(
+                        self.env.game.get_current_player(), self.env.pending_dice
+                    )
+                    if self.env.pending_valid_moves
+                    else []
+                )
 
     def test_deterministic_behavior_with_seed(self):
         """Test that environment initializes deterministically with same seed."""
@@ -91,18 +94,26 @@ class TestEnvironmentFunctionality(unittest.TestCase):
         agent_color2 = env2.agent_color
 
         # Agent color should be the same (deterministic assignment)
-        self.assertEqual(agent_color1, agent_color2, "Same seed should give same agent color")
+        self.assertEqual(
+            agent_color1, agent_color2, "Same seed should give same agent color"
+        )
 
         # Test that fixed agent color works deterministically
-        env3 = LudoRLEnv(EnvConfig(seed=456, randomize_agent=False, fixed_agent_color="RED"))
+        env3 = LudoRLEnv(
+            EnvConfig(seed=456, randomize_agent=False, fixed_agent_color="RED")
+        )
         _, _ = env3.reset()
         agent_color3 = env3.agent_color
 
-        env4 = LudoRLEnv(EnvConfig(seed=456, randomize_agent=False, fixed_agent_color="RED"))
+        env4 = LudoRLEnv(
+            EnvConfig(seed=456, randomize_agent=False, fixed_agent_color="RED")
+        )
         _, _ = env4.reset()
         agent_color4 = env4.agent_color
 
-        self.assertEqual(agent_color3, agent_color4, "Fixed agent color should be deterministic")
+        self.assertEqual(
+            agent_color3, agent_color4, "Fixed agent color should be deterministic"
+        )
         self.assertEqual(agent_color3, PlayerColor.RED, "Fixed color should be RED")
 
     def test_agent_color_assignment(self):
@@ -110,11 +121,9 @@ class TestEnvironmentFunctionality(unittest.TestCase):
         # Test random assignment
         env1 = LudoRLEnv(EnvConfig(randomize_agent=True, seed=1))
         env1.reset()
-        color1 = env1.agent_color
 
         env2 = LudoRLEnv(EnvConfig(randomize_agent=True, seed=2))
         env2.reset()
-        color2 = env2.agent_color
 
         # Different seeds should potentially give different colors
         # (though statistically they might be the same)
@@ -153,8 +162,14 @@ class TestEnvironmentFunctionality(unittest.TestCase):
         positive_rewards = [r for r in rewards if r > 0]
         negative_rewards = [r for r in rewards if r < 0]
 
-        self.assertGreater(len(positive_rewards), 0, "Should have some positive rewards")
-        self.assertGreater(len(negative_rewards), 0, "Should have some negative rewards (time penalties)")
+        self.assertGreater(
+            len(positive_rewards), 0, "Should have some positive rewards"
+        )
+        self.assertGreater(
+            len(negative_rewards),
+            0,
+            "Should have some negative rewards (time penalties)",
+        )
 
         # Total reward should reflect game outcome
         total_reward = sum(rewards)
@@ -166,15 +181,27 @@ class TestEnvironmentFunctionality(unittest.TestCase):
 
         # Check observation structure
         required_keys = [
-            "agent_color", "agent_progress", "agent_distance_to_finish",
-            "agent_vulnerable", "agent_safe", "agent_home", "agent_on_board",
-            "agent_capture_available", "agent_finish_available", "agent_threat_level",
-            "opponents_positions", "opponents_active", "dice", "dice_value_norm"
+            "agent_color",
+            "agent_progress",
+            "agent_distance_to_finish",
+            "agent_vulnerable",
+            "agent_safe",
+            "agent_home",
+            "agent_on_board",
+            "agent_capture_available",
+            "agent_finish_available",
+            "agent_threat_level",
+            "opponents_positions",
+            "opponents_active",
+            "dice",
+            "dice_value_norm",
         ]
 
         for key in required_keys:
             self.assertIn(key, obs, f"Observation missing key: {key}")
-            self.assertIsInstance(obs[key], np.ndarray, f"Observation {key} should be numpy array")
+            self.assertIsInstance(
+                obs[key], np.ndarray, f"Observation {key} should be numpy array"
+            )
 
         # Check shapes
         self.assertEqual(obs["agent_color"].shape, (4,))  # 4 colors
@@ -192,8 +219,9 @@ class TestEnvironmentFunctionality(unittest.TestCase):
 
                 # Shapes should be consistent
                 for key in obs.keys():
-                    self.assertEqual(obs[key].shape, next_obs[key].shape,
-                                   f"Shape mismatch for {key}")
+                    self.assertEqual(
+                        obs[key].shape, next_obs[key].shape, f"Shape mismatch for {key}"
+                    )
 
                 obs = next_obs
                 if done or truncated:
@@ -214,7 +242,9 @@ class TestEnvironmentFunctionality(unittest.TestCase):
                 # Game state should have changed
                 new_state = self._get_game_state_summary()
                 # At least turn count should have increased
-                self.assertGreater(new_state["turn_count"], initial_game_state["turn_count"])
+                self.assertGreater(
+                    new_state["turn_count"], initial_game_state["turn_count"]
+                )
 
                 if done or truncated:
                     break
@@ -239,8 +269,10 @@ class TestEnvironmentFunctionality(unittest.TestCase):
             steps += 1
 
         # Should have truncated due to max_turns
-        self.assertTrue(truncated or steps >= cfg.max_turns,
-                       f"Game should have ended by step {cfg.max_turns}, took {steps} steps")
+        self.assertTrue(
+            truncated or steps >= cfg.max_turns,
+            f"Game should have ended by step {cfg.max_turns}, took {steps} steps",
+        )
 
     def _run_episode(self, seed=None):
         """Helper to run a complete episode and return rewards."""
@@ -270,7 +302,12 @@ class TestEnvironmentFunctionality(unittest.TestCase):
         """Helper to get a summary of current game state."""
         return {
             "turn_count": self.env.turn_count,
-            "agent_tokens": [token.position for token in self.env.game.get_player_from_color(self.env.agent_color).tokens],
+            "agent_tokens": [
+                token.position
+                for token in self.env.game.get_player_from_color(
+                    self.env.agent_color
+                ).tokens
+            ],
             "current_player": self.env.game.get_current_player().color,
             "game_over": self.env.game.game_over,
         }

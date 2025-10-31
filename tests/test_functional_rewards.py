@@ -37,8 +37,13 @@ class TestRewardFunctionality(unittest.TestCase):
         move_result1.finished_token = False
 
         reward1, _ = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=move_result1,
-            cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=move_result1,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=0,
+            terminated=False,
         )
         rewards.append(reward1)
 
@@ -51,8 +56,13 @@ class TestRewardFunctionality(unittest.TestCase):
         move_result2.finished_token = False
 
         reward2, _ = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=move_result2,
-            cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=move_result2,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=0,
+            terminated=False,
         )
         rewards.append(reward2)
 
@@ -65,21 +75,33 @@ class TestRewardFunctionality(unittest.TestCase):
         move_result3.finished_token = True
 
         reward3, _ = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=move_result3,
-            cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=move_result3,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=0,
+            terminated=False,
         )
         rewards.append(reward3)
 
         # Final terminal reward
         reward_terminal, _ = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=None,
-            cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=True
+            game=game,
+            agent_color=self.agent_color,
+            move_result=None,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=0,
+            terminated=True,
         )
         rewards.append(reward_terminal)
 
         # Verify rewards are positive and accumulate properly
         total_reward = sum(rewards)
-        self.assertGreater(total_reward, 0, "Winning scenario should yield positive total reward")
+        self.assertGreater(
+            total_reward, 0, "Winning scenario should yield positive total reward"
+        )
         self.assertGreater(reward_terminal, 0, "Terminal win reward should be positive")
 
     def test_loss_scenario_rewards(self):
@@ -101,35 +123,57 @@ class TestRewardFunctionality(unittest.TestCase):
         move_result1.finished_token = False
 
         reward1, _ = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=move_result1,
-            cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=move_result1,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=0,
+            terminated=False,
         )
         rewards.append(reward1)
 
         # Move 2: Got captured
         reward2, _ = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=None,
-            cfg=self.cfg, is_illegal=False, opponent_captures=1, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=None,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=1,
+            terminated=False,
         )
         rewards.append(reward2)
 
         # Move 3: Illegal move
         reward3, _ = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=None,
-            cfg=self.cfg, is_illegal=True, opponent_captures=0, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=None,
+            cfg=self.cfg,
+            is_illegal=True,
+            opponent_captures=0,
+            terminated=False,
         )
         rewards.append(reward3)
 
         # Terminal loss reward
         reward_terminal, _ = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=None,
-            cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=True
+            game=game,
+            agent_color=self.agent_color,
+            move_result=None,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=0,
+            terminated=True,
         )
         rewards.append(reward_terminal)
 
         # Verify loss scenario yields negative total reward
         total_reward = sum(rewards)
-        self.assertLess(total_reward, 0, "Losing scenario should yield negative total reward")
+        self.assertLess(
+            total_reward, 0, "Losing scenario should yield negative total reward"
+        )
         self.assertLess(reward_terminal, 0, "Terminal loss reward should be negative")
 
     def test_capture_battle_scenario(self):
@@ -148,15 +192,25 @@ class TestRewardFunctionality(unittest.TestCase):
         move_result1.finished_token = False
 
         reward1, breakdown1 = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=move_result1,
-            cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=move_result1,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=0,
+            terminated=False,
         )
         rewards.append(reward1)
 
         # Opponent captures agent back
         reward2, breakdown2 = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=None,
-            cfg=self.cfg, is_illegal=False, opponent_captures=1, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=None,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=1,
+            terminated=False,
         )
         rewards.append(reward2)
 
@@ -169,15 +223,22 @@ class TestRewardFunctionality(unittest.TestCase):
         move_result3.finished_token = False
 
         reward3, breakdown3 = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=move_result3,
-            cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=move_result3,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=0,
+            terminated=False,
         )
         rewards.append(reward3)
 
         # Verify capture rewards balance out appropriately
         self.assertGreater(reward1, 0, "Agent capture should give positive reward")
         self.assertLess(reward2, 0, "Getting captured should give negative reward")
-        self.assertGreater(reward3, reward1, "Double capture should give higher reward than single")
+        self.assertGreater(
+            reward3, reward1, "Double capture should give higher reward than single"
+        )
 
         # Verify breakdown components
         self.assertEqual(breakdown1["capture"], self.cfg.reward.capture)
@@ -207,17 +268,28 @@ class TestRewardFunctionality(unittest.TestCase):
             move_result.finished_token = False
 
             reward, breakdown = self.calculator.compute(
-                game=game, agent_color=self.agent_color, move_result=move_result,
-                cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=False
+                game=game,
+                agent_color=self.agent_color,
+                move_result=move_result,
+                cfg=self.cfg,
+                is_illegal=False,
+                opponent_captures=0,
+                terminated=False,
             )
             rewards.append((reward, description, breakdown["progress"]))
 
         # All should have time penalty + some progress reward
         for reward, desc, progress_reward in rewards:
             # At minimum, should not be worse than just time penalty
-            self.assertGreaterEqual(reward, self.cfg.reward.time_penalty, f"{desc} should not be worse than time penalty")
+            self.assertGreaterEqual(
+                reward,
+                self.cfg.reward.time_penalty,
+                f"{desc} should not be worse than time penalty",
+            )
             # Progress reward should be non-negative
-            self.assertGreaterEqual(progress_reward, 0, f"{desc} should have non-negative progress reward")
+            self.assertGreaterEqual(
+                progress_reward, 0, f"{desc} should have non-negative progress reward"
+            )
 
     def test_penalty_avoidance_scenario(self):
         """Test that penalties discourage illegal moves and time wasting."""
@@ -233,18 +305,36 @@ class TestRewardFunctionality(unittest.TestCase):
         legal_move.finished_token = False
 
         legal_reward, _ = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=legal_move,
-            cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=legal_move,
+            cfg=self.cfg,
+            is_illegal=False,
+            opponent_captures=0,
+            terminated=False,
         )
 
         illegal_reward, _ = self.calculator.compute(
-            game=game, agent_color=self.agent_color, move_result=None,
-            cfg=self.cfg, is_illegal=True, opponent_captures=0, terminated=False
+            game=game,
+            agent_color=self.agent_color,
+            move_result=None,
+            cfg=self.cfg,
+            is_illegal=True,
+            opponent_captures=0,
+            terminated=False,
         )
 
         # Illegal move should be heavily penalized
-        self.assertLess(illegal_reward, legal_reward, "Illegal moves should be penalized more than legal moves")
-        self.assertLess(illegal_reward, self.cfg.reward.time_penalty, "Illegal moves should have large negative reward")
+        self.assertLess(
+            illegal_reward,
+            legal_reward,
+            "Illegal moves should be penalized more than legal moves",
+        )
+        self.assertLess(
+            illegal_reward,
+            self.cfg.reward.time_penalty,
+            "Illegal moves should have large negative reward",
+        )
 
     def test_reward_consistency_across_episodes(self):
         """Test that reward calculation is consistent across episodes."""
@@ -263,16 +353,27 @@ class TestRewardFunctionality(unittest.TestCase):
         for _ in range(5):
             self.calculator.reset_for_new_episode()
             reward, breakdown = self.calculator.compute(
-                game=game, agent_color=self.agent_color, move_result=move_result,
-                cfg=self.cfg, is_illegal=False, opponent_captures=0, terminated=False
+                game=game,
+                agent_color=self.agent_color,
+                move_result=move_result,
+                cfg=self.cfg,
+                is_illegal=False,
+                opponent_captures=0,
+                terminated=False,
             )
             rewards.append((reward, breakdown))
 
         # All rewards should be identical
         first_reward, first_breakdown = rewards[0]
         for reward, breakdown in rewards[1:]:
-            self.assertEqual(reward, first_reward, "Rewards should be consistent across episodes")
-            self.assertEqual(breakdown, first_breakdown, "Breakdowns should be consistent across episodes")
+            self.assertEqual(
+                reward, first_reward, "Rewards should be consistent across episodes"
+            )
+            self.assertEqual(
+                breakdown,
+                first_breakdown,
+                "Breakdowns should be consistent across episodes",
+            )
 
 
 if __name__ == "__main__":
