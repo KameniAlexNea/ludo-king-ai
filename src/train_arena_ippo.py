@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import os
-from dataclasses import dataclass
 from typing import Dict, Tuple
 
 import numpy as np
@@ -13,29 +12,14 @@ from sb3_contrib.common.maskable.buffers import MaskableDictRolloutBuffer
 from stable_baselines3.common.utils import explained_variance
 from torch.utils.tensorboard import SummaryWriter
 
+from ludo_rl.config import IPPOConfig, PPOHyper, ippo_config, ppo_hyper, AGENT_IDS
 from ludo_rl.eval import champion_vs_fixed, tournament_round_robin
 from models.configs.config import EnvConfig
 from models.envs.ludo_env_aec.raw_env import raw_env as AECEnv
 
-AGENTS = ("player_0", "player_1", "player_2", "player_3")
-
-
-@dataclass
-class PPOHyper:
-    learning_rate: float = 3e-4
-    n_steps: int = 2048
-    batch_size: int = 256
-    n_epochs: int = 10
-    gamma: float = 0.99
-    gae_lambda: float = 0.95
-    clip_range: float = 0.2
-    ent_coef: float = 0.01
-    vf_coef: float = 0.5
-    max_grad_norm: float = 0.5
-
 
 def build_spaces(env: AECEnv) -> Tuple[spaces.Dict, spaces.Discrete]:
-    sample_agent = AGENTS[0]
+    sample_agent = AGENT_IDS[0]
     obs_space = spaces.Dict(
         {
             "observation": env.observation_space(sample_agent),
@@ -45,7 +29,7 @@ def build_spaces(env: AECEnv) -> Tuple[spaces.Dict, spaces.Discrete]:
                 shape=(env.action_space(sample_agent).n,),
                 dtype=np.int8,
             ),
-            "agent_index": spaces.Discrete(len(AGENTS)),
+            "agent_index": spaces.Discrete(len(AGENT_IDS)),
         }
     )
     act_space = env.action_space(sample_agent)
@@ -57,16 +41,15 @@ def build_obs(env: AECEnv, agent: str) -> dict:
     return {
         "observation": raw["observation"].astype(np.float32, copy=False),
         "action_mask": raw["action_mask"].astype(np.int8, copy=False),
-        "agent_index": np.array(AGENTS.index(agent), dtype=np.int64),
+        "agent_index": np.array(AGENT_IDS.index(agent), dtype=np.int64),
     }
 
 
 def train_arena_ippo(
     env_cfg: EnvConfig,
-    lr: float = 3e-4,
-    n_steps: int = 2048,
-    total_updates: int = 1000,
-    device: str = "cpu",
+    *,
+    ippo: IPPOConfig = ippo_config,
+    ppo: PPOHyper = ppo_hyper,
 ):
     cfg = copy.deepcopy(env_cfg)
     cfg.multi_agent = True  # flattened obs
@@ -77,23 +60,26 @@ def train_arena_ippo(
 
     # Four independent policies
     models: Dict[str, MaskablePPO] = {}
-    for ag in AGENTS:
+    for ag in AGENT_IDS:
         models[ag] = MaskablePPO(
             "MultiInputPolicy",
             env=None,  # manual collection; init after setting spaces
-            learning_rate=lr,
-            n_steps=n_steps,
-            batch_size=256,
-            ent_coef=0.01,
-            vf_coef=0.5,
-            gamma=0.99,
-            gae_lambda=0.95,
-            device=device,
+            learning_rate=ppo.learning_rate,
+            n_steps=ppo.n_steps,
+            batch_size=ppo.batch_size,
+            ent_coef=ppo.ent_coef,
+            vf_coef=ppo.vf_coef,
+            gamma=ppo.gamma,
+            gae_lambda=ppo.gae_lambda,
+            device=ippo.device,
             verbose=0,
             tensorboard_log=os.path.join("training", "logs_arena"),
             policy_kwargs={
                 "activation_fn": th.nn.Tanh,
-                "net_arch": {"pi": [128, 128], "vf": [256, 256]},
+                "net_arch": {
+                    "pi": list(ippo.pi_net_arch),
+                    "vf": list(ippo.vf_net_arch),
+                },
             },
             _init_setup_model=False,
         )
@@ -107,21 +93,21 @@ def train_arena_ippo(
         models[ag]._setup_model()
 
     buffers: Dict[str, MaskableDictRolloutBuffer] = {}
-    for ag in AGENTS:
+    for ag in AGENT_IDS:
         buffers[ag] = MaskableDictRolloutBuffer(
-            n_steps,
+            ppo.n_steps,
             obs_space,
             act_space,
-            device=th.device(device),
-            gamma=0.99,
-            gae_lambda=0.95,
+            device=th.device(ippo.device),
+            gamma=ppo.gamma,
+            gae_lambda=ppo.gae_lambda,
             n_envs=1,
         )
 
     # Per-agent last obs and episode starts
     last_obs: Dict[str, dict] = {}
     episode_starts: Dict[str, np.ndarray] = {
-        ag: np.ones((1,), dtype=bool) for ag in AGENTS
+        ag: np.ones((1,), dtype=bool) for ag in AGENT_IDS
     }
     dones_flag: bool = False
 
@@ -148,13 +134,13 @@ def train_arena_ippo(
         return np.array([x])
 
     writer = SummaryWriter(log_dir=os.path.join("training", "logs_arena_tb"))
-    for update in range(total_updates):
+    for update in range(ippo.total_rounds):
         # Reset buffers
-        for ag in AGENTS:
+        for ag in AGENT_IDS:
             buffers[ag].reset()
 
         # Collect n_steps per agent
-        steps_collected = {ag: 0 for ag in AGENTS}
+        steps_collected = {ag: 0 for ag in AGENT_IDS}
         env.reset()
         dones_flag = False
 
@@ -171,7 +157,7 @@ def train_arena_ippo(
             done = term or trunc
 
             # Only record if this agent still needs steps
-            if steps_collected[agent] < n_steps:
+            if steps_collected[agent] < ppo.n_steps:
                 buffers[agent].add(
                     last_obs[agent],
                     np.array([[action]], dtype=np.int64),
@@ -187,17 +173,17 @@ def train_arena_ippo(
             if done:
                 dones_flag = True
                 # Reset episode_starts for all agents next episode
-                for ag in AGENTS:
+                for ag in AGENT_IDS:
                     episode_starts[ag] = np.ones((1,), dtype=bool)
 
                 env.reset()
 
             # Stop when all agents have n_steps
-            if all(steps_collected[ag] >= n_steps for ag in AGENTS):
+            if all(steps_collected[ag] >= ppo.n_steps for ag in AGENT_IDS):
                 break
 
         # Compute returns & advantages per agent
-        for ag in AGENTS:
+        for ag in AGENT_IDS:
             mdl = models[ag]
             if last_obs.get(ag) is not None:
                 with th.no_grad():
@@ -211,7 +197,7 @@ def train_arena_ippo(
             )
 
         # Train per agent
-        for ag in AGENTS:
+        for ag in AGENT_IDS:
             mdl = models[ag]
             # Copy of sb3 ppo_mask.train but scoped to our buffer
             entropy_losses = []
@@ -313,8 +299,12 @@ def train_arena_ippo(
             writer.add_scalar(f"{ag}/train/explained_variance", float(ev), update)
 
         # Periodic tournament and champion eval
-        if (update + 1) % 5 == 0:
-            summaries = tournament_round_robin(models, env_cfg, games_per_pair=5)
+        if (update + 1) % max(1, ippo.eval_every_rounds) == 0:
+            summaries = tournament_round_robin(
+                models,
+                env_cfg,
+                games_per_pair=max(2, ippo.eval_games_vs_fixed // 6),
+            )
             print("\n[Tournament] per-agent win rates:")
             best_ag = None
             best_wr = -1.0
@@ -331,11 +321,15 @@ def train_arena_ippo(
                     best_ag = ag
 
             # Champion eval vs fixed opponents
-            fixed_opps = ["balanced", "killer", "cautious", "winner"]
+            fixed_opps = list(ippo.eval_fixed_opponents)
             if best_ag is not None:
                 print(f"[Champion] {best_ag} vs fixed opponents")
                 results = champion_vs_fixed(
-                    models[best_ag], env_cfg, fixed_opps, games=25, deterministic=True
+                    models[best_ag],
+                    env_cfg,
+                    fixed_opps,
+                    games=ippo.eval_games_vs_fixed,
+                    deterministic=False,
                 )
                 for res in results:
                     writer.add_scalar(
@@ -364,5 +358,9 @@ def train_arena_ippo(
 
 
 if __name__ == "__main__":
-    cfg = EnvConfig(randomize_agent=True)
-    train_arena_ippo(cfg, lr=3e-4, n_steps=1024, total_updates=1000, device="cpu")
+    cfg = EnvConfig(randomize_agent=True, max_turns=125 * len(AGENT_IDS))
+    train_arena_ippo(
+        cfg,
+        ippo=ippo_config,
+        ppo=ppo_hyper,
+    )

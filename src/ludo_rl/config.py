@@ -36,4 +36,21 @@ class IPPOConfig:
     frac_1v1: float = 0.4
 
 
+@dataclass
+class PPOHyper:
+    learning_rate: float = 3e-4
+    n_steps: int = 2048
+    batch_size: int = 256
+    n_epochs: int = 10
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_range: float = 0.2
+    ent_coef: float = 0.01
+    vf_coef: float = 0.5
+    max_grad_norm: float = 0.5
+
+
+ippo_config = IPPOConfig()
+ppo_hyper = PPOHyper()
+
 AGENT_IDS = ("player_0", "player_1", "player_2", "player_3")
