@@ -11,11 +11,11 @@ from gymnasium import spaces
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.buffers import MaskableDictRolloutBuffer
 from stable_baselines3.common.utils import explained_variance
+from torch.utils.tensorboard import SummaryWriter
 
+from ludo_rl.eval import champion_vs_fixed, tournament_round_robin
 from models.configs.config import EnvConfig
 from models.envs.ludo_env_aec.raw_env import raw_env as AECEnv
-from loguru import logger
-
 
 AGENTS = ("player_0", "player_1", "player_2", "player_3")
 
@@ -120,7 +120,9 @@ def train_arena_ippo(
 
     # Per-agent last obs and episode starts
     last_obs: Dict[str, dict] = {}
-    episode_starts: Dict[str, np.ndarray] = {ag: np.ones((1,), dtype=bool) for ag in AGENTS}
+    episode_starts: Dict[str, np.ndarray] = {
+        ag: np.ones((1,), dtype=bool) for ag in AGENTS
+    }
     dones_flag: bool = False
 
     def policy_step(agent: str, obs: dict):
@@ -128,16 +130,24 @@ def train_arena_ippo(
         with th.no_grad():
             obs_tensor = mdl.policy.obs_to_tensor(obs)[0]
             # action mask for policy forward (batch dimension 1)
-            action_mask = th.as_tensor(obs["action_mask"], device=mdl.device).unsqueeze(0)
+            action_mask = th.as_tensor(obs["action_mask"], device=mdl.device).unsqueeze(
+                0
+            )
             actions, values, log_probs = mdl.policy(
                 obs_tensor, action_masks=action_mask
             )
         # actions is shape (1,); extract scalar safely
-        return int(actions.cpu().numpy().item()), values.squeeze(), log_probs.squeeze(), action_mask
+        return (
+            int(actions.cpu().numpy().item()),
+            values.squeeze(),
+            log_probs.squeeze(),
+            action_mask,
+        )
 
     def to_batch(x):
         return np.array([x])
 
+    writer = SummaryWriter(log_dir=os.path.join("training", "logs_arena_tb"))
     for update in range(total_updates):
         # Reset buffers
         for ag in AGENTS:
@@ -223,23 +233,33 @@ def train_arena_ippo(
                     values = values.flatten()
                     advantages = rollout_data.advantages
                     if mdl.normalize_advantage:
-                        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+                        advantages = (advantages - advantages.mean()) / (
+                            advantages.std() + 1e-8
+                        )
 
                     ratio = th.exp(log_prob - rollout_data.old_log_prob)
                     policy_loss_1 = advantages * ratio
-                    policy_loss_2 = advantages * th.clamp(ratio, 1 - clip_range, 1 + clip_range)
+                    policy_loss_2 = advantages * th.clamp(
+                        ratio, 1 - clip_range, 1 + clip_range
+                    )
                     policy_loss = -th.min(policy_loss_1, policy_loss_2).mean()
                     pg_losses.append(policy_loss.item())
-                    clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
+                    clip_fraction = th.mean(
+                        (th.abs(ratio - 1) > clip_range).float()
+                    ).item()
                     clip_fractions.append(clip_fraction)
 
                     if mdl.clip_range_vf is None:
                         values_pred = values
                     else:
                         values_pred = rollout_data.old_values + th.clamp(
-                            values - rollout_data.old_values, -clip_range_vf, clip_range_vf
+                            values - rollout_data.old_values,
+                            -clip_range_vf,
+                            clip_range_vf,
                         )
-                    value_loss = th.nn.functional.mse_loss(rollout_data.returns, values_pred)
+                    value_loss = th.nn.functional.mse_loss(
+                        rollout_data.returns, values_pred
+                    )
                     value_losses.append(value_loss.item())
 
                     if entropy is None:
@@ -248,30 +268,101 @@ def train_arena_ippo(
                         entropy_loss = -th.mean(entropy)
                     entropy_losses.append(entropy_loss.item())
 
-                    loss = policy_loss + mdl.ent_coef * entropy_loss + mdl.vf_coef * value_loss
+                    loss = (
+                        policy_loss
+                        + mdl.ent_coef * entropy_loss
+                        + mdl.vf_coef * value_loss
+                    )
 
                     with th.no_grad():
                         log_ratio = log_prob - rollout_data.old_log_prob
-                        approx_kl = th.mean((th.exp(log_ratio) - 1) - log_ratio).cpu().numpy()
+                        approx_kl = (
+                            th.mean((th.exp(log_ratio) - 1) - log_ratio).cpu().numpy()
+                        )
                         approx_kl_divs.append(approx_kl)
 
                     mdl.policy.optimizer.zero_grad()
                     loss.backward()
-                    th.nn.utils.clip_grad_norm_(mdl.policy.parameters(), mdl.max_grad_norm)
+                    th.nn.utils.clip_grad_norm_(
+                        mdl.policy.parameters(), mdl.max_grad_norm
+                    )
                     mdl.policy.optimizer.step()
 
             mdl._n_updates += mdl.n_epochs
-            ev = explained_variance(buffers[ag].values.flatten(), buffers[ag].returns.flatten())
+            ev = explained_variance(
+                buffers[ag].values.flatten(), buffers[ag].returns.flatten()
+            )
             # Basic logging to stdout
             print(
                 f"[Arena][{ag}] update={update} loss={np.mean(pg_losses):.3f} value_loss={np.mean(value_losses):.3f} "
                 f"entropy={np.mean(entropy_losses):.3f} clip_frac={np.mean(clip_fractions):.3f} ev={ev:.3f}"
             )
+            # TensorBoard per-agent training scalars
+            writer.add_scalar(
+                f"{ag}/train/policy_loss", float(np.mean(pg_losses)), update
+            )
+            writer.add_scalar(
+                f"{ag}/train/value_loss", float(np.mean(value_losses)), update
+            )
+            writer.add_scalar(
+                f"{ag}/train/entropy_loss", float(np.mean(entropy_losses)), update
+            )
+            writer.add_scalar(
+                f"{ag}/train/clip_fraction", float(np.mean(clip_fractions)), update
+            )
+            writer.add_scalar(f"{ag}/train/explained_variance", float(ev), update)
 
+        # Periodic tournament and champion eval
+        if (update + 1) % 5 == 0:
+            summaries = tournament_round_robin(models, env_cfg, games_per_pair=5)
+            print("\n[Tournament] per-agent win rates:")
+            best_ag = None
+            best_wr = -1.0
+            for ag, s in summaries.items():
+                print(
+                    f"  {ag}: win_rate={s.win_rate:.3f} games={s.games} avg_len={s.avg_len:.1f}"
+                )
+                writer.add_scalar(
+                    f"tournament/{ag}/win_rate", float(s.win_rate), update
+                )
+                writer.add_scalar(f"tournament/{ag}/games", float(s.games), update)
+                if s.win_rate > best_wr:
+                    best_wr = s.win_rate
+                    best_ag = ag
+
+            # Champion eval vs fixed opponents
+            fixed_opps = ["balanced", "killer", "cautious", "winner"]
+            if best_ag is not None:
+                print(f"[Champion] {best_ag} vs fixed opponents")
+                results = champion_vs_fixed(
+                    models[best_ag], env_cfg, fixed_opps, games=25, deterministic=True
+                )
+                for res in results:
+                    writer.add_scalar(
+                        f"champion/{best_ag}/{res.opponent}/win_rate",
+                        float(res.win_rate),
+                        update,
+                    )
+                    writer.add_scalar(
+                        f"champion/{best_ag}/{res.opponent}/avg_reward",
+                        float(res.avg_reward),
+                        update,
+                    )
+                    writer.add_scalar(
+                        f"champion/{best_ag}/{res.opponent}/avg_length",
+                        float(res.avg_length),
+                        update,
+                    )
+                    print(
+                        f"  vs {res.opponent}: win_rate={res.win_rate:.3f} avg_reward={res.avg_reward:.1f} avg_len={res.avg_length:.1f}"
+                    )
+
+    writer.flush()
+    writer.close()
     env.close()
     return models
 
 
 if __name__ == "__main__":
-    cfg = EnvConfig(max_turns=250, randomize_agent=True)
+    cfg = EnvConfig(randomize_agent=True)
     train_arena_ippo(cfg, lr=3e-4, n_steps=1024, total_updates=1000, device="cpu")

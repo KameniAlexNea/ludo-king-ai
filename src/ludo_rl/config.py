@@ -6,11 +6,11 @@ from typing import Tuple
 
 @dataclass
 class IPPOConfig:
-    total_rounds: int = 1000              # Number of training cycles over the 4 policies
-    steps_per_update: int = 64_000        # Timesteps per policy between updates
-    n_envs: int = 16                      # Parallel envs per policy
-    learning_rate: float = 3e-4           # PPO LR (with cosine/linear schedule later if desired)
-    n_steps: int = 256                    # PPO rollout length per env
+    total_rounds: int = 1000  # Number of training cycles over the 4 policies
+    steps_per_update: int = 64_000  # Timesteps per policy between updates
+    n_envs: int = 16  # Parallel envs per policy
+    learning_rate: float = 3e-4  # PPO LR (with cosine/linear schedule later if desired)
+    n_steps: int = 256  # PPO rollout length per env
     batch_size: int = 256
     ent_coef: float = 0.01
     vf_coef: float = 0.5

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 from sb3_contrib import MaskablePPO
 
+from models.analysis.eval_utils import evaluate_against_many
 from models.configs.config import EnvConfig
 from models.envs.ludo_env_aec.raw_env import raw_env as AECEnv
 
@@ -22,13 +23,11 @@ class MatchResult:
 
 def _build_obs(env: AECEnv, agent: str) -> dict:
     raw = env.observe(agent)
-    # Build multi-input observation expected by MaskablePPO
-    obs = {
+    return {
         "observation": raw["observation"].astype(np.float32, copy=False),
         "action_mask": raw["action_mask"].astype(np.int8, copy=False),
         "agent_index": np.array(AGENTS.index(agent), dtype=np.int64),
     }
-    return obs
 
 
 def play_match(
@@ -43,7 +42,6 @@ def play_match(
     Returns the winner, per-agent terminal rewards, and episode length.
     """
     cfg_copy = copy.deepcopy(cfg)
-    # Ensure flattened observations for policy inputs
     cfg_copy.multi_agent = True
     env = AECEnv(cfg_copy)
     env.reset()
@@ -62,12 +60,10 @@ def play_match(
         env.step(action)
         steps += 1
 
-    # Terminal rewards populated for all agents
     rewards = {ag: float(env.rewards.get(ag, 0.0)) for ag in AGENTS}
     winner = env.game.winner
     winner_agent = None
     if winner is not None:
-        # env has color->agent map
         try:
             winner_agent = env._color_agent_map[winner.color]
         except Exception:
@@ -86,6 +82,10 @@ class EvalSummary:
     draws: int = 0
     avg_len: float = 0.0
 
+    @property
+    def win_rate(self) -> float:
+        return self.wins / max(1, self.games)
+
     def update(self, res: MatchResult, my_agent: str):
         self.avg_len += res.length
         if res.winner is None:
@@ -95,37 +95,36 @@ class EvalSummary:
         else:
             self.losses += 1
 
-    @property
-    def win_rate(self) -> float:
-        return self.wins / max(1, self.games)
-
 
 def tournament_round_robin(
     policies: Dict[str, MaskablePPO],
     cfg: EnvConfig,
     games_per_pair: int = 10,
 ) -> Dict[str, EvalSummary]:
-    """Simple round-robin tournament across the 4 agents.
-
-    Each pair plays games_per_pair matches; other seats are filled by the
-    remaining policies. The summary is per agent id.
-    """
     agents = list(policies.keys())
     summaries = {ag: EvalSummary(name=ag, games=0) for ag in agents}
 
     for i in range(len(agents)):
         for j in range(i + 1, len(agents)):
-            a_i = agents[i]
-            a_j = agents[j]
-            # For each pair, play games with all 4 policies active
-            for g in range(games_per_pair):
+            for _ in range(games_per_pair):
                 res = play_match(policies, cfg, deterministic=True)
-                summaries[a_i].update(res, a_i)
-                summaries[a_j].update(res, a_j)
-                summaries[a_i].games += 1
-                summaries[a_j].games += 1
+                summaries[agents[i]].update(res, agents[i])
+                summaries[agents[j]].update(res, agents[j])
+                summaries[agents[i]].games += 1
+                summaries[agents[j]].games += 1
 
-    # Normalize average length
     for s in summaries.values():
         s.avg_len = s.avg_len / max(1, s.games)
     return summaries
+
+
+def champion_vs_fixed(
+    champion: MaskablePPO,
+    cfg: EnvConfig,
+    opponents: List[str],
+    games: int = 50,
+    deterministic: bool = True,
+):
+    cfg_copy = copy.deepcopy(cfg)
+    cfg_copy.multi_agent = True
+    return evaluate_against_many(champion, opponents, games, cfg_copy, deterministic)
