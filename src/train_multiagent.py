@@ -163,15 +163,11 @@ def main() -> None:
     # Checkpoint callback - also manages self-play opponent pool and best models
     if opponent_pool:
         print("Setting up self-play checkpoint callback...")
-        best_model_dir = os.path.join(train_cfg.model_dir, "best_models")
         checkpoint_callback = SelfPlayCallback(
             save_freq=max(1, ma_cfg.save_opponent_freq // train_cfg.n_envs),
             save_path=train_cfg.model_dir,
             opponent_pool=opponent_pool,
             name_prefix="ludo_ppo_ma",
-            best_model_dir=best_model_dir,
-            max_best_models=20,
-            metric_name="eval/probabilistic_v3/avg_reward",
             save_replay_buffer=False,
             save_vecnormalize=False,
             verbose=1,

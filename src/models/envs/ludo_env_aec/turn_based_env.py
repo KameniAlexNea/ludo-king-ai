@@ -202,8 +202,6 @@ class TurnBasedSelfPlayEnv(gym.Env):
         elif acting_agent in self.scripted_assignments:
             # Use scripted strategy as fallback
             strategy = self.scripted_assignments[acting_agent]
-            agent_idx = self.agent_indices[acting_agent]
-            player = self.base_env.game.players[agent_idx]
             # Use the public accessors provided by the base env instead of
             # reaching into private attributes. PettingZoo wrappers prohibit
             # accessing attributes that start with an underscore.
