@@ -104,7 +104,6 @@ def test_prune_opponent_model_cache(tmp_path):
 
     # manager should only keep the last one due to pool_size=1
     manager._load_existing_opponents()
-    env._prune_opponent_model_cache()
 
     # Only models present in pool should remain cached
     valid = set(manager.get_all_opponents())

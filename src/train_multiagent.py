@@ -5,7 +5,6 @@ from __future__ import annotations
 import copy
 import math
 import os
-from pathlib import Path
 from typing import Optional
 
 import torch
@@ -16,9 +15,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMoni
 from models.analysis.eval_utils import evaluate_against_many
 from models.arguments import parse_args
 from models.callbacks.callbacks import PeriodicEvalCallback
-from models.callbacks.self_play import SelfPlayCallback
 from models.configs.config import EnvConfig, MultiAgentConfig
-from models.envs.ludo_env_aec import OpponentPoolManager, TurnBasedSelfPlayEnv
+from models.envs.ludo_env_aec import TurnBasedSelfPlayEnv
 from models.envs.ludo_env_aec import env as make_aec_env
 
 
@@ -41,7 +39,6 @@ def create_multiagent_env(
     env_cfg: EnvConfig,
     n_envs: int = 4,
     max_cycles: int = 300,
-    opponent_pool: Optional[OpponentPoolManager] = None,
     ma_cfg: Optional[MultiAgentConfig] = None,
 ):
     """Create a vectorized multi-agent environment.
@@ -50,8 +47,7 @@ def create_multiagent_env(
         env_cfg: Environment configuration
         n_envs: Number of parallel environments
         max_cycles: Maximum cycles per episode (maps to max_turns)
-        opponent_pool: Pool of opponent models for self-play
-        ma_cfg: Multi-agent configuration
+    ma_cfg: Multi-agent configuration
 
     Returns:
         Vectorized environment compatible with SB3
@@ -67,9 +63,7 @@ def create_multiagent_env(
             if cfg_copy.seed is not None:
                 cfg_copy.seed = int(cfg_copy.seed) + int(worker_idx)
             base_env = make_aec_env(cfg_copy)
-            env = TurnBasedSelfPlayEnv(
-                base_env, opponent_pool=opponent_pool, ma_cfg=ma_cfg
-            )
+            env = TurnBasedSelfPlayEnv(base_env, ma_cfg=ma_cfg)
             return env
 
         return _init
@@ -93,14 +87,6 @@ def main() -> None:
     os.makedirs(train_cfg.logdir, exist_ok=True)
     os.makedirs(train_cfg.model_dir, exist_ok=True)
 
-    # Initialize opponent pool for self-play
-    opponent_pool = None
-    if ma_cfg.enable_self_play:
-        pool_dir = os.path.join(train_cfg.model_dir, "opponent_pool")
-        opponent_pool = OpponentPoolManager(pool_dir, ma_cfg.opponent_pool_size)
-        print(f"Self-play enabled with pool size {ma_cfg.opponent_pool_size}")
-        print(f"Existing opponents: {len(opponent_pool.get_all_opponents())}")
-
     # Update env config max_turns to match what SuperSuit expects
     env_cfg_copy = copy.deepcopy(env_cfg)
 
@@ -110,7 +96,6 @@ def main() -> None:
         env_cfg_copy,
         n_envs=train_cfg.n_envs,
         max_cycles=env_cfg_copy.max_turns,
-        opponent_pool=opponent_pool,
         ma_cfg=ma_cfg,
     )
 
@@ -160,26 +145,14 @@ def main() -> None:
     # Set up callbacks
     callbacks = []
 
-    # Checkpoint callback - also manages self-play opponent pool and best models
-    if opponent_pool:
-        print("Setting up self-play checkpoint callback...")
-        checkpoint_callback = SelfPlayCallback(
-            save_freq=max(1, ma_cfg.save_opponent_freq // train_cfg.n_envs),
-            save_path=train_cfg.model_dir,
-            opponent_pool=opponent_pool,
-            name_prefix="ludo_ppo_ma",
-            save_replay_buffer=False,
-            save_vecnormalize=False,
-            verbose=1,
-        )
-    else:
-        checkpoint_callback = CheckpointCallback(
-            save_freq=max(1, train_cfg.save_steps // train_cfg.n_envs),
-            save_path=train_cfg.model_dir,
-            name_prefix="ludo_ppo_ma",
-            save_replay_buffer=False,
-            save_vecnormalize=False,
-        )
+    # Simple periodic checkpointing only
+    checkpoint_callback = CheckpointCallback(
+        save_freq=max(1, train_cfg.save_steps // train_cfg.n_envs),
+        save_path=train_cfg.model_dir,
+        name_prefix="ludo_ppo_ma",
+        save_replay_buffer=False,
+        save_vecnormalize=False,
+    )
     callbacks.append(checkpoint_callback)
 
     # Evaluation callback (evaluates against fixed opponents)
@@ -231,12 +204,7 @@ def main() -> None:
     model.save(final_path)
     print(f"Final model saved to {final_path}")
 
-    # Print self-play statistics
-    if opponent_pool:
-        opponents = opponent_pool.get_all_opponents()
-        print(f"\nFinal opponent pool size: {len(opponents)}")
-        for i, opp in enumerate(opponents, 1):
-            print(f"  {i}. {Path(opp).name}")
+    # Shared policy training only (no opponent pool)
 
 
 if __name__ == "__main__":

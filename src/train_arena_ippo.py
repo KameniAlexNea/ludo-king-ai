@@ -12,7 +12,7 @@ from sb3_contrib.common.maskable.buffers import MaskableDictRolloutBuffer
 from stable_baselines3.common.utils import explained_variance
 from torch.utils.tensorboard import SummaryWriter
 
-from ludo_rl.config import IPPOConfig, PPOHyper, ippo_config, ppo_hyper, AGENT_IDS
+from ludo_rl.config import AGENT_IDS, IPPOConfig, PPOHyper, ippo_config, ppo_hyper
 from ludo_rl.eval import champion_vs_fixed, tournament_round_robin
 from models.configs.config import EnvConfig
 from models.envs.ludo_env_aec.raw_env import raw_env as AECEnv
@@ -55,6 +55,11 @@ def train_arena_ippo(
     cfg.multi_agent = True  # flattened obs
     env = AECEnv(cfg)
     env.reset()
+
+    # Model save locations
+    save_root = os.path.join("training", "models_arena")
+    save_champions_dir = os.path.join(save_root, "champions")
+    os.makedirs(save_champions_dir, exist_ok=True)
 
     obs_space, act_space = build_spaces(env)
 
@@ -134,6 +139,7 @@ def train_arena_ippo(
         return np.array([x])
 
     writer = SummaryWriter(log_dir=os.path.join("training", "logs_arena_tb"))
+    best_champion = None  # track last champion (agent id)
     for update in range(ippo.total_rounds):
         # Reset buffers
         for ag in AGENT_IDS:
@@ -331,6 +337,17 @@ def train_arena_ippo(
                     games=ippo.eval_games_vs_fixed,
                     deterministic=False,
                 )
+                # Save champion snapshot
+                champ_path = os.path.join(
+                    save_champions_dir,
+                    f"champion_{best_ag}_update_{update + 1:06d}.zip",
+                )
+                try:
+                    models[best_ag].save(champ_path)
+                    print(f"[Save] Champion {best_ag} -> {champ_path}")
+                    best_champion = best_ag
+                except Exception as e:
+                    print(f"[Save][WARN] Could not save champion {best_ag}: {e}")
                 for res in results:
                     writer.add_scalar(
                         f"champion/{best_ag}/{res.opponent}/win_rate",
@@ -354,6 +371,14 @@ def train_arena_ippo(
     writer.flush()
     writer.close()
     env.close()
+    # Optionally save latest champion state at end
+    if best_champion is not None:
+        final_champ_path = os.path.join(save_champions_dir, "champion_latest.zip")
+        try:
+            models[best_champion].save(final_champ_path)
+            print(f"[Save] Final champion {best_champion} -> {final_champ_path}")
+        except Exception as e:
+            print(f"[Save][WARN] Could not save final champion {best_champion}: {e}")
     return models
 
 
