@@ -9,6 +9,7 @@ import numpy as np
 from gymnasium import spaces
 from ludo_engine.strategies.strategy import Strategy, StrategyFactory
 from sb3_contrib import MaskablePPO
+import gc
 
 from ...configs.config import MultiAgentConfig
 from .opponent_pool import OpponentPoolManager
@@ -34,6 +35,8 @@ class TurnBasedSelfPlayEnv(gym.Env):
         self.agent_indices = {
             agent: idx for idx, agent in enumerate(self.possible_agents)
         }
+        # Local RNG for per-env, per-episode reproducibility
+        self.rng = np.random.default_rng()
 
         sample_agent = self.possible_agents[0]
         self.observation_space = spaces.Dict(
@@ -61,6 +64,33 @@ class TurnBasedSelfPlayEnv(gym.Env):
             str, Strategy
         ] = {}  # agent -> strategy_instance
         self.opponent_models: Dict[str, MaskablePPO] = {}
+
+    def _prune_opponent_model_cache(self) -> None:
+        """Purge cached opponent models that are no longer in the pool.
+
+        Prevents memory growth when the pool evicts older models.
+        """
+        if not self.opponent_pool:
+            return
+        try:
+            valid_paths = set(self.opponent_pool.get_all_opponents())
+        except Exception:
+            valid_paths = set()
+        to_delete = [p for p in list(self.opponent_models.keys()) if p not in valid_paths]
+        for path in to_delete:
+            try:
+                model = self.opponent_models.pop(path, None)
+                if model is not None and hasattr(model, "policy"):
+                    # Ensure tensors moved off GPU before delete
+                    try:
+                        model.policy.to("cpu")
+                    except Exception:
+                        pass
+                del model
+            except Exception:
+                pass
+        # Encourage timely memory release
+        gc.collect()
 
     def _sync_active_agent(self) -> None:
         while self.base_env.agents:
@@ -93,47 +123,56 @@ class TurnBasedSelfPlayEnv(gym.Env):
         return self._last_action_mask.copy()
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
+        # Reseed local RNG for per-episode stochasticity
+        if seed is not None:
+            self.rng = np.random.default_rng(seed)
+
         self.base_env.reset(seed=seed, options=options)
 
         self.opponent_assignments = {}
         self.scripted_assignments = {}
 
-        if self.opponent_pool and self.ma_cfg.enable_self_play:
-            num_opponents = min(
-                self.ma_cfg.self_play_num_opponents, len(self.possible_agents) - 1
-            )
-            if num_opponents > 0:
-                agents_to_assign = np.random.choice(
-                    self.possible_agents, num_opponents, replace=False
-                )
-                for agent in agents_to_assign:
-                    # Decide: use fixed scripted opponent or self-play opponent
-                    use_scripted = (
-                        self.ma_cfg.use_fixed_opponents
-                        and np.random.random() < self.ma_cfg.fixed_opponent_ratio
-                    )
+        # Ensure cache aligns with current pool contents (avoid memory leaks)
+        self._prune_opponent_model_cache()
 
-                    if use_scripted:
-                        # Use fixed scripted opponent
-                        strategy_name = np.random.choice(
-                            self.ma_cfg.fixed_opponent_strategies
-                        )
-                        strategy = StrategyFactory.create_strategy(strategy_name)
-                        self.scripted_assignments[agent] = strategy
-                    else:
-                        # Use self-play opponent from pool
-                        opp = self.opponent_pool.sample_opponent()
-                        if opp:
-                            self.opponent_assignments[agent] = opp
-                            # Load model immediately if not already cached
-                            if opp not in self.opponent_models:
-                                self.opponent_models[opp] = MaskablePPO.load(opp)
-                        else:
-                            # Fallback to scripted opponent if pool is empty
-                            strategy = StrategyFactory.create_strategy(
-                                self.ma_cfg.self_play_opponent_fallback
-                            )
-                            self.scripted_assignments[agent] = strategy
+        # Assign exactly one learning seat per episode; others are opponents
+        learning_agent = self.rng.choice(self.possible_agents)
+        for agent in self.possible_agents:
+            if agent == learning_agent:
+                continue
+
+            use_scripted = (
+                getattr(self.ma_cfg, "use_fixed_opponents", True)
+                and self.rng.random() < getattr(self.ma_cfg, "fixed_opponent_ratio", 0.3)
+            )
+
+            if use_scripted or not (self.opponent_pool and self.ma_cfg.enable_self_play):
+                # Fixed scripted opponent
+                strategies = getattr(
+                    self.ma_cfg,
+                    "fixed_opponent_strategies",
+                    ("probabilistic_v3", "killer", "balanced", "cautious"),
+                )
+                strategy_name = self.rng.choice(list(strategies))
+                strategy = StrategyFactory.create_strategy(strategy_name)
+                self.scripted_assignments[agent] = strategy
+            else:
+                # Self-play opponent from pool using local RNG
+                available = self.opponent_pool.get_all_opponents()
+                if available:
+                    idx = int(self.rng.integers(low=0, high=len(available)))
+                    opp = available[idx]
+                    self.opponent_assignments[agent] = opp
+                    if opp not in self.opponent_models:
+                        device = getattr(self.ma_cfg, "opponent_model_device", "cpu")
+                        self.opponent_models[opp] = MaskablePPO.load(opp, device=device)
+                else:
+                    # Fallback to scripted when pool is empty
+                    fallback = getattr(
+                        self.ma_cfg, "self_play_opponent_fallback", "balanced"
+                    )
+                    strategy = StrategyFactory.create_strategy(fallback)
+                    self.scripted_assignments[agent] = strategy
 
         self._sync_active_agent()
 
@@ -158,7 +197,10 @@ class TurnBasedSelfPlayEnv(gym.Env):
             opp_path = self.opponent_assignments[acting_agent]
             opp_model = self.opponent_models[opp_path]
             obs_dict = self._build_observation(acting_agent)
-            opp_action, _ = opp_model.predict(obs_dict, deterministic=True)
+            # Occasionally use stochastic actions for opponent diversity
+            stochastic_prob = getattr(self.ma_cfg, "opponent_stochastic_prob", 0.0)
+            deterministic = not (self.rng.random() < float(stochastic_prob))
+            opp_action, _ = opp_model.predict(obs_dict, deterministic=deterministic)
             self.base_env.step(int(opp_action))
         elif acting_agent in self.scripted_assignments:
             # Use scripted strategy as fallback

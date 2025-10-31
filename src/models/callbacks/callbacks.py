@@ -4,7 +4,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 from ..analysis.eval_utils import evaluate_against_many
 from ..configs.config import EnvConfig
-
+import torch
 
 class PeriodicEvalCallback(BaseCallback):
     """Run lightweight policy evaluations at a fixed timestep cadence."""
@@ -28,7 +28,9 @@ class PeriodicEvalCallback(BaseCallback):
         self._next_eval = eval_freq
         self._last_eval_step = 0
 
+    @torch.no_grad()
     def _run_eval(self) -> None:
+        self.model.set_training_mode(False)
         summaries = evaluate_against_many(
             self.model,
             self.opponents,

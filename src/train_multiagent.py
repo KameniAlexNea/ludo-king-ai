@@ -1,4 +1,4 @@
-"""Multi-agent training script using PettingZoo + SuperSuit + Stable-Baselines3."""
+"""Multi-agent training script using PettingZoo + Stable-Baselines3."""
 
 from __future__ import annotations
 
@@ -8,11 +8,14 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import supersuit as ss
 import torch
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import (
+    DummyVecEnv,
+    SubprocVecEnv,
+    VecMonitor,
+)
 
 from models.analysis.eval_utils import evaluate_against_many
 from models.arguments import parse_args
@@ -45,7 +48,7 @@ def create_multiagent_env(
     opponent_pool: Optional[OpponentPoolManager] = None,
     ma_cfg: Optional[MultiAgentConfig] = None,
 ):
-    """Create a vectorized multi-agent environment using SuperSuit.
+    """Create a vectorized multi-agent environment.
 
     Args:
         env_cfg: Environment configuration
@@ -59,21 +62,28 @@ def create_multiagent_env(
     """
 
     # Create base PettingZoo environment
-    def make_env_fn():
+    def make_env_fn(worker_idx: int):
         def _init():
             cfg_copy = copy.deepcopy(env_cfg)
             if max_cycles is not None:
                 cfg_copy.max_turns = max_cycles
+            # Optionally vary seed per worker for diversity
+            if cfg_copy.seed is not None:
+                cfg_copy.seed = int(cfg_copy.seed) + int(worker_idx)
             base_env = make_aec_env(cfg_copy)
-            base_env = ss.pad_action_space_v0(base_env)
-            return TurnBasedSelfPlayEnv(
+            env = TurnBasedSelfPlayEnv(
                 base_env, opponent_pool=opponent_pool, ma_cfg=ma_cfg
             )
+            return env
 
         return _init
 
-    env_fns = [make_env_fn() for _ in range(max(1, n_envs))]
-    vec_env = DummyVecEnv(env_fns)
+    env_fns = [make_env_fn(i) for i in range(max(1, n_envs))]
+    # Use subprocesses for CPU-bound environments for better throughput
+    if n_envs > 1:
+        vec_env = SubprocVecEnv(env_fns)
+    else:
+        vec_env = DummyVecEnv(env_fns)
     return vec_env
 
 

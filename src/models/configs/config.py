@@ -85,7 +85,7 @@ class MultiAgentConfig:
     enable_self_play: bool = True
     opponent_pool_size: int = 5  # Keep last N model versions as opponents
     save_opponent_freq: int = 250_000  # Save opponent every N timesteps
-    self_play_num_opponents: int = 2  # Number of agents to assign from opponent pool
+    self_play_num_opponents: int = 3  # Number of agents to assign from opponent pool
     self_play_opponent_fallback: str = (
         "balanced"  # Fallback scripted bot if no opponents
     )
@@ -101,3 +101,7 @@ class MultiAgentConfig:
         "balanced",
         "cautious",
     )  # Scripted strategies to mix with self-play
+
+    # Opponent model inference options
+    opponent_model_device: str = "cpu"  # Load opponent models on CPU to save VRAM
+    opponent_stochastic_prob: float = 0.1  # Chance to use stochastic actions for opponents

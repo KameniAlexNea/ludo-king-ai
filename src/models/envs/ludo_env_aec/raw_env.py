@@ -181,6 +181,7 @@ class raw_env(AECEnv, EzPickle):
         if not valid_moves:
             move_result = self._no_move_result(player, dice)
         else:
+            is_illegal = int(action) not in valid_moves
             move_result = self.game.execute_move(player, action, dice)
 
         self._last_move_results[agent] = move_result
