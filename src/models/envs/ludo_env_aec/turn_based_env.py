@@ -107,18 +107,33 @@ class TurnBasedSelfPlayEnv(gym.Env):
                     self.possible_agents, num_opponents, replace=False
                 )
                 for agent in agents_to_assign:
-                    opp = self.opponent_pool.sample_opponent()
-                    if opp:
-                        self.opponent_assignments[agent] = opp
-                        # Load model immediately if not already cached
-                        if opp not in self.opponent_models:
-                            self.opponent_models[opp] = MaskablePPO.load(opp)
-                    else:
-                        # Fallback to scripted opponent if pool is empty
-                        strategy = StrategyFactory.create_strategy(
-                            self.ma_cfg.self_play_opponent_fallback
+                    # Decide: use fixed scripted opponent or self-play opponent
+                    use_scripted = (
+                        self.ma_cfg.use_fixed_opponents
+                        and np.random.random() < self.ma_cfg.fixed_opponent_ratio
+                    )
+
+                    if use_scripted:
+                        # Use fixed scripted opponent
+                        strategy_name = np.random.choice(
+                            self.ma_cfg.fixed_opponent_strategies
                         )
+                        strategy = StrategyFactory.create_strategy(strategy_name)
                         self.scripted_assignments[agent] = strategy
+                    else:
+                        # Use self-play opponent from pool
+                        opp = self.opponent_pool.sample_opponent()
+                        if opp:
+                            self.opponent_assignments[agent] = opp
+                            # Load model immediately if not already cached
+                            if opp not in self.opponent_models:
+                                self.opponent_models[opp] = MaskablePPO.load(opp)
+                        else:
+                            # Fallback to scripted opponent if pool is empty
+                            strategy = StrategyFactory.create_strategy(
+                                self.ma_cfg.self_play_opponent_fallback
+                            )
+                            self.scripted_assignments[agent] = strategy
 
         self._sync_active_agent()
 

@@ -95,12 +95,9 @@ class MultiAgentConfig:
     # If False, only self-play
     use_fixed_opponents: bool = True
     fixed_opponent_ratio: float = 0.3  # 30% fixed opponents, 70% self-play
-
-    # Policy update strategy
-    # "synchronous": all agents updated together (default for shared policy)
-    # "asynchronous": agents can be updated at different rates
-    update_strategy: str = "synchronous"
-
-    # Population-based training
-    enable_population: bool = False
-    population_size: int = 3  # Maintain N distinct policies
+    fixed_opponent_strategies: tuple[str, ...] = (
+        "probabilistic_v3",
+        "killer",
+        "balanced",
+        "cautious",
+    )  # Scripted strategies to mix with self-play
