@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import gc
 from typing import Dict, Optional
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
-from ludo_engine.strategies.strategy import Strategy, StrategyFactory
+from ludo_engine.strategies.strategy import Strategy
 from sb3_contrib import MaskablePPO
 
 from ...configs.config import MultiAgentConfig
