@@ -148,11 +148,7 @@ class TurnBasedSelfPlayEnv(gym.Env):
 
             if use_scripted or not (self.opponent_pool and self.ma_cfg.enable_self_play):
                 # Fixed scripted opponent
-                strategies = getattr(
-                    self.ma_cfg,
-                    "fixed_opponent_strategies",
-                    ("probabilistic_v3", "killer", "balanced", "cautious"),
-                )
+                strategies = self.ma_cfg.fixed_opponent_strategies
                 strategy_name = self.rng.choice(list(strategies))
                 strategy = StrategyFactory.create_strategy(strategy_name)
                 self.scripted_assignments[agent] = strategy
@@ -164,13 +160,11 @@ class TurnBasedSelfPlayEnv(gym.Env):
                     opp = available[idx]
                     self.opponent_assignments[agent] = opp
                     if opp not in self.opponent_models:
-                        device = getattr(self.ma_cfg, "opponent_model_device", "cpu")
+                        device = self.ma_cfg.opponent_model_device
                         self.opponent_models[opp] = MaskablePPO.load(opp, device=device)
                 else:
                     # Fallback to scripted when pool is empty
-                    fallback = getattr(
-                        self.ma_cfg, "self_play_opponent_fallback", "balanced"
-                    )
+                    fallback = self.ma_cfg.self_play_opponent_fallback
                     strategy = StrategyFactory.create_strategy(fallback)
                     self.scripted_assignments[agent] = strategy
 
