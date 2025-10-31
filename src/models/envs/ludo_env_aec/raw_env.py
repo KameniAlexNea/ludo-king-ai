@@ -97,6 +97,25 @@ class raw_env(AECEnv, EzPickle):
         }
         self.action_spaces = {agent: action_space for agent in self.possible_agents}
 
+    # -----------------------------
+    # Public accessors for wrapper-safe state queries
+    # -----------------------------
+    def pending_dice(self, agent: str) -> int:
+        """Return the current pending dice value for the given agent.
+
+        This is a safe accessor to internal state so external wrappers do not
+        need to reach into private attributes (which PettingZoo wrappers block).
+        """
+        return int(self._pending_dice.get(agent, 0))
+
+    def valid_move_tokens(self, agent: str) -> list[int]:
+        """Return list of token ids that have a valid move for the agent.
+
+        When there are no valid moves, returns an empty list (the environment
+        will internally handle no-move/pass turns).
+        """
+        return [m.token_id for m in self._pending_valid_moves.get(agent, [])]
+
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
         return self.observation_spaces[agent]
@@ -181,7 +200,10 @@ class raw_env(AECEnv, EzPickle):
         if not valid_moves:
             move_result = self._no_move_result(player, dice)
         else:
-            is_illegal = int(action) not in valid_moves
+            # Consider action illegal if chosen token id is not one of the
+            # currently valid move token ids.
+            valid_token_ids = {m.token_id for m in valid_moves}
+            is_illegal = int(action) not in valid_token_ids
             move_result = self.game.execute_move(player, action, dice)
 
         self._last_move_results[agent] = move_result

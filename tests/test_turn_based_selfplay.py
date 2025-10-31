@@ -33,6 +33,15 @@ class SimpleBaseEnv:
         self._pending_dice = {}
         self._pending_valid_moves = {}
 
+    # Provide compatibility accessors used by the production env
+    # (the real raw_env exposes these as public methods so wrappers
+    # don't need to reach into private attributes).
+    def pending_dice(self, agent):
+        return int(self._pending_dice.get(agent, 0))
+
+    def valid_move_tokens(self, agent):
+        return [m.token_id for m in self._pending_valid_moves.get(agent, [])]
+
     def observation_space(self, agent):
         return spaces.Box(low=-1.0, high=1.0, shape=(8,), dtype=np.float32)
 

@@ -204,14 +204,27 @@ class TurnBasedSelfPlayEnv(gym.Env):
             strategy = self.scripted_assignments[acting_agent]
             agent_idx = self.agent_indices[acting_agent]
             player = self.base_env.game.players[agent_idx]
-            dice = self.base_env._pending_dice.get(acting_agent, 0)
-            valid_moves = self.base_env._pending_valid_moves.get(acting_agent, [])
+            # Use the public accessors provided by the base env instead of
+            # reaching into private attributes. PettingZoo wrappers prohibit
+            # accessing attributes that start with an underscore.
+            dice = (
+                self.base_env.pending_dice(acting_agent)
+                if hasattr(self.base_env, "pending_dice")
+                else 0
+            )
+            # valid_move_tokens returns a list of token ids that can move.
+            valid_token_ids = (
+                self.base_env.valid_move_tokens(acting_agent)
+                if hasattr(self.base_env, "valid_move_tokens")
+                else []
+            )
 
-            if valid_moves:
+            if valid_token_ids:
                 decision_context = self.base_env.game.get_ai_decision_context(dice)
-                chosen_token = strategy.decide(player, decision_context)
+                chosen_token = strategy.decide(decision_context)
             else:
                 chosen_token = 0
+
             self.base_env.step(chosen_token)
         else:
             # Learning agent controls this position

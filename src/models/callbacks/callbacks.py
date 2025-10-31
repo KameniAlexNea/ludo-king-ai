@@ -31,7 +31,6 @@ class PeriodicEvalCallback(BaseCallback):
 
     @torch.no_grad()
     def _run_eval(self) -> None:
-        self.model.set_training_mode(False)
         summaries = evaluate_against_many(
             self.model,
             self.opponents,
