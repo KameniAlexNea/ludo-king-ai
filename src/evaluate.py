@@ -9,7 +9,7 @@ import pandas as pd
 from sb3_contrib import MaskablePPO
 
 from models.analysis.eval_utils import EvalStats, evaluate_against
-from models.configs.config import EnvConfig
+from models.configs.config import EnvConfig, MATCHUP_TO_OPPONENTS
 
 
 def _parse_args() -> argparse.Namespace:
@@ -57,6 +57,13 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable multi-agent evaluation.",
     )
+    parser.add_argument(
+        "--matchup",
+        type=str,
+        choices=tuple(MATCHUP_TO_OPPONENTS.keys()),
+        default=EnvConfig().matchup,
+        help="Match configuration to replicate training setup (e.g. 1v1).",
+    )
     return parser.parse_args()
 
 
@@ -69,7 +76,10 @@ def main() -> None:
     model: MaskablePPO = MaskablePPO.load(args.model, device=args.device)
     print(model.policy)
     env_cfg = EnvConfig(
-        max_turns=args.max_turns, seed=args.seed, multi_agent=args.multi_agent
+        max_turns=args.max_turns,
+        seed=args.seed,
+        multi_agent=args.multi_agent,
+        matchup=args.matchup,
     )
 
     summaries: Sequence[EvalStats] = [

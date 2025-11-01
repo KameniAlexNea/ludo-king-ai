@@ -42,10 +42,10 @@ class EnvConfig:
     reward: RewardConfig = field(default_factory=RewardConfig)
     obs: ObservationConfig = field(default_factory=ObservationConfig)
     multi_agent: bool = False
-    matchup: str = "1v3"
+    matchup: str = "1v1"
 
     def __post_init__(self) -> None:
-        matchup = (self.matchup or "1v3").lower()
+        matchup = (self.matchup or "1v1").lower()
         if matchup not in MATCHUP_TO_OPPONENTS:
             raise ValueError(
                 f"Unsupported matchup '{self.matchup}'. Expected one of: {tuple(MATCHUP_TO_OPPONENTS)}"
