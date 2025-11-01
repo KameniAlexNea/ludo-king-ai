@@ -260,9 +260,14 @@ class raw_env(AECEnv, EzPickle):
             self.rewards[ag] = reward
             self.terminations[ag] = game_over
             self.truncations[ag] = truncated
+            # Expose both keys for compatibility:
+            # - "illegal_move" is used by PettingZoo's TerminateIllegalWrapper
+            # - "illegal_action" is used by our local tests and logging
+            illegal_flag = ag == current_agent and is_illegal
             self.infos[ag] = {
                 "reward_breakdown": breakdown,
-                "illegal_action": (ag == current_agent and is_illegal),
+                "illegal_action": illegal_flag,
+                "illegal_move": illegal_flag,
             }
 
     def _update_agent_reward(
@@ -280,9 +285,11 @@ class raw_env(AECEnv, EzPickle):
         )
 
         self.rewards[agent] = reward
+        # Expose both keys for compatibility with wrappers and tests
         self.infos[agent] = {
             "reward_breakdown": breakdown,
             "illegal_action": is_illegal,
+            "illegal_move": is_illegal,
         }
 
         self._opponent_captures[agent] = 0
