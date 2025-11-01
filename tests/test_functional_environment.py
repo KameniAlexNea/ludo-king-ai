@@ -227,6 +227,21 @@ class TestEnvironmentFunctionality(unittest.TestCase):
                 if done or truncated:
                     break
 
+    def test_one_vs_one_matchup_shapes(self):
+        """Ensure observations shrink appropriately for 1v1 matchups."""
+        cfg = EnvConfig(max_turns=30, seed=7, matchup="1v1")
+        env = LudoRLEnv(cfg)
+
+        obs, info = env.reset()
+
+        self.assertEqual(len(env.game.players), cfg.player_count)
+        self.assertEqual(
+            obs["opponents_positions"].shape,
+            (GameConstants.TOKENS_PER_PLAYER * cfg.opponent_count,),
+        )
+        self.assertEqual(obs["opponents_active"].shape, (cfg.opponent_count,))
+        self.assertTrue(all(obs["opponents_active"] <= 1.0))
+
     def test_game_state_persistence(self):
         """Test that game state persists correctly across steps."""
         obs, info = self.env.reset()

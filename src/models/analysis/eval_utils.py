@@ -28,12 +28,19 @@ def _mask_fn(env: LudoRLEnv):
 class SharedPolicyEvalEnv(gym.Wrapper):
     """Adapts the single-agent eval env to the shared-policy observation format."""
 
-    def __init__(self, env: gym.Env, num_agents: int = 4):
+    def __init__(
+        self, env: gym.Env, num_agents: int = 4, opponent_count: int | None = None
+    ):
         super().__init__(env)
-        base_space = get_flat_space_config()
+        opponent_slots = (
+            max(1, opponent_count)
+            if opponent_count is not None
+            else max(1, num_agents - 1)
+        )
+        base_space = get_flat_space_config(opponent_slots)
         action_dim = int(env.action_space.n)
         self._mask_shape = (action_dim,)
-        self._obs_keys = list(get_space_config().spaces.keys())
+        self._obs_keys = list(get_space_config(opponent_slots).spaces.keys())
         self.observation_space = spaces.Dict(
             {
                 "observation": spaces.Box(
@@ -187,7 +194,11 @@ def build_eval_env(opponent: str, cfg: EnvConfig) -> DummyVecEnv:
         env = LudoRLEnv(opponent_cfg)
         env = ActionMasker(env, _mask_fn)
         if cfg.multi_agent:
-            env = SharedPolicyEvalEnv(env)
+            env = SharedPolicyEvalEnv(
+                env,
+                num_agents=cfg.player_count,
+                opponent_count=cfg.opponent_count,
+            )
         return env
 
     return DummyVecEnv([_init])

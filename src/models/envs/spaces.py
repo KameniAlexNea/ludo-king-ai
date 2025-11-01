@@ -4,9 +4,13 @@ from gymnasium.spaces.utils import flatten_space
 from ludo_engine.models import ALL_COLORS, GameConstants
 
 
-def get_space_config():
+def get_space_config(opponent_count: int | None = None):
     tokens = GameConstants.TOKENS_PER_PLAYER
-    opponents = len(ALL_COLORS) - 1
+    max_opponents = len(ALL_COLORS) - 1
+    if opponent_count is None:
+        opponents = max_opponents
+    else:
+        opponents = max(1, min(opponent_count, max_opponents))
     token_total_max = float(tokens)
     opponent_total_max = float(tokens * opponents)
     return spaces.Dict(
@@ -107,7 +111,7 @@ def get_space_config():
     )
 
 
-def get_flat_space_config():
+def get_flat_space_config(opponent_count: int | None = None):
     """Return a flattened Box observation space for Supersuit wrappers.
 
     Supersuit homogenization expects observations to be described by a Box.
@@ -116,7 +120,7 @@ def get_flat_space_config():
     observation dictionaries.
     """
 
-    dict_space = get_space_config()
+    dict_space = get_space_config(opponent_count)
     flat_space = flatten_space(dict_space)
 
     # Ensure float32 consistency even if Gym defaults change in the future.

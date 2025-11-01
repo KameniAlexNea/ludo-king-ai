@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
+MATCHUP_TO_OPPONENTS = {"1v1": 1, "1v3": 3}
+
 
 @dataclass
 class RewardConfig:
@@ -40,6 +42,23 @@ class EnvConfig:
     reward: RewardConfig = field(default_factory=RewardConfig)
     obs: ObservationConfig = field(default_factory=ObservationConfig)
     multi_agent: bool = False
+    matchup: str = "1v3"
+
+    def __post_init__(self) -> None:
+        matchup = (self.matchup or "1v3").lower()
+        if matchup not in MATCHUP_TO_OPPONENTS:
+            raise ValueError(
+                f"Unsupported matchup '{self.matchup}'. Expected one of: {tuple(MATCHUP_TO_OPPONENTS)}"
+            )
+        self.matchup = matchup
+
+    @property
+    def opponent_count(self) -> int:
+        return MATCHUP_TO_OPPONENTS[self.matchup]
+
+    @property
+    def player_count(self) -> int:
+        return 1 + self.opponent_count
 
 
 @dataclass

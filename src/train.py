@@ -37,6 +37,11 @@ def _mask_fn(env: LudoRLEnv):
 def main() -> None:
     train_cfg, env_cfg = parse_args()
 
+    print(
+        f"Selected matchup: {env_cfg.matchup} "
+        f"({env_cfg.player_count} players, {env_cfg.opponent_count} opponents)"
+    )
+
     os.makedirs(train_cfg.logdir, exist_ok=True)
     os.makedirs(train_cfg.model_dir, exist_ok=True)
 

@@ -42,11 +42,23 @@ class LudoRLEnv(gym.Env):
         self.cfg = cfg or EnvConfig()
         self.rng = random.Random(self.cfg.seed)
 
+        if self.cfg.player_count < 2:
+            raise ValueError(
+                "Ludo requires at least two players (1 agent + 1 opponent)."
+            )
+        if self.cfg.player_count > len(ALL_COLORS):
+            raise ValueError(
+                f"Requested player count {self.cfg.player_count} exceeds available colors {len(ALL_COLORS)}."
+            )
+        self._available_colors = list(ALL_COLORS[: self.cfg.player_count])
+
         tokens = GameConstants.TOKENS_PER_PLAYER
 
         self.observation_space = (
-            get_flat_space_config if cfg.multi_agent else get_space_config
-        )()
+            get_flat_space_config(self.cfg.opponent_count)
+            if self.cfg.multi_agent
+            else get_space_config(self.cfg.opponent_count)
+        )
 
         self.action_space = spaces.Discrete(tokens)
 
@@ -140,14 +152,13 @@ class LudoRLEnv(gym.Env):
 
     # internal helpers ------------------------------------------------------
     def _create_game(self) -> None:
-        colors = list(ALL_COLORS)
+        colors = list(self._available_colors)
+        color_lookup = {color.name: color for color in colors}
         if not self.cfg.randomize_agent and self.cfg.fixed_agent_color:
             requested = self.cfg.fixed_agent_color.upper()
             try:
-                self.agent_color = next(
-                    color for color in colors if color.name == requested
-                )
-            except StopIteration as exc:  # pragma: no cover - guard clause
+                self.agent_color = color_lookup[requested]
+            except KeyError as exc:  # pragma: no cover - guard clause
                 raise ValueError(
                     f"Unknown agent color '{self.cfg.fixed_agent_color}'."
                 ) from exc
@@ -163,7 +174,7 @@ class LudoRLEnv(gym.Env):
         for player in self.game.players:
             if player.color != self.agent_color:
                 strategy = StrategyFactory.create_strategy(
-                    random.choice(self.opponent_names)
+                    self.rng.choice(self.opponent_names)
                 )
                 player.set_strategy(strategy)
 

@@ -81,6 +81,11 @@ def main() -> None:
     train_cfg, env_cfg = parse_args()
     env_cfg.multi_agent = True
 
+    print(
+        f"Selected matchup: {env_cfg.matchup} "
+        f"({env_cfg.player_count} players, {env_cfg.opponent_count} opponents)"
+    )
+
     # Multi-agent specific config
     ma_cfg = MultiAgentConfig()
 
@@ -103,6 +108,10 @@ def main() -> None:
     vec_env = VecMonitor(vec_env, train_cfg.logdir)
 
     print(f"Environment created with {train_cfg.n_envs} parallel environments")
+    print(
+        f"Each environment simulates {env_cfg.player_count} players "
+        f"({env_cfg.opponent_count} opponents per learning policy)."
+    )
     print(f"Observation space: {vec_env.observation_space}")
     print(f"Action space: {vec_env.action_space}")
 
@@ -116,7 +125,7 @@ def main() -> None:
     }
 
     # Create MaskablePPO model
-    # Note: With SuperSuit's conversion, all 4 agents share the same policy
+    # Note: With SuperSuit's conversion, all seats share the same policy
     # This is ideal for symmetric games like Ludo
     print("Initializing MaskablePPO model...")
     model = MaskablePPO(

@@ -53,7 +53,7 @@ def env(cfg: Optional[EnvConfig] = None):
 
 
 class raw_env(AECEnv, EzPickle):
-    """PettingZoo AEC environment for 4-player Ludo with turn-based play."""
+    """PettingZoo AEC environment for configurable-player Ludo with turn-based play."""
 
     metadata = {
         "render_modes": ["human", "ansi"],
@@ -69,10 +69,19 @@ class raw_env(AECEnv, EzPickle):
         super().__init__()
         self.cfg = cfg or EnvConfig()
 
+        if self.cfg.player_count < 2:
+            raise ValueError("Ludo requires at least two players for multi-agent play.")
+        if self.cfg.player_count > len(ALL_COLORS):
+            raise ValueError(
+                f"Requested player count {self.cfg.player_count} exceeds available colors {len(ALL_COLORS)}."
+            )
+        self.player_count = self.cfg.player_count
+        self.opponent_slots = max(1, self.player_count - 1)
+
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
-        self.possible_agents = ["player_0", "player_1", "player_2", "player_3"]
+        self.possible_agents = [f"player_{i}" for i in range(self.player_count)]
 
         self.game: Optional[LudoGame] = None
         self._agent_color_map: Dict[str, PlayerColor] = {}
@@ -89,7 +98,7 @@ class raw_env(AECEnv, EzPickle):
         self._opponent_captures: Dict[str, int] = {}
 
         tokens = GameConstants.TOKENS_PER_PLAYER
-        observation_space = get_flat_space_config()
+        observation_space = get_flat_space_config(self.opponent_slots)
         action_space = spaces.Discrete(tokens)
 
         self.observation_spaces = {
@@ -153,7 +162,7 @@ class raw_env(AECEnv, EzPickle):
         self._roll_dice_for_current()
 
     def _create_game(self) -> None:
-        colors = list(ALL_COLORS)
+        colors = list(ALL_COLORS[: self.player_count])
         self.game = LudoGame(colors)
 
         for idx, agent in enumerate(self.agents):

@@ -73,14 +73,23 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
         agent_tokens_on_safe = float(agent_safe.mean())
         agent_total_progress = float(agent_progress.sum())
 
+        opponent_slots = max(1, self.cfg.opponent_count)
+        ordered_opponents = [
+            color
+            for color in self._ordered_opponent_colors(self.agent_color)
+            if color in self._present_colors
+        ]
+
         opp_positions: List[float] = []
         opp_active: List[float] = []
-        opponent_progress_totals: List[float] = []
         opponent_home_count = 0.0
         opponent_finished_count = 0.0
         opponent_safe_count = 0.0
-        for color in self._ordered_opponent_colors(self.agent_color):
-            if color in self._present_colors:
+        actual_progress_totals: List[float] = []
+
+        for idx in range(opponent_slots):
+            if idx < len(ordered_opponents):
+                color = ordered_opponents[idx]
                 player = self.game.get_player_from_color(color)
                 start_pos = BoardConstants.START_POSITIONS[color]
                 progresses = np.array(
@@ -89,7 +98,8 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
                 )
                 opp_positions.extend(progresses.tolist())
                 opp_active.append(1.0)
-                opponent_progress_totals.append(float(progresses.sum()))
+                total_progress = float(progresses.sum())
+                actual_progress_totals.append(total_progress)
                 opponent_home_count += sum(_is_home(t.position) for t in player.tokens)
                 opponent_finished_count += sum(
                     _is_finished(t.position) for t in player.tokens
@@ -101,28 +111,24 @@ class ContinuousObservationBuilder(ObservationBuilderBase):
                 opp_positions.extend([0.0] * tokens_per_player)
                 opp_active.append(0.0)
 
-        opponent_total_progress = float(sum(opponent_progress_totals))
-        opponent_best_progress = float(max(opponent_progress_totals, default=0.0))
+        opponent_total_progress = float(sum(actual_progress_totals))
+        opponent_best_progress = float(max(actual_progress_totals, default=0.0))
 
-        total_opponent_tokens = float(
-            tokens_per_player * max(1, len(self._opponent_colors))
-        )
+        total_opponent_tokens = float(tokens_per_player * opponent_slots)
         opponent_tokens_at_home = float(opponent_home_count / total_opponent_tokens)
         opponent_tokens_finished = float(
             opponent_finished_count / total_opponent_tokens
         )
         opponent_tokens_on_safe = float(opponent_safe_count / total_opponent_tokens)
 
-        totals_with_agent = [agent_total_progress] + opponent_progress_totals
+        totals_with_agent = [agent_total_progress] + actual_progress_totals
         sorted_totals = sorted(totals_with_agent, reverse=True)
         agent_rank = (
             sorted_totals.index(agent_total_progress) / max(1, len(sorted_totals) - 1)
             if len(sorted_totals) > 1
             else 0.0
         )
-        progress_lead = agent_total_progress - max(
-            opponent_progress_totals, default=0.0
-        )
+        progress_lead = agent_total_progress - opponent_best_progress
 
         max_dice = GameConstants.DICE_MAX
         dice_vec = np.zeros(max_dice, dtype=np.float32)

@@ -1,6 +1,6 @@
 import argparse
 
-from models.configs.config import EnvConfig, TrainConfig
+from models.configs.config import MATCHUP_TO_OPPONENTS, EnvConfig, TrainConfig
 
 
 def parse_args() -> tuple[TrainConfig, EnvConfig]:
@@ -55,6 +55,13 @@ def parse_args() -> tuple[TrainConfig, EnvConfig]:
         type=str,
         default=env_defaults.opponent_strategy,
         help="Strategy name understood by ludo_engine.StrategyFactory.",
+    )
+    parser.add_argument(
+        "--matchup",
+        type=str,
+        choices=tuple(MATCHUP_TO_OPPONENTS.keys()),
+        default=env_defaults.matchup,
+        help="Match configuration for the learning agent (1v1 or 1v3).",
     )
     parser.add_argument(
         "--eval-freq",
@@ -125,6 +132,7 @@ def parse_args() -> tuple[TrainConfig, EnvConfig]:
         seed=args.seed,
         randomize_agent=args.fixed_agent_color is None,
         opponent_strategy=args.opponent_strategy,
+        matchup=args.matchup,
     )
     if args.fixed_agent_color:
         env_cfg.randomize_agent = False

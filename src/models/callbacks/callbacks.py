@@ -63,9 +63,7 @@ class PeriodicEvalCallback(BaseCallback):
             self.logger.record(
                 f"{prefix}/bd/capture", summary_dict["breakdown/capture"]
             )
-            self.logger.record(
-                f"{prefix}/bd/finish", summary_dict["breakdown/finish"]
-            )
+            self.logger.record(f"{prefix}/bd/finish", summary_dict["breakdown/finish"])
             self.logger.record(
                 f"{prefix}/bd/got_captured", summary_dict["breakdown/got_captured"]
             )

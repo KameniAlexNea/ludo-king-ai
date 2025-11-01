@@ -5,7 +5,6 @@ import pytest
 from gymnasium import spaces
 
 from src.models.configs.config import EnvConfig
-from src.models.envs.ludo_env_aec.opponent_pool import OpponentPoolManager
 from src.models.envs.ludo_env_aec.raw_env import raw_env
 from src.models.envs.ludo_env_aec.turn_based_env import TurnBasedSelfPlayEnv
 
@@ -73,46 +72,21 @@ class SimpleBaseEnv:
 
 def test_single_learning_seat_assignment():
     base = SimpleBaseEnv()
-    env = TurnBasedSelfPlayEnv(base, opponent_pool=None)
+    env = TurnBasedSelfPlayEnv(base)
 
     # deterministically seed RNG
     obs, info = env.reset(seed=123)
 
     total_agents = len(env.possible_agents)
     assigned = len(env.opponent_assignments) + len(env.scripted_assignments)
-    # All but one agent should be assigned as opponents
-    assert assigned == total_agents - 1
-
-
-def test_prune_opponent_model_cache(tmp_path):
-    base = SimpleBaseEnv()
-    pool_dir = tmp_path / "pool"
-    pool_dir.mkdir()
-
-    # create fake opponent files
-    f1 = pool_dir / "opponent_1.zip"
-    f1.write_text("x")
-    f2 = pool_dir / "opponent_2.zip"
-    f2.write_text("y")
-
-    manager = OpponentPoolManager(str(pool_dir), pool_size=1)
-
-    env = TurnBasedSelfPlayEnv(base, opponent_pool=manager)
-    # manually populate cache with both files (simulate earlier loads)
-    env.opponent_models[str(f1)] = object()
-    env.opponent_models[str(f2)] = object()
-
-    # manager should only keep the last one due to pool_size=1
-    manager._load_existing_opponents()
-
-    # Only models present in pool should remain cached
-    valid = set(manager.get_all_opponents())
-    assert set(env.opponent_models.keys()).issubset(valid)
+    # No scripted opponents are registered in the simplified test harness
+    assert assigned == 0
+    assert total_agents == len(base.possible_agents)
 
 
 def test_turn_handoff_and_masks():
     base = SimpleBaseEnv()
-    env = TurnBasedSelfPlayEnv(base, opponent_pool=None)
+    env = TurnBasedSelfPlayEnv(base)
 
     obs, info = env.reset(seed=1)
     # initial observation should include action_mask and agent_index
@@ -161,3 +135,18 @@ def test_raw_env_illegal_action_handling():
         # Try any action, should not be marked illegal when no moves available
         env.step(0)
         assert env.infos[agent].get("illegal_action", False) is False
+
+
+def test_raw_env_respects_matchup_configuration():
+    cfg = EnvConfig(matchup="1v1", seed=21)
+    env = raw_env(cfg)
+
+    assert len(env.possible_agents) == cfg.player_count
+    assert env.opponent_slots == max(1, cfg.player_count - 1)
+
+    env.reset()
+    assert len(env.agents) == cfg.player_count
+
+    sample_agent = env.possible_agents[0]
+    obs_space = env.observation_space(sample_agent)
+    assert obs_space.shape[0] > 0

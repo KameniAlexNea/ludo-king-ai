@@ -32,6 +32,7 @@ EVAL_FREQ=${EVAL_FREQ:-400000}
 EVAL_EPISODES=${EVAL_EPISODES:-20}
 EVAL_OPPONENTS=${EVAL_OPPONENTS:-}
 EVAL_DETERMINISTIC=${EVAL_DETERMINISTIC:-}
+MATCHUP=${MATCHUP:-1v3}
 
 mkdir -p "${LOGDIR}" "${MODELDIR}"
 
@@ -53,6 +54,7 @@ TRAIN_ARGS=(
     --n-envs "${N_ENVS}"
     --eval-freq "${EVAL_FREQ}"
     --eval-episodes "${EVAL_EPISODES}"
+    --matchup "${MATCHUP}"
 )
 
 if [[ -n "${FIXED_COLOR}" ]]; then
