@@ -125,7 +125,10 @@ class TurnBasedSelfPlayEnv(gym.Env):
         # Shared policy controls this position
         self.base_env.step(int(action))
 
-        reward = float(self.base_env.rewards.get(acting_agent, 0.0))
+        # Aggregate reward from every seat so the shared policy sees wins and losses.
+        team_step_reward = float(
+            sum(float(r) for r in self.base_env.rewards.values())
+        )
 
         self._sync_active_agent()
 
@@ -148,7 +151,7 @@ class TurnBasedSelfPlayEnv(gym.Env):
         if episode_done:
             info["terminal_observation"] = obs
 
-        return obs, reward, terminated, truncated, info
+        return obs, team_step_reward, terminated, truncated, info
 
     def _build_terminal_obs(self) -> dict[str, np.ndarray]:
         obs_space = self.observation_space["observation"]
