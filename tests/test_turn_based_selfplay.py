@@ -3,6 +3,7 @@ import types
 import numpy as np
 import pytest
 from gymnasium import spaces
+from ludo_engine.models import ALL_COLORS
 
 from src.models.configs.config import EnvConfig
 from src.models.envs.ludo_env_aec.raw_env import raw_env
@@ -150,3 +151,10 @@ def test_raw_env_respects_matchup_configuration():
     sample_agent = env.possible_agents[0]
     obs_space = env.observation_space(sample_agent)
     assert obs_space.shape[0] > 0
+
+    colors = [player.color for player in env.game.players]
+    assert len(colors) == cfg.player_count
+    all_colors = list(ALL_COLORS)
+    first_idx = all_colors.index(colors[0])
+    second_idx = all_colors.index(colors[1])
+    assert second_idx == (first_idx + len(all_colors) // 2) % len(all_colors)

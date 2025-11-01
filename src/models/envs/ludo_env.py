@@ -41,16 +41,16 @@ class LudoRLEnv(gym.Env):
         super().__init__()
         self.cfg = cfg or EnvConfig()
         self.rng = random.Random(self.cfg.seed)
+        self._total_colors = list(ALL_COLORS)
 
         if self.cfg.player_count < 2:
             raise ValueError(
                 "Ludo requires at least two players (1 agent + 1 opponent)."
             )
-        if self.cfg.player_count > len(ALL_COLORS):
+        if self.cfg.player_count > len(self._total_colors):
             raise ValueError(
-                f"Requested player count {self.cfg.player_count} exceeds available colors {len(ALL_COLORS)}."
+                f"Requested player count {self.cfg.player_count} exceeds available colors {len(self._total_colors)}."
             )
-        self._available_colors = list(ALL_COLORS[: self.cfg.player_count])
 
         tokens = GameConstants.TOKENS_PER_PLAYER
 
@@ -152,8 +152,8 @@ class LudoRLEnv(gym.Env):
 
     # internal helpers ------------------------------------------------------
     def _create_game(self) -> None:
-        colors = list(self._available_colors)
-        color_lookup = {color.name: color for color in colors}
+        total_colors = self._total_colors
+        color_lookup = {color.name: color for color in total_colors}
         if not self.cfg.randomize_agent and self.cfg.fixed_agent_color:
             requested = self.cfg.fixed_agent_color.upper()
             try:
@@ -163,9 +163,11 @@ class LudoRLEnv(gym.Env):
                     f"Unknown agent color '{self.cfg.fixed_agent_color}'."
                 ) from exc
         elif self.cfg.randomize_agent:
-            self.agent_color = self.rng.choice(colors)
+            self.agent_color = self.rng.choice(total_colors)
         else:
-            self.agent_color = colors[0]
+            self.agent_color = total_colors[0]
+
+        colors = self._select_player_colors(self.agent_color)
 
         pivot = colors.index(self.agent_color)
         ordered = colors[pivot:] + colors[:pivot]
@@ -181,6 +183,27 @@ class LudoRLEnv(gym.Env):
         self._obs_builder = make_observation_builder(
             self.cfg, self.game, self.agent_color
         )
+
+    def _select_player_colors(self, agent_color: PlayerColor) -> list[PlayerColor]:
+        total_colors = self._total_colors
+        if self.cfg.player_count >= len(total_colors):
+            return list(total_colors)
+        if self.cfg.player_count == 2:
+            span = len(total_colors)
+            agent_idx = total_colors.index(agent_color)
+            # Keep heads-up games aligned on opposite starts for fairness.
+            opponent_idx = (agent_idx + span // 2) % span
+            opponent_color = total_colors[opponent_idx]
+            return [agent_color, opponent_color]
+
+        colors = [agent_color]
+        for color in total_colors:
+            if color == agent_color:
+                continue
+            colors.append(color)
+            if len(colors) == self.cfg.player_count:
+                break
+        return colors
 
     def _ensure_agent_turn(self) -> None:
         if self.game is None:

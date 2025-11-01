@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 import numpy as np
-from ludo_engine.models import GameConstants, PlayerColor
+from ludo_engine.models import ALL_COLORS, GameConstants, PlayerColor
 
 from src.models.configs.config import EnvConfig
 from src.models.envs.ludo_env import LudoRLEnv
@@ -241,6 +241,17 @@ class TestEnvironmentFunctionality(unittest.TestCase):
         )
         self.assertEqual(obs["opponents_active"].shape, (cfg.opponent_count,))
         self.assertTrue(all(obs["opponents_active"] <= 1.0))
+
+        agent_color = env.agent_color
+        opponents = [p.color for p in env.game.players if p.color != agent_color]
+        self.assertEqual(len(opponents), 1)
+        all_colors = list(ALL_COLORS)
+        agent_idx = all_colors.index(agent_color)
+        opponent_idx = all_colors.index(opponents[0])
+        self.assertEqual(
+            opponent_idx,
+            (agent_idx + len(all_colors) // 2) % len(all_colors),
+        )
 
     def test_game_state_persistence(self):
         """Test that game state persists correctly across steps."""

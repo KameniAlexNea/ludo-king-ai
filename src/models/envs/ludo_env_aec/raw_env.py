@@ -68,14 +68,16 @@ class raw_env(AECEnv, EzPickle):
         EzPickle.__init__(self, cfg, render_mode)
         super().__init__()
         self.cfg = cfg or EnvConfig()
+        self._total_colors = list(ALL_COLORS)
 
         if self.cfg.player_count < 2:
             raise ValueError("Ludo requires at least two players for multi-agent play.")
-        if self.cfg.player_count > len(ALL_COLORS):
+        if self.cfg.player_count > len(self._total_colors):
             raise ValueError(
-                f"Requested player count {self.cfg.player_count} exceeds available colors {len(ALL_COLORS)}."
+                f"Requested player count {self.cfg.player_count} exceeds available colors {len(self._total_colors)}."
             )
-        self.player_count = self.cfg.player_count
+        self._player_colors = self._compute_player_colors()
+        self.player_count = len(self._player_colors)
         self.opponent_slots = max(1, self.player_count - 1)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -162,7 +164,7 @@ class raw_env(AECEnv, EzPickle):
         self._roll_dice_for_current()
 
     def _create_game(self) -> None:
-        colors = list(ALL_COLORS[: self.player_count])
+        colors = list(self._player_colors)
         self.game = LudoGame(colors)
 
         for idx, agent in enumerate(self.agents):
@@ -173,6 +175,19 @@ class raw_env(AECEnv, EzPickle):
             self._obs_builders[agent] = make_observation_builder(
                 self.cfg, self.game, color
             )
+
+    def _compute_player_colors(self) -> list[PlayerColor]:
+        total_colors = self._total_colors
+        if self.cfg.player_count >= len(total_colors):
+            return list(total_colors)
+        if self.cfg.player_count == 2:
+            base_color = total_colors[0]
+            span = len(total_colors)
+            # Use diametrically opposed starts so two-player games mirror the board layout.
+            opponent_idx = (total_colors.index(base_color) + span // 2) % span
+            opponent_color = total_colors[opponent_idx]
+            return [base_color, opponent_color]
+        return list(total_colors[: self.cfg.player_count])
 
     def _roll_dice_for_current(self) -> None:
         agent = self.agent_selection
