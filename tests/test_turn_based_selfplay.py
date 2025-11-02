@@ -91,12 +91,18 @@ def test_turn_handoff_and_masks():
 
     obs, info = env.reset(seed=1)
     # initial observation should include action_mask and agent_index
-    assert "action_mask" in obs and "observation" in obs and "agent_index" in obs
+    assert {
+        "observation",
+        "prev_observation",
+        "action_mask",
+        "agent_index",
+    }.issubset(obs.keys())
+    assert np.all(obs["prev_observation"] == 0.0)
 
     # Simulate one learning action; since no opponents assigned, action passes through
     next_obs, reward, terminated, truncated, info = env.step(0)
     assert isinstance(next_obs, dict)
-    assert "action_mask" in next_obs
+    assert "prev_observation" in next_obs
 
 
 def test_raw_env_illegal_action_handling():

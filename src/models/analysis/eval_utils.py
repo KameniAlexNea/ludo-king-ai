@@ -38,14 +38,21 @@ class SharedPolicyEvalEnv(gym.Wrapper):
             else max(1, num_agents - 1)
         )
         base_space = get_flat_space_config(opponent_slots)
+        obs_low = np.asarray(base_space.low, dtype=np.float32)
+        obs_high = np.asarray(base_space.high, dtype=np.float32)
         action_dim = int(env.action_space.n)
         self._mask_shape = (action_dim,)
         self._obs_keys = list(get_space_config(opponent_slots).spaces.keys())
         self.observation_space = spaces.Dict(
             {
                 "observation": spaces.Box(
-                    low=base_space.low,
-                    high=base_space.high,
+                    low=obs_low,
+                    high=obs_high,
+                    dtype=np.float32,
+                ),
+                "prev_observation": spaces.Box(
+                    low=obs_low,
+                    high=obs_high,
                     dtype=np.float32,
                 ),
                 "action_mask": spaces.Box(
@@ -59,20 +66,37 @@ class SharedPolicyEvalEnv(gym.Wrapper):
         )
         self._agent_index = np.array(0, dtype=np.int64)
         self._last_mask = np.ones(self._mask_shape, dtype=np.int8)
+        self._zero_prev_obs = np.zeros_like(obs_low, dtype=np.float32)
+        self._prev_obs = self._zero_prev_obs.copy()
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
+        self._prev_obs = self._zero_prev_obs.copy()
         obs, info = self.env.reset(seed=seed, options=options)
         mask = self._extract_mask(info)
         converted = self._convert_obs(obs, mask)
+        obs_with_prev = {
+            "observation": converted["observation"],
+            "prev_observation": self._prev_obs.copy(),
+            "action_mask": converted["action_mask"],
+            "agent_index": converted["agent_index"],
+        }
+        self._prev_obs = converted["observation"].copy()
         info = {**info, "action_mask": mask.copy()}
-        return converted, info
+        return obs_with_prev, info
 
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
         mask = self._extract_mask(info)
         converted = self._convert_obs(obs, mask)
+        obs_with_prev = {
+            "observation": converted["observation"],
+            "prev_observation": self._prev_obs.copy(),
+            "action_mask": converted["action_mask"],
+            "agent_index": converted["agent_index"],
+        }
+        self._prev_obs = converted["observation"].copy()
         info = {**info, "action_mask": mask.copy()}
-        return converted, reward, terminated, truncated, info
+        return obs_with_prev, reward, terminated, truncated, info
 
     def action_masks(self) -> np.ndarray:
         return self._last_mask.copy()

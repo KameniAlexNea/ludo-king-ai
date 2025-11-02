@@ -36,9 +36,15 @@ class TurnBasedSelfPlayEnv(gym.Env):
         self.rng = np.random.default_rng()
 
         sample_agent = self.possible_agents[0]
+        base_obs_space = base_env.observation_space(sample_agent)
+        obs_low = np.asarray(base_obs_space.low, dtype=np.float32)
+        obs_high = np.asarray(base_obs_space.high, dtype=np.float32)
+        obs_box = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
+        prev_obs_box = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
         self.observation_space = spaces.Dict(
             {
-                "observation": base_env.observation_space(sample_agent),
+                "observation": obs_box,
+                "prev_observation": prev_obs_box,
                 "action_mask": spaces.Box(
                     low=0,
                     high=1,
@@ -53,6 +59,10 @@ class TurnBasedSelfPlayEnv(gym.Env):
         self._current_agent: Optional[str] = None
         self._last_obs: Optional[dict[str, np.ndarray]] = None
         self._last_action_mask: Optional[np.ndarray] = None
+        self._zero_prev_obs = np.zeros_like(obs_low, dtype=np.float32)
+        self._prev_obs_cache: Dict[str, np.ndarray] = {
+            agent: self._zero_prev_obs.copy() for agent in self.possible_agents
+        }
 
         # Self-play disabled: the shared policy controls all seats.
         self.ma_cfg = ma_cfg or MultiAgentConfig()
@@ -77,12 +87,16 @@ class TurnBasedSelfPlayEnv(gym.Env):
         obs_array = raw_obs["observation"].astype(np.float32, copy=False)
         mask = raw_obs["action_mask"].astype(np.int8, copy=False)
         self._last_action_mask = mask
+        prev_array = self._prev_obs_cache.get(agent, self._zero_prev_obs)
+        prev_obs = prev_array.astype(np.float32, copy=True)
         obs = {
             "observation": obs_array,
+            "prev_observation": prev_obs,
             "action_mask": mask,
             "agent_index": np.array(self.agent_indices[agent], dtype=np.int64),
         }
         self._last_obs = obs
+        self._prev_obs_cache[agent] = obs_array.copy()
         return obs
 
     def action_masks(self) -> np.ndarray:
@@ -103,6 +117,10 @@ class TurnBasedSelfPlayEnv(gym.Env):
         # No opponent assignment: all seats are controlled by the policy
         self.opponent_assignments = {}
         self.scripted_assignments = {}
+
+        self._prev_obs_cache = {
+            agent: self._zero_prev_obs.copy() for agent in self.possible_agents
+        }
 
         self._sync_active_agent()
 
@@ -126,9 +144,7 @@ class TurnBasedSelfPlayEnv(gym.Env):
         self.base_env.step(int(action))
 
         # Aggregate reward from every seat so the shared policy sees wins and losses.
-        team_step_reward = float(
-            sum(float(r) for r in self.base_env.rewards.values())
-        )
+        team_step_reward = float(sum(float(r) for r in self.base_env.rewards.values()))
 
         self._sync_active_agent()
 
@@ -158,6 +174,7 @@ class TurnBasedSelfPlayEnv(gym.Env):
         mask_shape = self.observation_space["action_mask"].shape
         return {
             "observation": np.zeros(obs_space.shape, dtype=obs_space.dtype),
+            "prev_observation": self._zero_prev_obs.copy(),
             "action_mask": np.zeros(mask_shape, dtype=np.int8),
             "agent_index": np.zeros((), dtype=np.int64),
         }

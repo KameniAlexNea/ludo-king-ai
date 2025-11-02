@@ -9,7 +9,7 @@ import pandas as pd
 from sb3_contrib import MaskablePPO
 
 from models.analysis.eval_utils import EvalStats, evaluate_against
-from models.configs.config import EnvConfig, MATCHUP_TO_OPPONENTS
+from models.configs.config import MATCHUP_TO_OPPONENTS, EnvConfig
 
 
 def _parse_args() -> argparse.Namespace:
