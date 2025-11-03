@@ -1,5 +1,6 @@
 import random
 from dataclasses import dataclass
+
 from .config import config
 from .moves import MoveManagement
 from .player import Piece, Player

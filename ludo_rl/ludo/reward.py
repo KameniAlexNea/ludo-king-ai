@@ -15,7 +15,7 @@ class Reward:
     progress: float = 0.01
     safe_position: float = 0.05
     draw: float = -0.5
-    skipped_turn = -0.001
+    skipped_turn: float = -0.01
 
 
 reward_config = Reward()

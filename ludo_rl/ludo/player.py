@@ -3,10 +3,10 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
-from ..strategy.base import BaseStrategy
 
 from ludo_rl.strategy import build_move_options, create
 
+from ..strategy.base import BaseStrategy
 from .config import config
 from .model import Piece
 

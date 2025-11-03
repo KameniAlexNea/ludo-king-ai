@@ -100,17 +100,22 @@ class GameSimulator:
         return cumulative_rewards
 
     def _configure_opponent_strategies(self):
-        names = [os.getenv("OPPONENT1"), os.getenv("OPPONENT2"), os.getenv("OPPONENT3")]
-        strategies = [
-            n.strip().strip('"').lower() for n in names if n and n.strip().strip('"')
-        ]
-        it = iter(strategies)
+        opponents = os.getenv("OPPONENTS", "random").split(",")
+        # STRATEGY SELECTION METHOD : 0 - RANDOM, 1 - SEQUENTIAL
+        selection_method = int(os.getenv("STRATEGY_SELECTION", "0"))
+        strategies = [opp.strip().lower() for opp in opponents if opp]
+        pos = 0
         for idx, player in enumerate(self.game.players):
             if idx == self.agent_index:
                 continue
             try:
-                player.strategy_name = next(it)
+                player.strategy_name = (
+                    strategies[pos % len(strategies)]
+                    if selection_method == 1
+                    else random.choice(strategies)
+                )
                 player._strategy = None
+                pos += 1
             except StopIteration:
                 break
 
