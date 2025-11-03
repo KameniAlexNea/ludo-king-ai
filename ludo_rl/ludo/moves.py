@@ -62,7 +62,6 @@ class MoveManagement:
             if new_pos == -1:
                 continue
 
-            # --- FIX: Check for self-blockade ---
             # The home square (57) can hold all pieces and is not a blockade.
             if new_pos == 57:
                 valid_moves.append(
@@ -77,7 +76,6 @@ class MoveManagement:
                     valid_moves.append(
                         {"piece": piece, "new_pos": new_pos, "dice_roll": dice_roll}
                     )
-            # --- END FIX ---
 
         return valid_moves
 
