@@ -5,6 +5,7 @@ description = "Modern Ludo engine + reinforcement learning environments + evalua
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "dotenv>=0.9.9",
     "loguru>=0.7.3",
     "numpy>=2.3.3",
     "sb3-contrib>=2.7.0",

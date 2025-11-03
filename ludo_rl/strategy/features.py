@@ -4,18 +4,10 @@ from typing import Dict, List
 
 import numpy as np
 
+from ludo_rl.ludo.config import strategy_config
 from ludo_rl.ludo.model import Piece
 
 from .types import MoveOption, StrategyContext
-
-BOARD_CHANNEL_MY = 0
-BOARD_CHANNEL_SAFE = 4
-BOARD_CHANNEL_OPP_START = 1
-BOARD_CHANNEL_OPP_END = 3
-
-MAIN_TRACK_END = 51
-HOME_START = 52
-HOME_FINISH = 57
 
 
 def build_move_options(
@@ -44,10 +36,10 @@ def build_move_options(
         new_pos = move["new_pos"]
         current_pos = piece.position
         progress = _compute_progress(current_pos, new_pos)
-        distance_to_goal = max(HOME_FINISH - new_pos, 0)
+        distance_to_goal = max(strategy_config.home_finish - new_pos, 0)
 
         can_capture, capture_count = _check_capture(board, new_pos)
-        enters_home = new_pos >= HOME_START
+        enters_home = new_pos >= strategy_config.home_start
         enters_safe_zone = _is_safe_destination(board, new_pos)
         forms_blockade = _forms_blockade(board, new_pos, move)
         extra_turn = dice_roll == 6 or enters_home or can_capture
@@ -87,47 +79,54 @@ def _compute_progress(current_pos: int, new_pos: int) -> int:
 
 
 def _check_capture(board: np.ndarray, new_pos: int) -> tuple[bool, int]:
-    if new_pos <= 0 or new_pos > MAIN_TRACK_END:
+    if new_pos <= 0 or new_pos > strategy_config.main_track_end:
         return False, 0
-    safe_channel = board[BOARD_CHANNEL_SAFE]
+    safe_channel = board[strategy_config.board_channel_safe]
     if safe_channel[new_pos] > 0:
         return False, 0
-    opponents = board[BOARD_CHANNEL_OPP_START : BOARD_CHANNEL_OPP_END + 1, new_pos]
+    opponents = board[
+        strategy_config.board_channel_opp_start : strategy_config.board_channel_opp_end
+        + 1,
+        new_pos,
+    ]
     captured = int(opponents.sum())
     return captured > 0, captured
 
 
 def _is_safe_destination(board: np.ndarray, new_pos: int) -> bool:
-    if new_pos >= HOME_START:
+    if new_pos >= strategy_config.home_start:
         return True
     if new_pos <= 0:
         return False
-    safe_channel = board[BOARD_CHANNEL_SAFE]
+    safe_channel = board[strategy_config.board_channel_safe]
     return bool(safe_channel[new_pos])
 
 
 def _forms_blockade(board: np.ndarray, new_pos: int, move: Dict) -> bool:
-    if new_pos <= 0 or new_pos > MAIN_TRACK_END:
+    if new_pos <= 0 or new_pos > strategy_config.main_track_end:
         return False
-    safe_channel = board[BOARD_CHANNEL_SAFE]
+    safe_channel = board[strategy_config.board_channel_safe]
     if safe_channel[new_pos]:
         return False
-    current_count = board[BOARD_CHANNEL_MY, new_pos]
+    current_count = board[strategy_config.board_channel_my, new_pos]
     return current_count >= 1
 
 
 def _estimate_risk(board: np.ndarray, new_pos: int) -> float:
-    if new_pos <= 0 or new_pos > MAIN_TRACK_END:
+    if new_pos <= 0 or new_pos > strategy_config.main_track_end:
         return 0.0
 
-    opponents = board[BOARD_CHANNEL_OPP_START : BOARD_CHANNEL_OPP_END + 1]
-    safe_channel = board[BOARD_CHANNEL_SAFE]
+    opponents = board[
+        strategy_config.board_channel_opp_start : strategy_config.board_channel_opp_end
+        + 1
+    ]
+    safe_channel = board[strategy_config.board_channel_safe]
     risk = 0.0
 
     for step in range(1, 7):
         idx = new_pos - step
         if idx <= 0:
-            idx += MAIN_TRACK_END
+            idx += strategy_config.main_track_end
         if safe_channel[idx]:
             continue
         threat_level = opponents[:, idx].sum()

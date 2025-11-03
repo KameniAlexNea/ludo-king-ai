@@ -1,3 +1,4 @@
+import random
 import time
 
 import numpy as np
@@ -6,6 +7,14 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 from ludo_rl.ludo.config import config
 from ludo_rl.ludo_env import LudoEnv
+
+
+def seed_environ(seed_value: int = None):
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+
+
+seed_environ(42)
 
 print("--- Initializing Test Environment ---")
 print(f"Max game turns set to: {config.MAX_TURNS}")
@@ -19,6 +28,12 @@ def create_env():
 
 # Vectorize the environment
 env = DummyVecEnv([create_env])
+players = env.envs[0].simulator.game.players
+for idx, player in enumerate(players):
+    if idx == env.envs[0].simulator.agent_index:
+        continue
+    print(f"Opponent P{idx} strategy: {player.strategy_name}")
+
 model = MaskablePPO.load(
     "training/ludo_models/ppo_ludo_1762131743/best_model/best_model.zip"
 )
@@ -58,11 +73,7 @@ while True:
     reward = rewards[0]
     terminated = dones[0]  # 'dones' is True if the env terminated (agent won)
 
-    # --- THIS IS THE TRUNCATED FIX ---
-    # Your custom truncation logic is in info["truncated"]
-    # NOT info["TimeLimit.truncated"]
     truncated = infos[0].get("truncated", False)
-    # ---
 
     episode_reward += reward
 

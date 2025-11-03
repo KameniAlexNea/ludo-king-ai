@@ -20,5 +20,17 @@ class NetworkConfig:
     vf = [32, 16]
 
 
+class StrategyConfig:
+    board_channel_my = 0
+    board_channel_safe = 4
+    board_channel_opp_start = 1
+    board_channel_opp_end = 3
+
+    main_track_end = 51
+    home_start = 52
+    home_finish = 57
+
+
 config = Config()
 net_config = NetworkConfig()
+strategy_config = StrategyConfig()

@@ -50,12 +50,10 @@ class MoveManagement:
                     new_pos = piece.position + dice_roll
             else:  # On Main Track
                 if piece.position + dice_roll > 51:
-                    # --- FIX: Added missing overflow calculation ---
                     # Entering home column
                     overflow = (piece.position + dice_roll) - 51
                     if overflow <= 6:  # 51 + 6 = 57
                         new_pos = 51 + overflow
-                    # --- END FIX ---
                 else:
                     new_pos = piece.position + dice_roll
 
