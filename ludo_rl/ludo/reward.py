@@ -14,6 +14,7 @@ class Reward:
     exit_home: float = 1
     progress: float = 0.1
     safe_position: float = 0.5
+    draw: float = -5
     skipped_turn = -0.01
 
 

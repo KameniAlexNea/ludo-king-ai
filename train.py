@@ -40,7 +40,6 @@ if __name__ == "__main__":
     train_env = VecMonitor(train_env)
 
     # --- Create Evaluation Environment ---
-    eval_env = LudoEnv()  # Set to human for render
     eval_env = DummyVecEnv([LudoEnv])
     eval_env = VecMonitor(eval_env)
 

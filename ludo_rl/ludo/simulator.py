@@ -106,6 +106,9 @@ class GameSimulator:
         the reward accumulated for the agent (including opponent reactions),
         and whether the agent earned an extra turn.
         """
+        # Start a fresh transition summary for this full turn sequence.
+        self.reset_summaries()
+
         dice_roll = agent_move.get("dice_roll")
         if dice_roll is None:
             dice_roll = self.game.roll_dice()
@@ -115,12 +118,12 @@ class GameSimulator:
             self.agent_index, agent_move["piece"], agent_move["new_pos"], dice_roll
         )
 
+        # Record the agent's own transition before opponents respond.
+        self.update_summaries(self.agent_index, agent_move, agent_result)
+
         total_rewards = [0.0] * config.NUM_PLAYERS
         for player_idx, value in agent_result["rewards"].items():
             total_rewards[player_idx] += value
-
-        # 2. Reset summaries (ready for opponent moves)
-        self.reset_summaries()
 
         extra_turn = agent_result["extra_turn"]
 

@@ -212,7 +212,7 @@ class LudoEnv(gym.Env):
                 print(
                     f"--- MAX TURNS ({self.max_game_turns}) REACHED. GAME TRUNCATED. ---"
                 )
-            # No extra reward/penalty, SB3 handles this via GAE
+            reward += reward_config.draw
             return obs, reward, terminated, truncated, info
 
         # 4. Handle "no valid moves" for the *next* turn
@@ -241,7 +241,7 @@ class LudoEnv(gym.Env):
                 print(
                     f"--- MAX TURNS ({self.max_game_turns}) REACHED. GAME TRUNCATED. ---"
                 )
-            reward += reward_config.lose
+            reward += reward_config.draw
             return obs, reward, terminated, truncated, info
         if self.render_mode == "human":
             self.render()
