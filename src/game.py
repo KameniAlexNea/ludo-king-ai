@@ -1,7 +1,8 @@
-from src.config import config
-from src.player import Player, Piece
-from src.moves import MoveManagement
 import random
+
+from src.config import config
+from src.moves import MoveManagement
+from src.player import Piece, Player
 
 
 class LudoGame:
@@ -16,19 +17,25 @@ class LudoGame:
         self.rng.seed(42)
         self.move_manager = MoveManagement(self.players)
 
-    def get_agent_relative_pos(self, agent_index: int, abs_pos: int, ):
+    def get_agent_relative_pos(
+        self,
+        agent_index: int,
+        abs_pos: int,
+    ):
         return self.move_manager.get_agent_relative_pos(agent_index, abs_pos)
 
     def get_absolute_position(self, player_index: int, relative_pos: int):
         return self.move_manager.get_absolute_position(player_index, relative_pos)
-    
+
     def get_valid_moves(self, player_index: int, dice_roll: int):
         return self.move_manager.get_valid_moves(player_index, dice_roll)
 
     def roll_dice(self):
         return self.rng.randint(1, 6)
 
-    def make_move(self, player_index: int, piece: Piece, new_position: int, dice_roll: int):
+    def make_move(
+        self, player_index: int, piece: Piece, new_position: int, dice_roll: int
+    ):
         """Executes a move and returns the reward and events."""
         return self.move_manager.make_move(player_index, piece, new_position, dice_roll)
 

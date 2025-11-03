@@ -1,5 +1,6 @@
-from typing import Optional
 from dataclasses import dataclass, field
+from typing import Optional
+
 from src.config import config
 
 
@@ -12,7 +13,7 @@ class Piece:
     def is_safe(self, abs_pos):
         """Checks if an absolute board position is a safe 'star' square."""
         return abs_pos in config.SAFE_SQUARES_ABS
-    
+
     def is_finished(self):
         return self.position == 57
 
@@ -32,7 +33,7 @@ class Player:
         """Checks if all pieces are at the home position."""
         if self.has_finished:  # Don't re-check if already done
             return True
-        
+
         if all(p.is_finished() for p in self.pieces):
             self.has_finished = True
             return True

@@ -16,6 +16,7 @@ class Reward:
     safe_position: float = 0.5
     skipped_turn = -0.01
 
+
 reward_config = Reward()
 
 

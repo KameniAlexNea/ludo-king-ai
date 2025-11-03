@@ -3,13 +3,12 @@ import time
 
 import torch
 from loguru import logger
+
 # We must use MaskablePPO from sb3_contrib to handle action masking
 from sb3_contrib import MaskablePPO
-from sb3_contrib.common.maskable.callbacks import \
-    MaskableEvalCallback as EvalCallback
+from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback as EvalCallback
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
-from stable_baselines3.common.vec_env import (DummyVecEnv, SubprocVecEnv,
-                                              VecMonitor)
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from ludo_rl.extractor import LudoCnnExtractor
 from ludo_rl.ludo_env import LudoEnv
@@ -74,7 +73,7 @@ if __name__ == "__main__":
             features_dim=net_config.embed_dim
         ),  # Output features
         net_arch=dict(pi=net_config.pi, vf=net_config.vf),  # Actor/Critic network sizes
-        share_features_extractor=True
+        share_features_extractor=True,
     )
 
     logger.debug("--- Initializing PPO Model ---")

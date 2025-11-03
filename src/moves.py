@@ -1,5 +1,5 @@
 from .config import config
-from .player import Player, Piece
+from .player import Piece, Player
 from .reward import compute_move_rewards
 
 
@@ -81,7 +81,9 @@ class MoveManagement:
 
         return valid_moves
 
-    def make_move(self, player_index: int, piece: Piece, new_position: int, dice_roll: int):
+    def make_move(
+        self, player_index: int, piece: Piece, new_position: int, dice_roll: int
+    ):
         """Executes a move and returns the reward, events, and extra turn flag."""
         events = {
             "knockouts": [],
@@ -146,7 +148,9 @@ class MoveManagement:
 
         # Check for forming a blockade at the final position (excluding yard/home)
         if final_position not in (0, 57):
-            pieces_at_final_pos = sum(1 for p in player.pieces if p.position == final_position)
+            pieces_at_final_pos = sum(
+                1 for p in player.pieces if p.position == final_position
+            )
             if pieces_at_final_pos == 2:
                 events["blockades"].append(
                     {"player": player_index, "relative_pos": final_position}
@@ -162,11 +166,7 @@ class MoveManagement:
 
         mover_reward = rewards[player_index]
 
-        extra_turn = (
-            events["finished"]
-            or bool(events["knockouts"])
-            or dice_roll == 6
-        )
+        extra_turn = events["finished"] or bool(events["knockouts"]) or dice_roll == 6
 
         return {
             "reward": mover_reward,

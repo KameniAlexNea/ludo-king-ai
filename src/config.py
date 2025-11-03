@@ -9,15 +9,16 @@ class Config:
     PLAYER_START_SQUARES = [1, 14, 27, 40]  # Blue, Red, Green, Yellow
     SAFE_SQUARES_ABS = [1, 9, 14, 22, 27, 35, 40, 48]
 
-config = Config()
 
 class NetworkConfig:
     conv_configs = [16, 32]
     kernel_sizes = [7, 5]
     paddings = [3, 2]
     embed_dim = 32
-    pooled_output_size=4
+    pooled_output_size = 4
     pi = [32, 16]
     vf = [32, 16]
 
+
+config = Config()
 net_config = NetworkConfig()

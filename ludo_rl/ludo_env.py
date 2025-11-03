@@ -55,7 +55,7 @@ class LudoEnv(gym.Env):
                     dtype=np.float32,
                 ),
                 # Dice roll (1-6) will be 0-5 for one-hot encoding
-                "dice_roll": spaces.Box(low=0, high=5, shape=(1,), dtype=np.int64)
+                "dice_roll": spaces.Box(low=0, high=5, shape=(1,), dtype=np.int64),
             }
         )
 
