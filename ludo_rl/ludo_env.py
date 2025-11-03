@@ -20,7 +20,6 @@ class LudoEnv(gym.Env):
 
     Action Space:
         Discrete(4), representing the choice of which piece to move (0, 1, 2, or 3).
-        Action masking MUST be used.
     """
 
     metadata = {"render_modes": ["human"], "render_fps": 4}

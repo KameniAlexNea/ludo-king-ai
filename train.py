@@ -123,7 +123,7 @@ if __name__ == "__main__":
     obs, info = test_env.reset()
     for _ in range(500):
         # We need to provide the action mask for deterministic prediction
-        action_masks = test_env.env_method("get_action_masks")
+        action_masks = test_env.env_method("action_masks")
 
         action, _states = model.predict(
             obs, action_masks=action_masks[0], deterministic=True
