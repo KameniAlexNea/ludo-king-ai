@@ -1,20 +1,28 @@
-from dataclasses import dataclass
+from typing import Optional
 
 from .types import MoveOption, StrategyContext
 
 
-@dataclass
 class BaseStrategy:
-    """Base class for all strategies."""
+    """Base class for heuristic strategies with shared move selection."""
 
-    name: str = "base"
+    name = "base"
 
-    def select_move(self, ctx: StrategyContext) -> MoveOption:
-        """Select a move from the list of valid moves.
+    def select_move(self, ctx: StrategyContext) -> Optional[MoveOption]:
+        best: Optional[MoveOption] = None
+        best_score = float("-inf")
 
-        Args:
-            ctx (StrategyContext): The context containing valid moves and observation.
-        Returns:
-            MoveOption: The selected move.
-        """
+        for move in ctx.iter_legal():
+            score = self._score_move(ctx, move)
+            if score > best_score or (
+                score == best_score and best and move.piece_id < best.piece_id
+            ):
+                best = move
+                best_score = score
+
+        return best
+
+    def _score_move(
+        self, ctx: StrategyContext, move: MoveOption
+    ) -> float:  # pragma: no cover - abstract
         raise NotImplementedError

@@ -3,17 +3,16 @@ from __future__ import annotations
 from typing import Dict, Type
 
 from .cautious import CautiousStrategy
-from .killer import KillerStrategy
 from .defensive import DefensiveStrategy
 from .finish_line import FinishLineStrategy
 from .heatseeker import HeatSeekerStrategy
 from .hoarder import HoarderStrategy
 from .homebody import HomebodyStrategy
+from .killer import KillerStrategy
 from .probability import ProbabilityStrategy
+from .retaliator import RetaliatorStrategy
 from .rusher import RusherStrategy
 from .support import SupportStrategy
-from .retaliator import RetaliatorStrategy
-from .probability import ProbabilityStrategy
 
 STRATEGY_REGISTRY: Dict[str, Type] = {
     ProbabilityStrategy.name: ProbabilityStrategy,

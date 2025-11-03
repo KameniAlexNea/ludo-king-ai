@@ -9,10 +9,10 @@ from .hoarder import HoarderStrategy
 from .homebody import HomebodyStrategy
 from .killer import KillerStrategy
 from .probability import ProbabilityStrategy
+from .registry import available, create
 from .retaliator import RetaliatorStrategy
 from .rusher import RusherStrategy
 from .support import SupportStrategy
-from .registry import available, create
 from .types import MoveOption, StrategyContext
 
 __all__ = [

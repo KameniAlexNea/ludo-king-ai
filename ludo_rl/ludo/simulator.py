@@ -1,12 +1,13 @@
 import os
 import random
+from dataclasses import dataclass
 from typing import List
 
 import numpy as np
 
 from .config import config
 from .game import LudoGame
-from dataclasses import dataclass
+
 
 @dataclass
 class GameSimulator:

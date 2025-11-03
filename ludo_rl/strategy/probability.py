@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from .base import BaseStrategy
 from .types import MoveOption, StrategyContext
 
@@ -25,21 +23,7 @@ class ProbabilityStrategy(BaseStrategy):
         self.safe_bonus = safe_bonus
         self.extra_turn_bonus = extra_turn_bonus
 
-    def select_move(self, ctx: StrategyContext) -> Optional[MoveOption]:
-        best: Optional[MoveOption] = None
-        best_score = float("-inf")
-
-        for move in ctx.iter_legal():
-            score = self._score_move(move)
-            if score > best_score or (
-                score == best_score and best and move.piece_id < best.piece_id
-            ):
-                best = move
-                best_score = score
-
-        return best
-
-    def _score_move(self, move: MoveOption) -> float:
+    def _score_move(self, ctx: StrategyContext, move: MoveOption) -> float:
         score = move.progress * self.progress_weight
         if move.can_capture:
             score += move.capture_count * self.capture_weight

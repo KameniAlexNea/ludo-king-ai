@@ -38,21 +38,7 @@ class HoarderStrategy(BaseStrategy):
         default = {1, 2, 3, 8, 9, config.PATH_LENGTH - 6}
         return default
 
-    def select_move(self, ctx: StrategyContext) -> Optional[MoveOption]:
-        best: Optional[MoveOption] = None
-        best_score = float("-inf")
-
-        for move in ctx.iter_legal():
-            score = self._score_move(move)
-            if score > best_score or (
-                score == best_score and best and move.piece_id < best.piece_id
-            ):
-                best = move
-                best_score = score
-
-        return best
-
-    def _score_move(self, move: MoveOption) -> float:
+    def _score_move(self, ctx: StrategyContext, move: MoveOption) -> float:
         score = 0.0
         if move.forms_blockade:
             score += self.blockade_bonus

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from .base import BaseStrategy
 from .features import opponent_density_within
 from .types import MoveOption, StrategyContext
@@ -27,20 +25,6 @@ class RusherStrategy(BaseStrategy):
         self.risk_penalty = risk_penalty
         self.density_radius = density_radius
         self.density_penalty = density_penalty
-
-    def select_move(self, ctx: StrategyContext) -> Optional[MoveOption]:
-        best: Optional[MoveOption] = None
-        best_score = float("-inf")
-
-        for move in ctx.iter_legal():
-            score = self._score_move(ctx, move)
-            if score > best_score or (
-                score == best_score and best and move.piece_id < best.piece_id
-            ):
-                best = move
-                best_score = score
-
-        return best
 
     def _score_move(self, ctx: StrategyContext, move: MoveOption) -> float:
         score = 0.0
