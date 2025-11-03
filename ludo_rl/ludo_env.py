@@ -4,9 +4,9 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from src.config import config
-from src.reward import reward_config
-from src.simulator import GameSimulator
+from .ludo.config import config
+from .ludo.reward import reward_config
+from .ludo.simulator import GameSimulator
 
 
 class LudoEnv(gym.Env):

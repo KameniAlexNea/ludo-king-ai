@@ -1,8 +1,8 @@
 import random
 
-from src.config import config
-from src.moves import MoveManagement
-from src.player import Piece, Player
+from .config import config
+from .moves import MoveManagement
+from .player import Piece, Player
 
 
 class LudoGame:

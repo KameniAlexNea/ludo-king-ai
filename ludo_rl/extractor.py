@@ -3,7 +3,7 @@ import torch
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from torch import nn
 
-from src.config import net_config
+from .ludo.config import net_config
 
 
 class LudoCnnExtractor(BaseFeaturesExtractor):

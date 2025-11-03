@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from src.config import config
+from .config import config
 
 
 @dataclass

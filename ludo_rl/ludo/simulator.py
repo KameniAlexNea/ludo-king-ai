@@ -1,8 +1,8 @@
 import random
 from typing import List
 
-from src.config import config
-from src.game import LudoGame
+from .config import config
+from .game import LudoGame
 
 
 class GameSimulator:
