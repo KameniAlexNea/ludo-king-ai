@@ -6,16 +6,16 @@ from typing import Dict
 class Reward:
     win: float = 50
     lose: float = -50
-    finish: float = 10
-    capture: float = 2
-    got_capture: float = -5
-    blockade: float = 3
-    hit_blockade: float = -4
-    exit_home: float = 1
-    progress: float = 0.1
-    safe_position: float = 0.5
-    draw: float = -5
-    skipped_turn = -0.01
+    finish: float = 1
+    capture: float = 0.2
+    got_capture: float = -0.5
+    blockade: float = 0.3
+    hit_blockade: float = -0.4
+    exit_home: float = 0.1
+    progress: float = 0.01
+    safe_position: float = 0.05
+    draw: float = -0.5
+    skipped_turn = -0.001
 
 
 reward_config = Reward()

@@ -133,11 +133,6 @@ class LudoEnv(gym.Env):
 
         # Handle "no valid moves" on the very first turn
         while not np.any(info["action_mask"]):
-            if self.render_mode == "human":
-                print(
-                    f"Agent rolled {self.current_dice_roll}, no valid moves. Skipping turn."
-                )
-
             self.current_turn += 1
             self.simulator.step_opponents_only()
             self.current_dice_roll = self.simulator.game.roll_dice()
@@ -148,13 +143,6 @@ class LudoEnv(gym.Env):
 
             if self.current_turn >= self.max_game_turns:
                 return obs, info
-
-        if self.render_mode == "human":
-            print("--- Game Reset ---")
-            self.render()
-            print(
-                f"Agent rolled {self.current_dice_roll}. Valid pieces: {np.where(info['action_mask'])[0]}"
-            )
 
         return obs, info
 
@@ -167,8 +155,6 @@ class LudoEnv(gym.Env):
             # Agent chose an invalid piece. This shouldn't happen with MaskablePPO.
             # If it does, penalize and skip turn.
             reward = reward_config.lose  # Heavy penalty
-            if self.render_mode == "human":
-                print(f"Agent chose INVALID action {action}. Turn skipped.")
             opponent_rewards = self.simulator.step_opponents_only()
             reward += opponent_rewards[self.agent_index]
             self.current_turn += 1
@@ -179,11 +165,6 @@ class LudoEnv(gym.Env):
         else:
             # 2. Execute the valid move
             chosen_move = self.move_map[action]
-
-            if self.render_mode == "human":
-                print(
-                    f"Agent moving piece {chosen_move['piece'].piece_id} to {chosen_move['new_pos']}"
-                )
 
             # `step` executes agent move, simulates opponents, and returns next obs
             next_obs_data, reward, extra_turn = self.simulator.step(chosen_move)
@@ -200,18 +181,16 @@ class LudoEnv(gym.Env):
         if terminated:
             players = self.simulator.game.players
             rank = sum(p.has_won() for p in players)
-            reward += (
-                reward_config.win * (len(players) - rank + 1) / len(players)
-            )  # Large bonus for winning
-            if self.render_mode == "human":
-                print(f"---AGENT FINISHED (Rank: {rank}) ---")
+            if rank == len(players):
+                reward += reward_config.lose
+            else:
+                reward += (
+                    reward_config.win * (len(players) - rank + 1) / len(players)
+                )  # Large bonus for winning
+            info["final_rank"] = rank
             return obs, reward, terminated, truncated, info
 
         if truncated:
-            if self.render_mode == "human":
-                print(
-                    f"--- MAX TURNS ({self.max_game_turns}) REACHED. GAME TRUNCATED. ---"
-                )
             reward += reward_config.draw
             return obs, reward, terminated, truncated, info
 
@@ -219,10 +198,6 @@ class LudoEnv(gym.Env):
         # Loop until the agent has a move to make
         while not np.any(info["action_mask"]) and not terminated and not truncated:
             reward += reward_config.skipped_turn  # Small penalty for a skipped turn
-            if self.render_mode == "human":
-                print(
-                    f"Agent rolled {self.current_dice_roll}, no valid moves. Skipping turn."
-                )
             opponent_rewards = self.simulator.step_opponents_only()
             reward += opponent_rewards[self.agent_index]
             self.current_turn += 1
@@ -237,26 +212,23 @@ class LudoEnv(gym.Env):
             terminated, truncated = self._check_game_over()  # Re-check every loop
 
         if truncated:
-            if self.render_mode == "human":
-                print(
-                    f"--- MAX TURNS ({self.max_game_turns}) REACHED. GAME TRUNCATED. ---"
-                )
             reward += reward_config.draw
+            info["final_rank"] = 0
             return obs, reward, terminated, truncated, info
-        if self.render_mode == "human":
-            self.render()
-            print(
-                f"Agent's turn. Rolled {self.current_dice_roll}. Valid pieces: {np.where(info['action_mask'])[0]}"
-            )
         return obs, reward, terminated, truncated, info
 
     def render(self):
-        if self.render_mode == "human":
-            print(f"--- Turn {self.current_turn}/{self.max_game_turns} ---")
-            for i, player in enumerate(self.simulator.game.players):
-                player_str = "AGENT (P0)" if i == 0 else f"Opponent (P{i})"
-                piece_pos = [p.position for p in player.pieces]
-                print(f"   {player_str}: {piece_pos}")
+        return format_env_state(self)
 
     def close(self):
         pass
+
+
+def format_env_state(env: "LudoEnv") -> str:
+    """Returns a string snapshot of the current game state."""
+    lines = [f"--- Turn {env.current_turn}/{env.max_game_turns} ---"]
+    for idx, player in enumerate(env.simulator.game.players):
+        label = "AGENT (P0)" if idx == env.agent_index else f"Opponent (P{idx})"
+        positions = [piece.position for piece in player.pieces]
+        lines.append(f"   {label}: {positions}")
+    return "\n".join(lines)

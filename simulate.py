@@ -1,9 +1,11 @@
 import time
+
 import numpy as np
-from stable_baselines3.common.vec_env import DummyVecEnv
 from sb3_contrib import MaskablePPO
-from ludo_rl.ludo_env import LudoEnv
+from stable_baselines3.common.vec_env import DummyVecEnv
+
 from ludo_rl.ludo.config import config
+from ludo_rl.ludo_env import LudoEnv
 
 print("--- Initializing Test Environment ---")
 print(f"Max game turns set to: {config.MAX_TURNS}")
@@ -18,7 +20,7 @@ def create_env():
 # Vectorize the environment
 env = DummyVecEnv([create_env])
 model = MaskablePPO.load(
-    "training/ludo_models/ppo_ludo_1762131743/ludo_model_160000_steps.zip"
+    "training/ludo_models/ppo_ludo_1762131743/best_model/best_model.zip"
 )
 
 print("\n--- Starting Random Game Simulation ---")
@@ -64,7 +66,7 @@ while True:
 
     episode_reward += reward
 
-    # print(f"Step {step_count}, Action: {random_action[0]}, Reward: {reward:.2f}")
+    print(f"Step {step_count}, Action: {action.item()}, Reward: {reward:.2f}")
 
     # Check if the episode is over
     if terminated or truncated:
@@ -74,6 +76,7 @@ while True:
         print(f"Total Steps: {step_count}")
         print(f"Total Reward: {episode_reward:.2f}")
         print(f"Simulation Time: {end_time - start_time:.2f} seconds")
+        print("Info related to final rank:", infos[0].get("final_rank", "N/A"))
         break
 
 # Close the environment
