@@ -1,11 +1,11 @@
 """Heuristic Ludo strategies for scripted play or evaluation."""
 
-from .types import MoveOption, StrategyContext
-from .features import build_move_options
-from .probability import ProbabilityStrategy
 from .cautious import CautiousStrategy
+from .features import build_move_options
 from .killer import KillerStrategy
+from .probability import ProbabilityStrategy
 from .registry import available, create
+from .types import MoveOption, StrategyContext
 
 __all__ = [
     "MoveOption",

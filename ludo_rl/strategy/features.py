@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, List
+from typing import Dict, List
 
 import numpy as np
 
-from ludo_rl.ludo.player import Piece
+from ludo_rl.ludo.model import Piece
 
 from .types import MoveOption, StrategyContext
 
@@ -52,7 +52,9 @@ def build_move_options(
         forms_blockade = _forms_blockade(board, new_pos, move)
         extra_turn = dice_roll == 6 or enters_home or can_capture
         risk = _estimate_risk(board, new_pos)
-        leaving_safe_zone = _is_safe_destination(board, current_pos) and not enters_safe_zone
+        leaving_safe_zone = (
+            _is_safe_destination(board, current_pos) and not enters_safe_zone
+        )
 
         moves.append(
             MoveOption(
@@ -73,7 +75,9 @@ def build_move_options(
             )
         )
 
-    return StrategyContext(board=board, dice_roll=dice_roll, action_mask=action_mask, moves=moves)
+    return StrategyContext(
+        board=board, dice_roll=dice_roll, action_mask=action_mask, moves=moves
+    )
 
 
 def _compute_progress(current_pos: int, new_pos: int) -> int:

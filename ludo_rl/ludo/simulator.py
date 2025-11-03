@@ -1,5 +1,8 @@
+import os
 import random
 from typing import List
+
+import numpy as np
 
 from .config import config
 from .game import LudoGame
@@ -13,6 +16,7 @@ class GameSimulator:
     def __init__(self, agent_index):
         self.game = LudoGame()
         self.agent_index = agent_index
+        self._configure_opponent_strategies()
         self.reset_summaries()
 
     def reset_summaries(self):
@@ -82,7 +86,7 @@ class GameSimulator:
                     extra_turn = False
                     continue
 
-                move = random.choice(valid_moves)
+                move = self._decide_move(opp_index, dice_roll, valid_moves)
                 result = self.game.make_move(
                     opp_index, move["piece"], move["new_pos"], dice_roll
                 )
@@ -94,6 +98,49 @@ class GameSimulator:
                 extra_turn = result["extra_turn"]
 
         return cumulative_rewards
+
+    def _configure_opponent_strategies(self):
+        names = [os.getenv("OPPONENT1"), os.getenv("OPPONENT2"), os.getenv("OPPONENT3")]
+        strategies = [
+            n.strip().strip('"').lower() for n in names if n and n.strip().strip('"')
+        ]
+        it = iter(strategies)
+        for idx, player in enumerate(self.game.players):
+            if idx == self.agent_index:
+                continue
+            try:
+                player.strategy_name = next(it)
+                player._strategy = None
+            except StopIteration:
+                break
+
+    def _decide_move(self, player_index: int, dice_roll: int, valid_moves: list[dict]):
+        player = self.game.players[player_index]
+        board_stack = self._build_board_stack(player_index)
+        move = player.decide(board_stack, dice_roll, valid_moves)
+        if move is not None:
+            return move
+        return random.choice(valid_moves)
+
+    def _build_board_stack(self, player_index: int) -> np.ndarray:
+        board_state = self.game.get_board_state(player_index)
+        zero_channel = np.zeros(config.PATH_LENGTH, dtype=np.float32)
+        board_stack = np.stack(
+            [
+                np.asarray(board_state["my_pieces"], dtype=np.float32),
+                np.asarray(board_state["opp1_pieces"], dtype=np.float32),
+                np.asarray(board_state["opp2_pieces"], dtype=np.float32),
+                np.asarray(board_state["opp3_pieces"], dtype=np.float32),
+                np.asarray(board_state["safe_zones"], dtype=np.float32),
+                zero_channel,
+                zero_channel,
+                zero_channel,
+                zero_channel,
+                zero_channel,
+            ],
+            dtype=np.float32,
+        )
+        return board_stack
 
     def step_opponents_only(self):
         """Called when agent has no moves. Resets summaries and simulates opponents."""
