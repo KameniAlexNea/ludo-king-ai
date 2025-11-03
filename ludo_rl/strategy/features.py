@@ -67,8 +67,21 @@ def build_move_options(
             )
         )
 
+    my_distribution = board[strategy_config.board_channel_my].copy()
+    opponent_distribution = board[
+        strategy_config.board_channel_opp_start : strategy_config.board_channel_opp_end
+        + 1
+    ].sum(axis=0)
+    safe_channel = board[strategy_config.board_channel_safe].copy()
+
     return StrategyContext(
-        board=board, dice_roll=dice_roll, action_mask=action_mask, moves=moves
+        board=board,
+        dice_roll=dice_roll,
+        action_mask=action_mask,
+        moves=moves,
+        my_distribution=my_distribution,
+        opponent_distribution=opponent_distribution,
+        safe_channel=safe_channel,
     )
 
 
@@ -136,3 +149,36 @@ def _estimate_risk(board: np.ndarray, new_pos: int) -> float:
         risk += threat_level * weight
 
     return risk
+
+
+def opponent_density_within(board: np.ndarray, center: int, radius: int = 6) -> float:
+    opponents = board[
+        strategy_config.board_channel_opp_start : strategy_config.board_channel_opp_end
+        + 1
+    ]
+    total = 0.0
+    for offset in range(-radius, radius + 1):
+        idx = center + offset
+        if idx <= 0:
+            idx += strategy_config.main_track_end
+        elif idx > strategy_config.main_track_end:
+            idx -= strategy_config.main_track_end
+        total += opponents[:, idx].sum()
+    return float(total)
+
+
+def nearest_opponent_distance(board: np.ndarray, position: int) -> int:
+    opponents = board[
+        strategy_config.board_channel_opp_start : strategy_config.board_channel_opp_end
+        + 1
+    ]
+    for distance in range(1, strategy_config.main_track_end + 1):
+        forward = position + distance
+        backward = position - distance
+        if forward > strategy_config.main_track_end:
+            forward -= strategy_config.main_track_end
+        if backward <= 0:
+            backward += strategy_config.main_track_end
+        if opponents[:, forward].sum() > 0 or opponents[:, backward].sum() > 0:
+            return distance
+    return strategy_config.main_track_end

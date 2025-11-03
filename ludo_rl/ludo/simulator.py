@@ -6,8 +6,9 @@ import numpy as np
 
 from .config import config
 from .game import LudoGame
+from dataclasses import dataclass
 
-
+@dataclass
 class GameSimulator:
     """
     Manages the simulation, modified to integrate with the Gym env.

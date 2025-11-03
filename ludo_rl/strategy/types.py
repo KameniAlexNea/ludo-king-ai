@@ -34,6 +34,9 @@ class StrategyContext:
     dice_roll: int
     action_mask: np.ndarray  # shape (4,)
     moves: List[MoveOption]
+    my_distribution: np.ndarray
+    opponent_distribution: np.ndarray
+    safe_channel: np.ndarray
 
     def iter_legal(self) -> Iterable[MoveOption]:
         return (move for move in self.moves if self.action_mask[move.piece_id])
