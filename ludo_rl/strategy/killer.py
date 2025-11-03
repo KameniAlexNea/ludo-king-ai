@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Optional
 
+from .base import BaseStrategy
 from .types import MoveOption, StrategyContext
 
 
-class KillerStrategy:
+class KillerStrategy(BaseStrategy):
     """Aggressively hunts opponent pieces even at higher risk."""
 
     name = "killer"

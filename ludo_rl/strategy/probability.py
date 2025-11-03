@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Optional
 
+from .base import BaseStrategy
 from .types import MoveOption, StrategyContext
 
 
-class ProbabilityStrategy:
+class ProbabilityStrategy(BaseStrategy):
     """Balances progress with estimated knockout risk."""
 
     name = "probability"

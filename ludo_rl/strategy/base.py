@@ -1,6 +1,9 @@
+from dataclasses import dataclass
+
 from .types import MoveOption, StrategyContext
 
 
+@dataclass
 class BaseStrategy:
     """Base class for all strategies."""
 

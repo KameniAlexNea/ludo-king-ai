@@ -6,7 +6,6 @@ from loguru import logger
 
 # We must use MaskablePPO from sb3_contrib to handle action masking
 from sb3_contrib import MaskablePPO
-from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback as EvalCallback
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
@@ -36,32 +35,19 @@ if __name__ == "__main__":
     # --- Create Training Environment ---
     # We use a lambda to create the environment
     # Vectorize the environment
-    train_env = SubprocVecEnv([LudoEnv for _ in range(os.cpu_count() // 2)])
+    NENVS = os.cpu_count() // 2 if os.cpu_count() else 1
+    train_env = SubprocVecEnv([LudoEnv for _ in range(NENVS)])
     train_env = VecMonitor(train_env)
-
-    # --- Create Evaluation Environment ---
-    eval_env = DummyVecEnv([LudoEnv])
-    eval_env = VecMonitor(eval_env)
 
     logger.debug("--- Setting up Callbacks ---")
 
     # --- Callbacks ---
-    # Save a checkpoint every 10,000 steps
+    # Save a checkpoint every xxx steps
     checkpoint_callback = CheckpointCallback(
-        save_freq=10_000, save_path=model_save_path, name_prefix="ludo_model"
+        save_freq=250_000 // NENVS, save_path=model_save_path, name_prefix="ludo_model"
     )
 
-    # Evaluate the model every 20,000 steps
-    eval_callback = EvalCallback(
-        eval_env,
-        best_model_save_path=os.path.join(model_save_path, "best_model"),
-        log_path=log_path,
-        eval_freq=20_000,
-        deterministic=True,
-        render=False,  # Set to True if you want to watch the eval
-    )
-
-    callback_list = CallbackList([checkpoint_callback, eval_callback])
+    callback_list = CallbackList([checkpoint_callback])
 
     # --- Policy Kwargs ---
     # Define the custom feature extractor

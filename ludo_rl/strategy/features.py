@@ -39,7 +39,7 @@ def build_move_options(
         distance_to_goal = max(strategy_config.home_finish - new_pos, 0)
 
         can_capture, capture_count = _check_capture(board, new_pos)
-        enters_home = new_pos >= strategy_config.home_start
+        enters_home = new_pos == strategy_config.home_finish
         enters_safe_zone = _is_safe_destination(board, new_pos)
         forms_blockade = _forms_blockade(board, new_pos, move)
         extra_turn = dice_roll == 6 or enters_home or can_capture

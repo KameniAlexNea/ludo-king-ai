@@ -35,7 +35,7 @@ for idx, player in enumerate(players):
     print(f"Opponent P{idx} strategy: {player.strategy_name}")
 
 model = MaskablePPO.load(
-    "training/ludo_models/ppo_ludo_1762131743/best_model/best_model.zip"
+    "training/ludo_models/ppo_ludo_1762181598/best_model/best_model.zip"
 )
 
 print("\n--- Starting Random Game Simulation ---")

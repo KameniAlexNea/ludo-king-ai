@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+from ..strategy.base import BaseStrategy
 
 from ludo_rl.strategy import build_move_options, create
 
@@ -17,7 +18,7 @@ class Player:
     pieces: Optional[list[Piece]] = field(default_factory=lambda: [])
     has_finished: Optional[bool] = False
     strategy_name: str = "random"
-    _strategy: object = field(default=None, init=False, repr=False)
+    _strategy: BaseStrategy = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
         self.start_square = config.PLAYER_START_SQUARES[self.color]

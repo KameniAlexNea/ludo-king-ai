@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Optional
 
+from .base import BaseStrategy
 from .types import MoveOption, StrategyContext
 
 
-class CautiousStrategy:
+class CautiousStrategy(BaseStrategy):
     """Prioritises safety, safe zones, and avoiding exposure."""
 
     name = "cautious"

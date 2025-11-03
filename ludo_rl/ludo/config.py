@@ -1,3 +1,7 @@
+from dataclasses import dataclass
+
+
+@dataclass
 class Config:
     # --- Constants ---
     PATH_LENGTH = 58  # 0=yard, 1-51=track, 52-56=home, 57=finished
@@ -10,6 +14,7 @@ class Config:
     SAFE_SQUARES_ABS = [1, 9, 14, 22, 27, 35, 40, 48]
 
 
+@dataclass
 class NetworkConfig:
     conv_configs = [16, 32]
     kernel_sizes = [7, 5]
@@ -20,6 +25,7 @@ class NetworkConfig:
     vf = [32, 16]
 
 
+@dataclass
 class StrategyConfig:
     board_channel_my = 0
     board_channel_safe = 4
@@ -31,6 +37,12 @@ class StrategyConfig:
     home_finish = 57
 
 
+@dataclass
+class TrainingConfig:
+    save_freq = 250_000
+
+
 config = Config()
 net_config = NetworkConfig()
 strategy_config = StrategyConfig()
+training_config = TrainingConfig()
