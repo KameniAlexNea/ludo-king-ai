@@ -8,6 +8,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "loguru>=0.7.3",
     "numpy>=2.3.3",
+    "pytest>=8.4.2",
     "sb3-contrib>=2.7.0",
     "stable-baselines3>=2.7.0",
     "tensorboard>=2.20.0",
