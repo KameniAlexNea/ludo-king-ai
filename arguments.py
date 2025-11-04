@@ -36,7 +36,7 @@ def build_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log-dir", type=str, default="training/ludo_logs")
     parser.add_argument("--model-dir", type=str, default="training/ludo_models")
     parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--checkpoint-freq", type=int, default=250_000)
+    parser.add_argument("--checkpoint-freq", type=int, default=1_000_000)
     return parser
 
 

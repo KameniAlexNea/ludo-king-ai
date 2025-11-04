@@ -1,3 +1,4 @@
+import argparse
 import random
 import time
 
@@ -14,10 +15,14 @@ def seed_environ(seed_value: int = None):
     np.random.seed(seed_value)
 
 
-seed_environ(42)
-
-print("--- Initializing Test Environment ---")
-print(f"Max game turns set to: {config.MAX_TURNS}")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Simulate a trained Ludo agent")
+    parser.add_argument(
+        "--model-path",
+        type=str,
+        help="Path to the MaskablePPO model zip file",
+    )
+    return parser.parse_args()
 
 
 def create_env():
@@ -26,69 +31,81 @@ def create_env():
     return env
 
 
-# Vectorize the environment
-env = DummyVecEnv([create_env])
-players = env.envs[0].simulator.game.players
-for idx, player in enumerate(players):
-    if idx == env.envs[0].simulator.agent_index:
-        continue
-    print(f"Opponent P{idx} strategy: {player.strategy_name}")
+def main() -> None:
+    args = parse_args()
 
-model = MaskablePPO.load(
-    "training/ludo_models/ppo_ludo_1762181598/best_model/best_model.zip"
-)
+    seed_environ(42)
 
-print("\n--- Starting Random Game Simulation ---")
-start_time = time.time()
+    print("--- Initializing Test Environment ---")
+    print(f"Max game turns set to: {config.MAX_TURNS}")
 
-# Reset the environment
-obs = env.reset()
-episode_reward = 0
-step_count = 0
+    # Vectorize the environment
+    env = DummyVecEnv([create_env])
+    players = env.envs[0].simulator.game.players
+    for idx, player in enumerate(players):
+        if idx == env.envs[0].simulator.agent_index:
+            continue
+        print(f"Opponent P{idx} strategy: {player.strategy_name}")
 
-# Main game loop
-while True:
-    step_count += 1
+    model = MaskablePPO.load(args.model_path)
 
-    # Get the action mask for the first (and only) environment
-    action_masks = env.env_method("action_masks")[0]
+    print("\n--- Starting Random Game Simulation ---")
+    start_time = time.time()
 
-    # Get the indices of all valid actions
-    valid_actions = np.where(action_masks)[0]
+    # Reset the environment
+    obs = env.reset()
+    episode_reward = 0
+    step_count = 0
 
-    if len(valid_actions) == 0:
-        # This error should be impossible now, as ludo_env.py
-        # handles skipped turns internally.
-        print(f"CRITICAL ERROR: Step {step_count} - No valid actions available.")
-        print("This should not happen. Check ludo_env.py's reset() and step() loops.")
-        break
+    # Main game loop
+    while True:
+        step_count += 1
 
-    # Choose a random action from the valid set
-    action, _ = model.predict(obs, action_masks=action_masks)
+        # Get the action mask for the first (and only) environment
+        action_masks = env.env_method("action_masks")[0]
 
-    # Take the step
-    obs, rewards, dones, infos = env.step([action.item()])
+        # Get the indices of all valid actions
+        valid_actions = np.where(action_masks)[0]
 
-    # Extract results for the first env
-    reward = rewards[0]
-    terminated = dones[0]  # 'dones' is True if the env terminated (agent won)
+        if len(valid_actions) == 0:
+            # This error should be impossible now, as ludo_env.py
+            # handles skipped turns internally.
+            print(f"CRITICAL ERROR: Step {step_count} - No valid actions available.")
+            print(
+                "This should not happen. Check ludo_env.py's reset() and step() loops."
+            )
+            break
 
-    truncated = infos[0].get("truncated", False)
+        # Choose a random action from the valid set
+        action, _ = model.predict(obs, action_masks=action_masks)
 
-    episode_reward += reward
+        # Take the step
+        obs, rewards, dones, infos = env.step([action.item()])
 
-    print(f"Step {step_count}, Action: {action.item()}, Reward: {reward:.2f}")
+        # Extract results for the first env
+        reward = rewards[0]
+        terminated = dones[0]  # 'dones' is True if the env terminated (agent won)
 
-    # Check if the episode is over
-    if terminated or truncated:
-        print("\n--- SIMULATION COMPLETE ---")
+        truncated = infos[0].get("truncated", False)
 
-        end_time = time.time()
-        print(f"Total Steps: {step_count}")
-        print(f"Total Reward: {episode_reward:.2f}")
-        print(f"Simulation Time: {end_time - start_time:.2f} seconds")
-        print("Info related to final rank:", infos[0].get("final_rank", "N/A"))
-        break
+        episode_reward += reward
 
-# Close the environment
-env.close()
+        print(f"Step {step_count}, Action: {action.item()}, Reward: {reward:.2f}")
+
+        # Check if the episode is over
+        if terminated or truncated:
+            print("\n--- SIMULATION COMPLETE ---")
+
+            end_time = time.time()
+            print(f"Total Steps: {step_count}")
+            print(f"Total Reward: {episode_reward:.2f}")
+            print(f"Simulation Time: {end_time - start_time:.2f} seconds")
+            print("Info related to final rank:", infos[0].get("final_rank", "N/A"))
+            break
+
+    # Close the environment
+    env.close()
+
+
+if __name__ == "__main__":
+    main()
