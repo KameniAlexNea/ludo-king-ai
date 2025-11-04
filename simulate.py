@@ -49,6 +49,8 @@ def main() -> None:
 
     model = MaskablePPO.load(args.model_path)
 
+    print(model.policy)
+
     print("\n--- Starting Random Game Simulation ---")
     start_time = time.time()
 

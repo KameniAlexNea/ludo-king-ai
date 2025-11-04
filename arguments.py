@@ -20,6 +20,7 @@ class TrainConfig:
     model_dir: str
     device: str
     checkpoint_freq: int
+    learning_rate: float
 
 
 def build_train_parser() -> argparse.ArgumentParser:
@@ -37,6 +38,7 @@ def build_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-dir", type=str, default="training/ludo_models")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--checkpoint-freq", type=int, default=1_000_000)
+    parser.add_argument("--learning-rate", type=float, default=3e-4)
     return parser
 
 
@@ -63,4 +65,5 @@ def parse_train_args(args: list[str] | None = None) -> TrainConfig:
         model_dir=namespace.model_dir,
         device=namespace.device,
         checkpoint_freq=namespace.checkpoint_freq,
+        learning_rate=namespace.learning_rate
     )

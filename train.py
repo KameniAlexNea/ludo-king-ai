@@ -3,16 +3,31 @@ import time
 
 import torch
 from loguru import logger
+import math
 
 # We must use MaskablePPO from sb3_contrib to handle action masking
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor, VecNormalize
 
 from arguments import parse_train_args
 from ludo_rl.extractor import LudoCnnExtractor
 from ludo_rl.ludo.config import net_config
 from ludo_rl.ludo_env import LudoEnv
+
+
+def lr_schedule(lr_min: float = 1e-5, lr_max: float = 3e-4, warmup_steps: float = 0.03) -> float:
+    lr_min, lr_max = min(lr_min, lr_max), max(lr_min, lr_max)
+    def schedule(progress_remaining: float) -> float:
+        progress = 1 - progress_remaining
+        if progress < warmup_steps:
+            return lr_min + (lr_max - lr_min) * (progress / warmup_steps)
+        else:
+            adjusted_progress = (progress - warmup_steps) / (1 - warmup_steps)
+            return lr_max + 0.5 * (lr_max - lr_min) * (
+                1 + math.cos(math.pi * adjusted_progress)
+            )
+    return schedule
 
 # --- Main Training Script ---
 
@@ -39,6 +54,7 @@ if __name__ == "__main__":
         train_env = DummyVecEnv([LudoEnv])
     else:
         train_env = SubprocVecEnv([LudoEnv for _ in range(args.num_envs)])
+    train_env = VecNormalize(train_env)
     train_env = VecMonitor(train_env)
 
     logger.debug("--- Setting up Callbacks ---")
@@ -49,6 +65,7 @@ if __name__ == "__main__":
         save_freq=max(1, args.checkpoint_freq // args.num_envs),
         save_path=model_save_path,
         name_prefix="ludo_model",
+        save_vecnormalize=True,
     )
 
     callback_list = CallbackList([checkpoint_callback])
@@ -83,6 +100,7 @@ if __name__ == "__main__":
         clip_range=args.clip_range,
         ent_coef=args.ent_coef,
         device=args.device,
+        learning_rate=lr_schedule(lr_max=args.learning_rate)
     )
 
     final_model_path = os.path.join(model_save_path, "init_model")
