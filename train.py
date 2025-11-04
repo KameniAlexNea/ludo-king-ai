@@ -56,7 +56,7 @@ if __name__ == "__main__":
     # --- Policy Kwargs ---
     # Define the custom feature extractor
     policy_kwargs = dict(
-        activation_fn=torch.nn.ReLU,
+        activation_fn=torch.nn.Tanh,
         features_extractor_class=LudoCnnExtractor,
         features_extractor_kwargs=dict(
             features_dim=net_config.embed_dim
