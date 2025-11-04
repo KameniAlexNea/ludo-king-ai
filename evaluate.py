@@ -7,7 +7,7 @@ from typing import Iterable, Sequence
 
 import numpy as np
 from sb3_contrib import MaskablePPO
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from ludo_rl.ludo_env import LudoEnv
 
@@ -68,8 +68,29 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_env() -> DummyVecEnv:
-    return DummyVecEnv([lambda: LudoEnv(render_mode=None)])
+def build_env(model_path: str | None = None) -> DummyVecEnv:
+    """Create eval env and, if available, load VecNormalize stats.
+
+    If `model_path` is provided, this will look for a `vecnormalize.pkl` file
+    in the same directory and load it to ensure observations are normalized
+    exactly like during training. Rewards are not normalized during eval.
+    """
+    base_env = DummyVecEnv([lambda: LudoEnv(render_mode=None)])
+
+    if model_path is None:
+        return base_env
+
+    stats_path = os.path.join(os.path.dirname(model_path), "vecnormalize.pkl")
+    if os.path.exists(stats_path):
+        try:
+            env = VecNormalize.load(stats_path, base_env)
+            env.training = False
+            env.norm_reward = False
+            return env
+        except Exception:
+            # Fallback to unnormalized env if loading fails
+            return base_env
+    return base_env
 
 
 def evaluate_triplet(
@@ -81,7 +102,7 @@ def evaluate_triplet(
     os.environ["OPPONENTS"] = ",".join(triplet)
     os.environ["STRATEGY_SELECTION"] = "1"
 
-    env = build_env()
+    env = build_env(getattr(model, "path", None) or getattr(model, "_loaded_params", {}).get("model_path", None))
 
     rank_counter: Counter[int] = Counter()
     wins = 0
@@ -136,6 +157,8 @@ def main() -> None:
     seed_everything(args.seed)
 
     model = MaskablePPO.load(args.model_path, device=args.device)
+    # Attach model_path so build_env can find VecNormalize stats alongside it
+    setattr(model, "path", args.model_path)
     model.policy.set_training_mode(False)
 
     results = []

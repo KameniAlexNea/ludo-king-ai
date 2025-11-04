@@ -52,25 +52,36 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
             ).float()
             n_flatten = self.cnn(dummy_board).shape[1]
 
+        # Normalize CNN features to stabilize scale before fusion
+        self.board_norm = nn.LayerNorm(n_flatten)
+
         # --- Linear Layer to combine CNN output and dice roll ---
         # The dice roll will be one-hot encoded to a size of 6
+        # Optional pre-linear normalization and a light MLP head
+        self.pre_linear_norm = nn.LayerNorm(n_flatten + self.dice_roll_dim)
         self.linear = nn.Sequential(
-            nn.Linear(n_flatten + self.dice_roll_dim, features_dim), nn.ReLU()
+            nn.Linear(n_flatten + self.dice_roll_dim, features_dim),
+            nn.ReLU(),
+            nn.LayerNorm(features_dim),
         )
 
     def forward(self, observations: dict) -> torch.Tensor:
         # Process board with CNN
         board_features = self.cnn(observations["board"].float())
+        board_features = self.board_norm(board_features)
 
         # One-hot encode the dice roll
         # The dice roll is 0-5 (since we did dice-1)
         dice_roll = observations["dice_roll"].long()
+        # Defensive clamp in case upstream normalization corrupts the categorical input
+        dice_roll = torch.clamp(dice_roll, 0, self.dice_roll_dim - 1)
         one_hot_dice = nn.functional.one_hot(
             dice_roll.squeeze(1), num_classes=self.dice_roll_dim
         ).float()
 
         # Concatenate CNN features and one-hot dice roll
         combined_features = torch.cat([board_features, one_hot_dice], dim=1)
+        combined_features = self.pre_linear_norm(combined_features)
 
         # Pass through final linear layer
         return self.linear(combined_features)

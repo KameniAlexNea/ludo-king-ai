@@ -1,14 +1,14 @@
+import math
 import os
 import time
 
 import torch
 from loguru import logger
-import math
 
 # We must use MaskablePPO from sb3_contrib to handle action masking
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor, VecNormalize
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from arguments import parse_train_args
 from ludo_rl.extractor import LudoCnnExtractor
@@ -16,18 +16,23 @@ from ludo_rl.ludo.config import net_config
 from ludo_rl.ludo_env import LudoEnv
 
 
-def lr_schedule(lr_min: float = 1e-5, lr_max: float = 3e-4, warmup_steps: float = 0.03) -> float:
+def lr_schedule(
+    lr_min: float = 1e-5, lr_max: float = 3e-4, warmup_steps: float = 0.03
+) -> float:
     lr_min, lr_max = min(lr_min, lr_max), max(lr_min, lr_max)
+
     def schedule(progress_remaining: float) -> float:
         progress = 1 - progress_remaining
         if progress < warmup_steps:
             return lr_min + (lr_max - lr_min) * (progress / warmup_steps)
         else:
             adjusted_progress = (progress - warmup_steps) / (1 - warmup_steps)
-            return lr_max + 0.5 * (lr_max - lr_min) * (
+            return lr_min + 0.5 * (lr_max - lr_min) * (
                 1 + math.cos(math.pi * adjusted_progress)
             )
+
     return schedule
+
 
 # --- Main Training Script ---
 
@@ -54,7 +59,6 @@ if __name__ == "__main__":
         train_env = DummyVecEnv([LudoEnv])
     else:
         train_env = SubprocVecEnv([LudoEnv for _ in range(args.num_envs)])
-    train_env = VecNormalize(train_env)
     train_env = VecMonitor(train_env)
 
     logger.debug("--- Setting up Callbacks ---")
@@ -86,22 +90,31 @@ if __name__ == "__main__":
 
     # --- Initialize Model ---
     # We MUST use MaskablePPO from sb3_contrib
-    model = MaskablePPO(
-        "MultiInputPolicy",  # Use MlpPolicy as our extractor outputs a flat vector
-        train_env,
-        policy_kwargs=policy_kwargs,
-        verbose=1,
-        tensorboard_log=log_path,
-        n_steps=args.n_steps,
-        batch_size=args.batch_size,
-        n_epochs=args.n_epochs,
-        gamma=args.gamma,
-        gae_lambda=args.gae_lambda,
-        clip_range=args.clip_range,
-        ent_coef=args.ent_coef,
-        device=args.device,
-        learning_rate=lr_schedule(lr_max=args.learning_rate)
-    )
+    if args.resume is not None:
+        logger.info(f"--- Resuming training from {args.resume} ---")
+        model = MaskablePPO.load(
+            args.resume,
+            env=train_env,
+            device=args.device,
+            learning_rate=lr_schedule(lr_max=args.learning_rate),
+        )
+    else:
+        model = MaskablePPO(
+            "MultiInputPolicy",  # Use MlpPolicy as our extractor outputs a flat vector
+            train_env,
+            policy_kwargs=policy_kwargs,
+            verbose=1,
+            tensorboard_log=log_path,
+            n_steps=args.n_steps,
+            batch_size=args.batch_size,
+            n_epochs=args.n_epochs,
+            gamma=args.gamma,
+            gae_lambda=args.gae_lambda,
+            clip_range=args.clip_range,
+            ent_coef=args.ent_coef,
+            device=args.device,
+            learning_rate=lr_schedule(lr_max=args.learning_rate),
+        )
 
     final_model_path = os.path.join(model_save_path, "init_model")
     logger.info(f"--- Training Started. Saving initial model to {final_model_path} ---")
