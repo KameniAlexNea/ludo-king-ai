@@ -9,6 +9,7 @@ from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
+from arguments import parse_train_args
 from ludo_rl.extractor import LudoCnnExtractor
 from ludo_rl.ludo.config import net_config
 from ludo_rl.ludo_env import LudoEnv
@@ -18,25 +19,26 @@ from ludo_rl.ludo_env import LudoEnv
 if __name__ == "__main__":
     # --- Setup ---
     # Create directories for logs and models
-    BASE_DIR = "training"
-    LOG_DIR = f"{BASE_DIR}/ludo_logs"
-    MODEL_DIR = f"{BASE_DIR}/ludo_models"
+    args = parse_train_args()
+    print(args)
 
     # Unique timestamp for this training run
     run_id = f"ppo_ludo_{int(time.time())}"
-    model_save_path = os.path.join(MODEL_DIR, run_id)
-    log_path = os.path.join(LOG_DIR, run_id)
+    model_save_path = os.path.join(args.model_dir, run_id)
+    log_path = os.path.join(args.log_dir, run_id)
 
-    os.makedirs(model_save_path)
-    os.makedirs(log_path)
+    os.makedirs(model_save_path, exist_ok=True)
+    os.makedirs(log_path, exist_ok=True)
 
     logger.debug("--- Initializing Environment ---")
 
     # --- Create Training Environment ---
     # We use a lambda to create the environment
     # Vectorize the environment
-    NENVS = os.cpu_count() // 2 if os.cpu_count() else 1
-    train_env = SubprocVecEnv([LudoEnv for _ in range(NENVS)])
+    if args.num_envs == 1:
+        train_env = DummyVecEnv([LudoEnv])
+    else:
+        train_env = SubprocVecEnv([LudoEnv for _ in range(args.num_envs)])
     train_env = VecMonitor(train_env)
 
     logger.debug("--- Setting up Callbacks ---")
@@ -44,7 +46,9 @@ if __name__ == "__main__":
     # --- Callbacks ---
     # Save a checkpoint every xxx steps
     checkpoint_callback = CheckpointCallback(
-        save_freq=250_000 // NENVS, save_path=model_save_path, name_prefix="ludo_model"
+        save_freq=max(1, args.checkpoint_freq // args.num_envs),
+        save_path=model_save_path,
+        name_prefix="ludo_model",
     )
 
     callback_list = CallbackList([checkpoint_callback])
@@ -71,14 +75,14 @@ if __name__ == "__main__":
         policy_kwargs=policy_kwargs,
         verbose=1,
         tensorboard_log=log_path,
-        n_steps=2048,
-        batch_size=64,
-        n_epochs=10,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.1,
-        device="cpu",  # "cuda" if available, else "cpu"
+        n_steps=args.n_steps,
+        batch_size=args.batch_size,
+        n_epochs=args.n_epochs,
+        gamma=args.gamma,
+        gae_lambda=args.gae_lambda,
+        clip_range=args.clip_range,
+        ent_coef=args.ent_coef,
+        device=args.device,
     )
 
     final_model_path = os.path.join(model_save_path, "init_model")
@@ -88,7 +92,7 @@ if __name__ == "__main__":
     logger.info(f"--- Starting Training ({run_id}) ---")
 
     # --- Train the Model ---
-    model.learn(total_timesteps=1_000_000, callback=callback_list)
+    model.learn(total_timesteps=args.total_timesteps, callback=callback_list)
 
     # --- Save the Final Model ---
     final_model_path = os.path.join(model_save_path, "final_model")
