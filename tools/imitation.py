@@ -69,7 +69,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--opponents",
         type=str,
-        default=os.getenv("OPPONENTS", "homebody,heatseeker,retaliator,hoarder,rusher,finish_line,probability"),
+        default=os.getenv(
+            "OPPONENTS",
+            "homebody,heatseeker,retaliator,hoarder,rusher,finish_line,probability",
+        ),
         help="Comma-separated list of four strategies to play each game with.",
     )
     parser.add_argument(
@@ -408,9 +411,7 @@ def main() -> None:
             f"Collecting samples from game winners against opponents {opponents}"
         )
     else:
-        logger.info(
-            f"Collecting samples from teacher '{teacher}' against {opponents}"
-        )
+        logger.info(f"Collecting samples from teacher '{teacher}' against {opponents}")
     dataset = collect_teacher_samples(
         teacher=teacher,
         teacher_mode=teacher_mode,

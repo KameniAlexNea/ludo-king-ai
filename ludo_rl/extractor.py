@@ -136,9 +136,11 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         square_features = board.permute(0, 2, 1)  # (batch, squares, channels)
         square_features = self.square_norm(square_features)
         square_tokens = self.square_proj(square_features)
-        position_indices = torch.arange(
-            self.board_length, device=board.device
-        ).unsqueeze(0).expand(batch_size, -1)
+        position_indices = (
+            torch.arange(self.board_length, device=board.device)
+            .unsqueeze(0)
+            .expand(batch_size, -1)
+        )
         square_tokens = square_tokens + self.square_pos_embed(position_indices)
 
         # Dice token: (batch, 1, embed_dim)
@@ -149,9 +151,11 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         my_channel = board[:, 0, :]  # (batch, 58)
         piece_positions = self._extract_piece_positions(my_channel)
         piece_tokens = self.piece_position_embed(piece_positions)
-        piece_indices = torch.arange(
-            config.PIECES_PER_PLAYER, device=board.device
-        ).unsqueeze(0).expand(batch_size, -1)
+        piece_indices = (
+            torch.arange(config.PIECES_PER_PLAYER, device=board.device)
+            .unsqueeze(0)
+            .expand(batch_size, -1)
+        )
         piece_tokens = piece_tokens + self.piece_index_embed(piece_indices)
 
         # Assemble sequence: [CLS] + dice + squares + pieces
@@ -176,12 +180,7 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         indices = torch.arange(self.board_length, device=device)
 
         for batch_idx in range(batch_size):
-            counts = (
-                my_channel[batch_idx]
-                .round()
-                .clamp(min=0)
-                .to(dtype=torch.long)
-            )
+            counts = my_channel[batch_idx].round().clamp(min=0).to(dtype=torch.long)
             repeated = indices.repeat_interleave(counts)
 
             if repeated.numel() < config.PIECES_PER_PLAYER:
