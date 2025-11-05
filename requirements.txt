@@ -1,16 +1,6 @@
-python-dotenv
-langchain-groq
-langchain-ollama
-ollama
-pydantic
-loguru
-ludo-king-engine
-# RL Training dependencies
-gymnasium
+numpy
 stable-baselines3
 sb3-contrib
-ruamel.yaml
-gradio
-pillow
 tensorboard
-tox
+loguru
+dotenv

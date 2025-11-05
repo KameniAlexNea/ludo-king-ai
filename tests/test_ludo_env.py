@@ -1,103 +1,87 @@
+from __future__ import annotations
+
 import unittest
 from unittest.mock import Mock, patch
 
 import numpy as np
-from ludo_engine.core import LudoGame
-from ludo_engine.models import ALL_COLORS, PlayerColor
 
-from ludo_rl.config import EnvConfig
-from ludo_rl.ludo_env.ludo_env_base import LudoRLEnvBase
-from ludo_rl.ludo_env.observation import ObservationBuilder
-
-
-class MockLudoRLEnvBase(LudoRLEnvBase):
-    def attach_opponents(self, options=None):
-        pass  # Mock implementation
+from ludo_rl.ludo.config import config
+from ludo_rl.ludo.reward import reward_config
+from ludo_rl.ludo_env import LudoEnv
+from ludo_rl.ludo.simulator import GameSimulator as RealGameSimulator
 
 
-class TestObservationBuilder(unittest.TestCase):
-    def setUp(self):
-        self.cfg = EnvConfig()
-        self.game = LudoGame(ALL_COLORS)
-        self.agent_color = PlayerColor.RED
-        self.builder = ObservationBuilder(self.cfg, self.game, self.agent_color)
+class LudoEnvTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.env = LudoEnv()
 
-    def test_compute_size(self):
-        size = self.builder.compute_size()
-        # 1 color + 4 agent + 12 opp + 3 active + 4 progress + 4 safety + 1 dice = 29
-        expected = 1 + 4 + 12 + 3 + 4 + 4 + 1
-        self.assertEqual(size, expected)
+    def tearDown(self) -> None:
+        self.env.close()
 
-    def test_normalize_pos_home(self):
-        result = self.builder.normalize_pos(-1)  # HOME_POSITION
-        self.assertEqual(result, -1.0)
-
-    def test_normalize_pos_main_board(self):
-        result = self.builder.normalize_pos(0)
-        self.assertIsInstance(result, float)
-
-    def test_build(self):
-        obs = self.builder.build(turn_counter=5, dice=3)
-        self.assertIsInstance(obs, np.ndarray)
-        self.assertEqual(obs.dtype, np.float32)
-        self.assertEqual(len(obs), self.builder.size)
-
-
-class TestLudoRLEnvBase(unittest.TestCase):
-    def setUp(self):
-        self.cfg = EnvConfig()
-        self.env = MockLudoRLEnvBase(self.cfg)
-
-    def test_init(self):
-        self.assertEqual(self.env.cfg, self.cfg)
-        # agent_color, game, obs_builder are set in reset, not init
-        # self.assertEqual(self.env.agent_color, PlayerColor.RED)
-        # self.assertIsInstance(self.env.game, LudoGame)
-        # self.assertIsInstance(self.env.obs_builder, ObservationBuilderBase)
-
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._advance_to_agent_turn")
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_dice_for_agent")
-    def test_reset(self, mock_roll, mock_ensure):
-        mock_roll.return_value = (3, [])
+    def test_reset_provides_valid_observation_and_mask(self) -> None:
         obs, info = self.env.reset()
-        self.assertIsInstance(obs, np.ndarray)
-        self.assertIn("episode", info)
-        mock_ensure.assert_called_once()
-        mock_roll.assert_called_once()
+        self.assertEqual(obs["board"].shape, (10, config.PATH_LENGTH))
+        self.assertEqual(obs["dice_roll"].shape, (1,))
+        self.assertTrue(info["action_mask"].any())
+        np.testing.assert_array_equal(self.env.action_masks(), info["action_mask"])
 
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_opponent_turn")
-    def test_ensure_agent_turn(self, mock_simulate):
-        self.env.reset()  # Initialize game state
-        # Mock game to have agent as current player
-        mock_player = Mock()
-        mock_player.color = self.env.agent_color
-        self.env.game.get_current_player = Mock(return_value=mock_player)
-        self.env.game.get_current_player.return_value.color = self.env.agent_color
-        self.env._advance_to_agent_turn()
-        # Should not simulate since it's agent's turn
-        mock_simulate.assert_not_called()
+    def test_reset_handles_initial_no_moves_loop(self) -> None:
+        def factory(agent_index: int):
+            simulator = RealGameSimulator(agent_index)
+            simulator.game.roll_dice = Mock(side_effect=[1, 6, 6])
+            simulator.step_opponents_only = Mock(return_value=[0.0] * config.NUM_PLAYERS)
+            return simulator
 
-    def test_step_game_over(self):
-        self.env.game.game_over = True
+        with patch("ludo_rl.ludo_env.GameSimulator", side_effect=factory):
+            _, info = self.env.reset()
+
+        step_mock = self.env.simulator.step_opponents_only
+        self.assertGreaterEqual(step_mock.call_count, 1)
+        self.assertTrue(info["action_mask"].any())
+
+    def test_step_invalid_action_penalises_agent(self) -> None:
+        self.env.reset()
+        with patch.object(
+            self.env.simulator,
+            "step_opponents_only",
+            return_value=[0.0] * config.NUM_PLAYERS,
+        ), patch.object(self.env.simulator.game, "roll_dice", return_value=6):
+            self.env.move_map = {}
+            obs, reward, terminated, truncated, info = self.env.step(0)
+        self.assertEqual(reward, reward_config.lose)
+        self.assertFalse(terminated)
+        self.assertFalse(truncated)
+        self.assertEqual(obs["board"].shape, (10, config.PATH_LENGTH))
+        self.assertIsInstance(info["action_mask"], bool)
+
+    def test_step_valid_action_returns_next_observation(self) -> None:
+        _, info = self.env.reset()
+        action = int(np.where(info["action_mask"])[0][0])
+        obs, reward, terminated, truncated, next_info = self.env.step(action)
+        self.assertEqual(obs["board"].shape, (10, config.PATH_LENGTH))
+        self.assertIsInstance(reward, float)
+        self.assertIn("action_mask", next_info)
+        self.assertFalse(terminated and truncated)
+
+    def test_step_handles_win_condition(self) -> None:
+        self.env.reset()
+        piece = self.env.simulator.game.players[0].pieces[0]
+        piece.position = 56
+        self.env.current_dice_roll = 1
+        for other in self.env.simulator.game.players[0].pieces[1:]:
+            other.position = 57
+        self.env._get_info()
         obs, reward, terminated, truncated, info = self.env.step(0)
         self.assertTrue(terminated)
-        self.assertEqual(reward, 0.0)
+        self.assertFalse(truncated)
+        self.assertIn("final_rank", info)
+        self.assertGreater(reward, 0.0)
+        self.assertEqual(obs["board"].shape, (10, config.PATH_LENGTH))
 
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._roll_dice_for_agent")
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._simulate_opponent_turn")
-    @patch("ludo_rl.ludo_env.ludo_env_base.LudoRLEnvBase._advance_to_agent_turn")
-    def test_step_no_valid_moves(self, mock_ensure, mock_simulate, mock_roll):
-        self.env.pending_dice = 1
-        self.env.pending_valid_moves = []  # No valid moves
-        # Mock current player to be agent to prevent opponent simulation loop
-        mock_player = Mock()
-        mock_player.color = self.env.agent_color
-        self.env.game.get_current_player = Mock(return_value=mock_player)
-        # Mock roll to prevent calling at end
-        mock_roll.return_value = (1, [])
-        obs, reward, terminated, truncated, info = self.env.step(0)
-        self.assertIsInstance(obs, np.ndarray)
-        self.assertIn("illegal_action", info)
+    def test_render_returns_summary(self) -> None:
+        self.env.reset()
+        snapshot = self.env.render()
+        self.assertIn("Turn", snapshot)
 
 
 if __name__ == "__main__":
