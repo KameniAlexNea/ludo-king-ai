@@ -179,14 +179,16 @@ class LudoEnv(gym.Env):
         terminated, truncated = self._check_game_over()
 
         if terminated:
+            # When the agent finishes, count how many players have won (including the agent)
+            # This gives us the agent's finishing position (1 = first, 2 = second, etc.)
             players = self.simulator.game.players
             rank = sum(p.has_won() for p in players)
-            if rank == len(players):
-                reward += reward_config.lose
-            else:
-                reward += (
-                    reward_config.win * (len(players) - rank + 1) / len(players)
-                )  # Large bonus for winning
+            # Scale the win bonus based on finishing position
+            # rank=1 (first place) gets full win bonus
+            # rank=N (last to finish) gets minimal win bonus
+            reward += (
+                reward_config.win * (len(players) - rank + 1) / len(players)
+            )
             info["final_rank"] = rank
             return obs, reward, terminated, truncated, info
 
