@@ -1,6 +1,7 @@
 import math
 import os
 import time
+from typing import Callable
 
 import torch
 from loguru import logger
@@ -18,7 +19,7 @@ from ludo_rl.ludo_env import LudoEnv
 
 def lr_schedule(
     lr_min: float = 1e-5, lr_max: float = 3e-4, warmup_steps: float = 0.03
-) -> float:
+) -> Callable[[float], float]:
     lr_min, lr_max = min(lr_min, lr_max), max(lr_min, lr_max)
 
     def schedule(progress_remaining: float) -> float:
@@ -136,8 +137,7 @@ if __name__ == "__main__":
 
     model = MaskablePPO.load(final_model_path)
 
-    test_env = LudoEnv(render_mode="human")
-    test_env = DummyVecEnv([lambda: test_env])
+    test_env = DummyVecEnv([lambda: LudoEnv(render_mode="human")])
     # test_env = MaskableListActions(test_env) # Don't forget to wrap!
 
     obs, info = test_env.reset()

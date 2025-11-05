@@ -101,8 +101,6 @@ class MoveManagement:
 
         piece.position = new_position
 
-        hit_blockade = False
-
         # Check for captures, only on main track (1-51)
         abs_pos = self.get_absolute_position(player_index, new_position)
         if abs_pos != -1 and not self.is_safe(abs_pos):
@@ -134,11 +132,7 @@ class MoveManagement:
                     piece.position = old_position  # Move fails, revert position
                     events["hit_blockade"] = True
                     events["move_resolved"] = False
-                    hit_blockade = True
                     break  # Move ends
-
-                if hit_blockade:
-                    break
 
         final_position = piece.position
 

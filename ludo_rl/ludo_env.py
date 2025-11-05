@@ -147,7 +147,6 @@ class LudoEnv(gym.Env):
         return obs, info
 
     def step(self, action: int):
-        reward = 0.0
         extra_turn = False
 
         # 1. Check if the chosen action is valid

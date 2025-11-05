@@ -110,16 +110,13 @@ class GameSimulator:
         for idx, player in enumerate(self.game.players):
             if idx == self.agent_index:
                 continue
-            try:
-                player.strategy_name = (
-                    strategies[pos % len(strategies)]
-                    if selection_method == 1
-                    else random.choice(strategies)
-                )
-                player._strategy = None
-                pos += 1
-            except StopIteration:
-                break
+            player.strategy_name = (
+                strategies[pos % len(strategies)]
+                if selection_method == 1
+                else random.choice(strategies)
+            )
+            player._strategy = None
+            pos += 1
 
     def _decide_move(self, player_index: int, dice_roll: int, valid_moves: list[dict]):
         player = self.game.players[player_index]

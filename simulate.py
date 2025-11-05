@@ -1,6 +1,7 @@
 import argparse
 import random
 import time
+from typing import Optional
 
 import numpy as np
 from sb3_contrib import MaskablePPO
@@ -10,7 +11,7 @@ from ludo_rl.ludo.config import config
 from ludo_rl.ludo_env import LudoEnv
 
 
-def seed_environ(seed_value: int = None):
+def seed_environ(seed_value: Optional[int] = None):
     random.seed(seed_value)
     np.random.seed(seed_value)
 

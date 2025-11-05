@@ -52,7 +52,7 @@ class LudoEnvTests(unittest.TestCase):
         self.assertFalse(terminated)
         self.assertFalse(truncated)
         self.assertEqual(obs["board"].shape, (10, config.PATH_LENGTH))
-        self.assertTrue(info["action_mask"].dtype == bool)
+        self.assertIsInstance(info["action_mask"], bool)
 
     def test_step_valid_action_returns_next_observation(self) -> None:
         _, info = self.env.reset()
