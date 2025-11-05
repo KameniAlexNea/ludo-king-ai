@@ -10,6 +10,7 @@ from sb3_contrib import MaskablePPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from ludo_rl.ludo_env import LudoEnv
+from loguru import logger
 
 ALL_STRATEGIES: Sequence[str] = (
     "probability",
@@ -172,13 +173,13 @@ def main() -> None:
         results.append(stats)
 
         triplet_label = ",".join(triplet)
-        print(
+        logger.info(
             f"Triplet {triplet_label:<40} | Win-rate: {stats['win_rate']:.2%} | "
             f"Avg Rank: {stats['avg_rank']:.2f}"
         )
 
     if not results:
-        print("No opponent triplets evaluated.")
+        logger.warning("No opponent triplets evaluated.")
         return
 
     best = max(results, key=lambda item: item["win_rate"])
