@@ -37,7 +37,8 @@ def _make_context(
         action_mask = np.array([True, True, False, False], dtype=bool)
 
     opponent_distribution = board[
-        strategy_config.board_channel_opp_start : strategy_config.board_channel_opp_end + 1
+        strategy_config.board_channel_opp_start : strategy_config.board_channel_opp_end
+        + 1
     ].sum(axis=0)
 
     return StrategyContext(
@@ -88,7 +89,14 @@ def _move(
 class StrategySelectionTests(unittest.TestCase):
     def test_probability_prefers_safer_move(self) -> None:
         moves = [
-            _move(piece_id=0, current=5, new=11, progress=6, distance=40, enters_safe_zone=True),
+            _move(
+                piece_id=0,
+                current=5,
+                new=11,
+                progress=6,
+                distance=40,
+                enters_safe_zone=True,
+            ),
             _move(piece_id=1, current=5, new=15, progress=10, distance=36, risk=3.0),
         ]
         ctx = _make_context(moves)
@@ -97,7 +105,14 @@ class StrategySelectionTests(unittest.TestCase):
 
     def test_cautious_stays_safe(self) -> None:
         moves = [
-            _move(piece_id=0, current=12, new=16, progress=4, distance=35, enters_safe_zone=True),
+            _move(
+                piece_id=0,
+                current=12,
+                new=16,
+                progress=4,
+                distance=35,
+                enters_safe_zone=True,
+            ),
             _move(
                 piece_id=1,
                 current=18,
@@ -131,8 +146,23 @@ class StrategySelectionTests(unittest.TestCase):
 
     def test_defensive_prefers_safety(self) -> None:
         moves = [
-            _move(piece_id=0, current=25, new=30, progress=5, distance=27, enters_safe_zone=True),
-            _move(piece_id=1, current=32, new=36, progress=4, distance=21, leaving_safe_zone=True, risk=1.0),
+            _move(
+                piece_id=0,
+                current=25,
+                new=30,
+                progress=5,
+                distance=27,
+                enters_safe_zone=True,
+            ),
+            _move(
+                piece_id=1,
+                current=32,
+                new=36,
+                progress=4,
+                distance=21,
+                leaving_safe_zone=True,
+                risk=1.0,
+            ),
         ]
         ctx = _make_context(moves)
         choice = DefensiveStrategy().select_move(ctx)
@@ -140,8 +170,17 @@ class StrategySelectionTests(unittest.TestCase):
 
     def test_finish_line_closes_game(self) -> None:
         moves = [
-            _move(piece_id=0, current=54, new=57, progress=3, distance=0, enters_home=True),
-            _move(piece_id=1, current=50, new=55, progress=5, distance=2, enters_safe_zone=True),
+            _move(
+                piece_id=0, current=54, new=57, progress=3, distance=0, enters_home=True
+            ),
+            _move(
+                piece_id=1,
+                current=50,
+                new=55,
+                progress=5,
+                distance=2,
+                enters_safe_zone=True,
+            ),
         ]
         ctx = _make_context(moves)
         choice = FinishLineStrategy().select_move(ctx)
@@ -173,7 +212,15 @@ class StrategySelectionTests(unittest.TestCase):
                 distance=5,
                 enters_safe_zone=True,
             ),
-            _move(piece_id=1, current=30, new=34, progress=4, distance=23, leaving_safe_zone=True, risk=1.2),
+            _move(
+                piece_id=1,
+                current=30,
+                new=34,
+                progress=4,
+                distance=23,
+                leaving_safe_zone=True,
+                risk=1.2,
+            ),
         ]
         ctx = _make_context(moves)
         choice = HomebodyStrategy().select_move(ctx)
@@ -195,7 +242,15 @@ class StrategySelectionTests(unittest.TestCase):
         board = _make_board()
         board[1, 18] = 1.0
         moves = [
-            _move(piece_id=0, current=12, new=18, progress=6, distance=39, can_capture=True, capture_count=1),
+            _move(
+                piece_id=0,
+                current=12,
+                new=18,
+                progress=6,
+                distance=39,
+                can_capture=True,
+                capture_count=1,
+            ),
             _move(piece_id=1, current=22, new=26, progress=4, distance=31),
         ]
         ctx = _make_context(moves, board=board)
@@ -204,7 +259,9 @@ class StrategySelectionTests(unittest.TestCase):
 
     def test_rusher_chases_progress(self) -> None:
         moves = [
-            _move(piece_id=0, current=0, new=11, progress=11, distance=46, extra_turn=True),
+            _move(
+                piece_id=0, current=0, new=11, progress=11, distance=46, extra_turn=True
+            ),
             _move(piece_id=1, current=10, new=14, progress=4, distance=33),
         ]
         ctx = _make_context(moves)
@@ -216,7 +273,9 @@ class StrategySelectionTests(unittest.TestCase):
         board[0, 0] = 1.0  # Yard representation
         board[0, 20] = 1.0
         moves = [
-            _move(piece_id=0, current=0, new=6, progress=6, distance=51, extra_turn=True),
+            _move(
+                piece_id=0, current=0, new=6, progress=6, distance=51, extra_turn=True
+            ),
             _move(piece_id=1, current=20, new=24, progress=4, distance=33),
         ]
         ctx = _make_context(moves, board=board)

@@ -12,9 +12,15 @@ from ludo_rl.ludo.simulator import GameSimulator
 
 class GameSimulatorTests(unittest.TestCase):
     def test_configure_opponents_sequential(self) -> None:
-        with mock.patch.dict(os.environ, {"OPPONENTS": "rusher,cautious", "STRATEGY_SELECTION": "1"}):
+        with mock.patch.dict(
+            os.environ, {"OPPONENTS": "rusher,cautious", "STRATEGY_SELECTION": "1"}
+        ):
             sim = GameSimulator(agent_index=0)
-        opponent_names = [player.strategy_name for idx, player in enumerate(sim.game.players) if idx != sim.agent_index]
+        opponent_names = [
+            player.strategy_name
+            for idx, player in enumerate(sim.game.players)
+            if idx != sim.agent_index
+        ]
         self.assertEqual(opponent_names, ["rusher", "cautious", "rusher"])
 
     def test_update_summaries_tracks_events(self) -> None:
@@ -29,7 +35,11 @@ class GameSimulatorTests(unittest.TestCase):
             "events": {
                 "knockouts": [
                     {"player": sim.agent_index, "piece_id": 0, "abs_pos": abs_pos},
-                    {"player": (sim.agent_index + 1) % config.NUM_PLAYERS, "piece_id": 1, "abs_pos": abs_pos},
+                    {
+                        "player": (sim.agent_index + 1) % config.NUM_PLAYERS,
+                        "piece_id": 1,
+                        "abs_pos": abs_pos,
+                    },
                 ],
                 "blockades": [
                     {"player": sim.agent_index, "relative_pos": blockade_rel},
@@ -45,7 +55,9 @@ class GameSimulatorTests(unittest.TestCase):
         self.assertEqual(sim.transition_summary["my_knockouts"][rel_knockout_pos], 1)
         self.assertEqual(sim.transition_summary["opp_knockouts"][rel_knockout_pos], 1)
 
-        blockade_agent_rel = sim.get_agent_relative_pos_for_opp(sim.agent_index, blockade_rel)
+        blockade_agent_rel = sim.get_agent_relative_pos_for_opp(
+            sim.agent_index, blockade_rel
+        )
         self.assertEqual(sim.transition_summary["new_blockades"][blockade_agent_rel], 1)
 
     def test_get_agent_relative_pos_for_opp_edge_cases(self) -> None:
@@ -57,6 +69,7 @@ class GameSimulatorTests(unittest.TestCase):
         sim = GameSimulator(agent_index=0)
 
         roll_mock = mock.Mock(side_effect=[6] * 12)
+
         def fake_valid_moves(player_index: int, dice_roll: int):
             piece = sim.game.players[player_index].pieces[0]
             return [{"piece": piece, "new_pos": 1, "dice_roll": dice_roll}]
@@ -72,9 +85,15 @@ class GameSimulatorTests(unittest.TestCase):
 
         sim.reset_summaries()
 
-        with mock.patch.object(sim.game, "roll_dice", new=roll_mock), \
-            mock.patch.object(sim.game, "get_valid_moves", new=mock.Mock(side_effect=fake_valid_moves)), \
-            mock.patch.object(sim.game, "make_move", new=mock.Mock(side_effect=fake_make_move)):
+        with (
+            mock.patch.object(sim.game, "roll_dice", new=roll_mock),
+            mock.patch.object(
+                sim.game, "get_valid_moves", new=mock.Mock(side_effect=fake_valid_moves)
+            ),
+            mock.patch.object(
+                sim.game, "make_move", new=mock.Mock(side_effect=fake_make_move)
+            ),
+        ):
             rewards = sim.simulate_opponent_turns()
 
         self.assertAlmostEqual(rewards[sim.agent_index], 0.3)
@@ -96,8 +115,12 @@ class GameSimulatorTests(unittest.TestCase):
         player = sim.game.players[player_index]
         valid_moves = [{"piece": player.pieces[0], "new_pos": 1, "dice_roll": 6}]
 
-        with mock.patch.object(player, "decide", return_value=None), \
-            mock.patch("ludo_rl.ludo.simulator.random.choice", return_value=valid_moves[0]) as choice_mock:
+        with (
+            mock.patch.object(player, "decide", return_value=None),
+            mock.patch(
+                "ludo_rl.ludo.simulator.random.choice", return_value=valid_moves[0]
+            ) as choice_mock,
+        ):
             move = sim._decide_move(player_index, 6, valid_moves)
 
         self.assertIs(move, valid_moves[0])

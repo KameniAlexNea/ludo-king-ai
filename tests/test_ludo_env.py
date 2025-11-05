@@ -7,8 +7,8 @@ import numpy as np
 
 from ludo_rl.ludo.config import config
 from ludo_rl.ludo.reward import reward_config
-from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo.simulator import GameSimulator as RealGameSimulator
+from ludo_rl.ludo_env import LudoEnv
 
 
 class LudoEnvTests(unittest.TestCase):
@@ -29,7 +29,9 @@ class LudoEnvTests(unittest.TestCase):
         def factory(agent_index: int):
             simulator = RealGameSimulator(agent_index)
             simulator.game.roll_dice = Mock(side_effect=[1, 6, 6])
-            simulator.step_opponents_only = Mock(return_value=[0.0] * config.NUM_PLAYERS)
+            simulator.step_opponents_only = Mock(
+                return_value=[0.0] * config.NUM_PLAYERS
+            )
             return simulator
 
         with patch("ludo_rl.ludo_env.GameSimulator", side_effect=factory):
@@ -41,11 +43,14 @@ class LudoEnvTests(unittest.TestCase):
 
     def test_step_invalid_action_penalises_agent(self) -> None:
         self.env.reset()
-        with patch.object(
-            self.env.simulator,
-            "step_opponents_only",
-            return_value=[0.0] * config.NUM_PLAYERS,
-        ), patch.object(self.env.simulator.game, "roll_dice", return_value=6):
+        with (
+            patch.object(
+                self.env.simulator,
+                "step_opponents_only",
+                return_value=[0.0] * config.NUM_PLAYERS,
+            ),
+            patch.object(self.env.simulator.game, "roll_dice", return_value=6),
+        ):
             self.env.move_map = {}
             obs, reward, terminated, truncated, info = self.env.step(0)
         self.assertEqual(reward, reward_config.lose)
@@ -54,7 +59,9 @@ class LudoEnvTests(unittest.TestCase):
         self.assertEqual(obs["board"].shape, (10, config.PATH_LENGTH))
         # action_mask should be a sequence of booleans (e.g., list or ndarray)
         self.assertIsInstance(info["action_mask"], (list, np.ndarray))
-        self.assertTrue(all(isinstance(x, (bool, np.bool_)) for x in info["action_mask"]))
+        self.assertTrue(
+            all(isinstance(x, (bool, np.bool_)) for x in info["action_mask"])
+        )
 
     def test_step_valid_action_returns_next_observation(self) -> None:
         _, info = self.env.reset()

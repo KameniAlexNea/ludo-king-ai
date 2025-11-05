@@ -6,11 +6,11 @@ from collections import Counter
 from typing import Iterable, Sequence
 
 import numpy as np
+from loguru import logger
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from ludo_rl.ludo_env import LudoEnv
-from loguru import logger
 
 ALL_STRATEGIES: Sequence[str] = (
     "probability",
@@ -103,7 +103,10 @@ def evaluate_triplet(
     os.environ["OPPONENTS"] = ",".join(triplet)
     os.environ["STRATEGY_SELECTION"] = "1"
 
-    env = build_env(getattr(model, "path", None) or getattr(model, "_loaded_params", {}).get("model_path", None))
+    env = build_env(
+        getattr(model, "path", None)
+        or getattr(model, "_loaded_params", {}).get("model_path", None)
+    )
 
     rank_counter: Counter[int] = Counter()
     wins = 0
@@ -137,15 +140,18 @@ def evaluate_triplet(
         "episodes": episodes,
         "wins": wins,
         "win_rate": wins / episodes if episodes else 0.0,
-        "avg_rank": sum(rank * count for rank, count in rank_counter.items())
-        / episodes
-        if episodes
-        else 0.0,
+        "avg_rank": (
+            sum(rank * count for rank, count in rank_counter.items()) / episodes
+            if episodes
+            else 0.0
+        ),
         "rank_counts": dict(rank_counter),
     }
 
 
-def iter_triplets(limit: int | None, strategies: Sequence[str]) -> Iterable[Sequence[str]]:
+def iter_triplets(
+    limit: int | None, strategies: Sequence[str]
+) -> Iterable[Sequence[str]]:
     combos = list(itertools.combinations(strategies, 3))
     if limit is not None and limit < len(combos):
         random.shuffle(combos)
