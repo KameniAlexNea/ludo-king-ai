@@ -3,7 +3,7 @@ import torch
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from torch import nn
 
-from .ludo.config import net_config
+from .ludo.config import config, net_config
 
 
 class LudoCnnExtractor(BaseFeaturesExtractor):
@@ -85,3 +85,115 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
 
         # Pass through final linear layer
         return self.linear(combined_features)
+
+
+class LudoTransformerExtractor(BaseFeaturesExtractor):
+    """Transformer-based extractor using semantic tokens for board squares and pieces."""
+
+    def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
+        super().__init__(observation_space, features_dim)
+
+        board_channels, board_length = observation_space["board"].shape
+
+        self.board_length = board_length
+        self.dice_roll_dim = 6
+        self.embed_dim = net_config.embed_dim
+
+        # Square token encoding (per square: combine all channels)
+        self.square_norm = nn.LayerNorm(board_channels)
+        self.square_proj = nn.Linear(board_channels, self.embed_dim)
+        self.square_pos_embed = nn.Embedding(board_length, self.embed_dim)
+
+        # Learnable tokens and embeddings
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
+        self.dice_embed = nn.Embedding(self.dice_roll_dim, self.embed_dim)
+        self.piece_position_embed = nn.Embedding(config.PATH_LENGTH, self.embed_dim)
+        self.piece_index_embed = nn.Embedding(config.PIECES_PER_PLAYER, self.embed_dim)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=self.embed_dim,
+            nhead=8,
+            dim_feedforward=self.embed_dim * 4,
+            dropout=0.1,
+            activation="gelu",
+            batch_first=True,
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=3)
+
+        self.sequence_dropout = nn.Dropout(p=0.1)
+        self.output_norm = nn.LayerNorm(self.embed_dim)
+        self.head = nn.Sequential(
+            nn.Linear(self.embed_dim, features_dim),
+            nn.ReLU(),
+            nn.LayerNorm(features_dim),
+        )
+
+    def forward(self, observations: dict) -> torch.Tensor:
+        board = observations["board"].float()
+        batch_size = board.shape[0]
+
+        # Square tokens: (batch, 58, embed_dim)
+        square_features = board.permute(0, 2, 1)  # (batch, squares, channels)
+        square_features = self.square_norm(square_features)
+        square_tokens = self.square_proj(square_features)
+        position_indices = torch.arange(
+            self.board_length, device=board.device
+        ).unsqueeze(0).expand(batch_size, -1)
+        square_tokens = square_tokens + self.square_pos_embed(position_indices)
+
+        # Dice token: (batch, 1, embed_dim)
+        dice_roll = observations["dice_roll"].long().clamp(0, self.dice_roll_dim - 1)
+        dice_token = self.dice_embed(dice_roll.squeeze(1)).unsqueeze(1)
+
+        # Piece tokens derived from my_pieces channel
+        my_channel = board[:, 0, :]  # (batch, 58)
+        piece_positions = self._extract_piece_positions(my_channel)
+        piece_tokens = self.piece_position_embed(piece_positions)
+        piece_indices = torch.arange(
+            config.PIECES_PER_PLAYER, device=board.device
+        ).unsqueeze(0).expand(batch_size, -1)
+        piece_tokens = piece_tokens + self.piece_index_embed(piece_indices)
+
+        # Assemble sequence: [CLS] + dice + squares + pieces
+        cls_tokens = self.cls_token.expand(batch_size, -1, -1)
+        sequence = torch.cat(
+            [cls_tokens, dice_token, square_tokens, piece_tokens], dim=1
+        )
+        sequence = self.sequence_dropout(sequence)
+
+        encoded = self.encoder(sequence)
+        cls_feature = self.output_norm(encoded[:, 0])
+        return self.head(cls_feature)
+
+    def _extract_piece_positions(self, my_channel: torch.Tensor) -> torch.Tensor:
+        """Recover individual piece positions from the agent's occupancy channel."""
+
+        batch_size = my_channel.shape[0]
+        device = my_channel.device
+        piece_positions = torch.zeros(
+            batch_size, config.PIECES_PER_PLAYER, dtype=torch.long, device=device
+        )
+        indices = torch.arange(self.board_length, device=device)
+
+        for batch_idx in range(batch_size):
+            counts = (
+                my_channel[batch_idx]
+                .round()
+                .clamp(min=0)
+                .to(dtype=torch.long)
+            )
+            repeated = indices.repeat_interleave(counts)
+
+            if repeated.numel() < config.PIECES_PER_PLAYER:
+                padding = torch.zeros(
+                    config.PIECES_PER_PLAYER - repeated.numel(),
+                    dtype=torch.long,
+                    device=device,
+                )
+                repeated = torch.cat([repeated, padding], dim=0)
+            elif repeated.numel() > config.PIECES_PER_PLAYER:
+                repeated = repeated[: config.PIECES_PER_PLAYER]
+
+            piece_positions[batch_idx] = repeated
+
+        return piece_positions
