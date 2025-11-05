@@ -1,17 +1,59 @@
 from __future__ import annotations
 
-from typing import Iterable, Optional, Sequence
+import random
+from dataclasses import dataclass
+from typing import ClassVar, Iterable, Optional, Sequence
 
 from ludo_rl.ludo.config import config
 
-from .base import BaseStrategy
+from .base import BaseStrategy, BaseStrategyConfig
 from .types import MoveOption, StrategyContext
+
+
+@dataclass(slots=True)
+class HoarderStrategyConfig(BaseStrategyConfig):
+    chokepoint_candidates: tuple[int, ...] = (
+        1,
+        2,
+        3,
+        8,
+        9,
+        config.PATH_LENGTH - 8,
+        config.PATH_LENGTH - 6,
+        config.PATH_LENGTH - 4,
+    )
+    chokepoint_count_range: tuple[int, int] = (3, 6)
+    blockade_bonus: tuple[float, float] = (4.5, 7.5)
+    chokepoint_bonus: tuple[float, float] = (3.0, 6.0)
+    safe_zone_bonus: tuple[float, float] = (1.5, 3.5)
+    leave_safe_penalty: tuple[float, float] = (4.0, 6.5)
+    progress_weight: tuple[float, float] = (0.1, 0.4)
+    risk_penalty: tuple[float, float] = (0.6, 1.4)
+
+    def sample(self, rng: random.Random | None = None) -> dict[str, object]:
+        rng = rng or random
+        pool = list(self.chokepoint_candidates)
+        rng.shuffle(pool)
+        min_count, max_count = self.chokepoint_count_range
+        max_available = max(1, min(len(pool), max_count))
+        count = rng.randint(min(min_count, max_available), max_available)
+        chokepoints = sorted(pool[:count])
+        return {
+            "chokepoints": tuple(chokepoints),
+            "blockade_bonus": rng.uniform(*self.blockade_bonus),
+            "chokepoint_bonus": rng.uniform(*self.chokepoint_bonus),
+            "safe_zone_bonus": rng.uniform(*self.safe_zone_bonus),
+            "leave_safe_penalty": rng.uniform(*self.leave_safe_penalty),
+            "progress_weight": rng.uniform(*self.progress_weight),
+            "risk_penalty": rng.uniform(*self.risk_penalty),
+        }
 
 
 class HoarderStrategy(BaseStrategy):
     """Holds chokepoints near the yard and builds blockades to stall opponents."""
 
     name = "hoarder"
+    config: ClassVar[HoarderStrategyConfig] = HoarderStrategyConfig()
 
     def __init__(
         self,

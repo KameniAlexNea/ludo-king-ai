@@ -1,14 +1,42 @@
 from __future__ import annotations
 
-from .base import BaseStrategy
+import random
+from dataclasses import dataclass
+from typing import ClassVar
+
+from .base import BaseStrategy, BaseStrategyConfig
 from .features import nearest_opponent_distance, opponent_density_within
 from .types import MoveOption, StrategyContext
+
+
+@dataclass(slots=True)
+class HeatSeekerStrategyConfig(BaseStrategyConfig):
+    capture_weight: tuple[float, float] = (9.0, 14.0)
+    proximity_radius: tuple[int, int] = (4, 8)
+    proximity_weight: tuple[float, float] = (1.5, 3.0)
+    density_radius: tuple[int, int] = (3, 6)
+    density_weight: tuple[float, float] = (0.5, 1.0)
+    progress_weight: tuple[float, float] = (0.3, 0.8)
+    risk_penalty: tuple[float, float] = (0.4, 0.9)
+
+    def sample(self, rng: random.Random | None = None) -> dict[str, float | int]:
+        rng = rng or random
+        return {
+            "capture_weight": rng.uniform(*self.capture_weight),
+            "proximity_radius": rng.randint(*self.proximity_radius),
+            "proximity_weight": rng.uniform(*self.proximity_weight),
+            "density_radius": rng.randint(*self.density_radius),
+            "density_weight": rng.uniform(*self.density_weight),
+            "progress_weight": rng.uniform(*self.progress_weight),
+            "risk_penalty": rng.uniform(*self.risk_penalty),
+        }
 
 
 class HeatSeekerStrategy(BaseStrategy):
     """Moves toward concentrations of opponents to force engagements."""
 
     name = "heatseeker"
+    config: ClassVar[HeatSeekerStrategyConfig] = HeatSeekerStrategyConfig()
 
     def __init__(
         self,

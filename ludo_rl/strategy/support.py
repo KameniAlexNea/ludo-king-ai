@@ -1,15 +1,39 @@
 from __future__ import annotations
 
+import random
+from dataclasses import dataclass
+from typing import ClassVar
+
 import numpy as np
 
-from .base import BaseStrategy
+from .base import BaseStrategy, BaseStrategyConfig
 from .types import MoveOption, StrategyContext
+
+
+@dataclass(slots=True)
+class SupportStrategyConfig(BaseStrategyConfig):
+    yard_bonus: tuple[float, float] = (3.0, 5.5)
+    lag_weight: tuple[float, float] = (0.2, 0.5)
+    lead_penalty: tuple[float, float] = (0.15, 0.35)
+    safe_zone_bonus: tuple[float, float] = (1.0, 2.5)
+    risk_penalty: tuple[float, float] = (0.6, 1.2)
+
+    def sample(self, rng: random.Random | None = None) -> dict[str, float]:
+        rng = rng or random
+        return {
+            "yard_bonus": rng.uniform(*self.yard_bonus),
+            "lag_weight": rng.uniform(*self.lag_weight),
+            "lead_penalty": rng.uniform(*self.lead_penalty),
+            "safe_zone_bonus": rng.uniform(*self.safe_zone_bonus),
+            "risk_penalty": rng.uniform(*self.risk_penalty),
+        }
 
 
 class SupportStrategy(BaseStrategy):
     """Keeps the team's pieces evenly developed instead of racing a single runner."""
 
     name = "support"
+    config: ClassVar[SupportStrategyConfig] = SupportStrategyConfig()
 
     def __init__(
         self,

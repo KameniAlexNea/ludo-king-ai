@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import unittest
 
 import numpy as np
@@ -221,6 +222,26 @@ class StrategySelectionTests(unittest.TestCase):
         ctx = _make_context(moves, board=board)
         choice = SupportStrategy().select_move(ctx)
         self.assertEqual(choice.piece_id, 0)
+
+    def test_create_instance_builds_strategy(self) -> None:
+        strategy_classes = [
+            CautiousStrategy,
+            DefensiveStrategy,
+            FinishLineStrategy,
+            HeatSeekerStrategy,
+            HoarderStrategy,
+            HomebodyStrategy,
+            KillerStrategy,
+            ProbabilityStrategy,
+            RetaliatorStrategy,
+            RusherStrategy,
+            SupportStrategy,
+        ]
+
+        for idx, strategy_cls in enumerate(strategy_classes):
+            with self.subTest(strategy=strategy_cls.__name__):
+                instance = strategy_cls.create_instance(random.Random(idx))
+                self.assertIsInstance(instance, strategy_cls)
 
 
 if __name__ == "__main__":

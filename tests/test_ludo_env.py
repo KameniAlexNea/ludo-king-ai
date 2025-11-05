@@ -52,7 +52,9 @@ class LudoEnvTests(unittest.TestCase):
         self.assertFalse(terminated)
         self.assertFalse(truncated)
         self.assertEqual(obs["board"].shape, (10, config.PATH_LENGTH))
-        self.assertIsInstance(info["action_mask"], bool)
+        # action_mask should be a sequence of booleans (e.g., list or ndarray)
+        self.assertIsInstance(info["action_mask"], (list, np.ndarray))
+        self.assertTrue(all(isinstance(x, (bool, np.bool_)) for x in info["action_mask"]))
 
     def test_step_valid_action_returns_next_observation(self) -> None:
         _, info = self.env.reset()
