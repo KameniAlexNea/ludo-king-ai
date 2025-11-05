@@ -11,10 +11,10 @@ from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
-from tools.arguments import parse_train_args
 from ludo_rl.extractor import LudoCnnExtractor
 from ludo_rl.ludo.config import net_config
 from ludo_rl.ludo_env import LudoEnv
+from tools.arguments import parse_train_args
 
 
 def lr_schedule(
