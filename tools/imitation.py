@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--opponents",
         type=str,
-        default=os.getenv("OPPONENTS", "heatseeker,retaliator,hoarder,rusher,finish_line,probability"),
+        default=os.getenv("OPPONENTS", "homebody,heatseeker,retaliator,hoarder,rusher,finish_line,probability"),
         help="Comma-separated list of four strategies to play each game with.",
     )
     parser.add_argument(
@@ -180,7 +180,7 @@ def collect_teacher_samples(
 
     dynamic_teacher = teacher_mode == "winner"
 
-    for _ in range(games):
+    for index_game in range(games):
         pool = list(opponents)
         rng.shuffle(pool)
 
