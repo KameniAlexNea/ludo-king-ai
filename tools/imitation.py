@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,36 +36,6 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument(
-        "--teacher",
-        type=str,
-        required=True,
-        help="Strategy name to imitate (must appear in opponents list).",
-    )
-    parser.add_argument(
-        "--opponents",
-        type=str,
-        required=True,
-        help="Comma-separated list of four strategies to play each game with.",
-    )
-    parser.add_argument(
-        "--games",
-        type=int,
-        default=200,
-        help="Number of games to simulate for data collection.",
-    )
-    parser.add_argument(
-        "--max-samples",
-        type=int,
-        default=None,
-        help="Optional hard cap on collected samples (useful for memory control).",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=None,
-        help="Optional RNG seed for reproducibility.",
-    )
-    parser.add_argument(
         "--model-path",
         type=str,
         required=True,
@@ -77,6 +48,49 @@ def parse_args() -> argparse.Namespace:
         help="Where to store the behaviour-cloned checkpoint.",
     )
     parser.add_argument(
+        "--teacher",
+        type=str,
+        default=os.getenv("TEACHER", "homebody"),
+        help=(
+            "Strategy name to imitate when using fixed teacher mode. "
+            "Ignored if --teacher-mode winner is selected."
+        ),
+    )
+    parser.add_argument(
+        "--teacher-mode",
+        type=str,
+        choices=("fixed", "winner"),
+        default=os.getenv("TEACHER_MODE", "winner"),
+        help=(
+            "Select 'fixed' to clone a specific strategy provided via --teacher, "
+            "or 'winner' to imitate whichever scripted player wins each game."
+        ),
+    )
+    parser.add_argument(
+        "--opponents",
+        type=str,
+        default=os.getenv("OPPONENTS", "heatseeker,retaliator,hoarder,rusher,finish_line,probability"),
+        help="Comma-separated list of four strategies to play each game with.",
+    )
+    parser.add_argument(
+        "--games",
+        type=int,
+        default=int(os.getenv("GAMES", 10000)),
+        help="Number of games to simulate for data collection.",
+    )
+    parser.add_argument(
+        "--max-samples",
+        type=int,
+        default=None,
+        help="Optional hard cap on collected samples (useful for memory control).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Optional RNG seed for reproducibility.",
+    )
+    parser.add_argument(
         "--bc-epochs",
         type=int,
         default=5,
@@ -85,19 +99,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bc-batch-size",
         type=int,
-        default=1024,
+        default=int(os.getenv("BC_BATCH_SIZE", 1024)),
         help="Batch size for behaviour cloning updates.",
     )
     parser.add_argument(
         "--bc-lr",
         type=float,
-        default=3e-4,
+        default=float(os.getenv("BC_LR", 1e-4)),
         help="Learning rate for the behaviour cloning optimiser.",
     )
     parser.add_argument(
         "--device",
         type=str,
-        default="cpu",
+        default="cuda" if torch.cuda.is_available() else "cpu",
         help="Torch device to use for imitation updates (cpu / cuda / mps).",
     )
     parser.add_argument(
@@ -136,7 +150,7 @@ def build_board_stack(game: LudoGame, player_index: int) -> np.ndarray:
 
 
 def prepare_players(game: LudoGame, strategies: Sequence[str]) -> None:
-    for player, strategy_name in zip(game.players, strategies, strict=True):
+    for player, strategy_name in zip(game.players, strategies):
         player.strategy_name = strategy_name
         player._strategy = None  # Reset cached strategy instance
         player.has_finished = False
@@ -152,7 +166,8 @@ def action_mask_from_moves(valid_moves: Sequence[Dict]) -> np.ndarray:
 
 
 def collect_teacher_samples(
-    teacher: str,
+    teacher: str | None,
+    teacher_mode: str,
     opponents: Sequence[str],
     games: int,
     rng: random.Random,
@@ -163,15 +178,34 @@ def collect_teacher_samples(
     records_mask: List[np.ndarray] = []
     records_action: List[int] = []
 
-    for game_idx in range(games):
-        strategies = list(opponents)
-        rng.shuffle(strategies)
+    dynamic_teacher = teacher_mode == "winner"
 
-        if teacher not in strategies:
-            continue  # Should not happen but guard anyway
+    for _ in range(games):
+        pool = list(opponents)
+        rng.shuffle(pool)
+
+        if dynamic_teacher:
+            strategies = pool[: config.NUM_PLAYERS]
+            if len(strategies) < config.NUM_PLAYERS:
+                raise ValueError(
+                    "Need at least four opponents to sample winner-based teachers."
+                )
+        else:
+            assert teacher is not None
+            others = [name for name in pool if name != teacher]
+            if len(others) < config.NUM_PLAYERS - 1:
+                raise ValueError(
+                    "Opponents list must provide at least three non-teacher strategies."
+                )
+            strategies = [teacher] + others[: config.NUM_PLAYERS - 1]
 
         game = LudoGame()
         prepare_players(game, strategies)
+
+        player_records: List[Dict[str, List[np.ndarray]]] = [
+            {"board": [], "dice": [], "mask": [], "action": []}
+            for _ in range(config.NUM_PLAYERS)
+        ]
 
         finish_order: List[int] = []
         current_index = 0
@@ -199,11 +233,12 @@ def collect_teacher_samples(
                 decision = player.decide(board_stack, dice_roll, valid_moves)
                 move = decision if decision is not None else rng.choice(valid_moves)
 
-                if player.strategy_name == teacher and mask.any():
-                    records_board.append(board_stack)
-                    records_dice.append(np.array([dice_roll - 1], dtype=np.float32))
-                    records_mask.append(mask.astype(bool))
-                    records_action.append(move["piece"].piece_id)
+                if mask.any():
+                    store = player_records[current_index]
+                    store["board"].append(board_stack)
+                    store["dice"].append(np.array([dice_roll - 1], dtype=np.float32))
+                    store["mask"].append(mask.astype(bool))
+                    store["action"].append(move["piece"].piece_id)
 
                 result = game.make_move(
                     current_index, move["piece"], move["new_pos"], dice_roll
@@ -216,22 +251,46 @@ def collect_teacher_samples(
                 if player.has_won() and current_index not in finish_order:
                     finish_order.append(current_index)
 
-                if max_samples is not None and len(records_action) >= max_samples:
-                    break
-
-            if max_samples is not None and len(records_action) >= max_samples:
-                break
-
             current_index = (current_index + 1) % config.NUM_PLAYERS
             turns_taken += 1
+
+        if dynamic_teacher:
+            if finish_order:
+                winner_index = finish_order[0]
+                winner_store = player_records[winner_index]
+                records_board.extend(winner_store["board"])
+                records_dice.extend(winner_store["dice"])
+                records_mask.extend(winner_store["mask"])
+                records_action.extend(winner_store["action"])
+        else:
+            teacher_store = next(
+                (
+                    store
+                    for store, player in zip(player_records, game.players)
+                    if player.strategy_name == teacher
+                ),
+                None,
+            )
+            if teacher_store is not None:
+                records_board.extend(teacher_store["board"])
+                records_dice.extend(teacher_store["dice"])
+                records_mask.extend(teacher_store["mask"])
+                records_action.extend(teacher_store["action"])
 
         if max_samples is not None and len(records_action) >= max_samples:
             break
 
     if not records_action:
         raise RuntimeError(
-            "No samples were collected. Check strategy names and teacher."
+            "No samples were collected. Check strategy names and teacher selection."
         )
+
+    if max_samples is not None and len(records_action) > max_samples:
+        trim = max_samples
+        records_board = records_board[:trim]
+        records_dice = records_dice[:trim]
+        records_mask = records_mask[:trim]
+        records_action = records_action[:trim]
 
     return SampleBatch(
         board=np.stack(records_board, axis=0),
@@ -308,15 +367,12 @@ def behaviour_clone(
             batches += 1
 
         logger.info(
-            "Epoch %d/%d - loss %.4f",
-            epoch + 1,
-            epochs,
-            epoch_loss / max(1, batches),
+            f"Epoch {epoch + 1}/{epochs} - loss {epoch_loss / max(1, batches):.4f}",
         )
 
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
     model.save(save_path)
-    logger.info("Saved behaviour-cloned checkpoint to %s", save_path)
+    logger.info(f"Saved behaviour-cloned checkpoint to {save_path}")
 
 
 def main() -> None:
@@ -327,21 +383,43 @@ def main() -> None:
     ]
     validate_strategies(opponents)
 
-    teacher = args.teacher.strip().lower()
-    if teacher not in opponents:
-        raise ValueError("Teacher strategy must be included in opponents list.")
+    if len(opponents) < config.NUM_PLAYERS:
+        raise ValueError(
+            "Need at least four opponent strategies to run imitation games."
+        )
+
+    teacher_mode = args.teacher_mode.strip().lower()
+    teacher = args.teacher.strip().lower() if args.teacher else None
+
+    if teacher_mode == "fixed":
+        if not teacher:
+            raise ValueError(
+                "Teacher strategy name required when --teacher-mode is 'fixed'."
+            )
+        if teacher not in opponents:
+            raise ValueError("Teacher strategy must be included in opponents list.")
+    else:
+        teacher = None
 
     rng = random.Random(args.seed)
 
-    logger.info("Collecting samples from teacher '%s' against %s", teacher, opponents)
+    if teacher_mode == "winner":
+        logger.info(
+            f"Collecting samples from game winners against opponents {opponents}"
+        )
+    else:
+        logger.info(
+            f"Collecting samples from teacher '{teacher}' against {opponents}"
+        )
     dataset = collect_teacher_samples(
         teacher=teacher,
+        teacher_mode=teacher_mode,
         opponents=opponents,
         games=args.games,
         rng=rng,
         max_samples=args.max_samples,
     )
-    logger.info("Collected %d samples", dataset.action.shape[0])
+    logger.info(f"Collected {dataset.action.shape[0]} samples")
 
     save_dataset(dataset, args.dataset_out)
 
