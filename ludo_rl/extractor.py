@@ -6,6 +6,20 @@ from torch import nn
 from .ludo.config import config, net_config
 
 
+def _extract_piece_positions(
+    my_channel: torch.Tensor, board_length: int
+) -> torch.Tensor:
+    """Recover individual piece positions from the agent's occupancy channel."""
+
+    counts = my_channel.round().clamp(min=0).to(dtype=torch.long)
+    indices = torch.arange(board_length, device=my_channel.device)
+
+    return torch.stack(
+        [torch.repeat_interleave(indices, count_row, dim=0) for count_row in counts],
+        dim=0,
+    )
+
+
 class LudoCnnExtractor(BaseFeaturesExtractor):
     """
     Custom CNN feature extractor for the Ludo environment.
@@ -15,17 +29,16 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
     def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
         super().__init__(observation_space, features_dim)
 
-        # Extract dimensions from the observation space
-        self.board_shape = observation_space["board"].shape  # (10, 58)
+        board_shape = observation_space["board"].shape  # (10, 58)
+        self.board_length = board_shape[1]
         self.dice_roll_dim = 6
+        self.position_channels = 4  # my pieces + three opponents
+        self.context_channels = board_shape[0] - self.position_channels
 
-        n_input_channels = self.board_shape[0]  # Should be 10
-
-        # --- CNN Stream for Board ---
-        # Input: (batch_size, 10, 58)
-        self.cnn = nn.Sequential(
+        # Position-focused CNN stream (agent + opponents)
+        self.position_conv = nn.Sequential(
             nn.Conv1d(
-                n_input_channels,
+                self.position_channels,
                 net_config.conv_configs[0],
                 kernel_size=net_config.kernel_sizes[0],
                 stride=1,
@@ -40,51 +53,134 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
                 padding=net_config.paddings[1],
             ),
             nn.ReLU(),
-            nn.AdaptiveAvgPool1d(output_size=net_config.pooled_output_size),
-            nn.Flatten(),
+        )
+        self.position_pool = nn.AdaptiveAvgPool1d(
+            output_size=net_config.pooled_output_size
+        )
+        self.position_norm = nn.LayerNorm(
+            net_config.conv_configs[1] * net_config.pooled_output_size
         )
 
-        # --- Compute the flattened size of the CNN output ---
-        # To do this, we pass a dummy tensor through the CNN
+        # Contextual CNN stream (safe zones, heatmaps, knockouts, etc.)
+        self.context_conv = nn.Sequential(
+            nn.Conv1d(
+                self.context_channels,
+                net_config.conv_configs[0],
+                kernel_size=net_config.kernel_sizes[0],
+                stride=1,
+                padding=net_config.paddings[0],
+            ),
+            nn.ReLU(),
+            nn.Conv1d(
+                net_config.conv_configs[0],
+                net_config.conv_configs[1],
+                kernel_size=net_config.kernel_sizes[1],
+                stride=1,
+                padding=net_config.paddings[1],
+            ),
+            nn.ReLU(),
+        )
+        self.context_pool = nn.AdaptiveAvgPool1d(
+            output_size=net_config.pooled_output_size
+        )
+        self.context_norm = nn.LayerNorm(
+            net_config.conv_configs[1] * net_config.pooled_output_size
+        )
+
+        # Per-piece embeddings and projection
+        self.position_embed = nn.Embedding(config.PATH_LENGTH, net_config.embed_dim)
+        self.piece_index_embed = nn.Embedding(
+            config.PIECES_PER_PLAYER, net_config.embed_dim
+        )
+        self.piece_mlp = nn.Sequential(
+            nn.Linear(
+                net_config.embed_dim * 2 + net_config.conv_configs[1],
+                net_config.embed_dim,
+            ),
+            nn.ReLU(),
+        )
+
+        # Dice embedding to mirror transformer behaviour
+        self.dice_embed = nn.Embedding(self.dice_roll_dim, net_config.embed_dim)
+
+        # Infer flattened dimensions using a sample observation
         with torch.no_grad():
             dummy_board = torch.as_tensor(
                 observation_space["board"].sample()[None]
             ).float()
-            n_flatten = self.cnn(dummy_board).shape[1]
+            pos_flat = self.position_pool(
+                self.position_conv(dummy_board[:, : self.position_channels, :])
+            ).flatten(1)
+            ctx_flat = self.context_pool(
+                self.context_conv(dummy_board[:, self.position_channels :, :])
+            ).flatten(1)
 
-        # Normalize CNN features to stabilize scale before fusion
-        self.board_norm = nn.LayerNorm(n_flatten)
+        self.piece_feature_dim = config.PIECES_PER_PLAYER * net_config.embed_dim
+        self.total_feature_dim = (
+            pos_flat.shape[1]
+            + ctx_flat.shape[1]
+            + self.piece_feature_dim
+            + net_config.embed_dim
+        )
 
-        # --- Linear Layer to combine CNN output and dice roll ---
-        # The dice roll will be one-hot encoded to a size of 6
-        # Optional pre-linear normalization and a light MLP head
-        self.pre_linear_norm = nn.LayerNorm(n_flatten + self.dice_roll_dim)
-        self.linear = nn.Sequential(
-            nn.Linear(n_flatten + self.dice_roll_dim, features_dim),
+        self.feature_norm = nn.LayerNorm(self.total_feature_dim)
+        self.head = nn.Sequential(
+            nn.Linear(self.total_feature_dim, features_dim),
             nn.ReLU(),
             nn.LayerNorm(features_dim),
         )
 
     def forward(self, observations: dict) -> torch.Tensor:
-        # Process board with CNN
-        board_features = self.cnn(observations["board"].float())
-        board_features = self.board_norm(board_features)
+        board = observations["board"].float()
 
-        # One-hot encode the dice roll
-        # The dice roll is 0-5 (since we did dice-1)
-        dice_roll = observations["dice_roll"].long()
-        # Defensive clamp in case upstream normalization corrupts the categorical input
-        dice_roll = torch.clamp(dice_roll, 0, self.dice_roll_dim - 1)
-        one_hot_dice = nn.functional.one_hot(
-            dice_roll.squeeze(1), num_classes=self.dice_roll_dim
-        ).float()
+        position_board = board[:, : self.position_channels, :]
+        context_board = board[:, self.position_channels :, :]
 
-        # Concatenate CNN features and one-hot dice roll
-        combined_features = torch.cat([board_features, one_hot_dice], dim=1)
-        combined_features = self.pre_linear_norm(combined_features)
+        position_conv = self.position_conv(position_board)
+        position_flat = self.position_pool(position_conv).flatten(1)
+        position_flat = self.position_norm(position_flat)
 
-        # Pass through final linear layer
-        return self.linear(combined_features)
+        context_conv = self.context_conv(context_board)
+        context_flat = self.context_pool(context_conv).flatten(1)
+        context_flat = self.context_norm(context_flat)
+
+        my_channel = board[:, 0, :]
+        piece_positions = _extract_piece_positions(my_channel, self.board_length)
+        piece_indices = (
+            torch.arange(
+                config.PIECES_PER_PLAYER, device=board.device, dtype=torch.long
+            )
+            .unsqueeze(0)
+            .expand(board.shape[0], -1)
+        )
+
+        position_embed = self.position_embed(piece_positions)
+        index_embed = self.piece_index_embed(piece_indices)
+        conv_gather = self._gather_piece_context(position_conv, piece_positions)
+
+        piece_features = torch.cat([position_embed, index_embed, conv_gather], dim=-1)
+        piece_features = self.piece_mlp(piece_features)
+        piece_flat = piece_features.reshape(board.shape[0], -1)
+
+        dice_roll = (
+            observations["dice_roll"].long().clamp(0, self.dice_roll_dim - 1).squeeze(1)
+        )
+        dice_emb = self.dice_embed(dice_roll)
+
+        combined = torch.cat([position_flat, context_flat, piece_flat, dice_emb], dim=1)
+        combined = self.feature_norm(combined)
+        return self.head(combined)
+
+    def _gather_piece_context(
+        self, conv_map: torch.Tensor, piece_positions: torch.Tensor
+    ) -> torch.Tensor:
+        """Extract local conv features for each agent piece."""
+
+        _, channels, seq_len = conv_map.shape
+        clamped_positions = piece_positions.clamp(0, seq_len - 1)
+        gather_index = clamped_positions.unsqueeze(1).expand(-1, channels, -1)
+        gathered = torch.gather(conv_map, dim=2, index=gather_index)
+        return gathered.transpose(1, 2)
 
 
 class LudoTransformerExtractor(BaseFeaturesExtractor):
@@ -149,7 +245,7 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
 
         # Piece tokens derived from my_pieces channel
         my_channel = board[:, 0, :]  # (batch, 58)
-        piece_positions = self._extract_piece_positions(my_channel)
+        piece_positions = _extract_piece_positions(my_channel, self.board_length)
         piece_tokens = self.piece_position_embed(piece_positions)
         piece_indices = (
             torch.arange(config.PIECES_PER_PLAYER, device=board.device)
@@ -170,15 +266,6 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         return self.head(cls_feature)
 
     def _extract_piece_positions(self, my_channel: torch.Tensor) -> torch.Tensor:
-        """Recover individual piece positions from the agent's occupancy channel."""
+        """Expose helper for backwards compatibility with tests."""
 
-        counts = my_channel.round().clamp(min=0).to(dtype=torch.long)
-        indices = torch.arange(self.board_length, device=my_channel.device)
-
-        return torch.stack(
-            [
-                torch.repeat_interleave(indices, count_row, dim=0)
-                for count_row in counts
-            ],
-            dim=0,
-        )
+        return _extract_piece_positions(my_channel, self.board_length)
