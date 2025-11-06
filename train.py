@@ -192,29 +192,3 @@ if __name__ == "__main__":
     final_model_path = os.path.join(model_save_path, "final_model")
     logger.info(f"--- Training Complete. Saving final model to {final_model_path} ---")
     model.save(final_model_path)
-
-    # --- Load and Test the Trained Model ---
-    logger.info("\n--- Testing Trained Model ---")
-    del model  # Remove model from memory
-
-    model = MaskablePPO.load(final_model_path)
-
-    test_env = DummyVecEnv([lambda: LudoEnv(render_mode="human")])
-
-    obs = test_env.reset()
-    for _ in range(500):
-        # We need to provide the action mask for deterministic prediction
-        action_masks = test_env.env_method("action_masks")[0]
-
-        action, _states = model.predict(
-            obs, action_masks=action_masks, deterministic=True
-        )
-
-        obs, rewards, dones, infos = test_env.step(action)
-
-        if dones[0]:
-            logger.info("Test episode finished. Resetting.")
-            obs = test_env.reset()
-
-    test_env.close()
-    logger.info("--- Test Complete ---")
