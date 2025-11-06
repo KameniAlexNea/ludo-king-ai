@@ -9,7 +9,12 @@ from stable_baselines3.common.callbacks import (
     CallbackList,
     CheckpointCallback,
 )
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import (
+    DummyVecEnv,
+    SubprocVecEnv,
+    VecMonitor,
+    VecNormalize,
+)
 from torch.profiler import (
     ProfilerActivity,
     profile,
@@ -40,7 +45,6 @@ if __name__ == "__main__":
     # --- Setup ---
     # Create directories for logs and models
     args = parse_train_args()
-    net_config.use_transformer = args.use_transformer
     print(args)
 
     # Unique timestamp for this training run
@@ -60,6 +64,7 @@ if __name__ == "__main__":
         train_env = DummyVecEnv([LudoEnv])
     else:
         train_env = SubprocVecEnv([LudoEnv for _ in range(args.num_envs)])
+    train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
     train_env = VecMonitor(train_env)
 
     logger.debug("--- Setting up Callbacks ---")
@@ -88,7 +93,7 @@ if __name__ == "__main__":
     policy_kwargs = dict(
         activation_fn=torch.nn.Tanh,
         features_extractor_class=(
-            LudoTransformerExtractor if net_config.use_transformer else LudoCnnExtractor
+            LudoTransformerExtractor if args.use_transformer else LudoCnnExtractor
         ),
         features_extractor_kwargs=dict(
             features_dim=net_config.embed_dim
@@ -108,6 +113,7 @@ if __name__ == "__main__":
             env=train_env,
             device=args.device,
             learning_rate=lr_schedule(lr_max=args.learning_rate),
+            clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
         )
     else:
         model = MaskablePPO(
@@ -124,7 +130,9 @@ if __name__ == "__main__":
             clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
             ent_coef=args.ent_coef,
             device=args.device,
-            learning_rate=lr_schedule(lr_max=args.learning_rate),
+            learning_rate=lr_schedule(
+                lr_min=args.learning_rate * 0.5, lr_max=args.learning_rate
+            ),
         )
 
     final_model_path = os.path.join(model_save_path, "init_model")

@@ -11,7 +11,7 @@ from .config import config
 from .model import Piece
 
 
-@dataclass
+@dataclass(slots=True)
 class Player:
     color: int
     start_square: Optional[int] = None

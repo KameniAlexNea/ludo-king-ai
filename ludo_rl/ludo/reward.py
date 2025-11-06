@@ -1,21 +1,23 @@
 from dataclasses import dataclass
 from typing import Dict
 
+COEF = 5
 
-@dataclass
+
+@dataclass(slots=True)
 class Reward:
     win: float = 50
     lose: float = -50
-    finish: float = 1
-    capture: float = 0.2
-    got_capture: float = -0.5
-    blockade: float = 0.3
-    hit_blockade: float = -0.4
-    exit_home: float = 0.1
-    progress: float = 0.01
-    safe_position: float = 0.05
-    draw: float = -0.5
-    skipped_turn: float = -0.01
+    finish: float = 1 * COEF
+    capture: float = 0.2 * COEF
+    got_capture: float = -0.5 * COEF
+    blockade: float = 0.3 * COEF
+    hit_blockade: float = -0.4 * COEF
+    exit_home: float = 0.1 * COEF
+    progress: float = 0.01 * COEF
+    safe_position: float = 0.05 * COEF
+    draw: float = -0.5 * COEF
+    skipped_turn: float = -0.01 * COEF
 
 
 reward_config = Reward()
