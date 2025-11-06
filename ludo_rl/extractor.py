@@ -172,27 +172,23 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
     def _extract_piece_positions(self, my_channel: torch.Tensor) -> torch.Tensor:
         """Recover individual piece positions from the agent's occupancy channel."""
 
-        batch_size = my_channel.shape[0]
-        device = my_channel.device
-        piece_positions = torch.zeros(
-            batch_size, config.PIECES_PER_PLAYER, dtype=torch.long, device=device
+        counts = my_channel.round().clamp(min=0).to(dtype=torch.long)
+        indices = torch.arange(self.board_length, device=my_channel.device).expand_as(
+            counts
         )
-        indices = torch.arange(self.board_length, device=device)
 
-        for batch_idx in range(batch_size):
-            counts = my_channel[batch_idx].round().clamp(min=0).to(dtype=torch.long)
-            repeated = indices.repeat_interleave(counts)
+        repeated = torch.repeat_interleave(indices, counts, dim=1)
 
-            if repeated.numel() < config.PIECES_PER_PLAYER:
-                padding = torch.zeros(
-                    config.PIECES_PER_PLAYER - repeated.numel(),
-                    dtype=torch.long,
-                    device=device,
-                )
-                repeated = torch.cat([repeated, padding], dim=0)
-            elif repeated.numel() > config.PIECES_PER_PLAYER:
-                repeated = repeated[: config.PIECES_PER_PLAYER]
+        if repeated.shape[1] == config.PIECES_PER_PLAYER:
+            return repeated
 
-            piece_positions[batch_idx] = repeated
-
-        return piece_positions
+        # Fallback for any unexpected bookkeeping mismatches.
+        padded = torch.zeros(
+            counts.shape[0],
+            config.PIECES_PER_PLAYER,
+            dtype=torch.long,
+            device=my_channel.device,
+        )
+        limit = min(repeated.shape[1], config.PIECES_PER_PLAYER)
+        padded[:, :limit] = repeated[:, :limit]
+        return padded

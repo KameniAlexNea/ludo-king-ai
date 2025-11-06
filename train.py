@@ -4,10 +4,7 @@ import time
 import torch
 from loguru import logger
 from sb3_contrib import MaskablePPO
-from stable_baselines3.common.callbacks import (
-    CallbackList,
-    CheckpointCallback,
-)
+from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
@@ -20,6 +17,7 @@ if __name__ == "__main__":
     # --- Setup ---
     # Create directories for logs and models
     args = parse_train_args()
+    net_config.use_transformer = args.use_transformer
     print(args)
 
     # Unique timestamp for this training run

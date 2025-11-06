@@ -10,6 +10,40 @@ from ludo_rl.ludo.model import Piece
 from .types import MoveOption, StrategyContext
 
 
+def _create_move_options(move: dict, board: np.ndarray, dice_roll: int) -> MoveOption:
+    piece: Piece = move["piece"]
+    new_pos = move["new_pos"]
+    current_pos = piece.position
+    progress = _compute_progress(current_pos, new_pos)
+    distance_to_goal = max(strategy_config.home_finish - new_pos, 0)
+
+    can_capture, capture_count = _check_capture(board, new_pos)
+    enters_home = new_pos == strategy_config.home_finish
+    enters_safe_zone = _is_safe_destination(board, new_pos)
+    forms_blockade = _forms_blockade(board, new_pos, move)
+    extra_turn = dice_roll == 6 or enters_home or can_capture
+    risk = _estimate_risk(board, new_pos)
+    leaving_safe_zone = (
+        _is_safe_destination(board, current_pos) and not enters_safe_zone
+    )
+    return MoveOption(
+        piece_id=piece.piece_id,
+        current_pos=current_pos,
+        new_pos=new_pos,
+        dice_roll=dice_roll,
+        progress=progress,
+        distance_to_goal=distance_to_goal,
+        can_capture=can_capture,
+        capture_count=capture_count,
+        enters_home=enters_home,
+        enters_safe_zone=enters_safe_zone,
+        forms_blockade=forms_blockade,
+        extra_turn=extra_turn,
+        risk=risk,
+        leaving_safe_zone=leaving_safe_zone,
+    )
+
+
 def build_move_options(
     observation: Dict[str, np.ndarray],
     action_mask: np.ndarray,
@@ -29,43 +63,9 @@ def build_move_options(
 
     board = observation["board"]
     dice_roll = int(observation["dice_roll"][0]) + 1  # convert back to 1-6
-    moves: List[MoveOption] = []
-
-    for piece_id, move in move_map.items():
-        piece: Piece = move["piece"]
-        new_pos = move["new_pos"]
-        current_pos = piece.position
-        progress = _compute_progress(current_pos, new_pos)
-        distance_to_goal = max(strategy_config.home_finish - new_pos, 0)
-
-        can_capture, capture_count = _check_capture(board, new_pos)
-        enters_home = new_pos == strategy_config.home_finish
-        enters_safe_zone = _is_safe_destination(board, new_pos)
-        forms_blockade = _forms_blockade(board, new_pos, move)
-        extra_turn = dice_roll == 6 or enters_home or can_capture
-        risk = _estimate_risk(board, new_pos)
-        leaving_safe_zone = (
-            _is_safe_destination(board, current_pos) and not enters_safe_zone
-        )
-
-        moves.append(
-            MoveOption(
-                piece_id=piece_id,
-                current_pos=current_pos,
-                new_pos=new_pos,
-                dice_roll=dice_roll,
-                progress=progress,
-                distance_to_goal=distance_to_goal,
-                can_capture=can_capture,
-                capture_count=capture_count,
-                enters_home=enters_home,
-                enters_safe_zone=enters_safe_zone,
-                forms_blockade=forms_blockade,
-                extra_turn=extra_turn,
-                risk=risk,
-                leaving_safe_zone=leaving_safe_zone,
-            )
-        )
+    moves: List[MoveOption] = [
+        _create_move_options(move, board, dice_roll) for move in move_map.values()
+    ]
 
     my_distribution = board[strategy_config.board_channel_my].copy()
     opponent_distribution = board[
