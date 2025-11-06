@@ -16,13 +16,13 @@ class Config:
 
 @dataclass
 class NetworkConfig:
-    conv_configs = [64, 32]
+    conv_configs = [32, 24]
     kernel_sizes = [7, 5]
     paddings = [3, 2]
     embed_dim = 128
     pooled_output_size = 4
-    pi = [512, 128, 64]
-    vf = [512, 256, 64]
+    pi = [256, 128, 64]
+    vf = [256, 128, 64]
     use_transformer = True
 
 

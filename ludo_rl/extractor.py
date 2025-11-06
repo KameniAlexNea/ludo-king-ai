@@ -10,14 +10,15 @@ def _extract_piece_positions(
     my_channel: torch.Tensor, board_length: int
 ) -> torch.Tensor:
     """Recover individual piece positions from the agent's occupancy channel."""
+    with torch.autograd.profiler.record_function("extract_piece_positions"):
+        counts = my_channel.round().clamp(min=0).to(dtype=torch.long)
+        indices = torch.arange(board_length, device=my_channel.device, dtype=torch.long)
+        expanded_indices = indices.unsqueeze(0).expand_as(counts)
 
-    counts = my_channel.round().clamp(min=0).to(dtype=torch.long)
-    indices = torch.arange(board_length, device=my_channel.device)
-
-    return torch.stack(
-        [torch.repeat_interleave(indices, count_row, dim=0) for count_row in counts],
-        dim=0,
-    )
+        flat_positions = torch.repeat_interleave(
+            expanded_indices.reshape(-1), counts.reshape(-1), dim=0
+        )
+        return flat_positions.view(my_channel.shape[0], -1)
 
 
 class LudoCnnExtractor(BaseFeaturesExtractor):
@@ -103,6 +104,12 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         # Dice embedding to mirror transformer behaviour
         self.dice_embed = nn.Embedding(self.dice_roll_dim, net_config.embed_dim)
 
+        self.register_buffer(
+            "piece_indices",
+            torch.arange(config.PIECES_PER_PLAYER, dtype=torch.long).unsqueeze(0),
+            persistent=False,
+        )
+
         # Infer flattened dimensions using a sample observation
         with torch.no_grad():
             dummy_board = torch.as_tensor(
@@ -146,13 +153,7 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
 
         my_channel = board[:, 0, :]
         piece_positions = _extract_piece_positions(my_channel, self.board_length)
-        piece_indices = (
-            torch.arange(
-                config.PIECES_PER_PLAYER, device=board.device, dtype=torch.long
-            )
-            .unsqueeze(0)
-            .expand(board.shape[0], -1)
-        )
+        piece_indices = self.piece_indices.expand(board.shape[0], -1)
 
         position_embed = self.position_embed(piece_positions)
         index_embed = self.piece_index_embed(piece_indices)
@@ -196,8 +197,13 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         self.embed_dim = net_config.embed_dim
 
         # Square token encoding (per square: combine all channels)
+        reduced_dim = max(self.embed_dim // 2, 1)
         self.square_norm = nn.LayerNorm(board_channels)
-        self.square_proj = nn.Linear(board_channels, self.embed_dim)
+        self.square_proj = nn.Sequential(
+            nn.Linear(board_channels, reduced_dim),
+            nn.GELU(),
+            nn.Linear(reduced_dim, self.embed_dim),
+        )
         self.square_pos_embed = nn.Embedding(board_length, self.embed_dim)
 
         # Learnable tokens and embeddings
@@ -208,13 +214,13 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.embed_dim,
-            nhead=8,
-            dim_feedforward=self.embed_dim * 4,
+            nhead=6,
+            dim_feedforward=self.embed_dim * 3,
             dropout=0.1,
             activation="gelu",
             batch_first=True,
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=3)
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
 
         self.sequence_dropout = nn.Dropout(p=0.1)
         self.output_norm = nn.LayerNorm(self.embed_dim)
@@ -222,6 +228,17 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
             nn.Linear(self.embed_dim, features_dim),
             nn.ReLU(),
             nn.LayerNorm(features_dim),
+        )
+
+        self.register_buffer(
+            "square_position_indices",
+            torch.arange(board_length, dtype=torch.long).unsqueeze(0),
+            persistent=False,
+        )
+        self.register_buffer(
+            "transformer_piece_indices",
+            torch.arange(config.PIECES_PER_PLAYER, dtype=torch.long).unsqueeze(0),
+            persistent=False,
         )
 
     def forward(self, observations: dict) -> torch.Tensor:
@@ -232,11 +249,7 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         square_features = board.permute(0, 2, 1)  # (batch, squares, channels)
         square_features = self.square_norm(square_features)
         square_tokens = self.square_proj(square_features)
-        position_indices = (
-            torch.arange(self.board_length, device=board.device)
-            .unsqueeze(0)
-            .expand(batch_size, -1)
-        )
+        position_indices = self.square_position_indices.expand(batch_size, -1)
         square_tokens = square_tokens + self.square_pos_embed(position_indices)
 
         # Dice token: (batch, 1, embed_dim)
@@ -247,11 +260,7 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         my_channel = board[:, 0, :]  # (batch, 58)
         piece_positions = _extract_piece_positions(my_channel, self.board_length)
         piece_tokens = self.piece_position_embed(piece_positions)
-        piece_indices = (
-            torch.arange(config.PIECES_PER_PLAYER, device=board.device)
-            .unsqueeze(0)
-            .expand(batch_size, -1)
-        )
+        piece_indices = self.transformer_piece_indices.expand(batch_size, -1)
         piece_tokens = piece_tokens + self.piece_index_embed(piece_indices)
 
         # Assemble sequence: [CLS] + dice + squares + pieces
@@ -264,8 +273,3 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         encoded = self.encoder(sequence)
         cls_feature = self.output_norm(encoded[:, 0])
         return self.head(cls_feature)
-
-    def _extract_piece_positions(self, my_channel: torch.Tensor) -> torch.Tensor:
-        """Expose helper for backwards compatibility with tests."""
-
-        return _extract_piece_positions(my_channel, self.board_length)

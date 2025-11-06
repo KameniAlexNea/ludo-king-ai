@@ -4,14 +4,37 @@ import time
 import torch
 from loguru import logger
 from sb3_contrib import MaskablePPO
-from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
+from stable_baselines3.common.callbacks import (
+    BaseCallback,
+    CallbackList,
+    CheckpointCallback,
+)
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
+from torch.profiler import (
+    ProfilerActivity,
+    profile,
+    schedule,
+    tensorboard_trace_handler,
+)
 
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo.config import net_config
 from ludo_rl.ludo_env import LudoEnv
 from tools.arguments import parse_train_args
 from tools.scheduler import CoefScheduler, lr_schedule
+
+
+class ProfilerStepCallback(BaseCallback):
+    """Steps the PyTorch profiler once per environment step."""
+
+    def __init__(self, profiler) -> None:
+        super().__init__()
+        self.profiler = profiler
+
+    def _on_step(self) -> bool:
+        self.profiler.step()
+        return True
+
 
 if __name__ == "__main__":
     # --- Setup ---
@@ -56,7 +79,9 @@ if __name__ == "__main__":
         schedule=lr_schedule(lr_min=0.005, lr_max=args.ent_coef),
     )
 
-    callback_list = CallbackList([checkpoint_callback, entropy_callback])
+    callbacks = [entropy_callback]
+    if not args.profile:
+        callbacks.append(checkpoint_callback)
 
     # --- Policy Kwargs ---
     # Define the custom feature extractor
@@ -108,8 +133,52 @@ if __name__ == "__main__":
 
     logger.info(f"--- Starting Training ({run_id}) ---")
 
-    # --- Train the Model ---
-    model.learn(total_timesteps=args.total_timesteps, callback=callback_list)
+    profiling_summary = None
+    profiler_log_dir = None
+    trace_path = None
+    if args.profile:
+        logger.info("--- Profiling Enabled: results will be stored alongside logs ---")
+        activities = [ProfilerActivity.CPU]
+        if torch.cuda.is_available() and "cuda" in args.device:
+            activities.append(ProfilerActivity.CUDA)
+
+        profiler_log_dir = os.path.join(log_path, "profiler")
+        os.makedirs(profiler_log_dir, exist_ok=True)
+
+        profiler_schedule = schedule(wait=0, warmup=1, active=1, repeat=1)
+
+        with profile(
+            activities=activities,
+            schedule=profiler_schedule,
+            on_trace_ready=tensorboard_trace_handler(profiler_log_dir),
+            record_shapes=False,
+            profile_memory=False,
+            with_stack=False,
+        ) as prof:
+            profiling_callbacks = CallbackList(callbacks + [ProfilerStepCallback(prof)])
+            model.learn(
+                total_timesteps=args.total_timesteps,
+                callback=profiling_callbacks,
+            )
+            profiling_summary = prof.key_averages().table(
+                sort_by="cpu_time_total", row_limit=20
+            )
+        trace_path = os.path.join(profiler_log_dir, "trace.json")
+        try:
+            prof.export_chrome_trace(trace_path)
+        except RuntimeError:
+            logger.warning("Profiler trace already saved; skipping explicit export.")
+        if profiling_summary is not None and profiler_log_dir is not None:
+            logger.info("--- Profiling Summary (top 20 ops by CPU time) ---")
+            logger.info("\n{}", profiling_summary)
+            if trace_path is not None:
+                logger.info("Profiler trace exported to {}", trace_path)
+    else:
+        # --- Train the Model ---
+        model.learn(
+            total_timesteps=args.total_timesteps,
+            callback=CallbackList(callbacks),
+        )
 
     # --- Save the Final Model ---
     final_model_path = os.path.join(model_save_path, "final_model")
@@ -123,22 +192,21 @@ if __name__ == "__main__":
     model = MaskablePPO.load(final_model_path)
 
     test_env = DummyVecEnv([lambda: LudoEnv(render_mode="human")])
-    # test_env = MaskableListActions(test_env) # Don't forget to wrap!
 
-    obs, info = test_env.reset()
+    obs = test_env.reset()
     for _ in range(500):
         # We need to provide the action mask for deterministic prediction
-        action_masks = test_env.env_method("action_masks")
+        action_masks = test_env.env_method("action_masks")[0]
 
         action, _states = model.predict(
-            obs, action_masks=action_masks[0], deterministic=True
+            obs, action_masks=action_masks, deterministic=True
         )
 
-        obs, reward, terminated, truncated, info = test_env.step(action)
+        obs, rewards, dones, infos = test_env.step(action)
 
-        if terminated or truncated:
+        if dones[0]:
             logger.info("Test episode finished. Resetting.")
-            obs, info = test_env.reset()
+            obs = test_env.reset()
 
     test_env.close()
     logger.info("--- Test Complete ---")

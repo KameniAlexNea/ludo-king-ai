@@ -23,6 +23,7 @@ class TrainConfig:
     checkpoint_freq: int
     learning_rate: float
     use_transformer: bool = False
+    profile: bool = False
 
 
 def build_train_parser() -> argparse.ArgumentParser:
@@ -45,6 +46,11 @@ def build_train_parser() -> argparse.ArgumentParser:
         "--use-transformer",
         action="store_true",
         help="Use Transformer-based feature extractor",
+    )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Enable PyTorch profiler around training",
     )
     parser.add_argument("--resume", type=str, default=None)
     return parser
@@ -76,4 +82,5 @@ def parse_train_args(args: list[str] | None = None) -> TrainConfig:
         learning_rate=namespace.learning_rate,
         resume=namespace.resume,
         use_transformer=namespace.use_transformer,
+        profile=namespace.profile,
     )
