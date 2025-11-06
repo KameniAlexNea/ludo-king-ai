@@ -173,22 +173,12 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         """Recover individual piece positions from the agent's occupancy channel."""
 
         counts = my_channel.round().clamp(min=0).to(dtype=torch.long)
-        indices = torch.arange(self.board_length, device=my_channel.device).expand_as(
-            counts
+        indices = torch.arange(self.board_length, device=my_channel.device)
+
+        return torch.stack(
+            [
+                torch.repeat_interleave(indices, count_row, dim=0)
+                for count_row in counts
+            ],
+            dim=0,
         )
-
-        repeated = torch.repeat_interleave(indices, counts, dim=1)
-
-        if repeated.shape[1] == config.PIECES_PER_PLAYER:
-            return repeated
-
-        # Fallback for any unexpected bookkeeping mismatches.
-        padded = torch.zeros(
-            counts.shape[0],
-            config.PIECES_PER_PLAYER,
-            dtype=torch.long,
-            device=my_channel.device,
-        )
-        limit = min(repeated.shape[1], config.PIECES_PER_PLAYER)
-        padded[:, :limit] = repeated[:, :limit]
-        return padded

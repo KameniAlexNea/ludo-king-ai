@@ -7,6 +7,7 @@ from unittest import mock
 import numpy as np
 
 from ludo_rl.ludo.config import config
+from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.simulator import GameSimulator
 
 
@@ -68,13 +69,18 @@ class GameSimulatorTests(unittest.TestCase):
     def test_simulate_opponent_turns_accumulates_rewards(self) -> None:
         sim = GameSimulator(agent_index=0)
 
-        roll_mock = mock.Mock(side_effect=[6] * 12)
+        rolls = iter([6] * 12)
 
-        def fake_valid_moves(player_index: int, dice_roll: int):
-            piece = sim.game.players[player_index].pieces[0]
+        def fake_roll(self):
+            return next(rolls)
+
+        def fake_valid_moves(self, player_index: int, dice_roll: int):
+            piece = self.players[player_index].pieces[0]
             return [{"piece": piece, "new_pos": 1, "dice_roll": dice_roll}]
 
-        def fake_make_move(player_index: int, piece, new_pos: int, dice_roll: int):
+        def fake_make_move(
+            self, player_index: int, piece, new_pos: int, dice_roll: int
+        ):
             piece.position = new_pos
             return {
                 "reward": 0.5,
@@ -86,13 +92,9 @@ class GameSimulatorTests(unittest.TestCase):
         sim.reset_summaries()
 
         with (
-            mock.patch.object(sim.game, "roll_dice", new=roll_mock),
-            mock.patch.object(
-                sim.game, "get_valid_moves", new=mock.Mock(side_effect=fake_valid_moves)
-            ),
-            mock.patch.object(
-                sim.game, "make_move", new=mock.Mock(side_effect=fake_make_move)
-            ),
+            mock.patch.object(LudoGame, "roll_dice", fake_roll),
+            mock.patch.object(LudoGame, "get_valid_moves", fake_valid_moves),
+            mock.patch.object(LudoGame, "make_move", fake_make_move),
         ):
             rewards = sim.simulate_opponent_turns()
 
@@ -102,12 +104,16 @@ class GameSimulatorTests(unittest.TestCase):
     def test_step_opponents_only_resets_summary(self) -> None:
         sim = GameSimulator(agent_index=0)
         sim.transition_summary["movement_heatmap"][2] = 4
-        simulate_mock = mock.Mock(return_value=[0.0] * config.NUM_PLAYERS)
-        with mock.patch.object(sim, "simulate_opponent_turns", new=simulate_mock):
+        with mock.patch.object(
+            GameSimulator,
+            "simulate_opponent_turns",
+            autospec=True,
+            return_value=[0.0] * config.NUM_PLAYERS,
+        ) as simulate_mock:
             rewards = sim.step_opponents_only()
         self.assertEqual(sim.transition_summary["movement_heatmap"][2], 0)
         self.assertEqual(rewards, [0.0] * config.NUM_PLAYERS)
-        simulate_mock.assert_called_once()
+        simulate_mock.assert_called_once_with(sim)
 
     def test_decide_move_falls_back_to_random_choice(self) -> None:
         sim = GameSimulator(agent_index=0)
@@ -138,13 +144,17 @@ class GameSimulatorTests(unittest.TestCase):
         piece.position = 10
         move = {"piece": piece, "new_pos": 13, "dice_roll": 3}
 
-        simulate_mock = mock.Mock(return_value=[0.0] * config.NUM_PLAYERS)
-        with mock.patch.object(sim, "simulate_opponent_turns", new=simulate_mock):
+        with mock.patch.object(
+            GameSimulator,
+            "simulate_opponent_turns",
+            autospec=True,
+            return_value=[0.0] * config.NUM_PLAYERS,
+        ) as simulate_mock:
             next_obs, reward, extra_turn = sim.step(move)
 
         self.assertIn("board_state", next_obs)
         self.assertFalse(extra_turn)
-        self.assertTrue(simulate_mock.called)
+        simulate_mock.assert_called_once_with(sim)
         self.assertIsInstance(reward, float)
 
     def test_step_skips_opponents_on_extra_turn(self) -> None:
@@ -152,7 +162,11 @@ class GameSimulatorTests(unittest.TestCase):
         piece = sim.game.players[sim.agent_index].pieces[0]
         move = {"piece": piece, "new_pos": 1, "dice_roll": 6}
 
-        with mock.patch.object(sim, "simulate_opponent_turns") as simulate_mock:
+        with mock.patch.object(
+            GameSimulator,
+            "simulate_opponent_turns",
+            autospec=True,
+        ) as simulate_mock:
             _, _, extra_turn = sim.step(move)
 
         self.assertTrue(extra_turn)

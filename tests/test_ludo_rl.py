@@ -129,10 +129,13 @@ class LudoTransformerExtractorTests(unittest.TestCase):
 
     def test_forward_outputs_expected_shape(self) -> None:
         batch_size = 3
+        board = torch.randn(batch_size, 10, config.PATH_LENGTH, dtype=torch.float32)
+        board[:, 0, :] = 0.0
+        piece_indices = torch.tensor([0, 10, 20, 30], dtype=torch.long)
+        for batch_idx in range(batch_size):
+            board[batch_idx, 0, piece_indices] = 1.0
         observations = {
-            "board": torch.randn(
-                batch_size, 10, config.PATH_LENGTH, dtype=torch.float32
-            ),
+            "board": board,
             "dice_roll": torch.full((batch_size, 1), 9, dtype=torch.long),
         }
         with torch.no_grad():
@@ -147,14 +150,15 @@ class LudoTransformerExtractorTests(unittest.TestCase):
         my_channel[0, 10] = 1
         my_channel[0, 22] = 1
 
+        my_channel[1, 0] = 1  # Piece still in yard
         my_channel[1, 3] = 1
-        my_channel[1, 15] = 2  # One piece missing, expect zero padding
+        my_channel[1, 15] = 2
 
         positions = self.extractor._extract_piece_positions(my_channel)
 
         self.assertEqual(positions.shape, (2, config.PIECES_PER_PLAYER))
         self.assertListEqual(positions[0].tolist(), [4, 4, 10, 22])
-        self.assertListEqual(positions[1].tolist(), [3, 15, 15, 0])
+        self.assertListEqual(positions[1].tolist(), [0, 3, 15, 15])
 
 
 if __name__ == "__main__":
