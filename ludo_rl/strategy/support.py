@@ -29,25 +29,18 @@ class SupportStrategyConfig(BaseStrategyConfig):
         }
 
 
+@dataclass(slots=True)
 class SupportStrategy(BaseStrategy):
     """Keeps the team's pieces evenly developed instead of racing a single runner."""
 
-    name = "support"
+    name: ClassVar[str] = "support"
     config: ClassVar[SupportStrategyConfig] = SupportStrategyConfig()
 
-    def __init__(
-        self,
-        yard_bonus: float = 4.0,
-        lag_weight: float = 0.3,
-        lead_penalty: float = 0.2,
-        safe_zone_bonus: float = 1.5,
-        risk_penalty: float = 0.8,
-    ) -> None:
-        self.yard_bonus = yard_bonus
-        self.lag_weight = lag_weight
-        self.lead_penalty = lead_penalty
-        self.safe_zone_bonus = safe_zone_bonus
-        self.risk_penalty = risk_penalty
+    yard_bonus: float = 4.0
+    lag_weight: float = 0.3
+    lead_penalty: float = 0.2
+    safe_zone_bonus: float = 1.5
+    risk_penalty: float = 0.8
 
     def _score_move(self, ctx: StrategyContext, move: MoveOption) -> float:
         counts = ctx.my_distribution

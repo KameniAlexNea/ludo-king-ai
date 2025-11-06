@@ -1,11 +1,13 @@
+from dataclasses import dataclass
+
 from .config import config
 from .player import Piece, Player
 from .reward import compute_move_rewards
 
 
+@dataclass(slots=True)
 class MoveManagement:
-    def __init__(self, players: list[Player]):
-        self.players = players
+    players: list[Player]
 
     def is_safe(self, position: int):
         return position in config.SAFE_SQUARES_ABS

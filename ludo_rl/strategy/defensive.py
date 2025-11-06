@@ -31,29 +31,20 @@ class DefensiveStrategyConfig(BaseStrategyConfig):
         }
 
 
+@dataclass(slots=True)
 class DefensiveStrategy(BaseStrategy):
     """Keeps pieces sheltered and avoids exposing them to captures."""
 
-    name = "defensive"
+    name: ClassVar[str] = "defensive"
     config: ClassVar[DefensiveStrategyConfig] = DefensiveStrategyConfig()
 
-    def __init__(
-        self,
-        enter_home_bonus: float = 6.0,
-        safe_zone_bonus: float = 5.0,
-        blockade_bonus: float = 3.5,
-        extra_turn_bonus: float = 2.0,
-        risk_penalty: float = 2.0,
-        leave_safe_penalty: float = 6.0,
-        progress_weight: float = 0.3,
-    ) -> None:
-        self.enter_home_bonus = enter_home_bonus
-        self.safe_zone_bonus = safe_zone_bonus
-        self.blockade_bonus = blockade_bonus
-        self.extra_turn_bonus = extra_turn_bonus
-        self.risk_penalty = risk_penalty
-        self.leave_safe_penalty = leave_safe_penalty
-        self.progress_weight = progress_weight
+    enter_home_bonus: float = 6.0
+    safe_zone_bonus: float = 5.0
+    blockade_bonus: float = 3.5
+    extra_turn_bonus: float = 2.0
+    risk_penalty: float = 2.0
+    leave_safe_penalty: float = 6.0
+    progress_weight: float = 0.3
 
     def _score_move(self, ctx: StrategyContext, move: MoveOption) -> float:
         score = 0.0

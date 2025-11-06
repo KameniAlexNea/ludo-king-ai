@@ -27,25 +27,18 @@ class CautiousStrategyConfig(BaseStrategyConfig):
         }
 
 
+@dataclass(slots=True)
 class CautiousStrategy(BaseStrategy):
     """Prioritises safety, safe zones, and avoiding exposure."""
 
-    name = "cautious"
+    name: ClassVar[str] = "cautious"
     config: ClassVar[CautiousStrategyConfig] = CautiousStrategyConfig()
 
-    def __init__(
-        self,
-        safe_bonus: float = 4.0,
-        blockade_bonus: float = 3.0,
-        risk_penalty: float = 6.0,
-        leave_safe_penalty: float = 5.0,
-        progress_weight: float = 0.8,
-    ) -> None:
-        self.safe_bonus = safe_bonus
-        self.blockade_bonus = blockade_bonus
-        self.risk_penalty = risk_penalty
-        self.leave_safe_penalty = leave_safe_penalty
-        self.progress_weight = progress_weight
+    safe_bonus: float = 4.0
+    blockade_bonus: float = 3.0
+    risk_penalty: float = 6.0
+    leave_safe_penalty: float = 5.0
+    progress_weight: float = 0.8
 
     def _score_move(self, ctx: StrategyContext, move: MoveOption) -> float:
         score = move.progress * self.progress_weight

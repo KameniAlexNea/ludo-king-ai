@@ -1,41 +1,20 @@
-import math
 import os
 import time
-from typing import Callable
 
 import torch
 from loguru import logger
-
-# We must use MaskablePPO from sb3_contrib to handle action masking
 from sb3_contrib import MaskablePPO
-from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
+from stable_baselines3.common.callbacks import (
+    CallbackList,
+    CheckpointCallback,
+)
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
-from ludo_rl.extractor import LudoCnnExtractor
+from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo.config import net_config
 from ludo_rl.ludo_env import LudoEnv
 from tools.arguments import parse_train_args
-
-
-def lr_schedule(
-    lr_min: float = 1e-5, lr_max: float = 3e-4, warmup_steps: float = 0.03
-) -> Callable[[float], float]:
-    lr_min, lr_max = min(lr_min, lr_max), max(lr_min, lr_max)
-
-    def schedule(progress_remaining: float) -> float:
-        progress = 1 - progress_remaining
-        if progress < warmup_steps:
-            return lr_min + (lr_max - lr_min) * (progress / warmup_steps)
-        else:
-            adjusted_progress = (progress - warmup_steps) / (1 - warmup_steps)
-            return lr_min + 0.5 * (lr_max - lr_min) * (
-                1 + math.cos(math.pi * adjusted_progress)
-            )
-
-    return schedule
-
-
-# --- Main Training Script ---
+from tools.scheduler import CoefScheduler, lr_schedule
 
 if __name__ == "__main__":
     # --- Setup ---
@@ -73,13 +52,21 @@ if __name__ == "__main__":
         save_vecnormalize=True,
     )
 
-    callback_list = CallbackList([checkpoint_callback])
+    entropy_callback = CoefScheduler(
+        total_timesteps=args.total_timesteps,
+        att="ent_coef",
+        schedule=lr_schedule(lr_min=0.005, lr_max=args.ent_coef),
+    )
+
+    callback_list = CallbackList([checkpoint_callback, entropy_callback])
 
     # --- Policy Kwargs ---
     # Define the custom feature extractor
     policy_kwargs = dict(
         activation_fn=torch.nn.Tanh,
-        features_extractor_class=LudoCnnExtractor,
+        features_extractor_class=(
+            LudoTransformerExtractor if net_config.use_transformer else LudoCnnExtractor
+        ),
         features_extractor_kwargs=dict(
             features_dim=net_config.embed_dim
         ),  # Output features
@@ -111,7 +98,7 @@ if __name__ == "__main__":
             n_epochs=args.n_epochs,
             gamma=args.gamma,
             gae_lambda=args.gae_lambda,
-            clip_range=args.clip_range,
+            clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
             ent_coef=args.ent_coef,
             device=args.device,
             learning_rate=lr_schedule(lr_max=args.learning_rate),

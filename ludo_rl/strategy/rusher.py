@@ -30,27 +30,19 @@ class RusherStrategyConfig(BaseStrategyConfig):
         }
 
 
+@dataclass(slots=True)
 class RusherStrategy(BaseStrategy):
     """Prioritises raw progress toward home, largely ignoring skirmishes."""
 
-    name = "rusher"
+    name: ClassVar[str] = "rusher"
     config: ClassVar[RusherStrategyConfig] = RusherStrategyConfig()
 
-    def __init__(
-        self,
-        progress_weight: float = 2.0,
-        distance_penalty: float = 0.1,
-        extra_turn_bonus: float = 3.0,
-        risk_penalty: float = 0.5,
-        density_radius: int = 2,
-        density_penalty: float = 0.2,
-    ) -> None:
-        self.progress_weight = progress_weight
-        self.distance_penalty = distance_penalty
-        self.extra_turn_bonus = extra_turn_bonus
-        self.risk_penalty = risk_penalty
-        self.density_radius = density_radius
-        self.density_penalty = density_penalty
+    progress_weight: float = 2.0
+    distance_penalty: float = 0.1
+    extra_turn_bonus: float = 3.0
+    risk_penalty: float = 0.5
+    density_radius: int = 2
+    density_penalty: float = 0.2
 
     def _score_move(self, ctx: StrategyContext, move: MoveOption) -> float:
         score = 0.0

@@ -23,6 +23,7 @@ class NetworkConfig:
     pooled_output_size = 4
     pi = [512, 128, 64]
     vf = [512, 256, 64]
+    use_transformer = True
 
 
 @dataclass

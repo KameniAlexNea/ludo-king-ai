@@ -43,35 +43,23 @@ class HomebodyStrategyConfig(BaseStrategyConfig):
         }
 
 
+@dataclass(slots=True)
 class HomebodyStrategy(BaseStrategy):
     """Plays defensively, preferring safe zones, blockades, and home progress."""
 
-    name = "homebody"
+    name: ClassVar[str] = "homebody"
     config: ClassVar[HomebodyStrategyConfig] = HomebodyStrategyConfig()
 
-    def __init__(
-        self,
-        safe_zone_bonus: float = 4.0,
-        blockade_bonus: float = 5.0,
-        home_bonus: float = 6.0,
-        leave_start_penalty: float = 2.0,
-        leave_safe_penalty: float = 4.0,
-        risk_penalty: float = 1.5,
-        distance_penalty: float = 0.05,
-        distance_cap: int = 10,
-        near_home_threshold: int = strategy_config.main_track_end - 6,
-        near_home_bonus: float = 2.5,
-    ) -> None:
-        self.safe_zone_bonus = safe_zone_bonus
-        self.blockade_bonus = blockade_bonus
-        self.home_bonus = home_bonus
-        self.leave_start_penalty = leave_start_penalty
-        self.leave_safe_penalty = leave_safe_penalty
-        self.risk_penalty = risk_penalty
-        self.distance_penalty = distance_penalty
-        self.distance_cap = distance_cap
-        self.near_home_threshold = near_home_threshold
-        self.near_home_bonus = near_home_bonus
+    safe_zone_bonus: float = 4.0
+    blockade_bonus: float = 5.0
+    home_bonus: float = 6.0
+    leave_start_penalty: float = 2.0
+    leave_safe_penalty: float = 4.0
+    risk_penalty: float = 1.5
+    distance_penalty: float = 0.05
+    distance_cap: int = 10
+    near_home_threshold: int = strategy_config.main_track_end - 6
+    near_home_bonus: float = 2.5
 
     def _score_move(self, ctx: StrategyContext, move: MoveOption) -> float:
         score = 0.0

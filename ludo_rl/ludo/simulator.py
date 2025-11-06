@@ -1,7 +1,7 @@
 import os
 import random
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, field
+from typing import Dict, List
 
 import numpy as np
 
@@ -9,15 +9,19 @@ from .config import config
 from .game import LudoGame
 
 
-@dataclass
+@dataclass(slots=True)
 class GameSimulator:
     """
     Manages the simulation, modified to integrate with the Gym env.
     """
 
-    def __init__(self, agent_index):
+    agent_index: int = 0
+    game: LudoGame = field(init=False)
+    transition_summary: Dict[str, List[int]] = field(init=False, repr=False)
+    reward_heatmap: List[float] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
         self.game = LudoGame()
-        self.agent_index = agent_index
         self._configure_opponent_strategies()
         self.reset_summaries()
 

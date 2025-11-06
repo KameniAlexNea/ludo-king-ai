@@ -34,31 +34,21 @@ class RetaliatorStrategyConfig(BaseStrategyConfig):
         }
 
 
+@dataclass(slots=True)
 class RetaliatorStrategy(BaseStrategy):
     """Prioritises striking back at nearby opponents while staying battle-ready."""
 
-    name = "retaliator"
+    name: ClassVar[str] = "retaliator"
     config: ClassVar[RetaliatorStrategyConfig] = RetaliatorStrategyConfig()
 
-    def __init__(
-        self,
-        capture_weight: float = 8.0,
-        proximity_radius: int = 6,
-        proximity_weight: float = 1.5,
-        density_radius: int = 3,
-        density_weight: float = 0.5,
-        risk_penalty: float = 1.0,
-        leave_safe_penalty: float = 1.0,
-        extra_turn_bonus: float = 2.0,
-    ) -> None:
-        self.capture_weight = capture_weight
-        self.proximity_radius = proximity_radius
-        self.proximity_weight = proximity_weight
-        self.density_radius = density_radius
-        self.density_weight = density_weight
-        self.risk_penalty = risk_penalty
-        self.leave_safe_penalty = leave_safe_penalty
-        self.extra_turn_bonus = extra_turn_bonus
+    capture_weight: float = 8.0
+    proximity_radius: int = 6
+    proximity_weight: float = 1.5
+    density_radius: int = 3
+    density_weight: float = 0.5
+    risk_penalty: float = 1.0
+    leave_safe_penalty: float = 1.0
+    extra_turn_bonus: float = 2.0
 
     def _score_move(self, ctx: StrategyContext, move: MoveOption) -> float:
         score = 0.0
