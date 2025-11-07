@@ -54,28 +54,24 @@ class Player:
                 self.strategy_name = "random"
                 return random.choice(valid_moves)
 
-        move_map: dict[int, dict] = {}
+        move_choices: list[dict | None] = [None] * config.PIECES_PER_PLAYER
         action_mask = np.zeros(config.PIECES_PER_PLAYER, dtype=bool)
 
         for move in valid_moves:
             piece_id = move["piece"].piece_id
             action_mask[piece_id] = True
-            if piece_id not in move_map:
-                move_copy = move.copy()
-                move_copy["dice_roll"] = dice_roll
-                move_map[piece_id] = move_copy
+            if move_choices[piece_id] is None:
+                move_choices[piece_id] = move
 
-        observation = {
-            "board": board_stack,
-            "dice_roll": np.array([dice_roll - 1], dtype=np.int64),
-        }
-        ctx = build_move_options(observation, action_mask, move_map)
+        ctx = build_move_options(board_stack, dice_roll, action_mask, move_choices)
         decision = self._strategy.select_move(ctx)
 
         if decision is None:
             return random.choice(valid_moves)
 
-        selected = move_map.get(decision.piece_id)
+        if decision.piece_id >= len(move_choices):
+            return random.choice(valid_moves)
+        selected = move_choices[decision.piece_id]
         if selected is None:
             return random.choice(valid_moves)
         return selected

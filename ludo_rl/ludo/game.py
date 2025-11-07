@@ -1,9 +1,41 @@
 import random
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from .config import config
 from .moves import MoveManagement
 from .player import Piece, Player
+
+
+def _compute_safe_relative_positions() -> tuple[tuple[int, ...], ...]:
+    safe_positions: list[tuple[int, ...]] = []
+    for agent_start in config.PLAYER_START_SQUARES:
+        relative_indices = {
+            ((abs_pos - agent_start + 52) % 52) + 1
+            for abs_pos in config.SAFE_SQUARES_ABS
+        }
+        safe_positions.append(tuple(sorted(relative_indices)))
+    return tuple(safe_positions)
+
+
+def _compute_relative_translations() -> tuple[tuple[tuple[int, ...], ...], ...]:
+    translations: list[list[tuple[int, ...]]] = []
+    for player_start in config.PLAYER_START_SQUARES:
+        player_rows: list[tuple[int, ...]] = []
+        for agent_start in config.PLAYER_START_SQUARES:
+            mapping = [-1] * config.PATH_LENGTH
+            for rel_pos in range(1, 52):
+                abs_pos = ((player_start + rel_pos - 2 + 52) % 52) + 1
+                agent_rel = ((abs_pos - agent_start + 52) % 52) + 1
+                mapping[rel_pos] = agent_rel
+            player_rows.append(tuple(mapping))
+        translations.append(tuple(player_rows))
+    return tuple(translations)
+
+
+_SAFE_RELATIVE_POSITIONS = _compute_safe_relative_positions()
+_RELATIVE_TRANSLATIONS = _compute_relative_translations()
 
 
 @dataclass(slots=True)
@@ -16,12 +48,59 @@ class LudoGame:
     players: list[Player] = field(init=False)
     rng: random.Random = field(init=False, repr=False)
     move_manager: MoveManagement = field(init=False)
+    _board_buffer: np.ndarray | None = field(init=False, repr=False, default=None)
 
     def __post_init__(self) -> None:
         self.players = [Player(i) for i in range(config.NUM_PLAYERS)]
         self.rng = random.Random()
         self.rng.seed(42)
         self.move_manager = MoveManagement(self.players)
+
+    def build_board_tensor(
+        self, agent_index: int, out: np.ndarray | None = None
+    ) -> np.ndarray:
+        if out is not None:
+            board = out
+            if board.shape != (10, config.PATH_LENGTH):
+                raise ValueError("Expected board tensor of shape (10, PATH_LENGTH)")
+        else:
+            if self._board_buffer is None:
+                self._board_buffer = np.zeros(
+                    (10, config.PATH_LENGTH), dtype=np.float32
+                )
+            board = self._board_buffer
+
+        board.fill(0.0)
+
+        safe_channel = board[4]
+        safe_channel[52:57] = 1.0
+        for rel_pos in _SAFE_RELATIVE_POSITIONS[agent_index]:
+            safe_channel[rel_pos] = 1.0
+
+        for player_index, player in enumerate(self.players):
+            relative_channel_index = (
+                player_index - agent_index + config.NUM_PLAYERS
+            ) % config.NUM_PLAYERS
+            channel = board[relative_channel_index]
+
+            if relative_channel_index == 0:
+                for piece in player.pieces:
+                    channel[piece.position] += 1.0
+                continue
+
+            mapping = _RELATIVE_TRANSLATIONS[player_index][agent_index]
+            for piece in player.pieces:
+                pos = piece.position
+                if pos == 0:
+                    channel[0] += 1.0
+                elif pos > 51:
+                    continue
+                else:
+                    target = mapping[pos]
+                    if target != -1:
+                        channel[target] += 1.0
+
+        return board
 
     def get_agent_relative_pos(
         self,
@@ -47,56 +126,11 @@ class LudoGame:
 
     def get_board_state(self, agent_index):
         """Generates the (58, 5) board state tensor for the given agent."""
-        state = {
-            "my_pieces": [0] * config.PATH_LENGTH,
-            "opp1_pieces": [0] * config.PATH_LENGTH,  # Next player
-            "opp2_pieces": [0] * config.PATH_LENGTH,  # Player across
-            "opp3_pieces": [0] * config.PATH_LENGTH,  # Prev player
-            "safe_zones": [0] * config.PATH_LENGTH,
+        board = self.build_board_tensor(agent_index)
+        return {
+            "my_pieces": [int(value) for value in board[0]],
+            "opp1_pieces": [int(value) for value in board[1]],
+            "opp2_pieces": [int(value) for value in board[2]],
+            "opp3_pieces": [int(value) for value in board[3]],
+            "safe_zones": [int(value) for value in board[4]],
         }
-
-        # 1. Populate Safe Zones channel
-        for i in range(52, 57):
-            state["safe_zones"][i] = 1  # Home column is safe
-        for rel_pos in range(1, 52):
-            abs_pos = self.move_manager.get_absolute_position(agent_index, rel_pos)
-            if self.move_manager.is_safe(abs_pos):
-                state["safe_zones"][rel_pos] = 1
-
-        # 2. Populate Piece channels
-        channels = [
-            state["my_pieces"],
-            state["opp1_pieces"],
-            state["opp2_pieces"],
-            state["opp3_pieces"],
-        ]
-
-        for i in range(config.NUM_PLAYERS):
-            player = self.players[i]
-            relative_player_index = (
-                i - agent_index + config.NUM_PLAYERS
-            ) % config.NUM_PLAYERS
-            target_channel = channels[relative_player_index]
-
-            for piece in player.pieces:
-                if relative_player_index == 0:
-                    # This is our agent's piece
-                    target_channel[piece.position] += 1
-                else:
-                    # This is an opponent's piece
-                    if piece.position == 0:
-                        target_channel[0] += 1  # Opponent in yard
-                    elif piece.position > 51:
-                        # Opponent in their home column, we don't map this
-                        continue
-                    else:
-                        # Opponent on main track, map to our relative path
-                        opp_abs_pos = self.move_manager.get_absolute_position(
-                            i, piece.position
-                        )
-                        agent_relative_pos = self.move_manager.get_agent_relative_pos(
-                            agent_index, opp_abs_pos
-                        )
-                        if agent_relative_pos != -1:
-                            target_channel[agent_relative_pos] += 1
-        return state

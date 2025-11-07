@@ -15,13 +15,13 @@ from itertools import combinations
 from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
+from loguru import logger
 from sb3_contrib import MaskablePPO
 
 from ludo_rl.ludo.config import config
 from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.player import Player
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
-from loguru import logger
 
 POINTS_TABLE = (4, 3, 1, 0)
 
@@ -174,23 +174,7 @@ def parse_checkpoint_ids(checkpoint_str: str) -> List[str]:
 
 def build_board_stack(game: LudoGame, player_index: int) -> np.ndarray:
     """Build board state tensor for RL model input."""
-    board_state = game.get_board_state(player_index)
-    zero_channel = np.zeros(config.PATH_LENGTH, dtype=np.float32)
-    return np.stack(
-        [
-            np.asarray(board_state["my_pieces"], dtype=np.float32),
-            np.asarray(board_state["opp1_pieces"], dtype=np.float32),
-            np.asarray(board_state["opp2_pieces"], dtype=np.float32),
-            np.asarray(board_state["opp3_pieces"], dtype=np.float32),
-            np.asarray(board_state["safe_zones"], dtype=np.float32),
-            zero_channel,
-            zero_channel,
-            zero_channel,
-            zero_channel,
-            zero_channel,
-        ],
-        dtype=np.float32,
-    )
+    return game.build_board_tensor(player_index)
 
 
 def player_progress(player: Player) -> int:
@@ -415,9 +399,7 @@ def run_league(
     combination_summaries: List[CombinationSummary] = []
 
     combos = list(combinations(participant_pool, 4))
-    logger.info(
-        f"Running league with {len(combos)} combinations of 4 participants..."
-    )
+    logger.info(f"Running league with {len(combos)} combinations of 4 participants...")
 
     for combo_idx, combo in enumerate(combos, start=1):
         logger.info(f"[{combo_idx}/{len(combos)}] Running: {', '.join(combo)}")
@@ -430,8 +412,12 @@ def run_league(
             league_totals[name] += pts
             games_played[name] += len(summary.game_results)
 
-        combo_table = sorted(summary.totals.items(), key=lambda item: (-item[1], item[0]))
-        combo_results = ", ".join(f"{name}: {points} pts" for name, points in combo_table)
+        combo_table = sorted(
+            summary.totals.items(), key=lambda item: (-item[1], item[0])
+        )
+        combo_results = ", ".join(
+            f"{name}: {points} pts" for name, points in combo_table
+        )
         logger.info(f"[{combo_idx}/{len(combos)}] Results: {combo_results}")
 
     return league_totals, games_played, combination_summaries

@@ -69,23 +69,7 @@ def select_strategies(provided: str | None) -> List[str]:
 
 
 def build_board_stack(game: LudoGame, player_index: int) -> np.ndarray:
-    board_state = game.get_board_state(player_index)
-    zero_channel = np.zeros(config.PATH_LENGTH, dtype=np.float32)
-    return np.stack(
-        [
-            np.asarray(board_state["my_pieces"], dtype=np.float32),
-            np.asarray(board_state["opp1_pieces"], dtype=np.float32),
-            np.asarray(board_state["opp2_pieces"], dtype=np.float32),
-            np.asarray(board_state["opp3_pieces"], dtype=np.float32),
-            np.asarray(board_state["safe_zones"], dtype=np.float32),
-            zero_channel,
-            zero_channel,
-            zero_channel,
-            zero_channel,
-            zero_channel,
-        ],
-        dtype=np.float32,
-    )
+    return game.build_board_tensor(player_index)
 
 
 def player_progress(player: Player) -> int:
@@ -135,7 +119,6 @@ def play_game(
     finish_order: List[int] = []
     turns_taken = 0
     current_index = 0
-
     while turns_taken < config.MAX_TURNS and len(finish_order) < config.NUM_PLAYERS:
         player = game.players[current_index]
         if player.has_won():

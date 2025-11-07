@@ -20,6 +20,7 @@ class GameSimulator:
     game: LudoGame = field(init=False)
     transition_summary: Dict[str, List[int]] = field(init=False, repr=False)
     reward_heatmap: List[float] = field(init=False, repr=False)
+    _board_buffer: np.ndarray | None = field(init=False, repr=False, default=None)
 
     def __post_init__(self) -> None:
         self.game = LudoGame()
@@ -133,24 +134,9 @@ class GameSimulator:
         return random.choice(valid_moves)
 
     def _build_board_stack(self, player_index: int) -> np.ndarray:
-        board_state = self.game.get_board_state(player_index)
-        zero_channel = np.zeros(config.PATH_LENGTH, dtype=np.float32)
-        board_stack = np.stack(
-            [
-                np.asarray(board_state["my_pieces"], dtype=np.float32),
-                np.asarray(board_state["opp1_pieces"], dtype=np.float32),
-                np.asarray(board_state["opp2_pieces"], dtype=np.float32),
-                np.asarray(board_state["opp3_pieces"], dtype=np.float32),
-                np.asarray(board_state["safe_zones"], dtype=np.float32),
-                zero_channel,
-                zero_channel,
-                zero_channel,
-                zero_channel,
-                zero_channel,
-            ],
-            dtype=np.float32,
-        )
-        return board_stack
+        if self._board_buffer is None:
+            self._board_buffer = np.zeros((10, config.PATH_LENGTH), dtype=np.float32)
+        return self.game.build_board_tensor(player_index, out=self._board_buffer)
 
     def step_opponents_only(self):
         """Called when agent has no moves. Resets summaries and simulates opponents."""
