@@ -53,7 +53,7 @@ class RusherStrategy(BaseStrategy):
         score -= move.risk * self.risk_penalty
 
         opp_density = opponent_density_within(
-            ctx.board, move.new_pos, radius=self.density_radius
+            ctx.opponent_distribution, move.new_pos, radius=self.density_radius
         )
         score -= opp_density * self.density_penalty
 

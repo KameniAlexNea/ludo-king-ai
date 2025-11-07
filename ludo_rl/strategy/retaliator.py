@@ -55,10 +55,10 @@ class RetaliatorStrategy(BaseStrategy):
         if move.can_capture:
             score += move.capture_count * self.capture_weight
 
-        distance = nearest_opponent_distance(ctx.board, move.new_pos)
+        distance = nearest_opponent_distance(ctx.opponent_distribution, move.new_pos)
         score += max(0, self.proximity_radius - distance) * self.proximity_weight
         density = opponent_density_within(
-            ctx.board, move.new_pos, radius=self.density_radius
+            ctx.opponent_distribution, move.new_pos, radius=self.density_radius
         )
         score += density * self.density_weight
 

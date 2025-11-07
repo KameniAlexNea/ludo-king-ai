@@ -3,7 +3,6 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-import numpy as np
 import torch
 
 from .config import config
@@ -126,31 +125,11 @@ class GameSimulator:
 
     def _decide_move(self, player_index: int, dice_roll: int, valid_moves: list[dict]):
         player = self.game.players[player_index]
-        board_stack = self._build_board_stack(player_index)
+        board_stack = self.game.build_board_tensor(player_index)
         move = player.decide(board_stack, dice_roll, valid_moves)
         if move is not None:
             return move
         return random.choice(valid_moves)
-
-    def _build_board_stack(self, player_index: int) -> np.ndarray:
-        board_state = self.game.get_board_state(player_index)
-        zero_channel = np.zeros(config.PATH_LENGTH, dtype=np.float32)
-        board_stack = np.stack(
-            [
-                np.asarray(board_state["my_pieces"], dtype=np.float32),
-                np.asarray(board_state["opp1_pieces"], dtype=np.float32),
-                np.asarray(board_state["opp2_pieces"], dtype=np.float32),
-                np.asarray(board_state["opp3_pieces"], dtype=np.float32),
-                np.asarray(board_state["safe_zones"], dtype=np.float32),
-                zero_channel,
-                zero_channel,
-                zero_channel,
-                zero_channel,
-                zero_channel,
-            ],
-            dtype=np.float32,
-        )
-        return board_stack
 
     def step_opponents_only(self):
         """Called when agent has no moves. Resets summaries and simulates opponents."""

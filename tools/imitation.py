@@ -133,23 +133,7 @@ def validate_strategies(opponents: Sequence[str]) -> None:
 
 
 def build_board_stack(game: LudoGame, player_index: int) -> np.ndarray:
-    board_state = game.get_board_state(player_index)
-    zero_channel = np.zeros(config.PATH_LENGTH, dtype=np.float32)
-    return np.stack(
-        [
-            np.asarray(board_state["my_pieces"], dtype=np.float32),
-            np.asarray(board_state["opp1_pieces"], dtype=np.float32),
-            np.asarray(board_state["opp2_pieces"], dtype=np.float32),
-            np.asarray(board_state["opp3_pieces"], dtype=np.float32),
-            np.asarray(board_state["safe_zones"], dtype=np.float32),
-            zero_channel,
-            zero_channel,
-            zero_channel,
-            zero_channel,
-            zero_channel,
-        ],
-        dtype=np.float32,
-    )
+    return game.build_board_tensor(player_index)
 
 
 def prepare_players(game: LudoGame, strategies: Sequence[str]) -> None:
