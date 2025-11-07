@@ -2,7 +2,6 @@
 Tournament script for competing multiple RL model versions against each other.
 
 Similar to tournament.py but uses trained PPO models instead of heuristic strategies.
-Supports both 4-model tournaments and mixed tournaments (models + strategies).
 """
 
 from __future__ import annotations
@@ -255,8 +254,7 @@ def play_game(
 ) -> GameResult:
     """Play a single game with the given participants.
 
-    participants can be model names (str) or strategy names (str).
-    Models are looked up in models_dict, otherwise treated as strategies.
+    participants are ModelWrapper instances.
     """
     game = LudoGame()
     game_seed = rng.randint(0, 1_000_000)
