@@ -138,7 +138,7 @@ class GameSimulatorTests(unittest.TestCase):
 
     def test_build_board_stack_shape(self) -> None:
         sim = GameSimulator(agent_index=0)
-        stack = sim._build_board_stack(sim.agent_index)
+        stack = sim.game.build_board_tensor(sim.agent_index, sim.game._board_buffer)
         self.assertEqual(stack.shape, (10, config.PATH_LENGTH))
         self.assertTrue(np.all(stack[5:] == 0))  # extra channels initialised to zero
 
