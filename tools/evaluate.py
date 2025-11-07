@@ -6,11 +6,14 @@ from collections import Counter
 from typing import Iterable, Sequence
 
 import numpy as np
+from dotenv import load_dotenv
 from loguru import logger
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from ludo_rl.ludo_env import LudoEnv
+
+load_dotenv()
 
 ALL_STRATEGIES: Sequence[str] = (
     "probability",
@@ -42,6 +45,12 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=10,
         help="Number of evaluation games per opponent triplet",
+    )
+    parser.add_argument(
+        "--opponents",
+        type=str,
+        default=os.getenv("OPPONENTS", ",".join(ALL_STRATEGIES)),
+        help="Comma-separated list of opponent strategies",
     )
     parser.add_argument(
         "--seed",
@@ -169,7 +178,10 @@ def main() -> None:
     model.policy.set_training_mode(False)
 
     results = []
-    for triplet in iter_triplets(args.limit_combos, ALL_STRATEGIES):
+    opponents = args.opponents.split(",")
+
+    print(f"Evaluating against opponent strategies: {', '.join(opponents)}")
+    for triplet in iter_triplets(args.limit_combos, opponents):
         stats = evaluate_triplet(
             model=model,
             triplet=triplet,

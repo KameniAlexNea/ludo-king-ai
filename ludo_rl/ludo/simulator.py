@@ -3,7 +3,6 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-import numpy as np
 import torch
 
 from .config import config
@@ -20,7 +19,6 @@ class GameSimulator:
     game: LudoGame = field(init=False)
     transition_summary: Dict[str, List[int]] = field(init=False, repr=False)
     reward_heatmap: List[float] = field(init=False, repr=False)
-    _board_buffer: np.ndarray | None = field(init=False, repr=False, default=None)
 
     def __post_init__(self) -> None:
         self.game = LudoGame()
@@ -127,16 +125,11 @@ class GameSimulator:
 
     def _decide_move(self, player_index: int, dice_roll: int, valid_moves: list[dict]):
         player = self.game.players[player_index]
-        board_stack = self._build_board_stack(player_index)
+        board_stack = self.game.build_board_tensor(player_index)
         move = player.decide(board_stack, dice_roll, valid_moves)
         if move is not None:
             return move
         return random.choice(valid_moves)
-
-    def _build_board_stack(self, player_index: int) -> np.ndarray:
-        if self._board_buffer is None:
-            self._board_buffer = np.zeros((10, config.PATH_LENGTH), dtype=np.float32)
-        return self.game.build_board_tensor(player_index, out=self._board_buffer)
 
     def step_opponents_only(self):
         """Called when agent has no moves. Resets summaries and simulates opponents."""

@@ -21,7 +21,6 @@ from sb3_contrib import MaskablePPO
 from ludo_rl.ludo.config import config
 from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.player import Player
-from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 
 POINTS_TABLE = (4, 3, 1, 0)
 
@@ -182,16 +181,6 @@ def player_progress(player: Player) -> int:
     return sum(piece.position for piece in player.pieces)
 
 
-def attach_strategy(player: Player, strategy_name: str, rng: random.Random) -> None:
-    """Attach a heuristic strategy to a player."""
-    cls = STRATEGY_REGISTRY[strategy_name]
-    try:
-        player._strategy = cls.create_instance(rng)
-    except NotImplementedError:
-        player._strategy = cls()
-    player.strategy_name = strategy_name
-
-
 def attach_model(player: Player, model_wrapper: ModelWrapper) -> None:
     """Attach an RL model to a player."""
     player.strategy_name = model_wrapper.name
@@ -258,7 +247,7 @@ def determine_rankings(game: LudoGame, finish_order: List[int]) -> List[int]:
 
 
 def play_game(
-    participants: Sequence[str | ModelWrapper],
+    participants: Sequence[str],
     models_dict: Dict[str, ModelWrapper],
     deterministic: bool,
     rng: random.Random,
@@ -285,13 +274,12 @@ def play_game(
         player.has_finished = False
         player._strategy = None
 
-        # Check if participant is a model or strategy
-        if participant in models_dict:
-            model_wrapper = models_dict[participant]
-            attach_model(player, model_wrapper)
-            model_assignments[seat_index] = model_wrapper
-        else:
-            attach_strategy(player, participant, rng)
+        if participant not in models_dict:
+            raise ValueError(f"Unknown participant '{participant}'")
+
+        model_wrapper = models_dict[participant]
+        attach_model(player, model_wrapper)
+        model_assignments[seat_index] = model_wrapper
 
     finish_order: List[int] = []
     turns_taken = 0
@@ -315,19 +303,15 @@ def play_game(
 
             board_stack = build_board_stack(game, current_index)
 
-            # Decide using model or strategy
-            model_wrapper = model_assignments.get(current_index)
-            if model_wrapper is not None:
-                decision = decide_with_model(
-                    model_wrapper,
-                    board_stack,
-                    dice_roll,
-                    valid_moves,
-                    deterministic,
-                    rng,
-                )
-            else:
-                decision = player.decide(board_stack, dice_roll, valid_moves)
+            model_wrapper = model_assignments[current_index]
+            decision = decide_with_model(
+                model_wrapper,
+                board_stack,
+                dice_roll,
+                valid_moves,
+                deterministic,
+                rng,
+            )
 
             move = decision if decision is not None else rng.choice(valid_moves)
 
@@ -469,6 +453,9 @@ def main() -> None:
     args = parse_args()
     rng = random.Random(args.seed)
 
+    if args.strategies:
+        raise SystemExit("Heuristic strategies are not supported in model tournaments.")
+
     # Parse checkpoint IDs
     checkpoint_ids = parse_checkpoint_ids(args.checkpoints)
     if not checkpoint_ids:
@@ -494,18 +481,6 @@ def main() -> None:
 
     # Build participant pool
     participant_pool: List[str] = list(models_dict.keys())
-
-    # Add strategies if requested
-    if args.strategies:
-        strategy_names = [s.strip() for s in args.strategies.split(",") if s.strip()]
-        for strategy in strategy_names:
-            if strategy not in STRATEGY_REGISTRY:
-                raise SystemExit(f"Unknown strategy: {strategy}")
-            participant_pool.append(strategy)
-        print(
-            f"Including {len(strategy_names)} heuristic strategies: {', '.join(strategy_names)}"
-        )
-        print()
 
     if len(participant_pool) < 4:
         raise SystemExit(
