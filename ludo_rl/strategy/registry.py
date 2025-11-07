@@ -29,10 +29,12 @@ STRATEGY_REGISTRY: Dict[str, Type] = {
 }
 
 
-def create(strategy_name: str, **kwargs):
+def create(strategy_name: str, use_create=True, **kwargs):
     cls = STRATEGY_REGISTRY.get(strategy_name.lower())
     if cls is None:
         raise KeyError(f"Unknown strategy '{strategy_name}'.")
+    if use_create:
+        return cls.create_instance()
     return cls(**kwargs)
 
 

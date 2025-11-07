@@ -60,6 +60,8 @@ def main() -> None:
     episode_reward = 0
     step_count = 0
 
+    player = env.envs[0].simulator.game.players[env.envs[0].simulator.agent_index]
+
     # Main game loop
     while True:
         step_count += 1
@@ -83,17 +85,25 @@ def main() -> None:
         action, _ = model.predict(obs, action_masks=action_masks)
 
         # Take the step
-        obs, rewards, dones, infos = env.step([action.item()])
+        obs, rewards, dones, infos = env.step(action)
 
         # Extract results for the first env
         reward = rewards[0]
+        if obs["dice_roll"][0].sum() == 5:
+            print(
+                f"Info: Step {step_count} - Dice roll is 6: {obs['dice_roll'][0]}. {player.pieces}"
+            )
+        if reward < 0:
+            print(f"Warning: Step {step_count} yielded negative reward: {reward}")
         terminated = dones[0]  # 'dones' is True if the env terminated (agent won)
 
         truncated = infos[0].get("truncated", False)
 
         episode_reward += reward
 
-        print(f"Step {step_count}, Action: {action.item()}, Reward: {reward:.2f}")
+        print(
+            f"Step {step_count}, Action: {action.item()}, Reward: {reward:.2f}, Dice Roll: {obs['dice_roll'][0].item() + 1}"
+        )
 
         # Check if the episode is over
         if terminated or truncated:

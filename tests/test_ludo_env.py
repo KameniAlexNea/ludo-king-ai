@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import numpy as np
 
 from ludo_rl.ludo.config import config
+from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.reward import reward_config
 from ludo_rl.ludo_env import LudoEnv
-from ludo_rl.ludo.simulator import GameSimulator as RealGameSimulator
 
 
 class LudoEnvTests(unittest.TestCase):
@@ -26,33 +26,50 @@ class LudoEnvTests(unittest.TestCase):
         np.testing.assert_array_equal(self.env.action_masks(), info["action_mask"])
 
     def test_reset_handles_initial_no_moves_loop(self) -> None:
-        def factory(agent_index: int):
-            simulator = RealGameSimulator(agent_index)
-            simulator.game.roll_dice = Mock(side_effect=[1, 6, 6])
-            simulator.step_opponents_only = Mock(return_value=[0.0] * config.NUM_PLAYERS)
-            return simulator
+        dice_iter = iter([1, 6, 6])
 
-        with patch("ludo_rl.ludo_env.GameSimulator", side_effect=factory):
+        def rigged_roll(self):
+            try:
+                return next(dice_iter)
+            except StopIteration:
+                return 6
+
+        with (
+            patch.object(LudoGame, "roll_dice", rigged_roll),
+            patch(
+                "ludo_rl.ludo_env.GameSimulator.step_opponents_only",
+                return_value=[0.0] * config.NUM_PLAYERS,
+            ) as step_mock,
+        ):
             _, info = self.env.reset()
 
-        step_mock = self.env.simulator.step_opponents_only
         self.assertGreaterEqual(step_mock.call_count, 1)
         self.assertTrue(info["action_mask"].any())
 
     def test_step_invalid_action_penalises_agent(self) -> None:
         self.env.reset()
-        with patch.object(
-            self.env.simulator,
-            "step_opponents_only",
-            return_value=[0.0] * config.NUM_PLAYERS,
-        ), patch.object(self.env.simulator.game, "roll_dice", return_value=6):
+
+        def fixed_roll(self):
+            return 6
+
+        with (
+            patch(
+                "ludo_rl.ludo_env.GameSimulator.step_opponents_only",
+                return_value=[0.0] * config.NUM_PLAYERS,
+            ),
+            patch.object(LudoGame, "roll_dice", fixed_roll),
+        ):
             self.env.move_map = {}
             obs, reward, terminated, truncated, info = self.env.step(0)
         self.assertEqual(reward, reward_config.lose)
         self.assertFalse(terminated)
         self.assertFalse(truncated)
         self.assertEqual(obs["board"].shape, (10, config.PATH_LENGTH))
-        self.assertIsInstance(info["action_mask"], bool)
+        # action_mask should be a sequence of booleans (e.g., list or ndarray)
+        self.assertIsInstance(info["action_mask"], (list, np.ndarray))
+        self.assertTrue(
+            all(isinstance(x, (bool, np.bool_)) for x in info["action_mask"])
+        )
 
     def test_step_valid_action_returns_next_observation(self) -> None:
         _, info = self.env.reset()

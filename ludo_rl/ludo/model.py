@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from .config import config
 
 
-@dataclass
+@dataclass(slots=True)
 class Piece:
     color: int  # 0, 1, 2, or 3
     piece_id: int  # 0, 1, 2, or 3

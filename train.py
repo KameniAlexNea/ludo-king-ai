@@ -1,41 +1,45 @@
-import math
 import os
 import time
-from typing import Callable
 
 import torch
 from loguru import logger
-
-# We must use MaskablePPO from sb3_contrib to handle action masking
 from sb3_contrib import MaskablePPO
-from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
+from stable_baselines3.common.callbacks import (
+    BaseCallback,
+    CallbackList,
+    CheckpointCallback,
+)
+from stable_baselines3.common.vec_env import (
+    DummyVecEnv,
+    SubprocVecEnv,
+    VecMonitor,
+    VecNormalize,
+)
+from torch.profiler import (
+    ProfilerActivity,
+    profile,
+    schedule,
+    tensorboard_trace_handler,
+)
 
-from arguments import parse_train_args
-from ludo_rl.extractor import LudoCnnExtractor
+from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo.config import net_config
 from ludo_rl.ludo_env import LudoEnv
+from tools.arguments import parse_train_args
+from tools.scheduler import CoefScheduler, lr_schedule
 
 
-def lr_schedule(
-    lr_min: float = 1e-5, lr_max: float = 3e-4, warmup_steps: float = 0.03
-) -> Callable[[float], float]:
-    lr_min, lr_max = min(lr_min, lr_max), max(lr_min, lr_max)
+class ProfilerStepCallback(BaseCallback):
+    """Steps the PyTorch profiler once per environment step."""
 
-    def schedule(progress_remaining: float) -> float:
-        progress = 1 - progress_remaining
-        if progress < warmup_steps:
-            return lr_min + (lr_max - lr_min) * (progress / warmup_steps)
-        else:
-            adjusted_progress = (progress - warmup_steps) / (1 - warmup_steps)
-            return lr_min + 0.5 * (lr_max - lr_min) * (
-                1 + math.cos(math.pi * adjusted_progress)
-            )
+    def __init__(self, profiler) -> None:
+        super().__init__()
+        self.profiler = profiler
 
-    return schedule
+    def _on_step(self) -> bool:
+        self.profiler.step()
+        return True
 
-
-# --- Main Training Script ---
 
 if __name__ == "__main__":
     # --- Setup ---
@@ -60,6 +64,7 @@ if __name__ == "__main__":
         train_env = DummyVecEnv([LudoEnv])
     else:
         train_env = SubprocVecEnv([LudoEnv for _ in range(args.num_envs)])
+    train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
     train_env = VecMonitor(train_env)
 
     logger.debug("--- Setting up Callbacks ---")
@@ -73,13 +78,23 @@ if __name__ == "__main__":
         save_vecnormalize=True,
     )
 
-    callback_list = CallbackList([checkpoint_callback])
+    entropy_callback = CoefScheduler(
+        total_timesteps=args.total_timesteps,
+        att="ent_coef",
+        schedule=lr_schedule(lr_min=0.005, lr_max=args.ent_coef),
+    )
+
+    callbacks = [entropy_callback]
+    if not args.profile:
+        callbacks.append(checkpoint_callback)
 
     # --- Policy Kwargs ---
     # Define the custom feature extractor
     policy_kwargs = dict(
         activation_fn=torch.nn.Tanh,
-        features_extractor_class=LudoCnnExtractor,
+        features_extractor_class=(
+            LudoTransformerExtractor if args.use_transformer else LudoCnnExtractor
+        ),
         features_extractor_kwargs=dict(
             features_dim=net_config.embed_dim
         ),  # Output features
@@ -98,6 +113,7 @@ if __name__ == "__main__":
             env=train_env,
             device=args.device,
             learning_rate=lr_schedule(lr_max=args.learning_rate),
+            clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
         )
     else:
         model = MaskablePPO(
@@ -111,10 +127,12 @@ if __name__ == "__main__":
             n_epochs=args.n_epochs,
             gamma=args.gamma,
             gae_lambda=args.gae_lambda,
-            clip_range=args.clip_range,
+            clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
             ent_coef=args.ent_coef,
             device=args.device,
-            learning_rate=lr_schedule(lr_max=args.learning_rate),
+            learning_rate=lr_schedule(
+                lr_min=args.learning_rate * 0.5, lr_max=args.learning_rate
+            ),
         )
 
     final_model_path = os.path.join(model_save_path, "init_model")
@@ -123,37 +141,54 @@ if __name__ == "__main__":
 
     logger.info(f"--- Starting Training ({run_id}) ---")
 
-    # --- Train the Model ---
-    model.learn(total_timesteps=args.total_timesteps, callback=callback_list)
+    profiling_summary = None
+    profiler_log_dir = None
+    trace_path = None
+    if args.profile:
+        logger.info("--- Profiling Enabled: results will be stored alongside logs ---")
+        activities = [ProfilerActivity.CPU]
+        if torch.cuda.is_available() and "cuda" in args.device:
+            activities.append(ProfilerActivity.CUDA)
+
+        profiler_log_dir = os.path.join(log_path, "profiler")
+        os.makedirs(profiler_log_dir, exist_ok=True)
+
+        profiler_schedule = schedule(wait=0, warmup=1, active=1, repeat=1)
+
+        with profile(
+            activities=activities,
+            schedule=profiler_schedule,
+            on_trace_ready=tensorboard_trace_handler(profiler_log_dir),
+            record_shapes=False,
+            profile_memory=False,
+            with_stack=False,
+        ) as prof:
+            profiling_callbacks = CallbackList(callbacks + [ProfilerStepCallback(prof)])
+            model.learn(
+                total_timesteps=args.total_timesteps,
+                callback=profiling_callbacks,
+            )
+            profiling_summary = prof.key_averages().table(
+                sort_by="cpu_time_total", row_limit=20
+            )
+        trace_path = os.path.join(profiler_log_dir, "trace.json")
+        try:
+            prof.export_chrome_trace(trace_path)
+        except RuntimeError:
+            logger.warning("Profiler trace already saved; skipping explicit export.")
+        if profiling_summary is not None and profiler_log_dir is not None:
+            logger.info("--- Profiling Summary (top 20 ops by CPU time) ---")
+            logger.info("\n{}", profiling_summary)
+            if trace_path is not None:
+                logger.info("Profiler trace exported to {}", trace_path)
+    else:
+        # --- Train the Model ---
+        model.learn(
+            total_timesteps=args.total_timesteps,
+            callback=CallbackList(callbacks),
+        )
 
     # --- Save the Final Model ---
     final_model_path = os.path.join(model_save_path, "final_model")
     logger.info(f"--- Training Complete. Saving final model to {final_model_path} ---")
     model.save(final_model_path)
-
-    # --- Load and Test the Trained Model ---
-    logger.info("\n--- Testing Trained Model ---")
-    del model  # Remove model from memory
-
-    model = MaskablePPO.load(final_model_path)
-
-    test_env = DummyVecEnv([lambda: LudoEnv(render_mode="human")])
-    # test_env = MaskableListActions(test_env) # Don't forget to wrap!
-
-    obs, info = test_env.reset()
-    for _ in range(500):
-        # We need to provide the action mask for deterministic prediction
-        action_masks = test_env.env_method("action_masks")
-
-        action, _states = model.predict(
-            obs, action_masks=action_masks[0], deterministic=True
-        )
-
-        obs, reward, terminated, truncated, info = test_env.step(action)
-
-        if terminated or truncated:
-            logger.info("Test episode finished. Resetting.")
-            obs, info = test_env.reset()
-
-    test_env.close()
-    logger.info("--- Test Complete ---")

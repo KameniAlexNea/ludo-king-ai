@@ -63,9 +63,7 @@ class MoveManagementTests(unittest.TestCase):
             )
         )
         moves = self.manager.get_valid_moves(0, 6)
-        self.assertFalse(
-            any(move["piece"] is player.pieces[0] for move in moves)
-        )
+        self.assertFalse(any(move["piece"] is player.pieces[0] for move in moves))
 
     def test_make_move_capture_and_extra_turn(self) -> None:
         mover = self.players[0].pieces[0]

@@ -1,23 +1,28 @@
 import os
 import random
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, field
+from typing import Dict, List
 
 import numpy as np
+import torch
 
 from .config import config
 from .game import LudoGame
 
 
-@dataclass
+@dataclass(slots=True)
 class GameSimulator:
     """
     Manages the simulation, modified to integrate with the Gym env.
     """
 
-    def __init__(self, agent_index):
+    agent_index: int = 0
+    game: LudoGame = field(init=False)
+    transition_summary: Dict[str, List[int]] = field(init=False, repr=False)
+    reward_heatmap: List[float] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
         self.game = LudoGame()
-        self.agent_index = agent_index
         self._configure_opponent_strategies()
         self.reset_summaries()
 
@@ -74,32 +79,33 @@ class GameSimulator:
 
     def simulate_opponent_turns(self) -> List[float]:
         """Simulates turns for all 3 opponents and returns cumulative rewards."""
-        cumulative_rewards = [0.0] * config.NUM_PLAYERS
+        with torch.autograd.profiler.record_function("simulate_opponent_turns"):
+            cumulative_rewards = [0.0] * config.NUM_PLAYERS
 
-        for i in range(1, config.NUM_PLAYERS):
-            opp_index = (self.agent_index + i) % config.NUM_PLAYERS
-            extra_turn = True
+            for i in range(1, config.NUM_PLAYERS):
+                opp_index = (self.agent_index + i) % config.NUM_PLAYERS
+                extra_turn = True
 
-            while extra_turn:
-                dice_roll = self.game.roll_dice()
-                valid_moves = self.game.get_valid_moves(opp_index, dice_roll)
+                while extra_turn:
+                    dice_roll = self.game.roll_dice()
+                    valid_moves = self.game.get_valid_moves(opp_index, dice_roll)
 
-                if not valid_moves:
-                    extra_turn = False
-                    continue
+                    if not valid_moves:
+                        extra_turn = False
+                        continue
 
-                move = self._decide_move(opp_index, dice_roll, valid_moves)
-                result = self.game.make_move(
-                    opp_index, move["piece"], move["new_pos"], dice_roll
-                )
-                self.update_summaries(opp_index, move, result)
+                    move = self._decide_move(opp_index, dice_roll, valid_moves)
+                    result = self.game.make_move(
+                        opp_index, move["piece"], move["new_pos"], dice_roll
+                    )
+                    self.update_summaries(opp_index, move, result)
 
-                for player_idx, value in result["rewards"].items():
-                    cumulative_rewards[player_idx] += value
+                    for player_idx, value in result["rewards"].items():
+                        cumulative_rewards[player_idx] += value
 
-                extra_turn = result["extra_turn"]
+                    extra_turn = result["extra_turn"]
 
-        return cumulative_rewards
+            return cumulative_rewards
 
     def _configure_opponent_strategies(self):
         opponents = os.getenv("OPPONENTS", "random").split(",")
@@ -165,9 +171,10 @@ class GameSimulator:
             dice_roll = self.game.roll_dice()
 
         # 1. Execute agent's move
-        agent_result = self.game.make_move(
-            self.agent_index, agent_move["piece"], agent_move["new_pos"], dice_roll
-        )
+        with torch.autograd.profiler.record_function("agent_make_move"):
+            agent_result = self.game.make_move(
+                self.agent_index, agent_move["piece"], agent_move["new_pos"], dice_roll
+            )
 
         # Record the agent's own transition before opponents respond.
         self.update_summaries(self.agent_index, agent_move, agent_result)
@@ -180,8 +187,9 @@ class GameSimulator:
 
         # 3. Simulate opponent turns if no extra turn was earned
         if not extra_turn:
-            opponent_rewards = self.simulate_opponent_turns()
-            total_rewards = [a + b for a, b in zip(total_rewards, opponent_rewards)]
+            with torch.autograd.profiler.record_function("opponent_turns_block"):
+                opponent_rewards = self.simulate_opponent_turns()
+                total_rewards = [a + b for a, b in zip(total_rewards, opponent_rewards)]
 
         # 4. Get observation for agent's *next* turn
         next_dice_roll = self.game.roll_dice()

@@ -85,6 +85,49 @@ tox
 
 The default configuration runs formatting checks (via Ruff/Black if installed) and unit tests once they are introduced.
 
+**Mind Map**
+
+```
+ludo_rl
+├─ __init__.py → loads .env so simulator/env can read opponent strategy settings
+├─ ludo_env.LudoEnv (Gymnasium Env)
+│  ├─ wraps GameSimulator to expose observation dict & masked Discrete(4) actions
+│  ├─ handles invalid moves, turn limit, reward shaping, and rendering snapshots
+│  └─ converts simulator telemetry into 10-channel board tensor + dice_roll token
+├─ ludo.simulator.GameSimulator
+│  ├─ owns LudoGame, tracks agent_index, and keeps heatmaps/summary channels
+│  ├─ steps agent move, then rolls opponents (respecting extra turns)
+│  └─ injects scripted opponent strategies via environment variables
+├─ ludo.game.LudoGame
+│  ├─ instantiates 4 Player objects and provides dice + move plumbing
+│  ├─ delegates legal-move logic to MoveManagement
+│  └─ builds per-agent board_state channels consumed by env + strategies
+├─ ludo.moves.MoveManagement
+│  ├─ enforces rules: entry, home stretch, captures, blockades, extra turns
+│  └─ invokes reward.compute_move_rewards for dense shaping events
+├─ ludo.player.Player
+│  ├─ keeps Piece state, win detection, and chooses moves via strategies
+│  └─ falls back to random if requested heuristic unavailable
+├─ strategy package
+│  ├─ features.build_move_options turns env observation into StrategyContext
+│  ├─ BaseStrategy + concrete heuristics (defensive, killer, etc.) score MoveOption
+│  └─ registry.create/available expose factories to simulator & players
+├─ extractor.LudoCnnExtractor / LudoTransformerExtractor
+│  ├─ convert observation dict into feature vectors for MaskablePPO
+│  └─ fuse CNN/Transformer encodings with per-piece embeddings and dice token
+├─ tools (arguments, scheduler, evaluate, etc.)
+│  └─ supporting scripts for training, tournaments, imitation, scheduling
+└─ train.py
+   ├─ parses CLI args, configures MaskablePPO w/ custom extractor
+   └─ runs vectorized envs, callbacks (checkpoints, entropy annealing, profiler)
+```
+
+- LudoEnv mediates RL interaction: builds masked actions, enforces rewards, loops until player or opponents advance, and emits 10-channel observations.  
+- GameSimulator orchestrates turns: applies agent move, simulates opponents with heuristic strategies, and updates heatmaps consumed by both env and feature extractors.  
+- Core rules live in LudoGame + MoveManagement + Piece/Player, with reward.compute_move_rewards producing shaped returns for PPO.  
+- Strategy module supplies configurable heuristics; features.build_move_options transforms env data into StrategyContext so Player.decide can score moves consistently.  
+- extractor.py houses CNN/Transformer feature pipelines that embed board channels, per-piece context, and dice roll before feeding MaskablePPO during training (train.py).
+
 ## License
 
 Released under the MIT License. See `LICENSE` for details.

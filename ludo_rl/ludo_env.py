@@ -34,10 +34,8 @@ class LudoEnv(gym.Env):
         self.simulator = GameSimulator(self.agent_index)
         self.render_mode = render_mode
 
-        # --- ADDED FOR TRUNCATION ---
         self.max_game_turns = config.MAX_TURNS
         self.current_turn = 0
-        # ---
 
         # Action Space: Choose one of 4 pieces
         self.action_space = spaces.Discrete(4)
@@ -191,6 +189,8 @@ class LudoEnv(gym.Env):
 
         if truncated:
             reward += reward_config.draw
+            info["final_rank"] = 0
+            info["TimeLimit.truncated"] = True
             return obs, reward, terminated, truncated, info
 
         # 4. Handle "no valid moves" for the *next* turn
@@ -213,6 +213,7 @@ class LudoEnv(gym.Env):
         if truncated:
             reward += reward_config.draw
             info["final_rank"] = 0
+            info["TimeLimit.truncated"] = True
             return obs, reward, terminated, truncated, info
         return obs, reward, terminated, truncated, info
 

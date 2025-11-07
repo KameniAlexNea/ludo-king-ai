@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(slots=True)
 class Config:
     # --- Constants ---
     PATH_LENGTH = 58  # 0=yard, 1-51=track, 52-56=home, 57=finished
@@ -14,18 +14,18 @@ class Config:
     SAFE_SQUARES_ABS = [1, 9, 14, 22, 27, 35, 40, 48]
 
 
-@dataclass
+@dataclass(slots=True)
 class NetworkConfig:
-    conv_configs = [64, 32]
+    conv_configs = [32, 24]
     kernel_sizes = [7, 5]
     paddings = [3, 2]
     embed_dim = 128
     pooled_output_size = 4
-    pi = [512, 128, 64]
-    vf = [512, 256, 64]
+    pi = [256, 128, 64]
+    vf = [256, 128, 64]
 
 
-@dataclass
+@dataclass(slots=True)
 class StrategyConfig:
     board_channel_my = 0
     board_channel_safe = 4
@@ -37,12 +37,6 @@ class StrategyConfig:
     home_finish = 57
 
 
-@dataclass
-class TrainingConfig:
-    save_freq = 250_000
-
-
 config = Config()
 net_config = NetworkConfig()
 strategy_config = StrategyConfig()
-training_config = TrainingConfig()

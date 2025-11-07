@@ -1,19 +1,23 @@
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .config import config
 from .moves import MoveManagement
 from .player import Piece, Player
 
 
-@dataclass
+@dataclass(slots=True)
 class LudoGame:
     """
     Main Ludo Game Engine.
     Contains all rules and state manipulation logic.
     """
 
-    def __init__(self):
+    players: list[Player] = field(init=False)
+    rng: random.Random = field(init=False, repr=False)
+    move_manager: MoveManagement = field(init=False)
+
+    def __post_init__(self) -> None:
         self.players = [Player(i) for i in range(config.NUM_PLAYERS)]
         self.rng = random.Random()
         self.rng.seed(42)
