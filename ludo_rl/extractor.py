@@ -187,7 +187,12 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
 class LudoTransformerExtractor(BaseFeaturesExtractor):
     """Transformer-based extractor using semantic tokens for board squares and pieces."""
 
-    def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
+    def __init__(
+        self,
+        observation_space: gym.spaces.Dict,
+        features_dim: int = 128,
+        nhead: int = 4,
+    ):
         super().__init__(observation_space, features_dim)
 
         board_channels, board_length = observation_space["board"].shape
@@ -214,7 +219,7 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.embed_dim,
-            nhead=6,
+            nhead=nhead,
             dim_feedforward=self.embed_dim * 3,
             dropout=0.1,
             activation="gelu",

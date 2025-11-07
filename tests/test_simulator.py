@@ -122,7 +122,11 @@ class GameSimulatorTests(unittest.TestCase):
         valid_moves = [{"piece": player.pieces[0], "new_pos": 1, "dice_roll": 6}]
 
         with (
-            mock.patch.object(player, "decide", return_value=None),
+            mock.patch(
+                "ludo_rl.ludo.player.Player.decide",
+                autospec=True,
+                return_value=None,
+            ),
             mock.patch(
                 "ludo_rl.ludo.simulator.random.choice", return_value=valid_moves[0]
             ) as choice_mock,
