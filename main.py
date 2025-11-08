@@ -66,7 +66,7 @@ Game Features:
 
     try:
         # Import and launch the app
-        from interface.app import launch_app
+        from ludo_interface.app import launch_app
 
         print("🎲 Enhanced Ludo Game")
         print("=" * 50)

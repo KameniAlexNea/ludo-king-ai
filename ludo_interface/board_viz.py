@@ -264,7 +264,7 @@ def _draw_stacked_tokens(
             text_color = (255, 255, 255) if sum(token_color) < 400 else (0, 0, 0)
             d.text(
                 (token_x - 5, token_y - 8),
-                str(token.token_id),
+                str(token.piece_id),
                 fill=text_color,
                 font=FONT,
             )
@@ -312,7 +312,7 @@ def _home_column_positions_for_color(color: PlayerColor) -> Dict[int, Tuple[int,
     """
     mapping: Dict[int, Tuple[int, int]] = {}
     center = (7, 7)
-    entry_index = config.HOME_COLUMN_ENTRIES[color.value]
+    entry_index = config.HOME_ENTRY[color.value]
     entry_coord = PATH_INDEX_TO_COORD[entry_index]
     ex, ey = entry_coord
     dx = 0 if ex == center[0] else (1 if center[0] > ex else -1)
@@ -506,12 +506,11 @@ def draw_board(
 
     for color, tlist in tokens.items():
         for tk in tlist:
-            state = tk.state.value
             pos = tk.position
 
             if tk.in_yard():
                 # Home tokens - render individually in their designated spots
-                c, r = _token_home_grid_position(color, tk.token_id)
+                c, r = _token_home_grid_position(color, tk.piece_id)
                 bbox = _cell_bbox(c, r)
                 cx, cy = (bbox[0] + bbox[2]) // 2, (bbox[1] + bbox[3]) // 2
                 _draw_stacked_tokens(d, [(color, tk)], cx, cy, CELL // 2 - 6, show_ids)

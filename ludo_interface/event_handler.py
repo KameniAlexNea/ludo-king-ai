@@ -10,7 +10,7 @@ from ludo_rl.ludo.game import LudoGame
 from .models import PlayerColor
 from ludo_interface.board_viz import draw_board
 
-from .game_manager import GameManager
+from .game_manager import GameManager, GameState
 from .utils import Utils
 
 
@@ -32,20 +32,21 @@ class EventHandler:
         self.show_token_ids = show_token_ids
 
     def _ui_init(self, *strats):
-        game = self.game_manager.init_game(list(strats))
+        game, state = self.game_manager.init_game(list(strats))
         pil_img = draw_board(
             self.game_manager.game_state_tokens(game), show_ids=self.show_token_ids
         )
         html = self.utils.img_to_data_uri(pil_img)
 
-        current_player = game.get_current_player()
-        player_html = f"<h3 style='color: {current_player.color.value};'>🎯 Current Player: {current_player.color.value.title()}</h3>"
+        current_player = game.players[state.current_player_index]
+        player_html = f"<h3 style='color: red;'>🎯 Current Player: Player {state.current_player_index}</h3>"
 
         has_human = any(s == "human" for s in strats)
-        controls_visible = has_human and self.game_manager.is_human_turn(game)
+        controls_visible = has_human and self.game_manager.is_human_turn(game, state)
 
         return (
             game,
+            state,
             html,
             "🎮 Game initialized! Roll the dice to start.",
             [],
@@ -69,10 +70,11 @@ class EventHandler:
         return [random.choice(strategies) for _ in range(len(self.default_players))]
 
     def _ui_steps(
-        self, game, history: List[str], show, pending_dice, human_choice=None
+        self, game, state, history: List[str], show, pending_dice, human_choice=None
     ):
-        if game is None:
+        if game is None or state is None:
             return (
+                None,
                 None,
                 None,
                 "No game initialized",
@@ -92,8 +94,8 @@ class EventHandler:
                 None,  # auto_delay_state
             )
 
-        game, desc, tokens, move_opts, waiting = self.game_manager.play_step(
-            game, human_choice, pending_dice
+        game, state, desc, tokens, move_opts, waiting = self.game_manager.play_step(
+            game, state, human_choice, pending_dice
         )
         history.append(desc)
         if len(history) > 50:
@@ -102,18 +104,18 @@ class EventHandler:
         pil_img = draw_board(tokens, show_ids=show)
         html = self.utils.img_to_data_uri(pil_img)
 
-        if not game.game_over:
-            current_player = game.get_current_player()
-            player_html = f"<h3 style='color: {current_player.color.value};'>🎯 Current Player: {current_player.color.value.title()}</h3>"
+        if not state.game_over:
+            current_player = game.players[state.current_player_index]
+            player_html = f"<h3 style='color: red;'>🎯 Current Player: Player {state.current_player_index}</h3>"
         else:
-            player_html = f"<h3>🏆 Winner: {game.winner.color.value.title()}!</h3>"
+            player_html = f"<h3>🏆 Winner: Player {state.winner_index}!</h3>"
 
         if waiting and move_opts:
             moves_html = (
                 "<h4>Choose your move:</h4><ul>"
                 + "".join(
                     [
-                        f"<li><strong>Token {opt['token_id']}</strong>: {opt['description']} ({opt['move_type']})</li>"
+                        f"<li><strong>Piece {opt['piece_id']}</strong>: {opt['description']}</li>"
                         for opt in move_opts
                     ]
                 )
@@ -123,7 +125,7 @@ class EventHandler:
                 gr.update(
                     visible=i < len(move_opts),
                     value=(
-                        f"Move Token {move_opts[i]['token_id']}"
+                        f"Move Piece {move_opts[i]['piece_id']}"
                         if i < len(move_opts)
                         else ""
                     ),
@@ -134,6 +136,7 @@ class EventHandler:
             next_pending_dice = pending_dice
             return (
                 game,
+                state,
                 html,
                 desc,
                 history,
@@ -152,6 +155,7 @@ class EventHandler:
             # clear pending_dice and selected_token_id after the turn resolves
             return (
                 game,
+                state,
                 html,
                 desc,
                 history,
@@ -170,9 +174,10 @@ class EventHandler:
                 None,  # auto_delay_state
             )
 
-    def _ui_run_auto(self, n, delay, game: LudoGame, history: List[str], show: bool):
-        if game is None:
+    def _ui_run_auto(self, n, delay, game: LudoGame, state: GameState, history: List[str], show: bool):
+        if game is None or state is None:
             yield (
+                None,
                 None,
                 None,
                 "No game",
@@ -196,28 +201,27 @@ class EventHandler:
         desc = ""
         remaining = int(n)
         for _ in range(int(n)):
-            if self.game_manager.is_human_turn(game):
-                current_player = game.get_current_player()
+            if self.game_manager.is_human_turn(game, state):
                 dice = game.roll_dice()
-                valid_moves = game.get_valid_moves(current_player, dice)
+                valid_moves = game.get_valid_moves(state.current_player_index, dice)
 
                 if valid_moves:
                     pil_img = draw_board(
                         self.game_manager.game_state_tokens(game), show_ids=show
                     )
                     html = self.utils.img_to_data_uri(pil_img)
-                    player_html = f"<h3 style='color: {current_player.color.value};'>🎯 Current Player: {current_player.color.value.title()}</h3>"
-                    desc = f"Auto-play paused: {current_player.color.value} rolled {dice} - Choose your move:"
+                    player_html = f"<h3 style='color: red;'>🎯 Current Player: Player {state.current_player_index}</h3>"
+                    desc = f"Auto-play paused: Player {state.current_player_index} rolled {dice} - Choose your move:"
                     history.append(desc)
                     if len(history) > 50:
                         history = history[-50:]
 
-                    move_options = self.game_manager.get_human_move_options(game, dice)
+                    move_options = self.game_manager.get_human_move_options(game, state, dice)
                     moves_html = (
                         "<h4>Choose your move:</h4><ul>"
                         + "".join(
                             [
-                                f"<li><strong>Token {opt['token_id']}</strong>: {opt['description']} ({opt['move_type']})</li>"
+                                f"<li><strong>Piece {opt['piece_id']}</strong>: {opt['description']}</li>"
                                 for opt in move_options
                             ]
                         )
@@ -227,7 +231,7 @@ class EventHandler:
                         gr.update(
                             visible=i < len(move_options),
                             value=(
-                                f"Move Token {move_options[i]['token_id']}"
+                                f"Move Piece {move_options[i]['piece_id']}"
                                 if i < len(move_options)
                                 else ""
                             ),
@@ -239,6 +243,7 @@ class EventHandler:
                     remaining_after_pause = max(remaining - 1, 0)
                     yield (
                         game,
+                        state,
                         html,
                         desc,
                         history,
@@ -255,16 +260,16 @@ class EventHandler:
                     )
                     return
                 else:
-                    extra_turn = dice == 6
-                    if not extra_turn:
-                        game.next_turn()
-                    desc = f"{current_player.color.value} rolled {dice} - no moves{' (extra turn)' if extra_turn else ''}"
+                    # No valid moves - this is handled by play_step
+                    game, state, desc, tokens, move_opts, waiting = self.game_manager.play_step(
+                        game, state, None, dice
+                    )
                     history.append(desc)
                     if len(history) > 50:
                         history = history[-50:]
                     remaining = max(remaining - 1, 0)
             else:
-                game, step_desc, _, _, _ = self.game_manager.play_step(game)
+                game, state, step_desc, tokens, move_opts, waiting = self.game_manager.play_step(game, state)
                 desc = step_desc
                 history.append(step_desc)
                 if len(history) > 50:
@@ -276,16 +281,16 @@ class EventHandler:
             )
             html = self.utils.img_to_data_uri(pil_img)
 
-            if not game.game_over:
-                current_player = game.get_current_player()
-                player_html = f"<h3 style='color: {current_player.color.value};'>🎯 Current Player: {current_player.color.value.title()}</h3>"
+            if not state.game_over:
+                player_html = f"<h3 style='color: red;'>🎯 Current Player: Player {state.current_player_index}</h3>"
             else:
-                player_html = f"<h3>🏆 Winner: {game.winner.color.value.title()}!</h3>"
+                player_html = f"<h3>🏆 Winner: Player {state.winner_index}!</h3>"
 
-            waiting = self.game_manager.is_human_turn(game) and not game.game_over
+            waiting = self.game_manager.is_human_turn(game, state) and not state.game_over
             # clear pending_dice while continuing auto-play (no human pause)
             yield (
                 game,
+                state,
                 html,
                 desc,
                 history,
@@ -304,7 +309,7 @@ class EventHandler:
                 delay,  # auto_delay_state
             )
 
-            if game.game_over:
+            if state.game_over:
                 break
             if delay and delay > 0 and not waiting:
                 time.sleep(float(delay))
@@ -313,6 +318,7 @@ class EventHandler:
         self,
         token_id,
         game,
+        state,
         history,
         show,
         move_opts,
@@ -323,6 +329,7 @@ class EventHandler:
         if not move_opts:
             return (
                 game,
+                state,
                 None,
                 "No moves available",
                 history,
@@ -341,7 +348,7 @@ class EventHandler:
                 auto_delay_state,  # auto_delay_state
             )
         # Use the pending_dice from auto-play to execute the human's chosen move
-        out = list(self._ui_steps(game, history, show, pending_dice, token_id))
+        out = list(self._ui_steps(game, state, history, show, pending_dice, token_id))
         # out shape: [..., move_options, pending_dice, selected_token_id, auto_steps_remaining, auto_delay_state]
         if len(out) >= 17:
             out[-2] = auto_steps_remaining
@@ -349,38 +356,37 @@ class EventHandler:
         return tuple(out)
 
     def _ui_resume_auto(
-        self, remaining, delay, game: LudoGame, history: List[str], show: bool
+        self, remaining, delay, game: LudoGame, state: GameState, history: List[str], show: bool
     ):
         try:
             rem = int(remaining) if remaining is not None else 0
         except Exception:
             rem = 0
-        if rem <= 0 or game is None:
+        if rem <= 0 or game is None or state is None:
             # No resume needed; return a snapshot without changing states
-            if game is not None:
+            if game is not None and state is not None:
                 pil_img = draw_board(
                     self.game_manager.game_state_tokens(game), show_ids=show
                 )
                 html = self.utils.img_to_data_uri(pil_img)
-                if not game.game_over:
-                    current_player = game.get_current_player()
-                    player_html = f"<h3 style='color: {current_player.color.value};'>🎯 Current Player: {current_player.color.value.title()}</h3>"
+                if not state.game_over:
+                    player_html = f"<h3 style='color: red;'>🎯 Current Player: Player {state.current_player_index}</h3>"
                 else:
-                    player_html = (
-                        f"<h3>🏆 Winner: {game.winner.color.value.title()}!</h3>"
-                    )
+                    player_html = f"<h3>🏆 Winner: Player {state.winner_index}!</h3>"
             else:
                 html = None
                 player_html = ""
             return (
                 game,
+                state,
                 html,
                 "",
                 history,
                 bool(
                     game
-                    and self.game_manager.is_human_turn(game)
-                    and not game.game_over
+                    and state
+                    and self.game_manager.is_human_turn(game, state)
+                    and not state.game_over
                 ),
                 player_html,
                 "",
@@ -396,20 +402,20 @@ class EventHandler:
                 delay,  # auto_delay_state
             )
         # Resume by delegating to _ui_run_auto
-        for out in self._ui_run_auto(rem, delay, game, history, show):
+        for out in self._ui_run_auto(rem, delay, game, state, history, show):
             yield out
 
-    def _ui_export(self, game: LudoGame):
-        if not game:
+    def _ui_export(self, game: LudoGame, state: GameState):
+        if not game or not state:
             return "No game"
         state_dict = {
-            "current_turn": game.current_player_index,
+            "current_turn": state.current_player_index,
             "tokens": {
-                k: [asdict(v.to_dict()) for v in vs]
+                k.value: [{"piece_id": v.piece_id, "position": v.position} for v in vs]
                 for k, vs in self.game_manager.game_state_tokens(game).items()
             },
-            "game_over": game.game_over,
-            "winner": game.winner.color.value if game.winner else None,
+            "game_over": state.game_over,
+            "winner": state.winner_index if state.game_over else None,
         }
         return json.dumps(state_dict, indent=2)
 
@@ -420,13 +426,14 @@ class EventHandler:
         # Run the simulation
         total_games = int(n_games)
         for _ in range(total_games):
-            g = self.game_manager.init_game(list(ai_strats))
+            game, state = self.game_manager.init_game(list(ai_strats))
             turns_taken = 0
-            while not g.game_over and turns_taken < 1000:  # Safety limit
-                g, _, _, _, _ = self.game_manager.play_step(g)
+            while not state.game_over and turns_taken < 1000:  # Safety limit
+                game, state, _, _, _, _ = self.game_manager.play_step(game, state)
                 turns_taken += 1
-            if g.winner:
-                win_counts[g.winner.color.value] += 1
+            if state.game_over and state.winner_index is not None:
+                winner_color = self.default_players[state.winner_index]
+                win_counts[winner_color.value] += 1
 
         # Calculate statistics
         total = sum(win_counts.values()) or 1
@@ -562,9 +569,10 @@ class EventHandler:
 
         return chart_html
 
-    def _ui_update_stats(self, stats, game: LudoGame):
-        if game and game.game_over and game.winner:
+    def _ui_update_stats(self, stats, game: LudoGame, state: GameState):
+        if game and state and state.game_over and state.winner_index is not None:
             stats = dict(stats)
             stats["games"] += 1
-            stats["wins"][game.winner.color.value] += 1
+            winner_color = self.default_players[state.winner_index]
+            stats["wins"][winner_color.value] += 1
         return stats

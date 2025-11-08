@@ -47,6 +47,7 @@ class UIBuilder:
             """,
         ) as demo:
             game_state = gr.State()
+            state_state = gr.State()  # GameState object
             move_history = gr.State([])
             stats_state = gr.State(
                 {"games": 0, "wins": {c.value: 0 for c in self.default_players}}
@@ -65,6 +66,7 @@ class UIBuilder:
                 with gr.TabItem("🎮 Play Game"):
                     self._build_play_game_tab(
                         game_state,
+                        state_state,
                         move_history,
                         stats_state,
                         waiting_for_human,
@@ -88,6 +90,7 @@ class UIBuilder:
     def _build_play_game_tab(
         self,
         game_state,
+        state_state,
         move_history,
         stats_state,
         waiting_for_human,
@@ -115,7 +118,7 @@ class UIBuilder:
                                     else self.ai_strategies[0]
                                 )
                             ),
-                            label="🔴🟢🟡🔵"[i] + f" {color.value.title()} Strategy",
+                            label="🔴🟢🟡🔵"[i] + f" {color.name.title()} Strategy",
                             container=True,
                             scale=1,
                         )
@@ -194,7 +197,7 @@ class UIBuilder:
                         container=False,
                         value={
                             "games": 0,
-                            "wins": {c.value: 0 for c in self.default_players},
+                            "wins": {c.name: 0 for c in self.default_players},
                         },
                     )
 
@@ -212,6 +215,7 @@ class UIBuilder:
             strategy_inputs,
             [
                 game_state,
+                state_state,
                 board_plot,
                 log,
                 move_history,
@@ -236,6 +240,7 @@ class UIBuilder:
             strategy_inputs,
             [
                 game_state,
+                state_state,
                 board_plot,
                 log,
                 move_history,
@@ -255,9 +260,10 @@ class UIBuilder:
         )
         step_btn.click(
             self.handler._ui_steps,
-            [game_state, move_history, show_ids, pending_dice],
+            [game_state, state_state, move_history, show_ids, pending_dice],
             [
                 game_state,
+                state_state,
                 board_plot,
                 log,
                 move_history,
@@ -275,12 +281,12 @@ class UIBuilder:
                 auto_delay_state,
             ],
         ).then(
-            self.handler._ui_update_stats, [stats_state, game_state], [stats_state]
+            self.handler._ui_update_stats, [stats_state, game_state, state_state], [stats_state]
         ).then(lambda s: s, [stats_state], [stats_display])
 
         for i, btn in enumerate(move_buttons):
             btn.click(
-                lambda opts, idx=i: opts[idx]["token_id"] if idx < len(opts) else None,
+                lambda opts, idx=i: opts[idx]["piece_id"] if idx < len(opts) else None,
                 [human_move_options],
                 [selected_token_id],
             ).then(
@@ -288,6 +294,7 @@ class UIBuilder:
                 [
                     selected_token_id,
                     game_state,
+                    state_state,
                     move_history,
                     show_ids,
                     human_move_options,
@@ -297,6 +304,7 @@ class UIBuilder:
                 ],
                 [
                     game_state,
+                    state_state,
                     board_plot,
                     log,
                     move_history,
@@ -314,18 +322,20 @@ class UIBuilder:
                     auto_delay_state,
                 ],
             ).then(
-                self.handler._ui_update_stats, [stats_state, game_state], [stats_state]
+                self.handler._ui_update_stats, [stats_state, game_state, state_state], [stats_state]
             ).then(lambda s: s, [stats_state], [stats_display]).then(
                 self.handler._ui_resume_auto,
                 [
                     auto_steps_remaining,
                     auto_delay_state,
                     game_state,
+                    state_state,
                     move_history,
                     show_ids,
                 ],
                 [
                     game_state,
+                    state_state,
                     board_plot,
                     log,
                     move_history,
@@ -343,14 +353,15 @@ class UIBuilder:
                     auto_delay_state,
                 ],
             ).then(
-                self.handler._ui_update_stats, [stats_state, game_state], [stats_state]
+                self.handler._ui_update_stats, [stats_state, game_state, state_state], [stats_state]
             ).then(lambda s: s, [stats_state], [stats_display])
 
         run_auto_btn.click(
             self.handler._ui_run_auto,
-            [auto_steps_n, auto_delay, game_state, move_history, show_ids],
+            [auto_steps_n, auto_delay, game_state, state_state, move_history, show_ids],
             [
                 game_state,
+                state_state,
                 board_plot,
                 log,
                 move_history,
@@ -368,13 +379,13 @@ class UIBuilder:
                 auto_delay_state,
             ],
         ).then(
-            self.handler._ui_update_stats, [stats_state, game_state], [stats_state]
+            self.handler._ui_update_stats, [stats_state, game_state, state_state], [stats_state]
         ).then(lambda s: s, [stats_state], [stats_display])
 
         move_history_btn.click(
             lambda h: "\n".join(h[-30:]), [move_history], [history_box]
         )
-        export_btn.click(self.handler._ui_export, [game_state], [export_box])
+        export_btn.click(self.handler._ui_export, [game_state, state_state], [export_box])
 
     def _build_simulation_tab(self):
         """Builds the 'Simulate Multiple Games' tab of the UI."""
@@ -393,7 +404,7 @@ class UIBuilder:
                                     - 1,
                                 )
                             ],
-                            label="🔴🟢🟡🔵"[i] + f" {color.value.title()} Strategy",
+                            label="🔴🟢🟡🔵"[i] + f" {color.name.title()} Strategy",
                             container=True,
                         )
                         for i, color in enumerate(self.default_players)

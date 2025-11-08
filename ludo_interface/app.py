@@ -8,7 +8,7 @@ os.environ.setdefault(
 )
 
 
-from ludo_engine.strategies.strategy import StrategyFactory
+from ludo_rl.strategy.registry import available as get_available_strategies
 from .board_viz import preload_board_template
 
 from .event_handler import EventHandler
@@ -17,7 +17,7 @@ from .ui_builder import UIBuilder
 from .utils import Utils
 from .models import PlayerColor, ALL_COLORS
 
-AI_STRATEGIES = StrategyFactory.get_available_strategies()
+AI_STRATEGIES = list(get_available_strategies().keys())
 DEFAULT_PLAYERS = ALL_COLORS
 
 
@@ -36,7 +36,7 @@ class LudoApp:
         """
         self.default_players = players if players is not None else DEFAULT_PLAYERS
         self.show_token_ids = show_token_ids
-        self.ai_strategies = StrategyFactory.get_available_strategies()
+        self.ai_strategies = list(get_available_strategies().keys())
 
         # Initialize components
         self.game_manager = GameManager(self.default_players, self.show_token_ids)

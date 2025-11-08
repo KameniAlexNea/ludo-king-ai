@@ -1,11 +1,19 @@
 from typing import Dict, List, Optional
+import random
 
-from ludo_engine.models import MoveResult
-from ludo_engine.strategies import HumanStrategy
-from ludo_engine.strategies.strategy import StrategyFactory
+from ludo_rl.strategy.registry import create as create_strategy
 from .models import PlayerColor
 from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.piece import Piece as Token
+
+
+class GameState:
+    """Tracks additional game state needed for the UI."""
+    def __init__(self):
+        self.current_player_index: int = 0
+        self.winner_index: Optional[int] = None
+        self.game_over: bool = False
+        self.finish_order: List[int] = []
 
 
 class GameManager:
@@ -15,70 +23,79 @@ class GameManager:
         self.default_players = default_players
         self.show_token_ids = show_token_ids
 
-    def init_game(self, strategies: List[str]) -> LudoGame:
+    def init_game(self, strategies: List[str]) -> tuple[LudoGame, GameState]:
         """Initializes a new Ludo game with the given strategies."""
-        strategy_objs = [StrategyFactory.create_strategy(name) for name in strategies]
-        game = LudoGame(self.default_players)
-        for player, strat in zip(game.players, strategy_objs):
-            player.set_strategy(strat)
-        return game
+        game = LudoGame()
+        state = GameState()
+        
+        # Reset players and attach strategies
+        for idx, (player, strategy_name) in enumerate(zip(game.players, strategies)):
+            player.reset()
+            player.strategy_name = strategy_name
+            try:
+                player._strategy = create_strategy(strategy_name)
+            except KeyError:
+                player.strategy_name = "random"
+                player._strategy = None
+        
+        return game, state
 
     def game_state_tokens(self, game: LudoGame) -> Dict[PlayerColor, List[Token]]:
         """Extracts token information from the game state."""
         token_map: Dict[PlayerColor, List[Token]] = {c: [] for c in PlayerColor}
         for p in game.players:
             for t in p.pieces:
-                token_map[p.color].append(t)
+                token_map[PlayerColor(p.color)].append(t)
         return token_map
 
-    def get_human_strategy(self, game: LudoGame) -> Optional[HumanStrategy]:
-        """Get the human strategy from the current player if it exists."""
-        current_player = game.get_current_player()
-        return (
-            current_player.strategy
-            if isinstance(current_player.strategy, HumanStrategy)
-            else None
-        )
-
-    def is_human_turn(self, game: LudoGame) -> bool:
+    def is_human_turn(self, game: LudoGame, state: GameState) -> bool:
         """Check if it's currently a human player's turn."""
-        return self.get_human_strategy(game) is not None
+        if state.game_over:
+            return False
+        current_player = game.players[state.current_player_index]
+        return current_player.strategy_name.lower() == "human"
 
-    def get_human_move_options(self, game: LudoGame, dice: int) -> List[dict]:
+    def get_human_move_options(self, game: LudoGame, state: GameState, dice: int) -> List[dict]:
         """Get move options for a human player."""
-        current_player = game.get_current_player()
-        valid_moves = game.get_valid_moves(current_player, dice)
+        valid_moves = game.get_valid_moves(state.current_player_index, dice)
+        current_player = game.players[state.current_player_index]
 
         options = []
         for move in valid_moves:
-            token = current_player.pieces[move.token_id]
+            piece = move["piece"]
             options.append(
                 {
-                    "token_id": move.token_id,
-                    "description": f"Token {move.token_id}: {token.state.value} at {token.position} -> {move.target_position}",
-                    "move_type": move.move_type,
+                    "piece_id": piece.piece_id,
+                    "description": f"Piece {piece.piece_id}: pos {piece.position} -> {move['new_pos']}",
+                    "move": move,
                 }
             )
         return options
 
-    def serialize_move(self, move_result: MoveResult) -> str:
+    def serialize_move(self, player_index: int, move: dict, result: dict) -> str:
         """Serializes a move result into a human-readable string."""
-        if not move_result or not move_result.success:
+        if not move or not result:
             return "No move"
-        parts = [
-            f"{move_result.player_color} token {move_result.token_id} -> {move_result.new_position}"
-        ]
-        if move_result.captured_tokens:
-            parts.append(f"captured {len(move_result.captured_tokens)}")
-        if move_result.finished_token:
+        
+        piece = move["piece"]
+        new_pos = move["new_pos"]
+        events = result.get("events", {})
+        
+        parts = [f"Player {player_index} piece {piece.piece_id} -> {new_pos}"]
+        
+        if events.get("knockouts"):
+            parts.append(f"knocked out {len(events['knockouts'])}")
+        if events.get("finished"):
             parts.append("finished")
-        if move_result.extra_turn:
+        if result.get("extra_turn"):
             parts.append("extra turn")
+        
         return ", ".join(parts)
 
     def play_step(
         self,
         game: LudoGame,
+        state: GameState,
         human_move_choice: Optional[int] = None,
         dice: Optional[int] = None,
     ):
@@ -86,56 +103,92 @@ class GameManager:
 
         If `dice` is provided, use it; otherwise roll a new dice value.
         """
-        if game.game_over:
-            return game, "Game over", self.game_state_tokens(game), [], False
+        if state.game_over:
+            return game, state, "Game over", self.game_state_tokens(game), [], False
 
-        current_player = game.get_current_player()
+        current_player = game.players[state.current_player_index]
+        
+        # Check if player has already won
+        if current_player.has_won():
+            if state.current_player_index not in state.finish_order:
+                state.finish_order.append(state.current_player_index)
+            
+            # Move to next player
+            state.current_player_index = (state.current_player_index + 1) % 4
+            
+            # Check if game is over
+            if len(state.finish_order) >= 4:
+                state.game_over = True
+                state.winner_index = state.finish_order[0]
+                desc = f"Game over! Winner: Player {state.winner_index}"
+                return game, state, desc, self.game_state_tokens(game), [], False
+            
+            desc = f"Player {state.current_player_index} has already won, moving to next player"
+            return game, state, desc, self.game_state_tokens(game), [], False
+
         if dice is None:
             dice = game.roll_dice()
-        valid_moves = game.get_valid_moves(current_player, dice)
+        
+        valid_moves = game.get_valid_moves(state.current_player_index, dice)
 
         if not valid_moves:
             extra_turn = dice == 6
-            if not extra_turn:
-                game.next_turn()
-
             token_positions = ", ".join(
-                [
-                    f"token {i}: {t.position} ({t.state.value})"
-                    for i, t in enumerate(current_player.tokens)
-                ]
+                [f"piece {i}: {p.position}" for i, p in enumerate(current_player.pieces)]
             )
-            desc = f"{current_player.color.value} rolled {dice} - no moves{' (extra turn)' if extra_turn else ''} | Positions: {token_positions}"
-            return game, desc, self.game_state_tokens(game), [], False
+            desc = f"Player {state.current_player_index} rolled {dice} - no moves{' (extra turn)' if extra_turn else ''} | Positions: {token_positions}"
+            
+            if not extra_turn:
+                state.current_player_index = (state.current_player_index + 1) % 4
+            
+            return game, state, desc, self.game_state_tokens(game), [], False
 
-        human_strategy = self.get_human_strategy(game)
-        if human_strategy and human_move_choice is None:
-            move_options = self.get_human_move_options(game, dice)
-            desc = f"{current_player.color.value} rolled {dice} - Choose your move:"
-            return game, desc, self.game_state_tokens(game), move_options, True
+        # Check if it's a human player's turn and we need input
+        is_human = current_player.strategy_name.lower() == "human"
+        if is_human and human_move_choice is None:
+            move_options = self.get_human_move_options(game, state, dice)
+            desc = f"Player {state.current_player_index} rolled {dice} - Choose your move:"
+            return game, state, desc, self.game_state_tokens(game), move_options, True
 
+        # Select move
         chosen_move = None
-        if human_strategy and human_move_choice is not None:
+        if is_human and human_move_choice is not None:
+            # Find the move for the chosen piece
             chosen_move = next(
-                (m for m in valid_moves if m.token_id == human_move_choice), None
+                (m for m in valid_moves if m["piece"].piece_id == human_move_choice), 
+                None
             )
         else:
-            ctx = game.get_ai_decision_context(dice)
-            token_choice = current_player.make_strategic_decision(ctx)
-            chosen_move = next(
-                (m for m in valid_moves if m.token_id == token_choice), None
-            )
+            # AI decision
+            board_stack = game.build_board_tensor(state.current_player_index)
+            chosen_move = current_player.decide(board_stack, dice, valid_moves)
 
         if chosen_move is None:
-            chosen_move = valid_moves[0]
+            chosen_move = random.choice(valid_moves)
 
-        move_res = game.execute_move(current_player, chosen_move.token_id, dice)
-        desc = f"{current_player.color.value} rolled {dice}: {self.serialize_move(move_res)}"
+        # Execute move
+        result = game.make_move(
+            state.current_player_index,
+            chosen_move["piece"],
+            chosen_move["new_pos"],
+            dice,
+        )
+        
+        desc = f"Player {state.current_player_index} rolled {dice}: {self.serialize_move(state.current_player_index, chosen_move, result)}"
 
-        if not move_res.extra_turn and not game.game_over:
-            game.next_turn()
+        # Check if player won
+        if current_player.has_won() and state.current_player_index not in state.finish_order:
+            state.finish_order.append(state.current_player_index)
+            desc += " | Player has WON!"
 
-        if game.game_over:
-            desc += f" | WINNER: {game.winner.color.value}"
+        # Check if game is over
+        if len(state.finish_order) >= 4:
+            state.game_over = True
+            state.winner_index = state.finish_order[0]
+            desc += f" | GAME OVER! Winner: Player {state.winner_index}"
 
-        return game, desc, self.game_state_tokens(game), [], False
+        # Move to next player if no extra turn
+        if not result.get("extra_turn", False) and not state.game_over:
+            state.current_player_index = (state.current_player_index + 1) % 4
+
+        return game, state, desc, self.game_state_tokens(game), [], False
