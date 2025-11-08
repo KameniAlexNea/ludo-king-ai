@@ -1,5 +1,6 @@
 import random
 from dataclasses import dataclass, field
+from typing import Dict, Optional
 
 import numpy as np
 
@@ -7,6 +8,15 @@ from .board import LudoBoard
 from .config import config
 from .player import MoveResolution, Piece, Player
 from .reward import compute_move_rewards
+
+
+@dataclass(slots=True)
+class TurnOutcome:
+    dice_roll: int
+    move: Optional[dict]
+    result: Optional[Dict[str, object]]
+    extra_turn: bool
+    skipped: bool
 
 
 @dataclass(slots=True)
@@ -65,6 +75,60 @@ class LudoGame:
             "events": resolution.events,
             "extra_turn": resolution.extra_turn,
         }
+
+    def take_turn(
+        self,
+        player_index: int,
+        *,
+        dice_roll: Optional[int] = None,
+        move: Optional[dict] = None,
+        rng: Optional[random.Random] = None,
+    ) -> TurnOutcome:
+        rng = rng or self.rng
+        dice = dice_roll if dice_roll is not None else self.roll_dice()
+
+        valid_moves = self.get_valid_moves(player_index, dice)
+
+        if move is not None:
+            selected_move = move
+            if "dice_roll" not in selected_move or selected_move["dice_roll"] != dice:
+                selected_move = dict(selected_move)
+                selected_move["dice_roll"] = dice
+
+            if not any(
+                selected_move["piece"] is option["piece"]
+                and selected_move["new_pos"] == option["new_pos"]
+                for option in valid_moves
+            ):
+                return TurnOutcome(dice, None, None, False, True)
+        else:
+            if not valid_moves:
+                return TurnOutcome(dice, None, None, False, True)
+
+            board_stack = self.build_board_tensor(player_index)
+            decision = self.players[player_index].decide(board_stack, dice, valid_moves)
+            selected_move = (
+                decision if decision is not None else rng.choice(valid_moves)
+            )
+            if "dice_roll" not in selected_move or selected_move["dice_roll"] != dice:
+                selected_move = dict(selected_move)
+                selected_move["dice_roll"] = dice
+
+        result = self.make_move(
+            player_index,
+            selected_move["piece"],
+            selected_move["new_pos"],
+            dice,
+        )
+
+        copied_move = dict(selected_move)
+        return TurnOutcome(
+            dice_roll=dice,
+            move=copied_move,
+            result=result,
+            extra_turn=bool(result.get("extra_turn", False)),
+            skipped=False,
+        )
 
     def get_board_state(self, agent_index):
         """Generates the (58, 5) board state tensor for the given agent."""

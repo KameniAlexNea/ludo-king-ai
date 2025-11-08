@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -194,6 +195,36 @@ class LudoGameTests(unittest.TestCase):
         result = game.make_move(0, piece, 1, dice_roll=6)
         self.assertIn("reward", result)
         self.assertIn("events", result)
+
+    def test_take_turn_random_fallback(self) -> None:
+        game = LudoGame()
+        player = game.players[0]
+
+        with (
+            mock.patch(
+                "ludo_rl.ludo.player.Player.decide",
+                autospec=True,
+                return_value=None,
+            ),
+            mock.patch.object(game.rng, "choice", wraps=game.rng.choice) as choice_mock,
+        ):
+            outcome = game.take_turn(0, dice_roll=6)
+
+        self.assertFalse(outcome.skipped)
+        self.assertIsNotNone(outcome.move)
+        self.assertIn(outcome.move["piece"], player.pieces)
+        choice_mock.assert_called()
+
+    def test_take_turn_invalid_move_skips(self) -> None:
+        game = LudoGame()
+        piece = game.players[0].pieces[0]
+        piece.position = 0
+        invalid_move = {"piece": piece, "new_pos": 3, "dice_roll": 6}
+
+        outcome = game.take_turn(0, dice_roll=6, move=invalid_move)
+
+        self.assertTrue(outcome.skipped)
+        self.assertIsNone(outcome.result)
 
 
 class RewardComputationTests(unittest.TestCase):
