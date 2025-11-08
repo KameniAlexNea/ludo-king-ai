@@ -9,6 +9,7 @@ from .heatseeker import HeatSeekerStrategy
 from .hoarder import HoarderStrategy
 from .homebody import HomebodyStrategy
 from .killer import KillerStrategy
+from .llm_agent import LLMStrategy
 from .probability import ProbabilityStrategy
 from .retaliator import RetaliatorStrategy
 from .rl_agent import RLStrategy
@@ -28,6 +29,7 @@ STRATEGY_REGISTRY: Dict[str, Type] = {
     SupportStrategy.name: SupportStrategy,
     RetaliatorStrategy.name: RetaliatorStrategy,
     RLStrategy.name: RLStrategy,
+    LLMStrategy.name: LLMStrategy,
 }
 
 

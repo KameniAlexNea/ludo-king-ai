@@ -8,6 +8,7 @@ from .heatseeker import HeatSeekerStrategy
 from .hoarder import HoarderStrategy
 from .homebody import HomebodyStrategy
 from .killer import KillerStrategy
+from .llm_agent import LLMStrategy
 from .probability import ProbabilityStrategy
 from .registry import available, create
 from .retaliator import RetaliatorStrategy
@@ -29,6 +30,7 @@ __all__ = [
     "HoarderStrategy",
     "HomebodyStrategy",
     "RetaliatorStrategy",
+    "LLMStrategy",
     "RLStrategy",
     "RusherStrategy",
     "SupportStrategy",
