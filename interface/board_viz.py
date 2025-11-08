@@ -314,33 +314,35 @@ def _home_column_positions_for_color(color: PlayerColor) -> Dict[int, Tuple[int,
     value is the finish square handled separately. We therefore allocate visual cells
     for 52..56 only and reserve 57 for the center pile.
     
-    The home columns should be straight paths (either vertical or horizontal) from
-    the square after the entry point toward the center (7, 7).
+    The home columns should be straight paths (either vertical or horizontal) starting
+    ONE STEP after the entry point toward the center (7, 7).
     """
     mapping: Dict[int, Tuple[int, int]] = {}
     center = (7, 7)
     entry_index = BoardConstants.HOME_COLUMN_ENTRIES[color]
     
-    # Home column starts from the square AFTER the entry point
-    start_index = (entry_index + 1) % 52
-    start_coord = PATH_INDEX_TO_COORD[start_index]
-    sx, sy = start_coord
+    # HOME_COLUMN_ENTRIES points to the last main track square
+    # We need to start the home column ONE STEP toward center from there
+    entry_coord = PATH_INDEX_TO_COORD[entry_index]
+    ex, ey = entry_coord
     
     # Determine if this should be a horizontal or vertical path based on alignment with center
-    if sx == center[0]:
+    if ex == center[0]:
         # Vertical path (RED and YELLOW)
         dx = 0
-        dy = 1 if center[1] > sy else -1
-    elif sy == center[1]:
+        dy = 1 if center[1] > ey else -1
+    elif ey == center[1]:
         # Horizontal path (GREEN and BLUE)
-        dx = 1 if center[0] > sx else -1
+        dx = 1 if center[0] > ex else -1
         dy = 0
     else:
         # Fallback: should not happen with correct board layout
-        dx = 1 if center[0] > sx else -1 if center[0] < sx else 0
-        dy = 1 if center[1] > sy else -1 if center[1] < sy else 0
+        dx = 1 if center[0] > ex else -1 if center[0] < ex else 0
+        dy = 1 if center[1] > ey else -1 if center[1] < ey else 0
     
-    cx, cy = sx, sy
+    # Start ONE STEP toward center from the entry point
+    cx, cy = ex + dx, ey + dy
+    
     # Only create squares for the lane portion (start..finish-1)
     for offset in range(GameConstants.HOME_COLUMN_SIZE - 1):  # exclude final position
         mapping[HOME_COLUMN_START + offset] = (cx, cy)
