@@ -1,6 +1,8 @@
 import base64
 import io
+
 from PIL import Image
+
 
 class Utils:
     """Utility functions for the application."""

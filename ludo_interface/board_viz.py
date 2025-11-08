@@ -2,9 +2,10 @@ from typing import Dict, List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
-from ludo_rl.ludo.piece import Piece as Token
 from ludo_rl.ludo.config import config
-from .models import PlayerColor, ALL_COLORS
+from ludo_rl.ludo.piece import Piece as Token
+
+from .models import ALL_COLORS, PlayerColor
 
 # Enhanced Styling with gradients and better colors
 COLOR_MAP = {
@@ -333,9 +334,7 @@ HOME_COLUMN_COORDS = {
 START_POSITIONS = {
     color: config.PLAYER_START_SQUARES[color.value] for color in ALL_COLORS
 }
-HOME_COLUMN_ENTRIES = {
-    color: config.HOME_ENTRY[color.value] for color in ALL_COLORS
-}
+HOME_COLUMN_ENTRIES = {color: config.HOME_ENTRY[color.value] for color in ALL_COLORS}
 
 
 def _generate_board_template() -> Image.Image:
@@ -506,7 +505,7 @@ def draw_board(
 
     for color, tlist in tokens.items():
         for tk in tlist:
-            pos = tk.position
+            pos = tk.to_absolute()
 
             if tk.in_yard():
                 # Home tokens - render individually in their designated spots
@@ -515,20 +514,18 @@ def draw_board(
                 cx, cy = (bbox[0] + bbox[2]) // 2, (bbox[1] + bbox[3]) // 2
                 _draw_stacked_tokens(d, [(color, tk)], cx, cy, CELL // 2 - 6, show_ids)
 
-            elif (
-                HOME_COLUMN_START <= pos <= HOME_COLUMN_END
-            ):
+            elif HOME_COLUMN_START <= pos <= HOME_COLUMN_END:
                 # Home column tokens
                 coord_map = HOME_COLUMN_COORDS[color]
                 if pos in coord_map:
-                    key = f"home_column_{color.value}_{pos}"
+                    key = f"home_column_{color.name}_{pos}"
                     if key not in position_groups:
                         position_groups[key] = []
                     position_groups[key].append((color, tk))
 
             elif tk.is_finished():
                 # Finished tokens - stack at finish anchor
-                key = f"finished_{color.value}"
+                key = f"finished_{color.name}"
                 if key not in position_groups:
                     position_groups[key] = []
                 position_groups[key].append((color, tk))
@@ -544,7 +541,7 @@ def draw_board(
     for key, token_group in position_groups.items():
         if key.startswith("home_column_"):
             parts = key.split("_")
-            color = PlayerColor(parts[2])
+            color = PlayerColor[parts[2]]
             pos = int(parts[3])
             coord_map = HOME_COLUMN_COORDS[color]
             if pos in coord_map:
@@ -554,7 +551,7 @@ def draw_board(
                 _draw_stacked_tokens(d, token_group, cx, cy, CELL // 2 - 4, show_ids)
 
         elif key.startswith("finished_"):
-            color = PlayerColor(key.split("_")[1])
+            color = PlayerColor[key.split("_")[1]]
             ax, ay = finish_anchor[color]
             _draw_stacked_tokens(d, token_group, ax, ay, CELL // 2 - 4, show_ids)
 

@@ -53,3 +53,17 @@ class Piece:
 
     def send_home(self) -> None:
         self.position = 0
+
+    def to_absolute(self) -> int:
+        """
+        Convert the piece's relative position to an absolute board position.
+        Used by interface only
+        """
+        if self.in_yard():
+            return -1
+        if self.in_home_column() or self.is_finished():
+            return self.position
+
+        start_square = config.PLAYER_START_SQUARES[self.color]
+        abs_pos = ((start_square + self.position - 2 + 52) % 52) + 1
+        return abs_pos

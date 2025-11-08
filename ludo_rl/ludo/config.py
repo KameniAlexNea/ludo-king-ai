@@ -1,5 +1,6 @@
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
+
 
 @dataclass(slots=True)
 class Config:
@@ -17,7 +18,7 @@ class Config:
     HOME_ENTRY = [51, 12, 25, 38]  # Red, Green, Yellow, Blue
     HOME_COLUMN_ENTRIES = 52  # All enter home column at position 52
     HOME_COLUMN_SIZE = 6
-    STAR_SQUARES = [9, 22,  35, 48]
+    STAR_SQUARES = [9, 22, 35, 48]
 
 
 @dataclass(slots=True)

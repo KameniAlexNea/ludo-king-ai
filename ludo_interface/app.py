@@ -9,13 +9,13 @@ os.environ.setdefault(
 
 
 from ludo_rl.strategy.registry import available as get_available_strategies
-from .board_viz import preload_board_template
 
+from .board_viz import preload_board_template
 from .event_handler import EventHandler
 from .game_manager import GameManager
+from .models import ALL_COLORS, PlayerColor
 from .ui_builder import UIBuilder
 from .utils import Utils
-from .models import PlayerColor, ALL_COLORS
 
 AI_STRATEGIES = list(get_available_strategies().keys())
 DEFAULT_PLAYERS = ALL_COLORS

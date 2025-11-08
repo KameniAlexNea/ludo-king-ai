@@ -1,16 +1,15 @@
 import json
 import random
 import time
-from dataclasses import asdict
 from typing import List
 
 import gradio as gr
 
-from ludo_rl.ludo.game import LudoGame
-from .models import PlayerColor
 from ludo_interface.board_viz import draw_board
+from ludo_rl.ludo.game import LudoGame
 
 from .game_manager import GameManager, GameState
+from .models import PlayerColor
 from .utils import Utils
 
 
@@ -38,7 +37,6 @@ class EventHandler:
         )
         html = self.utils.img_to_data_uri(pil_img)
 
-        current_player = game.players[state.current_player_index]
         player_html = f"<h3 style='color: red;'>🎯 Current Player: Player {state.current_player_index}</h3>"
 
         has_human = any(s == "human" for s in strats)
@@ -105,7 +103,6 @@ class EventHandler:
         html = self.utils.img_to_data_uri(pil_img)
 
         if not state.game_over:
-            current_player = game.players[state.current_player_index]
             player_html = f"<h3 style='color: red;'>🎯 Current Player: Player {state.current_player_index}</h3>"
         else:
             player_html = f"<h3>🏆 Winner: Player {state.winner_index}!</h3>"
@@ -174,7 +171,9 @@ class EventHandler:
                 None,  # auto_delay_state
             )
 
-    def _ui_run_auto(self, n, delay, game: LudoGame, state: GameState, history: List[str], show: bool):
+    def _ui_run_auto(
+        self, n, delay, game: LudoGame, state: GameState, history: List[str], show: bool
+    ):
         if game is None or state is None:
             yield (
                 None,
@@ -216,7 +215,9 @@ class EventHandler:
                     if len(history) > 50:
                         history = history[-50:]
 
-                    move_options = self.game_manager.get_human_move_options(game, state, dice)
+                    move_options = self.game_manager.get_human_move_options(
+                        game, state, dice
+                    )
                     moves_html = (
                         "<h4>Choose your move:</h4><ul>"
                         + "".join(
@@ -261,15 +262,17 @@ class EventHandler:
                     return
                 else:
                     # No valid moves - this is handled by play_step
-                    game, state, desc, tokens, move_opts, waiting = self.game_manager.play_step(
-                        game, state, None, dice
+                    game, state, desc, tokens, move_opts, waiting = (
+                        self.game_manager.play_step(game, state, None, dice)
                     )
                     history.append(desc)
                     if len(history) > 50:
                         history = history[-50:]
                     remaining = max(remaining - 1, 0)
             else:
-                game, state, step_desc, tokens, move_opts, waiting = self.game_manager.play_step(game, state)
+                game, state, step_desc, tokens, move_opts, waiting = (
+                    self.game_manager.play_step(game, state)
+                )
                 desc = step_desc
                 history.append(step_desc)
                 if len(history) > 50:
@@ -286,7 +289,9 @@ class EventHandler:
             else:
                 player_html = f"<h3>🏆 Winner: Player {state.winner_index}!</h3>"
 
-            waiting = self.game_manager.is_human_turn(game, state) and not state.game_over
+            waiting = (
+                self.game_manager.is_human_turn(game, state) and not state.game_over
+            )
             # clear pending_dice while continuing auto-play (no human pause)
             yield (
                 game,
@@ -356,7 +361,13 @@ class EventHandler:
         return tuple(out)
 
     def _ui_resume_auto(
-        self, remaining, delay, game: LudoGame, state: GameState, history: List[str], show: bool
+        self,
+        remaining,
+        delay,
+        game: LudoGame,
+        state: GameState,
+        history: List[str],
+        show: bool,
     ):
         try:
             rem = int(remaining) if remaining is not None else 0
@@ -421,7 +432,7 @@ class EventHandler:
 
     def _ui_run_bulk(self, n_games, *strats):
         ai_strats = [s if s != "human" else "random" for s in strats]
-        win_counts = {c.value: 0 for c in self.default_players}
+        win_counts = {c.name: 0 for c in self.default_players}
 
         # Run the simulation
         total_games = int(n_games)
@@ -433,7 +444,7 @@ class EventHandler:
                 turns_taken += 1
             if state.game_over and state.winner_index is not None:
                 winner_color = self.default_players[state.winner_index]
-                win_counts[winner_color.value] += 1
+                win_counts[winner_color.name] += 1
 
         # Calculate statistics
         total = sum(win_counts.values()) or 1
@@ -574,5 +585,5 @@ class EventHandler:
             stats = dict(stats)
             stats["games"] += 1
             winner_color = self.default_players[state.winner_index]
-            stats["wins"][winner_color.value] += 1
+            stats["wins"][winner_color.name] += 1
         return stats

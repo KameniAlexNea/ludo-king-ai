@@ -2,9 +2,8 @@ from typing import List
 
 import gradio as gr
 
-from .models import PlayerColor
-
 from .event_handler import EventHandler
+from .models import PlayerColor
 
 
 class UIBuilder:
@@ -281,7 +280,9 @@ class UIBuilder:
                 auto_delay_state,
             ],
         ).then(
-            self.handler._ui_update_stats, [stats_state, game_state, state_state], [stats_state]
+            self.handler._ui_update_stats,
+            [stats_state, game_state, state_state],
+            [stats_state],
         ).then(lambda s: s, [stats_state], [stats_display])
 
         for i, btn in enumerate(move_buttons):
@@ -322,7 +323,9 @@ class UIBuilder:
                     auto_delay_state,
                 ],
             ).then(
-                self.handler._ui_update_stats, [stats_state, game_state, state_state], [stats_state]
+                self.handler._ui_update_stats,
+                [stats_state, game_state, state_state],
+                [stats_state],
             ).then(lambda s: s, [stats_state], [stats_display]).then(
                 self.handler._ui_resume_auto,
                 [
@@ -353,7 +356,9 @@ class UIBuilder:
                     auto_delay_state,
                 ],
             ).then(
-                self.handler._ui_update_stats, [stats_state, game_state, state_state], [stats_state]
+                self.handler._ui_update_stats,
+                [stats_state, game_state, state_state],
+                [stats_state],
             ).then(lambda s: s, [stats_state], [stats_display])
 
         run_auto_btn.click(
@@ -379,13 +384,17 @@ class UIBuilder:
                 auto_delay_state,
             ],
         ).then(
-            self.handler._ui_update_stats, [stats_state, game_state, state_state], [stats_state]
+            self.handler._ui_update_stats,
+            [stats_state, game_state, state_state],
+            [stats_state],
         ).then(lambda s: s, [stats_state], [stats_display])
 
         move_history_btn.click(
             lambda h: "\n".join(h[-30:]), [move_history], [history_box]
         )
-        export_btn.click(self.handler._ui_export, [game_state, state_state], [export_box])
+        export_btn.click(
+            self.handler._ui_export, [game_state, state_state], [export_box]
+        )
 
     def _build_simulation_tab(self):
         """Builds the 'Simulate Multiple Games' tab of the UI."""

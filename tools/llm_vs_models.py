@@ -21,6 +21,7 @@ from ludo_rl.strategy.llm_agent import (
 )
 from ludo_rl.strategy.registry import create as create_strategy
 from ludo_rl.strategy.rl_agent import RLStrategy
+
 POINTS_TABLE = (3, 2, 1, 0)
 
 
@@ -114,7 +115,11 @@ def run_single_game(
         outcome = game.take_turn(current_index, rng=base_rng)
         _log_outcome(game_index, label, outcome)
 
-        if not outcome.skipped and player.has_won() and current_index not in finish_order:
+        if (
+            not outcome.skipped
+            and player.has_won()
+            and current_index not in finish_order
+        ):
             finish_order.append(current_index)
 
         while (
@@ -274,7 +279,9 @@ def _load_static_participant(entry: Dict[str, Any]) -> Participant:
         raise SystemExit(f"Unknown static strategy '{strategy_name}'.") from exc
 
     label = entry.get("label") or strategy_name
-    logger.info(f"Configured static participant '{label}' using strategy '{strategy_name}'.")
+    logger.info(
+        f"Configured static participant '{label}' using strategy '{strategy_name}'."
+    )
     return Participant(label=label, strategy=strategy)
 
 
@@ -338,7 +345,9 @@ def main() -> None:
     )
 
     leaderboard: Dict[str, int] = {participant.label: 0 for participant in participants}
-    points_board: Dict[str, int] = {participant.label: 0 for participant in participants}
+    points_board: Dict[str, int] = {
+        participant.label: 0 for participant in participants
+    }
 
     logger.info(
         f"Starting tournament for {n_games} game(s) | deterministic={deterministic} "
@@ -363,11 +372,15 @@ def main() -> None:
         )
 
     logger.info("Tournament complete. Final standings:")
-    for label, wins in sorted(leaderboard.items(), key=lambda item: (-item[1], item[0])):
+    for label, wins in sorted(
+        leaderboard.items(), key=lambda item: (-item[1], item[0])
+    ):
         logger.info(f"  {label}: {wins} win(s)")
 
     logger.info("Aggregated points:")
-    for label, points in sorted(points_board.items(), key=lambda item: (-item[1], item[0])):
+    for label, points in sorted(
+        points_board.items(), key=lambda item: (-item[1], item[0])
+    ):
         logger.info(f"  {label}: {points} point(s)")
 
 
