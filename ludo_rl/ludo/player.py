@@ -54,36 +54,20 @@ class Player:
     def get_valid_moves(self, board: "LudoBoard", dice_roll: int) -> List[Dict[str, object]]:
         moves: List[Dict[str, object]] = []
 
+        finish_position = config.PATH_LENGTH - 1
+
         for piece in self.pieces:
-            new_pos = -1
+            destination = piece.destination_for_roll(dice_roll)
 
-            if piece.in_yard():
-                if dice_roll == 6:
-                    new_pos = 1
-            elif piece.is_finished():
-                continue
-            elif piece.in_home_column():
-                candidate = piece.position + dice_roll
-                if candidate <= 57:
-                    new_pos = candidate
-            else:
-                candidate = piece.position + dice_roll
-                if candidate > 51:
-                    overflow = candidate - 51
-                    if overflow <= 6:
-                        new_pos = 51 + overflow
-                else:
-                    new_pos = candidate
-
-            if new_pos == -1:
+            if destination is None:
                 continue
 
-            if new_pos == 57:
-                moves.append({"piece": piece, "new_pos": new_pos, "dice_roll": dice_roll})
+            if destination == finish_position:
+                moves.append({"piece": piece, "new_pos": destination, "dice_roll": dice_roll})
                 continue
 
-            if board.count_player_pieces(self.color, new_pos) < 2:
-                moves.append({"piece": piece, "new_pos": new_pos, "dice_roll": dice_roll})
+            if board.count_player_pieces(self.color, destination) < 2:
+                moves.append({"piece": piece, "new_pos": destination, "dice_roll": dice_roll})
 
         return moves
 
