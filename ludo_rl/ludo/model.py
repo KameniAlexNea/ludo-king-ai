@@ -9,9 +9,21 @@ class Piece:
     piece_id: int  # 0, 1, 2, or 3
     position: int = 0  # 0 = Yard
 
-    def is_safe(self, abs_pos):
+    def is_safe(self, abs_pos: int) -> bool:
         """Checks if an absolute board position is a safe 'star' square."""
         return abs_pos in config.SAFE_SQUARES_ABS
 
-    def is_finished(self):
+    def is_finished(self) -> bool:
         return self.position == 57
+
+    def in_yard(self) -> bool:
+        return self.position == 0
+
+    def in_home_column(self) -> bool:
+        return 52 <= self.position <= 56
+
+    def move_to(self, new_position: int) -> None:
+        self.position = new_position
+
+    def send_home(self) -> None:
+        self.position = 0

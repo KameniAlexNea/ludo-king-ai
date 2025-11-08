@@ -1,6 +1,6 @@
 import random
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Dict, List, Optional, TYPE_CHECKING, cast
 
 import numpy as np
 
@@ -9,6 +9,18 @@ from ludo_rl.strategy import build_move_options, create
 from ..strategy.base import BaseStrategy
 from .config import config
 from .model import Piece
+
+
+if TYPE_CHECKING:  # pragma: no cover - used for type checking only
+    from .board import LudoBoard
+
+
+@dataclass(slots=True)
+class MoveResolution:
+    old_position: int
+    new_position: int
+    events: Dict[str, object]
+    extra_turn: bool
 
 
 @dataclass(slots=True)
@@ -33,6 +45,110 @@ class Player:
             self.has_finished = True
             return True
         return False
+
+    def reset(self) -> None:
+        self.has_finished = False
+        for piece in self.pieces:
+            piece.send_home()
+
+    def get_valid_moves(self, board: "LudoBoard", dice_roll: int) -> List[Dict[str, object]]:
+        moves: List[Dict[str, object]] = []
+
+        for piece in self.pieces:
+            new_pos = -1
+
+            if piece.in_yard():
+                if dice_roll == 6:
+                    new_pos = 1
+            elif piece.is_finished():
+                continue
+            elif piece.in_home_column():
+                candidate = piece.position + dice_roll
+                if candidate <= 57:
+                    new_pos = candidate
+            else:
+                candidate = piece.position + dice_roll
+                if candidate > 51:
+                    overflow = candidate - 51
+                    if overflow <= 6:
+                        new_pos = 51 + overflow
+                else:
+                    new_pos = candidate
+
+            if new_pos == -1:
+                continue
+
+            if new_pos == 57:
+                moves.append({"piece": piece, "new_pos": new_pos, "dice_roll": dice_roll})
+                continue
+
+            if board.count_player_pieces(self.color, new_pos) < 2:
+                moves.append({"piece": piece, "new_pos": new_pos, "dice_roll": dice_roll})
+
+        return moves
+
+    def move_piece(
+        self, board: "LudoBoard", piece: Piece, new_position: int, dice_roll: int
+    ) -> MoveResolution:
+        events: Dict[str, object] = {
+            "knockouts": [],
+            "blockades": [],
+            "hit_blockade": False,
+            "exited_home": False,
+            "finished": False,
+            "move_resolved": True,
+        }
+
+        old_position = piece.position
+
+        if old_position == 0 and new_position == 1:
+            events["exited_home"] = True
+        if new_position == 57:
+            events["finished"] = True
+
+        piece.move_to(new_position)
+
+        abs_pos = board.absolute_position(self.color, new_position)
+        if abs_pos != -1 and not board.is_safe_square(abs_pos):
+            occupants = board.pieces_at_absolute(abs_pos, exclude_player=self.color)
+
+            if len(occupants) == 1:
+                opponent_index, opponent_piece = occupants[0]
+                opponent_piece.send_home()
+                knockouts = cast(List[Dict[str, int]], events["knockouts"])
+                knockouts.append(
+                    {
+                        "player": opponent_index,
+                        "piece_id": opponent_piece.piece_id,
+                        "abs_pos": abs_pos,
+                    }
+                )
+            elif len(occupants) >= 2:
+                piece.move_to(old_position)
+                events["hit_blockade"] = True
+                events["move_resolved"] = False
+
+        final_position = piece.position
+
+        if events["move_resolved"] and final_position not in (0, 57):
+            if board.count_player_pieces(self.color, final_position) == 2:
+                blockades = cast(List[Dict[str, int]], events["blockades"])
+                blockades.append(
+                    {"player": self.color, "relative_pos": final_position}
+                )
+
+        extra_turn = (
+            bool(events["knockouts"])
+            or bool(events["finished"])
+            or dice_roll == 6
+        )
+
+        return MoveResolution(
+            old_position=old_position,
+            new_position=final_position,
+            events=events,
+            extra_turn=extra_turn,
+        )
 
     def decide(self, board_stack: np.ndarray, dice_roll: int, valid_moves: list[dict]):
         if not valid_moves:
