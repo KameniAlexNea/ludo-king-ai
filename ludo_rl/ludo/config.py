@@ -10,7 +10,9 @@ class Config:
     MAX_TURNS = 200
 
     # Absolute positions on the 52-square board
-    PLAYER_START_SQUARES = [1, 14, 27, 40]  # Blue, Red, Green, Yellow
+    PLAYER_START_SQUARES = [1, 14, 27, 40]  # Red, Green, Yellow, Blue
+    HOME_ENTRY = [51, 12, 25, 38]  # Red, Green, Yellow, Blue
+    HOME_COLUMN_ENTRIES = [52, 52, 52, 52]  # All enter home column at position 52
     SAFE_SQUARES_ABS = [1, 9, 14, 22, 27, 35, 40, 48]
 
 
