@@ -382,10 +382,12 @@ class LLMStrategyTests(unittest.TestCase):
     def test_select_move_retries_and_falls_back(self) -> None:
         class FailingChatModel:
             def __init__(self) -> None:
-                self.outputs = iter([
-                    {"content": "I choose piece A"},
-                    {"content": "No idea"},
-                ])
+                self.outputs = iter(
+                    [
+                        {"content": "I choose piece A"},
+                        {"content": "No idea"},
+                    ]
+                )
 
             def invoke(self, messages):
                 try:
@@ -410,9 +412,7 @@ class LLMStrategyTests(unittest.TestCase):
         self.assertEqual(choice.piece_id, 2)
 
     def test_configure_with_model_name_uses_init_chat_model(self) -> None:
-        fake_model = SimpleNamespace(
-            invoke=lambda *_: {"content": '{"piece_id": 0}'}
-        )
+        fake_model = SimpleNamespace(invoke=lambda *_: {"content": '{"piece_id": 0}'})
 
         with mock.patch(
             "ludo_rl.strategy.llm_agent.init_chat_model", return_value=fake_model

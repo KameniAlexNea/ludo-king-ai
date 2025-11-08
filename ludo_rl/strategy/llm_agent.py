@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-import json
-import re
+import random
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Optional, Sequence
 
@@ -14,7 +13,9 @@ def _load_langchain() -> tuple[Any, Any, Any, Any]:  # pragma: no cover - helper
     chat_spec = importlib.util.find_spec("langchain.chat_models")
     msg_spec = importlib.util.find_spec("langchain.messages")
     if chat_spec is None or msg_spec is None:
-        raise ImportError("LangChain chat models are not available. Install 'langchain'.")
+        raise ImportError(
+            "LangChain chat models are not available. Install 'langchain'."
+        )
     chat_module = importlib.import_module("langchain.chat_models")
     message_module = importlib.import_module("langchain.messages")
     return (
@@ -44,6 +45,7 @@ except ImportError:  # Fallback types enable graceful degradation without LangCh
 
     class AIMessage(_FallbackMessage):
         pass
+
 
 from .base import BaseStrategy, BaseStrategyConfig
 from .types import MoveOption, StrategyContext
@@ -131,9 +133,7 @@ class LLMStrategy(BaseStrategy):
 
     # --- Strategy entry point --------------------------------------------------
     def select_move(self, ctx: StrategyContext) -> Optional[MoveOption]:  # type: ignore[override]
-        legal_moves = [
-            move for move in ctx.moves if ctx.action_mask[move.piece_id]
-        ]
+        legal_moves = [move for move in ctx.moves if ctx.action_mask[move.piece_id]]
         if not legal_moves:
             return None
 
@@ -152,8 +152,8 @@ class LLMStrategy(BaseStrategy):
                 if move.piece_id == piece_id:
                     return move
 
-        # Fallback: simple heuristic (first legal move)
-        return legal_moves[0]
+        # Fallback: random legal move
+        return random.choice(legal_moves)
 
     # --- Prompt construction ---------------------------------------------------
     def _build_messages(
@@ -183,7 +183,7 @@ class LLMStrategy(BaseStrategy):
         human_prompt = (
             "Dice roll: {dice}\n"
             "Legal moves (choose one):\n- {moves}\n"
-            "Respond with JSON, e.g. {{\"piece_id\": 2, \"reason\": \"Prefer capture\"}}"
+            'Respond with JSON, e.g. {{"piece_id": 2, "reason": "Prefer capture"}}'
         ).format(
             dice=ctx.dice_roll,
             moves="\n- ".join(move_descriptions),
@@ -202,7 +202,6 @@ class LLMStrategy(BaseStrategy):
         if content is None:
             return None
 
-        # Attempt JSON parsing first
         try:
             payload = _parse_json(content)
             if isinstance(payload, dict) and "piece_id" in payload:
@@ -211,16 +210,6 @@ class LLMStrategy(BaseStrategy):
                 piece_id = None
         except Exception:
             piece_id = None
-
-        if piece_id is None:
-            match = re.search(r"piece\s*id\s*[:=]\s*(\d)", content, re.I)
-            if match:
-                piece_id = int(match.group(1))
-
-        if piece_id is None:
-            match = re.search(r"(\d)", content)
-            if match:
-                piece_id = int(match.group(1))
 
         if piece_id is None:
             return None
