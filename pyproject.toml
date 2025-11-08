@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "dotenv>=0.9.9",
+    "gradio>=5.49.1",
     "langchain>=1.0.5",
     "llm-output-parser>=0.3.0",
     "loguru>=0.7.3",

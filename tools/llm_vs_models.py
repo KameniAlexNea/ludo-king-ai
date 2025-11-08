@@ -21,6 +21,8 @@ from ludo_rl.strategy.llm_agent import (
 )
 from ludo_rl.strategy.registry import create as create_strategy
 from ludo_rl.strategy.rl_agent import RLStrategy
+POINTS_TABLE = (3, 2, 1, 0)
+
 
 try:  # Optional dependency guard for YAML parsing
     import yaml
@@ -336,6 +338,7 @@ def main() -> None:
     )
 
     leaderboard: Dict[str, int] = {participant.label: 0 for participant in participants}
+    points_board: Dict[str, int] = {participant.label: 0 for participant in participants}
 
     logger.info(
         f"Starting tournament for {n_games} game(s) | deterministic={deterministic} "
@@ -346,14 +349,26 @@ def main() -> None:
         result = run_single_game(rng, participants, game_index=game_idx)
         winner = result["rankings"][0]
         leaderboard[winner] += 1
+
+        points_table = POINTS_TABLE[: len(result["rankings"])]
+        awarded_points: Dict[str, int] = {}
+        for position, name in enumerate(result["rankings"]):
+            points = points_table[position] if position < len(points_table) else 0
+            points_board[name] += points
+            awarded_points[name] = points
+
         logger.info(
             f"[Game {game_idx:02d}] Winner={winner} | Rankings={result['rankings']} "
-            f"| Turns={result['turns']}"
+            f"| Turns={result['turns']} | Points awarded={awarded_points}"
         )
 
     logger.info("Tournament complete. Final standings:")
     for label, wins in sorted(leaderboard.items(), key=lambda item: (-item[1], item[0])):
         logger.info(f"  {label}: {wins} win(s)")
+
+    logger.info("Aggregated points:")
+    for label, points in sorted(points_board.items(), key=lambda item: (-item[1], item[0])):
+        logger.info(f"  {label}: {points} point(s)")
 
 
 if __name__ == "__main__":
