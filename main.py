@@ -95,7 +95,7 @@ Game Features:
             server_name=args.host,
             server_port=args.port,
             share=args.share,
-            inbrowser=True,
+            inbrowser=False,
             show_error=True,
             quiet=False,
         )
