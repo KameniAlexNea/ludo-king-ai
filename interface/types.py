@@ -120,8 +120,8 @@ def _compute_board_constants() -> tuple[Dict[PlayerColor, int], Dict[PlayerColor
 
     for idx, color in INDEX_TO_COLOR.items():
         abs_start = config.PLAYER_START_SQUARES[idx]
-        # Add +1 because tokens at relative position 1 should be drawn at the next visual square
-        start_positions[color] = absolute_to_path_index(abs_start) + 1
+        # Map absolute board position to visual path index (0-51)
+        start_positions[color] = absolute_to_path_index(abs_start)
 
         abs_entry = game.board.absolute_position(idx, 51)
         # Add +1 because HOME_COLUMN_ENTRIES should point to where position 52 starts (the entry to home column)
