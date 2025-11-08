@@ -1,4 +1,4 @@
-"""Run quick matches driven by a YAML configuration."""
+"""Run matches defined by a YAML configuration file."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
+from loguru import logger
 from sb3_contrib import MaskablePPO
 
 from ludo_rl.ludo.config import config
@@ -38,14 +39,12 @@ class Participant:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=(
-            "Pit configured opponents against each other using a YAML configuration file."
-        )
+        description="Pit configured participants against each other using YAML settings."
     )
     parser.add_argument(
         "--config",
         required=True,
-        help="Path to YAML file describing the match participants and settings.",
+        help="Path to YAML file describing match setup.",
     )
     return parser.parse_args()
 
@@ -79,12 +78,19 @@ def determine_rankings(game: LudoGame, finish_order: List[int]) -> List[int]:
 def run_single_game(
     base_rng: random.Random,
     participants: Sequence[Participant],
+    *,
+    game_index: int,
 ) -> Dict[str, object]:
     game = LudoGame()
 
     round_seed = base_rng.randint(0, 1_000_000)
     random.seed(round_seed)
     game.rng.seed(round_seed)
+
+    logger.info(
+        f"[Game {game_index:02d}] Starting with seed={round_seed} | participants="
+        f"{', '.join(p.label for p in participants)}"
+    )
 
     seat_labels = attach_players(game, participants)
 
@@ -93,20 +99,20 @@ def run_single_game(
     current_index = 0
 
     while turns_taken < config.MAX_TURNS and len(finish_order) < config.NUM_PLAYERS:
+        label = seat_labels[current_index]
         player = game.players[current_index]
+
         if player.has_won():
             if current_index not in finish_order:
                 finish_order.append(current_index)
             current_index = (current_index + 1) % config.NUM_PLAYERS
             continue
 
+        logger.info(f"[Game {game_index:02d}] Player {label} taking turn.")
         outcome = game.take_turn(current_index, rng=base_rng)
+        _log_outcome(game_index, label, outcome)
 
-        if (
-            not outcome.skipped
-            and player.has_won()
-            and current_index not in finish_order
-        ):
+        if not outcome.skipped and player.has_won() and current_index not in finish_order:
             finish_order.append(current_index)
 
         while (
@@ -114,7 +120,9 @@ def run_single_game(
             and outcome.extra_turn
             and len(finish_order) < config.NUM_PLAYERS
         ):
+            logger.info(f"[Game {game_index:02d}] Player {label} earned an extra turn.")
             outcome = game.take_turn(current_index, rng=base_rng)
+            _log_outcome(game_index, label, outcome)
             if (
                 not outcome.skipped
                 and player.has_won()
@@ -128,10 +136,45 @@ def run_single_game(
     rankings = determine_rankings(game, finish_order)
     ranking_labels = [seat_labels[idx] for idx in rankings]
 
+    logger.info(
+        f"[Game {game_index:02d}] Completed in {turns_taken} turns. Rankings: "
+        f"{ranking_labels}"
+    )
+
     return {
         "turns": turns_taken,
         "rankings": ranking_labels,
     }
+
+
+def _log_outcome(game_index: int, label: str, outcome: Any) -> None:
+    if outcome.skipped:
+        logger.info(
+            f"[Game {game_index:02d}] Player {label} skipped turn (dice={outcome.dice_roll})."
+        )
+        return
+
+    move = outcome.move or {}
+    result = outcome.result or {}
+
+    piece = move.get("piece")
+    new_pos = move.get("new_pos")
+    dice = move.get("dice_roll")
+
+    events = result.get("events", {}) if isinstance(result, dict) else {}
+    extras = []
+    if events.get("knockouts"):
+        extras.append("knockout")
+    if events.get("finished"):
+        extras.append("finish")
+    if outcome.extra_turn:
+        extras.append("extra")
+    extras_text = f" ({', '.join(extras)})" if extras else ""
+
+    logger.info(
+        f"[Game {game_index:02d}] Player {label} moved piece {getattr(piece, 'piece_id', '?')} "
+        f"to {new_pos} with dice {dice}{extras_text}."
+    )
 
 
 def _ensure_yaml_available() -> None:
@@ -143,10 +186,12 @@ def _ensure_yaml_available() -> None:
 
 def _load_yaml_config(path: str) -> Dict[str, Any]:
     _ensure_yaml_available()
-    with open(path, "r", encoding="utf-8") as handle:
+    config_path = Path(path)
+    with config_path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle)
     if not isinstance(data, dict):
         raise SystemExit("Configuration file must contain a mapping at the top level.")
+    logger.info(f"Loaded configuration from {config_path.resolve()}")
     return data
 
 
@@ -191,6 +236,7 @@ def _load_llm_participant(entry: Dict[str, Any]) -> Participant:
     )
 
     label = entry.get("label") or entry.get("name") or "llm"
+    logger.info(f"Configured LLM participant '{label}' using model '{model_name}'.")
     return Participant(label=label, strategy=strategy)
 
 
@@ -202,12 +248,17 @@ def _load_rl_participant(
         raise SystemExit("RL participant requires a 'path' to the checkpoint file.")
 
     det_flag = bool(entry.get("deterministic", deterministic_default))
-    model = MaskablePPO.load(Path(checkpoint).expanduser(), device=device)
+    model_path = Path(checkpoint).expanduser()
+    model = MaskablePPO.load(model_path, device=device)
     model.policy.set_training_mode(False)
     strategy = RLStrategy(model=model, deterministic=det_flag)
 
-    label = entry.get("label") or entry.get("name") or Path(checkpoint).stem
-    return Participant(label=label or "rl", strategy=strategy)
+    label = entry.get("label") or entry.get("name") or model_path.stem or "rl"
+    logger.info(
+        f"Configured RL participant '{label}' from checkpoint '{model_path}'"
+        f" (deterministic={det_flag})."
+    )
+    return Participant(label=label, strategy=strategy)
 
 
 def _load_static_participant(entry: Dict[str, Any]) -> Participant:
@@ -221,6 +272,7 @@ def _load_static_participant(entry: Dict[str, Any]) -> Participant:
         raise SystemExit(f"Unknown static strategy '{strategy_name}'.") from exc
 
     label = entry.get("label") or strategy_name
+    logger.info(f"Configured static participant '{label}' using strategy '{strategy_name}'.")
     return Participant(label=label, strategy=strategy)
 
 
@@ -252,6 +304,10 @@ def _load_participants(
             f"Configuration must define exactly {config.NUM_PLAYERS} participants."
         )
 
+    logger.info(
+        "Configured participants: "
+        + ", ".join(f"{idx}:{p.label}" for idx, p in enumerate(participants))
+    )
     return participants
 
 
@@ -266,7 +322,14 @@ def main() -> None:
 
     deterministic = bool(config_map.get("deterministic", False))
     device = str(config_map.get("device", "cpu"))
-    rng = random.Random(config_map.get("seed"))
+    seed = config_map.get("seed")
+
+    if seed is None:
+        logger.info("No seed provided; results will vary between runs.")
+    else:
+        logger.info(f"Using RNG seed {seed}.")
+
+    rng = random.Random(seed)
 
     participants = _load_participants(
         config_map, device=device, deterministic=deterministic
@@ -274,19 +337,23 @@ def main() -> None:
 
     leaderboard: Dict[str, int] = {participant.label: 0 for participant in participants}
 
+    logger.info(
+        f"Starting tournament for {n_games} game(s) | deterministic={deterministic} "
+        f"| device={device}"
+    )
+
     for game_idx in range(1, n_games + 1):
-        result = run_single_game(rng, participants)
+        result = run_single_game(rng, participants, game_index=game_idx)
         winner = result["rankings"][0]
         leaderboard[winner] += 1
-        print(
-            f"Game {game_idx:02d}: winner={winner} | rankings={result['rankings']} | turns={result['turns']}"
+        logger.info(
+            f"[Game {game_idx:02d}] Winner={winner} | Rankings={result['rankings']} "
+            f"| Turns={result['turns']}"
         )
 
-    print("\nFinal standings (wins):")
-    for label, wins in sorted(
-        leaderboard.items(), key=lambda item: (-item[1], item[0])
-    ):
-        print(f"  {label}: {wins}")
+    logger.info("Tournament complete. Final standings:")
+    for label, wins in sorted(leaderboard.items(), key=lambda item: (-item[1], item[0])):
+        logger.info(f"  {label}: {wins} win(s)")
 
 
 if __name__ == "__main__":
