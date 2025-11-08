@@ -236,8 +236,9 @@ class GameManager:
 
         if state is TokenState.MAIN:
             abs_pos = session.game.board.absolute_position(player_index, rel_pos)
-            if abs_pos != -1:
-                marker = absolute_to_path_index(abs_pos)
+            # Use relative position as marker since pieces are at 1-51 and 
+            # path indices 1-51 correspond to the correct visual positions
+            marker = rel_pos
         elif state is TokenState.HOME_COLUMN:
             marker = max(rel_pos, GameConstants.HOME_COLUMN_START)
 

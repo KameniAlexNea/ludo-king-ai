@@ -556,8 +556,11 @@ def draw_board(
                 position_groups[key].append((color, tk))
 
             else:  # active on main path
-                if 0 <= pos < len(PATH_INDEX_TO_COORD):
-                    key = f"main_path_{pos}"
+                # Convert relative position to path index by adding 1
+                # (tokens at rel pos 1-51 should be drawn at path indices 1-51)
+                path_idx = pos
+                if 0 <= path_idx < len(PATH_INDEX_TO_COORD):
+                    key = f"main_path_{path_idx}"
                     if key not in position_groups:
                         position_groups[key] = []
                     position_groups[key].append((color, tk))
