@@ -1,6 +1,6 @@
 import random
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Dict, List, Optional, cast
 
 import numpy as np
 
@@ -9,7 +9,6 @@ from ludo_rl.strategy import build_move_options, create
 from ..strategy.base import BaseStrategy
 from .config import config
 from .model import Piece
-
 
 if TYPE_CHECKING:  # pragma: no cover - used for type checking only
     from .board import LudoBoard
@@ -51,7 +50,9 @@ class Player:
         for piece in self.pieces:
             piece.send_home()
 
-    def get_valid_moves(self, board: "LudoBoard", dice_roll: int) -> List[Dict[str, object]]:
+    def get_valid_moves(
+        self, board: "LudoBoard", dice_roll: int
+    ) -> List[Dict[str, object]]:
         moves: List[Dict[str, object]] = []
 
         finish_position = config.PATH_LENGTH - 1
@@ -63,11 +64,15 @@ class Player:
                 continue
 
             if destination == finish_position:
-                moves.append({"piece": piece, "new_pos": destination, "dice_roll": dice_roll})
+                moves.append(
+                    {"piece": piece, "new_pos": destination, "dice_roll": dice_roll}
+                )
                 continue
 
             if board.count_player_pieces(self.color, destination) < 2:
-                moves.append({"piece": piece, "new_pos": destination, "dice_roll": dice_roll})
+                moves.append(
+                    {"piece": piece, "new_pos": destination, "dice_roll": dice_roll}
+                )
 
         return moves
 
@@ -117,14 +122,10 @@ class Player:
         if events["move_resolved"] and final_position not in (0, 57):
             if board.count_player_pieces(self.color, final_position) == 2:
                 blockades = cast(List[Dict[str, int]], events["blockades"])
-                blockades.append(
-                    {"player": self.color, "relative_pos": final_position}
-                )
+                blockades.append({"player": self.color, "relative_pos": final_position})
 
         extra_turn = (
-            bool(events["knockouts"])
-            or bool(events["finished"])
-            or dice_roll == 6
+            bool(events["knockouts"]) or bool(events["finished"]) or dice_roll == 6
         )
 
         return MoveResolution(

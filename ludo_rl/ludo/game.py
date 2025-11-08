@@ -70,9 +70,15 @@ class LudoGame:
         """Generates the (58, 5) board state tensor for the given agent."""
         board = self.build_board_tensor(agent_index)
         return {
-            "my_pieces": [int(value) for value in board[0]],
-            "opp1_pieces": [int(value) for value in board[1]],
-            "opp2_pieces": [int(value) for value in board[2]],
-            "opp3_pieces": [int(value) for value in board[3]],
-            "safe_zones": [int(value) for value in board[4]],
+            key: v
+            for key, v in zip(
+                [
+                    "my_pieces",
+                    "opp1_pieces",
+                    "opp2_pieces",
+                    "opp3_pieces",
+                    "safe_zones",
+                ],
+                board,
+            )
         }

@@ -83,9 +83,7 @@ class BoardAndPlayerTests(unittest.TestCase):
             )
         )
         moves = self.player.get_valid_moves(self.board, 6)
-        self.assertFalse(
-            any(move["piece"] is self.player.pieces[0] for move in moves)
-        )
+        self.assertFalse(any(move["piece"] is self.player.pieces[0] for move in moves))
 
     def test_make_move_capture_and_extra_turn(self) -> None:
         mover = self.player.pieces[0]
@@ -98,7 +96,11 @@ class BoardAndPlayerTests(unittest.TestCase):
 
         resolution = self.player.move_piece(self.board, mover, target_rel, dice_roll=1)
         rewards = compute_move_rewards(
-            len(self.players), 0, resolution.old_position, resolution.new_position, resolution.events
+            len(self.players),
+            0,
+            resolution.old_position,
+            resolution.new_position,
+            resolution.events,
         )
         self.assertTrue(resolution.events["knockouts"])
         self.assertEqual(opponent_piece.position, 0)
@@ -118,9 +120,15 @@ class BoardAndPlayerTests(unittest.TestCase):
         self.players[1].pieces[1].position = opponent_rel
 
         mover.position = new_position - 1
-        resolution = self.player.move_piece(self.board, mover, new_position, dice_roll=1)
+        resolution = self.player.move_piece(
+            self.board, mover, new_position, dice_roll=1
+        )
         rewards = compute_move_rewards(
-            len(self.players), 0, resolution.old_position, resolution.new_position, resolution.events
+            len(self.players),
+            0,
+            resolution.old_position,
+            resolution.new_position,
+            resolution.events,
         )
         self.assertTrue(resolution.events["hit_blockade"])
         self.assertFalse(resolution.events["move_resolved"])
@@ -133,7 +141,11 @@ class BoardAndPlayerTests(unittest.TestCase):
         self.player.pieces[1].position = 10
         resolution = self.player.move_piece(self.board, mover, 10, dice_roll=2)
         rewards = compute_move_rewards(
-            len(self.players), 0, resolution.old_position, resolution.new_position, resolution.events
+            len(self.players),
+            0,
+            resolution.old_position,
+            resolution.new_position,
+            resolution.events,
         )
         self.assertTrue(resolution.events["blockades"])
         self.assertIn({"player": 0, "relative_pos": 10}, resolution.events["blockades"])

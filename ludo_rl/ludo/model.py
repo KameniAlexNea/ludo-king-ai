@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 from .config import config
 
-
 MAIN_TRACK_END = 51
 HOME_COLUMN_START = 52
 HOME_FINISH = 57

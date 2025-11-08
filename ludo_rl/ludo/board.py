@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable, List, Sequence, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Sequence, Tuple
 
 import numpy as np
 
@@ -68,7 +68,9 @@ class LudoBoard:
 
     def count_player_pieces(self, player_index: int, relative_pos: int) -> int:
         return sum(
-            1 for piece in self.players[player_index].pieces if piece.position == relative_pos
+            1
+            for piece in self.players[player_index].pieces
+            if piece.position == relative_pos
         )
 
     def pieces_at_absolute(
@@ -87,14 +89,18 @@ class LudoBoard:
                     occupants.append((idx, piece))
         return occupants
 
-    def build_tensor(self, agent_index: int, out: np.ndarray | None = None) -> np.ndarray:
+    def build_tensor(
+        self, agent_index: int, out: np.ndarray | None = None
+    ) -> np.ndarray:
         if out is not None:
             board = out
             if board.shape != (10, config.PATH_LENGTH):
                 raise ValueError("Expected board tensor of shape (10, PATH_LENGTH)")
         else:
             if self._tensor_buffer is None:
-                self._tensor_buffer = np.zeros((10, config.PATH_LENGTH), dtype=np.float32)
+                self._tensor_buffer = np.zeros(
+                    (10, config.PATH_LENGTH), dtype=np.float32
+                )
             board = self._tensor_buffer
 
         board.fill(0.0)
