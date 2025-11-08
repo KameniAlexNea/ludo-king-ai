@@ -8,8 +8,8 @@ import numpy as np
 from ludo_rl.ludo.board import LudoBoard
 from ludo_rl.ludo.config import config
 from ludo_rl.ludo.game import LudoGame
-from ludo_rl.ludo.model import Piece
 from ludo_rl.ludo.moves import MoveManagement
+from ludo_rl.ludo.piece import Piece
 from ludo_rl.ludo.player import Player
 from ludo_rl.ludo.reward import compute_move_rewards, reward_config
 

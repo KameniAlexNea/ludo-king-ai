@@ -8,7 +8,7 @@ from ludo_rl.strategy import build_move_options, create
 
 from ..strategy.base import BaseStrategy
 from .config import config
-from .model import Piece
+from .piece import Piece
 
 if TYPE_CHECKING:  # pragma: no cover - used for type checking only
     from .board import LudoBoard

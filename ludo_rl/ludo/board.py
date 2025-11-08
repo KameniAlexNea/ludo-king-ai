@@ -8,7 +8,7 @@ import numpy as np
 from .config import config
 
 if TYPE_CHECKING:  # pragma: no cover - used for type checking only
-    from .model import Piece
+    from .piece import Piece
     from .player import Player
 
 
