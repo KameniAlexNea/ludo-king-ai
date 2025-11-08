@@ -8,6 +8,9 @@ from typing import Any, ClassVar, Dict, Optional, Sequence
 
 from llm_output_parser import parse_json as _parse_json
 
+from .base import BaseStrategy, BaseStrategyConfig
+from .types import MoveOption, StrategyContext
+
 
 def _load_langchain() -> tuple[Any, Any, Any, Any]:  # pragma: no cover - helper
     chat_spec = importlib.util.find_spec("langchain.chat_models")
@@ -46,9 +49,6 @@ except ImportError:  # Fallback types enable graceful degradation without LangCh
     class AIMessage(_FallbackMessage):
         pass
 
-
-from .base import BaseStrategy, BaseStrategyConfig
-from .types import MoveOption, StrategyContext
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a seasoned Ludo strategist. Given the current dice roll and legal moves, "
