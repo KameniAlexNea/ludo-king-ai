@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import random
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 import numpy as np
 
@@ -16,9 +18,11 @@ from ludo_rl.strategy import (
     KillerStrategy,
     ProbabilityStrategy,
     RetaliatorStrategy,
+    RLStrategy,
     RusherStrategy,
     SupportStrategy,
 )
+from ludo_rl.strategy.rl_agent import RLStrategyConfig
 from ludo_rl.strategy.types import MoveOption, StrategyContext
 
 
@@ -301,6 +305,48 @@ class StrategySelectionTests(unittest.TestCase):
             with self.subTest(strategy=strategy_cls.__name__):
                 instance = strategy_cls.create_instance(random.Random(idx))
                 self.assertIsInstance(instance, strategy_cls)
+
+
+class RLStrategyTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        RLStrategy.config = None
+
+    def test_create_without_configuration_errors(self) -> None:
+        RLStrategy.config = None
+        with self.assertRaises(NotImplementedError):
+            RLStrategy.create_instance()
+
+    def test_select_move_uses_model_prediction(self) -> None:
+        class DummyModel:
+            def __init__(self) -> None:
+                self.policy = SimpleNamespace(set_training_mode=lambda *_: None)
+
+            def predict(self, obs, action_masks=None, deterministic=True):
+                legal = np.flatnonzero(action_masks)
+                return np.array([int(legal[-1])]), None
+
+        RLStrategy.configure(model=DummyModel(), deterministic=True)
+        strategy = RLStrategy.create_instance()
+
+        moves = [
+            _move(piece_id=0, current=0, new=6, progress=6, distance=51),
+            _move(piece_id=1, current=0, new=7, progress=7, distance=50),
+        ]
+        ctx = _make_context(moves, action_mask=np.array([True, True, False, False]))
+        choice = strategy.select_move(ctx)
+        self.assertIsNotNone(choice)
+        self.assertEqual(choice.piece_id, 1)
+
+    def test_configure_from_path_loads_model(self) -> None:
+        dummy_model = SimpleNamespace(
+            policy=SimpleNamespace(set_training_mode=lambda *_: None)
+        )
+        with mock.patch(
+            "ludo_rl.strategy.rl_agent.MaskablePPO.load", return_value=dummy_model
+        ) as loader:
+            RLStrategy.configure_from_path("/tmp/model.zip", device="cpu")
+        loader.assert_called_once_with("/tmp/model.zip", device="cpu")
+        self.assertIsInstance(RLStrategy.config, RLStrategyConfig)
 
 
 if __name__ == "__main__":

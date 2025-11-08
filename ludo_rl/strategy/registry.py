@@ -11,6 +11,7 @@ from .homebody import HomebodyStrategy
 from .killer import KillerStrategy
 from .probability import ProbabilityStrategy
 from .retaliator import RetaliatorStrategy
+from .rl_agent import RLStrategy
 from .rusher import RusherStrategy
 from .support import SupportStrategy
 
@@ -26,6 +27,7 @@ STRATEGY_REGISTRY: Dict[str, Type] = {
     RusherStrategy.name: RusherStrategy,
     SupportStrategy.name: SupportStrategy,
     RetaliatorStrategy.name: RetaliatorStrategy,
+    RLStrategy.name: RLStrategy,
 }
 
 
