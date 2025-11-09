@@ -1,10 +1,13 @@
 import random
 from typing import Dict, List, Optional
 
+from loguru import logger
+
 from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.piece import Piece as Token
 from ludo_rl.strategy.registry import create as create_strategy
 
+from .llm_config_ui import StrategyConfigManager
 from .models import PlayerColor, PTOPlayerColor
 
 
@@ -21,9 +24,42 @@ class GameState:
 class GameManager:
     """Handles core game logic and state management."""
 
-    def __init__(self, default_players: List[PlayerColor], show_token_ids: bool):
+    def __init__(
+        self,
+        default_players: List[PlayerColor],
+        show_token_ids: bool,
+        config_manager: StrategyConfigManager = None,
+    ):
         self.default_players = default_players
         self.show_token_ids = show_token_ids
+        self.config_manager = config_manager
+
+    def _create_strategy_from_config(self, strategy_name: str):
+        """Create a strategy from LLM or RL configuration."""
+        if strategy_name.startswith("llm:"):
+            label = strategy_name[4:]  # Remove "llm:" prefix
+            if self.config_manager and label in self.config_manager.llm_configs:
+                config = self.config_manager.llm_configs[label]
+                # Import here to avoid circular dependency
+                from ludo_rl.strategy.llm_agent import LLMStrategy, init_chat_model
+
+                chat_model = init_chat_model(
+                    f"{config.provider}:{config.model_name}",
+                    api_key=config.api_key,
+                )
+                return LLMStrategy(model=chat_model)
+        elif strategy_name.startswith("rl:"):
+            label = strategy_name[3:]  # Remove "rl:" prefix
+            if self.config_manager and label in self.config_manager.rl_configs:
+                config = self.config_manager.rl_configs[label]
+                # Import here to avoid circular dependency
+                from sb3_contrib import MaskablePPO
+
+                from ludo_rl.strategy.rl_agent import RLStrategy
+
+                model = MaskablePPO.load(config.path)
+                return RLStrategy(model=model, deterministic=False)
+        return None
 
     def init_game(self, strategies: List[str]) -> tuple[LudoGame, GameState]:
         """Initializes a new Ludo game with the given strategies."""
@@ -34,11 +70,22 @@ class GameManager:
         for idx, (player, strategy_name) in enumerate(zip(game.players, strategies)):
             player.reset()
             player.strategy_name = strategy_name
-            try:
-                player._strategy = create_strategy(strategy_name)
-            except KeyError:
-                player.strategy_name = "random"
-                player._strategy = None
+
+            # Try to create from config (LLM or RL)
+            strategy = self._create_strategy_from_config(strategy_name)
+
+            if strategy:
+                player._strategy = strategy
+            else:
+                # Fall back to registry
+                try:
+                    player._strategy = create_strategy(strategy_name)
+                except KeyError:
+                    logger.warning(
+                        f"Strategy '{strategy_name}' not found in registry. Defaulting to 'random'."
+                    )
+                    player.strategy_name = "random"
+                    player._strategy = None
 
         return game, state
 
