@@ -32,7 +32,7 @@ class RLStrategy(BaseStrategy):
 
     @classmethod
     def configure(cls, model: MaskablePPO, *, deterministic: bool = True) -> None:
-        cls.config = RLStrategyConfig(model=model, deterministic=deterministic)
+        return cls(model=model, deterministic=deterministic)
 
     @classmethod
     def configure_from_path(
@@ -40,7 +40,7 @@ class RLStrategy(BaseStrategy):
     ) -> None:
         model = MaskablePPO.load(model_path, device=device)
         model.policy.set_training_mode(False)
-        cls.configure(model=model, deterministic=deterministic)
+        return cls.configure(model=model, deterministic=deterministic)
 
     def select_move(self, ctx: StrategyContext) -> Optional[MoveOption]:  # type: ignore[override]
         if not np.any(ctx.action_mask):
