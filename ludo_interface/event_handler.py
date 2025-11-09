@@ -12,7 +12,7 @@ from .game_manager import GameManager, GameState
 from .models import PlayerColor
 from .utils import Utils
 
-HISTORY_LIMIT = 100
+HISTORY_LIMIT = 50
 
 
 class EventHandler:

@@ -2,7 +2,7 @@ from typing import List
 
 import gradio as gr
 
-from .event_handler import EventHandler
+from .event_handler import HISTORY_LIMIT, EventHandler
 from .models import PlayerColor
 
 
@@ -202,7 +202,11 @@ class UIBuilder:
 
                 with gr.Accordion("📚 History", open=False):
                     history_box = gr.Textbox(
-                        show_label=False, lines=6, max_lines=10, container=False
+                        show_label=False,
+                        lines=6,
+                        max_lines=10,
+                        container=False,
+                        show_copy_button=True,
                     )
 
         # Hidden elements
@@ -390,7 +394,7 @@ class UIBuilder:
         ).then(lambda s: s, [stats_state], [stats_display])
 
         move_history_btn.click(
-            lambda h: "\n".join(h[-30:]), [move_history], [history_box]
+            lambda h: "\n".join(h[-HISTORY_LIMIT:]), [move_history], [history_box]
         )
         export_btn.click(
             self.handler._ui_export, [game_state, state_state], [export_box]
