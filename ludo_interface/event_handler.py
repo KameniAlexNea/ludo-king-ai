@@ -12,6 +12,8 @@ from .game_manager import GameManager, GameState
 from .models import PlayerColor
 from .utils import Utils
 
+HISTORY_LIMIT = 100
+
 
 class EventHandler:
     """Handles UI event callbacks and interactions."""
@@ -96,8 +98,8 @@ class EventHandler:
             game, state, human_choice, pending_dice
         )
         history.append(desc)
-        if len(history) > 50:
-            history = history[-50:]
+        if len(history) > 1.5 * HISTORY_LIMIT:
+            history = history[-HISTORY_LIMIT:]
 
         pil_img = draw_board(tokens, show_ids=show)
         html = self.utils.img_to_data_uri(pil_img)
@@ -212,8 +214,8 @@ class EventHandler:
                     player_html = f"<h3 style='color: red;'>🎯 Current Player: Player {state.current_player_index}</h3>"
                     desc = f"Auto-play paused: Player {state.current_player_index} rolled {dice} - Choose your move:"
                     history.append(desc)
-                    if len(history) > 50:
-                        history = history[-50:]
+                    if len(history) > 1.5 * HISTORY_LIMIT:
+                        history = history[-HISTORY_LIMIT:]
 
                     move_options = self.game_manager.get_human_move_options(
                         game, state, dice
@@ -266,8 +268,8 @@ class EventHandler:
                         self.game_manager.play_step(game, state, None, dice)
                     )
                     history.append(desc)
-                    if len(history) > 50:
-                        history = history[-50:]
+                    if len(history) > 1.5 * HISTORY_LIMIT:
+                        history = history[-HISTORY_LIMIT:]
                     remaining = max(remaining - 1, 0)
             else:
                 game, state, step_desc, tokens, move_opts, waiting = (
@@ -275,8 +277,8 @@ class EventHandler:
                 )
                 desc = step_desc
                 history.append(step_desc)
-                if len(history) > 50:
-                    history = history[-50:]
+                if len(history) > 1.5 * HISTORY_LIMIT:
+                    history = history[-HISTORY_LIMIT:]
                 remaining = max(remaining - 1, 0)
 
             pil_img = draw_board(

@@ -73,6 +73,8 @@ class LudoGame:
             "rewards": rewards,
             "events": resolution.events,
             "extra_turn": resolution.extra_turn,
+            "old_position": resolution.old_position,
+            "new_position": resolution.new_position,
         }
 
     def take_turn(

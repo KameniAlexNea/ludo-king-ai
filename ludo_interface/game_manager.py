@@ -80,10 +80,13 @@ class GameManager:
             return "No move"
 
         piece = move["piece"]
+        old_pos = result.get("old_position", "?")
         new_pos = move["new_pos"]
         events = result.get("events", {})
 
-        parts = [f"Player {player_index} piece {piece.piece_id} -> {new_pos}"]
+        parts = [
+            f"Player {player_index} piece {piece.piece_id}: {old_pos} -> {new_pos}"
+        ]
 
         if events.get("knockouts"):
             knockout_details = []
