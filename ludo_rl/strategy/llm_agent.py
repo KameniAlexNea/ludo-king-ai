@@ -104,7 +104,7 @@ class LLMStrategy(BaseStrategy):
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
         max_retries: int = 2,
     ) -> None:
-        cls.config = LLMStrategyConfig(
+        return cls(
             model=model,
             system_prompt=system_prompt,
             max_retries=max_retries,
@@ -125,7 +125,7 @@ class LLMStrategy(BaseStrategy):
             )
 
         model = init_chat_model(model_name, **provider_kwargs)
-        cls.configure(
+        return cls.configure(
             model=model,
             system_prompt=system_prompt,
             max_retries=max_retries,
@@ -139,7 +139,7 @@ class LLMStrategy(BaseStrategy):
 
         messages = self._build_messages(ctx, legal_moves)
 
-        for attempt in range(self.max_retries + 1):
+        for _ in range(self.max_retries + 1):
             try:
                 response = self.model.invoke(messages)
             except Exception:

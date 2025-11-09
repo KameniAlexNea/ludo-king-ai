@@ -61,6 +61,7 @@ class GameManager:
             player.strategy_name = strategy_name
             try:
                 player._strategy = create_strategy_instance(strategy_name, configs)
+                player._strategy.name = strategy_name
             except KeyError:
                 logger.error(
                     f"Strategy '{strategy_name}' not found. Defaulting to 'random'."
