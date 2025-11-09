@@ -3,13 +3,13 @@ from __future__ import annotations
 import argparse
 import os
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from itertools import combinations
 from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
 from loguru import logger
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ludo_rl.ludo.config import config
 from ludo_rl.ludo.game import LudoGame
@@ -104,7 +104,7 @@ def determine_rankings(game: LudoGame, finish_order: List[int]) -> List[int]:
     remaining = [idx for idx in range(config.NUM_PLAYERS) if idx not in ordered]
     remaining.sort(
         key=lambda idx: (
-            sum(piece.position == 57 for piece in game.players[idx].pieces),
+            sum(piece.is_finished() for piece in game.players[idx].pieces),
             player_progress(game.players[idx]),
         ),
         reverse=True,
@@ -198,7 +198,9 @@ def run_combination_tournament(
     )
 
 
-def log_combination_summary(summary: CombinationSummary, index: int | None = None) -> None:
+def log_combination_summary(
+    summary: CombinationSummary, index: int | None = None
+) -> None:
     """Log a compact per-combination result summary using loguru.
 
     This is intended to be called immediately after finishing the n games for a
@@ -262,7 +264,7 @@ def print_summary(
     combination_summaries: Sequence[CombinationSummary],
 ) -> None:
     logger.info(
-        f"Strategy pool: { ', '.join(strategy_pool)}",
+        f"Strategy pool: {', '.join(strategy_pool)}",
     )
 
     # Per-combination summaries are logged at completion time during run_league.
