@@ -38,13 +38,13 @@ class LudoApp:
         self.default_players = players if players is not None else DEFAULT_PLAYERS
         self.show_token_ids = show_token_ids
 
-        # Initialize strategy config manager
-        self.config_manager = StrategyConfigManager()
-
         # Build available strategies list - filter out llm and rl since none configured yet
         self.ai_strategies = [
-            s for s in AI_STRATEGIES if not s.startswith(("llm", "rl"))
+            s for s in AI_STRATEGIES if not s in ("llm", "rl")
         ]
+
+        # Initialize strategy config manager
+        self.config_manager = StrategyConfigManager()
 
         # Initialize components
         self.game_manager = GameManager(

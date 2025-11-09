@@ -1,11 +1,13 @@
 import random
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
 from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.piece import Piece as Token
+from ludo_rl.strategy.llm_agent import LLMStrategy
 from ludo_rl.strategy.registry import create as create_strategy
+from ludo_rl.strategy.rl_agent import RLStrategy
 
 from .llm_config_ui import StrategyConfigManager
 from .models import PlayerColor, PTOPlayerColor
@@ -34,31 +36,85 @@ class GameManager:
         self.show_token_ids = show_token_ids
         self.config_manager = config_manager
 
-    def _create_strategy_from_config(self, strategy_name: str):
-        """Create a strategy from LLM or RL configuration."""
-        if strategy_name.startswith("llm:"):
-            label = strategy_name[4:]  # Remove "llm:" prefix
-            if self.config_manager and label in self.config_manager.llm_configs:
-                config = self.config_manager.llm_configs[label]
-                # Import here to avoid circular dependency
-                from ludo_rl.strategy.llm_agent import LLMStrategy, init_chat_model
+    def _create_strategy_from_config(self, label: str) -> Optional[Any]:
+        """Create a strategy instance from config manager."""
+        # Strip prefix if present (e.g., "llm:qwen3" -> "qwen3")
+        actual_label = label
+        if label.startswith("llm:"):
+            actual_label = label[4:]  # Remove "llm:" prefix
+        elif label.startswith("rl:"):
+            actual_label = label[3:]  # Remove "rl:" prefix
+        
+        # Check LLM configs
+        if actual_label in self.config_manager.llm_configs:
+            config = self.config_manager.llm_configs[actual_label]
+            # Create LLM strategy using the class method
+            try:
+                from ludo_rl.strategy.llm_agent import LLMStrategy
 
-                chat_model = init_chat_model(
-                    f"{config.provider}:{config.model_name}",
-                    api_key=config.api_key,
+                provider = config.provider
+                model = config.model_name
+                model_name = f"{provider}:{model}"
+
+                logger.info(f"Creating LLM strategy '{actual_label}' with model={model_name}")
+
+                # Use configure_with_model_name class method
+                provider_kwargs = {}
+                if config.api_key:
+                    provider_kwargs["api_key"] = config.api_key
+
+                LLMStrategy.configure_with_model_name(model_name, **provider_kwargs)
+                strategy = LLMStrategy(
+                    model=LLMStrategy.config.model,
+                    system_prompt=LLMStrategy.config.system_prompt,
+                    max_retries=LLMStrategy.config.max_retries,
                 )
-                return LLMStrategy(model=chat_model)
-        elif strategy_name.startswith("rl:"):
-            label = strategy_name[3:]  # Remove "rl:" prefix
-            if self.config_manager and label in self.config_manager.rl_configs:
-                config = self.config_manager.rl_configs[label]
-                # Import here to avoid circular dependency
-                from sb3_contrib import MaskablePPO
+                
+                # Test connection to LLM server
+                logger.info(f"Testing connection to {provider} server...")
+                try:
+                    test_response = strategy.model.invoke([{"role": "user", "content": "test"}])
+                    logger.info(f"Successfully connected to {provider} server")
+                except Exception as conn_error:
+                    logger.error(f"Failed to connect to {provider} server: {conn_error}")
+                    raise
+                
+                logger.info(f"Successfully created LLM strategy '{actual_label}'")
+                return strategy
+            except Exception as e:
+                logger.error(
+                    f"Failed to create LLM strategy '{actual_label}' (model={model_name}): {e}"
+                )
+                return None
 
+        # Check RL configs
+        elif actual_label in self.config_manager.rl_configs:
+            config = self.config_manager.rl_configs[actual_label]
+            # Create RL strategy using the class method
+            try:
                 from ludo_rl.strategy.rl_agent import RLStrategy
 
-                model = MaskablePPO.load(config.path)
-                return RLStrategy(model=model, deterministic=False)
+                model_path = config.path
+                logger.info(f"Loading RL model from '{model_path}'")
+
+                # Use configure_from_path class method
+                RLStrategy.configure_from_path(
+                    model_path, device="cpu", deterministic=True
+                )
+                strategy = RLStrategy(
+                    model=RLStrategy.config.model,
+                    deterministic=RLStrategy.config.deterministic,
+                )
+                logger.info(f"Successfully created RL strategy '{actual_label}'")
+                return strategy
+            except Exception as e:
+                logger.error(
+                    f"Failed to create RL strategy '{actual_label}' (path={config.path}): {e}"
+                )
+                return None
+
+        # Not a configured LLM/RL strategy, return None to try registry
+        return None
         return None
 
     def init_game(self, strategies: List[str]) -> tuple[LudoGame, GameState]:
