@@ -31,7 +31,6 @@ class LudoGame:
         self.players = [Player(i) for i in range(config.NUM_PLAYERS)]
         self.board = LudoBoard(self.players)
         self.rng = random.Random()
-        self.rng.seed(42)
 
     def build_board_tensor(
         self, agent_index: int, out: np.ndarray | None = None

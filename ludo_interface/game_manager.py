@@ -86,7 +86,14 @@ class GameManager:
         parts = [f"Player {player_index} piece {piece.piece_id} -> {new_pos}"]
 
         if events.get("knockouts"):
-            parts.append(f"knocked out {len(events['knockouts'])}")
+            knockout_details = []
+            for knockout in events["knockouts"]:
+                knocked_player = knockout["player"]
+                knocked_piece = knockout["piece_id"]
+                knockout_details.append(
+                    f"Player {knocked_player} piece {knocked_piece}"
+                )
+            parts.append(f"knocked out {', '.join(knockout_details)}")
         if events.get("finished"):
             parts.append("finished")
         if result.get("extra_turn"):
@@ -110,22 +117,11 @@ class GameManager:
 
         current_player = game.players[state.current_player_index]
 
-        # Check if player has already won
+        # Check if player has already won - skip their turn
         if current_player.has_won():
-            if state.current_player_index not in state.finish_order:
-                state.finish_order.append(state.current_player_index)
-
             # Move to next player
             state.current_player_index = (state.current_player_index + 1) % 4
-
-            # Check if game is over
-            if len(state.finish_order) >= 4:
-                state.game_over = True
-                state.winner_index = state.finish_order[0]
-                desc = f"Game over! Winner: Player {state.winner_index}"
-                return game, state, desc, self.game_state_tokens(game), [], False
-
-            desc = f"Player {state.current_player_index} has already won, moving to next player"
+            desc = f"Player {state.current_player_index - 1 if state.current_player_index > 0 else 3} has already won, skipping turn"
             return game, state, desc, self.game_state_tokens(game), [], False
 
         if dice is None:
@@ -134,7 +130,7 @@ class GameManager:
         valid_moves = game.get_valid_moves(state.current_player_index, dice)
 
         if not valid_moves:
-            extra_turn = False # No valid moves, turn ends
+            extra_turn = False  # No valid moves, turn ends
             token_positions = ", ".join(
                 [
                     f"piece {i}: {p.position}"
@@ -183,19 +179,12 @@ class GameManager:
 
         desc = f"Player {state.current_player_index} rolled {dice}: {self.serialize_move(state.current_player_index, chosen_move, result)}"
 
-        # Check if player won
-        if (
-            current_player.has_won()
-            and state.current_player_index not in state.finish_order
-        ):
-            state.finish_order.append(state.current_player_index)
-            desc += " | Player has WON!"
-
-        # Check if game is over
-        if len(state.finish_order) >= 4:
+        # Check if player won - game ends immediately
+        if current_player.has_won():
             state.game_over = True
-            state.winner_index = state.finish_order[0]
-            desc += f" | GAME OVER! Winner: Player {state.winner_index}"
+            state.winner_index = state.current_player_index
+            desc += f" | Player {state.current_player_index} has WON! GAME OVER!"
+            return game, state, desc, self.game_state_tokens(game), [], False
 
         # Move to next player if no extra turn
         if not result.get("extra_turn", False) and not state.game_over:
