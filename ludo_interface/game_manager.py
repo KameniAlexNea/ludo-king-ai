@@ -1,15 +1,16 @@
 import random
 from typing import Dict, List, Optional, Union
 
-from .llm_config_ui import LLMProviderConfig, RLModelConfig
+from loguru import logger
+
 from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.piece import Piece as Token
-from ludo_rl.strategy.registry import create as create_strategy
-
-from .models import PlayerColor, PTOPlayerColor
-from loguru import logger
 from ludo_rl.strategy.llm_agent import LLMStrategy
+from ludo_rl.strategy.registry import create as create_strategy
 from ludo_rl.strategy.rl_agent import RLStrategy
+
+from .llm_config_ui import LLMProviderConfig, RLModelConfig
+from .models import PlayerColor, PTOPlayerColor
 
 
 def create_strategy_instance(
@@ -17,12 +18,12 @@ def create_strategy_instance(
 ):
     """Factory to create strategy instances based on strategy name."""
     if strategy_name.startswith("llm:"):
-        config: LLMProviderConfig = configs[strategy_name[len("llm:") :]]
+        config: LLMProviderConfig = configs[strategy_name]
         return LLMStrategy.configure_with_model_name(
             model_name=f"{config.provider}:{config.model_name}", api_key=config.api_key
         )
     elif strategy_name.startswith("rl:"):
-        config: RLModelConfig = configs[strategy_name[len("rl:") :]]
+        config: RLModelConfig = configs[strategy_name]
         return RLStrategy.configure_from_path(config.path)
     else:
         return create_strategy(strategy_name)

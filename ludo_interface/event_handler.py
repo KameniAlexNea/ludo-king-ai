@@ -5,10 +5,11 @@ from typing import List
 
 import gradio as gr
 
-from ludo_interface.board_viz import draw_board
 from ludo_rl.ludo.game import LudoGame
 
+from .board_viz import draw_board
 from .game_manager import GameManager, GameState
+from .llm_config_ui import StrategyConfigManager
 from .models import PlayerColor
 from .utils import Utils
 
@@ -25,15 +26,19 @@ class EventHandler:
         ai_strategies: List[str],
         default_players: List[PlayerColor],
         show_token_ids: bool,
+        strategy_config_manager: StrategyConfigManager,
     ):
         self.game_manager = game_manager
         self.utils = utils
         self.ai_strategies = ai_strategies
         self.default_players = default_players
         self.show_token_ids = show_token_ids
+        self.strategy_config_manager = strategy_config_manager
 
     def _ui_init(self, *strats):
-        game, state = self.game_manager.init_game(list(strats))
+        game, state = self.game_manager.init_game(
+            list(strats), self.strategy_config_manager
+        )
         pil_img = draw_board(
             self.game_manager.game_state_tokens(game), show_ids=self.show_token_ids
         )
@@ -439,7 +444,9 @@ class EventHandler:
         # Run the simulation
         total_games = int(n_games)
         for _ in range(total_games):
-            game, state = self.game_manager.init_game(list(ai_strats))
+            game, state = self.game_manager.init_game(
+                list(ai_strats), self.strategy_config_manager
+            )
             turns_taken = 0
             while not state.game_over and turns_taken < 1000:  # Safety limit
                 game, state, _, _, _, _ = self.game_manager.play_step(game, state)

@@ -20,6 +20,7 @@ class UIBuilder:
         self.default_players = default_players
         self.show_token_ids = show_token_ids
         self.handler = handler  # The object with event handler methods (e.g., LudoApp)
+        self.strategy_dropdowns = []  # To be populated with strategy dropdown components
 
     def create_ui(self):
         """Creates and returns the Gradio UI for the Ludo game."""
@@ -77,6 +78,25 @@ class UIBuilder:
                     )
                 with gr.TabItem("🏆 Simulate Multiple Games"):
                     self._build_simulation_tab()
+                with gr.TabItem("⚙️ Configure Strategies"):
+                    from .llm_config_ui import (
+                        StrategyConfigManager,
+                        create_llm_config_ui,
+                        create_rl_config_ui,
+                    )
+
+                    config_manager = StrategyConfigManager()
+
+                    create_llm_config_ui(
+                        config_manager,
+                        self.ai_strategies,
+                        self.strategy_dropdowns,
+                    )
+                    create_rl_config_ui(
+                        config_manager,
+                        self.ai_strategies,
+                        self.strategy_dropdowns,
+                    )
 
             gr.Markdown(
                 """
@@ -123,6 +143,7 @@ class UIBuilder:
                         )
                         for i, color in enumerate(self.default_players)
                     ]
+                    self.strategy_dropdowns.extend(strategy_inputs)
 
                 with gr.Accordion("🎮 Controls", open=True):
                     init_btn = gr.Button("🎮 New Game", variant="primary", size="sm")
@@ -422,6 +443,7 @@ class UIBuilder:
                         )
                         for i, color in enumerate(self.default_players)
                     ]
+                    self.strategy_dropdowns.extend(sim_strat_inputs)
 
                 with gr.Accordion("⚙️ Simulation Parameters", open=True):
                     bulk_games = gr.Slider(

@@ -32,6 +32,15 @@ class StrategyConfigManager:
         self.llm_configs: Dict[str, LLMProviderConfig] = {}
         self.rl_configs: Dict[str, RLModelConfig] = {}
 
+    def __getitem__(self, key: str):
+        if key.startswith("llm:"):
+            label = key[len("llm:") :]
+            return self.llm_configs[label]
+        elif key.startswith("rl:"):
+            label = key[len("rl:") :]
+            return self.rl_configs[label]
+        return None
+
     def add_llm_config(
         self, provider: str, model_name: str, label: str, api_key: Optional[str] = None
     ):
@@ -88,7 +97,9 @@ class StrategyConfigManager:
 
 
 def create_llm_config_ui(
-    config_manager: StrategyConfigManager, base_strategies: list[str], strategy_dropdowns: List
+    config_manager: StrategyConfigManager,
+    base_strategies: list[str],
+    strategy_dropdowns: List,
 ):
     """Create the LLM configuration UI."""
 
@@ -187,7 +198,9 @@ def create_llm_config_ui(
 
 
 def create_rl_config_ui(
-    config_manager: StrategyConfigManager, base_strategies: list[str], strategy_dropdowns: List
+    config_manager: StrategyConfigManager,
+    base_strategies: list[str],
+    strategy_dropdowns: List,
 ):
     """Create the RL model configuration UI."""
 

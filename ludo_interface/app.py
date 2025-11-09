@@ -13,10 +13,10 @@ from ludo_rl.strategy.registry import available as get_available_strategies
 from .board_viz import preload_board_template
 from .event_handler import EventHandler
 from .game_manager import GameManager
+from .llm_config_ui import StrategyConfigManager
 from .models import ALL_COLORS, PlayerColor
 from .ui_builder import UIBuilder
 from .utils import Utils
-from .llm_config_ui import StrategyConfigManager
 
 AI_STRATEGIES = list(get_available_strategies(False).keys())
 DEFAULT_PLAYERS = ALL_COLORS
@@ -49,6 +49,7 @@ class LudoApp:
             self.ai_strategies,
             self.default_players,
             self.show_token_ids,
+            self.strategy_config_manager,
         )
         self.ui_builder = UIBuilder(
             self.ai_strategies,
