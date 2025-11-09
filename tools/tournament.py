@@ -1,19 +1,27 @@
 from __future__ import annotations
 
 import argparse
+import os
 import random
 from dataclasses import dataclass
 from itertools import combinations
 from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
+from loguru import logger
 
 from ludo_rl.ludo.config import config
 from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.player import Player
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
+from ludo_rl.strategy.registry import available as available_strategies
 
-POINTS_TABLE = (4, 3, 1, 0)
+POINTS_TABLE = (3, 2, 1, 0)
+
+
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
 
 
 @dataclass
@@ -35,7 +43,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run a heuristic-only Ludo strategy tournament"
     )
-    parser.add_argument("--games", type=int, default=10, help="Number of games to play")
+    parser.add_argument(
+        "--games",
+        type=int,
+        default=int(os.getenv("GAMES", "20")),
+        help="Number of games to play",
+    )
     parser.add_argument(
         "--seed",
         type=int,
@@ -45,7 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--strategies",
         type=str,
-        default=None,
+        default=os.getenv("OPPONENTS", ",".join(available_strategies())),
         help=(
             "Comma-separated list of strategy names to include. "
             "League runs every combination of four distinct strategies."
@@ -100,14 +113,9 @@ def determine_rankings(game: LudoGame, finish_order: List[int]) -> List[int]:
 
 
 def play_game(
-    seats: Sequence[str],
-    rng: random.Random,
-    game_index: int,
+    seats: Sequence[str], rng: random.Random, game_index: int, seed: int = 42
 ) -> GameResult:
     game = LudoGame()
-    game_seed = rng.randint(0, 1_000_000)
-    game.rng.seed(game_seed)
-    random.seed(game_seed)
 
     for player, strategy_name in zip(game.players, seats, strict=True):
         for piece in player.pieces:
@@ -213,19 +221,19 @@ def print_summary(
     games_played: Dict[str, int],
     combination_summaries: Sequence[CombinationSummary],
 ) -> None:
-    print("Strategy pool:", ", ".join(strategy_pool))
-    print()
+    logger.info(
+        f"Strategy pool: { ', '.join(strategy_pool)}",
+    )
 
     for combo_index, summary in enumerate(combination_summaries, start=1):
         combo_label = ", ".join(summary.participants)
-        print(f"Combination {combo_index:03d}: {combo_label}")
+        logger.info(f"Combination {combo_index:03d}: {combo_label}")
         combo_table = sorted(
             summary.totals.items(), key=lambda item: (-item[1], item[0])
         )
-        print("  Points collected:")
+        logger.info("  Points collected:")
         for rank, (name, points) in enumerate(combo_table, start=1):
-            print(f"    {rank}. {name:12s} {points:3d} pts")
-        print()
+            logger.info(f"    {rank}. {name:12s} {points:3d} pts")
 
     print("League standings:")
     for rank, (name, points) in enumerate(
@@ -242,7 +250,8 @@ def print_summary(
 
 def main() -> None:
     args = parse_args()
-    rng = random.Random(args.seed)
+    seed_everything(args.seed)
+    rng = random.Random()
 
     try:
         strategy_pool = select_strategies(args.strategies)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Type
 
+from .base import BaseStrategy
 from .cautious import CautiousStrategy
 from .defensive import DefensiveStrategy
 from .finish_line import FinishLineStrategy
@@ -17,7 +18,7 @@ from .rl_agent import RLStrategy
 from .rusher import RusherStrategy
 from .support import SupportStrategy
 
-STRATEGY_REGISTRY: Dict[str, Type] = {
+STRATEGY_REGISTRY: Dict[str, BaseStrategy] = {
     ProbabilityStrategy.name: ProbabilityStrategy,
     CautiousStrategy.name: CautiousStrategy,
     KillerStrategy.name: KillerStrategy,
@@ -49,6 +50,6 @@ def available(ignore_human: bool = True) -> Dict[str, Type]:
         return {
             name: cls
             for name, cls in STRATEGY_REGISTRY.items()
-            if name != HumanStrategy.name
+            if name not in (HumanStrategy.name, LLMStrategy.name, RLStrategy.name)
         }
     return dict(STRATEGY_REGISTRY)
