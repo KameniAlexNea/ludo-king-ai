@@ -36,7 +36,7 @@ class LudoApp:
         """
         self.default_players = players if players is not None else DEFAULT_PLAYERS
         self.show_token_ids = show_token_ids
-        self.ai_strategies = list(get_available_strategies().keys())
+        self.ai_strategies = AI_STRATEGIES
 
         # Initialize components
         self.game_manager = GameManager(self.default_players, self.show_token_ids)

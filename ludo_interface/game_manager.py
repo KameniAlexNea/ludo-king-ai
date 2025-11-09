@@ -134,7 +134,7 @@ class GameManager:
         valid_moves = game.get_valid_moves(state.current_player_index, dice)
 
         if not valid_moves:
-            extra_turn = dice == 6
+            extra_turn = False # No valid moves, turn ends
             token_positions = ", ".join(
                 [
                     f"piece {i}: {p.position}"
