@@ -10,6 +10,7 @@ from llm_output_parser import parse_json as _parse_json
 from loguru import logger
 
 from .base import BaseStrategy, BaseStrategyConfig
+from .features import opponent_density_within
 from .types import MoveOption, StrategyContext
 
 
@@ -52,16 +53,20 @@ except ImportError:  # Fallback types enable graceful degradation without LangCh
 
 
 DEFAULT_SYSTEM_PROMPT = (
-    "You are a seasoned Ludo strategist. Given the current dice roll and legal moves, "
-    "choose the single best move for the active player. Respond ONLY with a JSON "
-    "object containing the fields 'piece_id' (integer between 0 and 3) and 'reason'."
+    "You are a seasoned Ludo strategist advising the active player. Use the dice roll, "
+    "opponent overview, and per-move metrics as decision aids. The metrics (e.g. 'risk' as capture "
+    "likelihood or 'opponents_within6' as nearby threats) are hints—you may rely on them, balance "
+    "them, or disregard them if board intuition suggests a better play. Aim to capture opponents, "
+    "reach home, and advance safely while avoiding unnecessary risk. Respond ONLY with JSON "
+    "containing 'piece_id' (0-3) and 'reason'."
 )
 
 MOVE_TEMPLATE = (
     "Piece {piece_id}: current={current_pos}, new={new_pos}, progress={progress}, "
     "distance_to_goal={distance_to_goal}, capture={can_capture}, capture_count={capture_count}, "
     "enters_home={enters_home}, enters_safe_zone={enters_safe_zone}, forms_blockade={forms_blockade}, "
-    "extra_turn={extra_turn}, risk={risk:.2f}, leaving_safe_zone={leaving_safe_zone}"
+    "extra_turn={extra_turn}, risk={risk:.2f}, leaving_safe_zone={leaving_safe_zone}, "
+    "opponents_within6={opponent_threat:.2f}"
 )
 
 
@@ -143,7 +148,7 @@ class LLMStrategy(BaseStrategy):
         for _ in range(self.max_retries + 1):
             try:
                 response = self.model.invoke(messages)
-                logger.debug(f"LLM response: {response}")
+                logger.debug(f"LLM response: {self._get_content(response)}")
             except Exception:
                 continue
 
@@ -163,30 +168,37 @@ class LLMStrategy(BaseStrategy):
         ctx: StrategyContext,
         legal_moves: Sequence[MoveOption],
     ) -> list:
-        move_descriptions = [
-            MOVE_TEMPLATE.format(
-                piece_id=move.piece_id,
-                current_pos=move.current_pos,
-                new_pos=move.new_pos,
-                progress=move.progress,
-                distance_to_goal=move.distance_to_goal,
-                can_capture=move.can_capture,
-                capture_count=move.capture_count,
-                enters_home=move.enters_home,
-                enters_safe_zone=move.enters_safe_zone,
-                forms_blockade=move.forms_blockade,
-                extra_turn=move.extra_turn,
-                risk=move.risk,
-                leaving_safe_zone=move.leaving_safe_zone,
+        opponent_summary = self._summarize_opponents(ctx)
+
+        move_descriptions = []
+        for move in legal_moves:
+            opponent_threat = self._opponent_threat(ctx, move)
+            move_descriptions.append(
+                MOVE_TEMPLATE.format(
+                    piece_id=move.piece_id,
+                    current_pos=move.current_pos,
+                    new_pos=move.new_pos,
+                    progress=move.progress,
+                    distance_to_goal=move.distance_to_goal,
+                    can_capture=move.can_capture,
+                    capture_count=move.capture_count,
+                    enters_home=move.enters_home,
+                    enters_safe_zone=move.enters_safe_zone,
+                    forms_blockade=move.forms_blockade,
+                    extra_turn=move.extra_turn,
+                    risk=move.risk,
+                    leaving_safe_zone=move.leaving_safe_zone,
+                    opponent_threat=opponent_threat,
+                )
             )
-            for move in legal_moves
-        ]
 
         human_prompt = (
+            "{opponent_summary}\n"
             "Dice roll: {dice}\n"
             "Legal moves (choose one):\n- {moves}\n"
             'Respond with JSON, e.g. {{"piece_id": 2, "reason": "Prefer capture"}}'
         ).format(
+            opponent_summary=opponent_summary,
             dice=ctx.dice_roll,
             moves="\n- ".join(move_descriptions),
         )
@@ -227,3 +239,73 @@ class LLMStrategy(BaseStrategy):
         if isinstance(response, dict):
             return response.get("content")
         return str(response) if response is not None else None
+
+    @staticmethod
+    def _summarize_opponents(ctx: StrategyContext, max_clusters: int = 4) -> str:
+        distribution_seq = getattr(ctx, "opponent_distribution", None)
+        if distribution_seq is None:
+            return "Opponent overview: data unavailable."
+
+        if hasattr(distribution_seq, "tolist"):
+            distribution = distribution_seq.tolist()
+        else:
+            distribution = list(distribution_seq)
+
+        total = int(round(sum(distribution)))
+        if total <= 0:
+            return "Opponent overview: no opponent pieces on the main track."
+
+        safe_channel_seq = getattr(ctx, "safe_channel", None)
+        safe_count = 0
+        if safe_channel_seq is not None:
+            if hasattr(safe_channel_seq, "tolist"):
+                safe_channel = safe_channel_seq.tolist()
+            else:
+                safe_channel = list(safe_channel_seq)
+            safe_indices = [idx for idx, val in enumerate(safe_channel) if val]
+            safe_count = sum(
+                int(round(distribution[idx]))
+                for idx in safe_indices
+                if 0 <= idx < len(distribution)
+            )
+
+        clusters = sorted(
+            (
+                (idx, int(round(count)))
+                for idx, count in enumerate(distribution)
+                if count > 0
+            ),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+        clusters = [cluster for cluster in clusters if cluster[1] > 0]
+
+        if clusters:
+            clusters_str = ", ".join(
+                f"{pos}:{count}" for pos, count in clusters[:max_clusters]
+            )
+        else:
+            clusters_str = "none"
+
+        if safe_count > 0:
+            return (
+                f"Opponent overview: total on track={total}, protected in safe squares={safe_count}, "
+                f"largest clusters (pos:count)=[{clusters_str}]."
+            )
+
+        return (
+            f"Opponent overview: total on track={total}, "
+            f"largest clusters (pos:count)=[{clusters_str}]."
+        )
+
+    @staticmethod
+    def _opponent_threat(ctx: StrategyContext, move: MoveOption) -> float:
+        distribution_seq = getattr(ctx, "opponent_distribution", None)
+        if distribution_seq is None:
+            return 0.0
+        distribution = (
+            distribution_seq.tolist()
+            if hasattr(distribution_seq, "tolist")
+            else list(distribution_seq)
+        )
+        return float(opponent_density_within(distribution, move.new_pos, radius=6))
