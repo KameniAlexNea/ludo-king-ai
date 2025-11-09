@@ -187,7 +187,7 @@ def _log_outcome(game_index: int, label: str, outcome: Any) -> None:
 def _ensure_yaml_available() -> None:
     if yaml is None:  # pragma: no cover - runtime guard
         raise SystemExit(
-            "PyYAML is required for this script. Install it via 'pip install pyyaml'."
+            "PyYAML is required for this script. Install it via 'pip install PyYAML'."
         ) from _yaml_import_error
 
 

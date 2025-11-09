@@ -10,7 +10,7 @@ A beautiful and interactive Ludo game with:
 - Tournament simulation mode
 
 Usage:
-    python launch_ludo.py [--port PORT] [--host HOST] [--share]
+    python main.py [--port PORT] [--host HOST] [--share]
 
 Options:
     --port PORT    Port to run the server on (default: 7860)
@@ -33,10 +33,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python launch_ludo.py                    # Launch on default port 7860
-    python launch_ludo.py --port 8080        # Launch on port 8080
-    python launch_ludo.py --share            # Create shareable link
-    python launch_ludo.py --host localhost   # Only local access
+    python main.py                    # Launch on default port 7860
+    python main.py --port 8080        # Launch on port 8080
+    python main.py --share            # Create shareable link
+    python main.py --host localhost   # Only local access
 
 Game Features:
     🎮 Human Player Mode: Select "human" strategy to play yourself

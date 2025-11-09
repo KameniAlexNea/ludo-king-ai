@@ -23,8 +23,7 @@ from ludo_rl.strategy import (
     RusherStrategy,
     SupportStrategy,
 )
-from ludo_rl.strategy.llm_agent import DEFAULT_SYSTEM_PROMPT, LLMStrategyConfig
-from ludo_rl.strategy.rl_agent import RLStrategyConfig
+from ludo_rl.strategy.llm_agent import DEFAULT_SYSTEM_PROMPT
 from ludo_rl.strategy.types import MoveOption, StrategyContext
 
 
@@ -393,10 +392,12 @@ class LLMStrategyTests(unittest.TestCase):
                 except StopIteration:
                     raise RuntimeError("exhausted")
 
-        strategy = LLMStrategy.configure(  # two retries => fall back to first legal move
-            model=FailingChatModel(),
-            system_prompt=DEFAULT_SYSTEM_PROMPT,
-            max_retries=1,
+        strategy = (
+            LLMStrategy.configure(  # two retries => fall back to first legal move
+                model=FailingChatModel(),
+                system_prompt=DEFAULT_SYSTEM_PROMPT,
+                max_retries=1,
+            )
         )
 
         moves = [

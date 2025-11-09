@@ -110,6 +110,11 @@ class LLMStrategy(BaseStrategy):
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
         max_retries: int = 2,
     ) -> None:
+        cls.config = LLMStrategyConfig(
+            model=model,
+            system_prompt=system_prompt,
+            max_retries=max_retries,
+        )
         return cls(
             model=model,
             system_prompt=system_prompt,
