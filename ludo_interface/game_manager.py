@@ -1,16 +1,31 @@
 import random
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
-from loguru import logger
-
+from .llm_config_ui import LLMProviderConfig, RLModelConfig
 from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.piece import Piece as Token
-from ludo_rl.strategy.llm_agent import LLMStrategy
 from ludo_rl.strategy.registry import create as create_strategy
+
+from .models import PlayerColor, PTOPlayerColor
+from loguru import logger
+from ludo_rl.strategy.llm_agent import LLMStrategy
 from ludo_rl.strategy.rl_agent import RLStrategy
 
-from .llm_config_ui import StrategyConfigManager
-from .models import PlayerColor, PTOPlayerColor
+
+def create_strategy_instance(
+    strategy_name: str, configs: dict[str, Union[RLModelConfig, LLMProviderConfig]]
+):
+    """Factory to create strategy instances based on strategy name."""
+    if strategy_name.startswith("llm:"):
+        config: LLMProviderConfig = configs[strategy_name[len("llm:") :]]
+        return LLMStrategy.configure_with_model_name(
+            model_name=f"{config.provider}:{config.model_name}", api_key=config.api_key
+        )
+    elif strategy_name.startswith("rl:"):
+        config: RLModelConfig = configs[strategy_name[len("rl:") :]]
+        return RLStrategy.configure_from_path(config.path)
+    else:
+        return create_strategy(strategy_name)
 
 
 class GameState:
@@ -26,98 +41,15 @@ class GameState:
 class GameManager:
     """Handles core game logic and state management."""
 
-    def __init__(
-        self,
-        default_players: List[PlayerColor],
-        show_token_ids: bool,
-        config_manager: StrategyConfigManager = None,
-    ):
+    def __init__(self, default_players: List[PlayerColor], show_token_ids: bool):
         self.default_players = default_players
         self.show_token_ids = show_token_ids
-        self.config_manager = config_manager
 
-    def _create_strategy_from_config(self, label: str) -> Optional[Any]:
-        """Create a strategy instance from config manager."""
-        # Strip prefix if present (e.g., "llm:qwen3" -> "qwen3")
-        actual_label = label
-        if label.startswith("llm:"):
-            actual_label = label[4:]  # Remove "llm:" prefix
-        elif label.startswith("rl:"):
-            actual_label = label[3:]  # Remove "rl:" prefix
-        
-        # Check LLM configs
-        if actual_label in self.config_manager.llm_configs:
-            config = self.config_manager.llm_configs[actual_label]
-            # Create LLM strategy using the class method
-            try:
-                from ludo_rl.strategy.llm_agent import LLMStrategy
-
-                provider = config.provider
-                model = config.model_name
-                model_name = f"{provider}:{model}"
-
-                logger.info(f"Creating LLM strategy '{actual_label}' with model={model_name}")
-
-                # Use configure_with_model_name class method
-                provider_kwargs = {}
-                if config.api_key:
-                    provider_kwargs["api_key"] = config.api_key
-
-                LLMStrategy.configure_with_model_name(model_name, **provider_kwargs)
-                strategy = LLMStrategy(
-                    model=LLMStrategy.config.model,
-                    system_prompt=LLMStrategy.config.system_prompt,
-                    max_retries=LLMStrategy.config.max_retries,
-                )
-                
-                # Test connection to LLM server
-                logger.info(f"Testing connection to {provider} server...")
-                try:
-                    test_response = strategy.model.invoke([{"role": "user", "content": "test"}])
-                    logger.info(f"Successfully connected to {provider} server")
-                except Exception as conn_error:
-                    logger.error(f"Failed to connect to {provider} server: {conn_error}")
-                    raise
-                
-                logger.info(f"Successfully created LLM strategy '{actual_label}'")
-                return strategy
-            except Exception as e:
-                logger.error(
-                    f"Failed to create LLM strategy '{actual_label}' (model={model_name}): {e}"
-                )
-                return None
-
-        # Check RL configs
-        elif actual_label in self.config_manager.rl_configs:
-            config = self.config_manager.rl_configs[actual_label]
-            # Create RL strategy using the class method
-            try:
-                from ludo_rl.strategy.rl_agent import RLStrategy
-
-                model_path = config.path
-                logger.info(f"Loading RL model from '{model_path}'")
-
-                # Use configure_from_path class method
-                RLStrategy.configure_from_path(
-                    model_path, device="cpu", deterministic=True
-                )
-                strategy = RLStrategy(
-                    model=RLStrategy.config.model,
-                    deterministic=RLStrategy.config.deterministic,
-                )
-                logger.info(f"Successfully created RL strategy '{actual_label}'")
-                return strategy
-            except Exception as e:
-                logger.error(
-                    f"Failed to create RL strategy '{actual_label}' (path={config.path}): {e}"
-                )
-                return None
-
-        # Not a configured LLM/RL strategy, return None to try registry
-        return None
-        return None
-
-    def init_game(self, strategies: List[str]) -> tuple[LudoGame, GameState]:
+    def init_game(
+        self,
+        strategies: List[str],
+        configs: dict[str, Union[RLModelConfig, LLMProviderConfig]],
+    ) -> tuple[LudoGame, GameState]:
         """Initializes a new Ludo game with the given strategies."""
         game = LudoGame()
         state = GameState()
@@ -126,22 +58,14 @@ class GameManager:
         for idx, (player, strategy_name) in enumerate(zip(game.players, strategies)):
             player.reset()
             player.strategy_name = strategy_name
-
-            # Try to create from config (LLM or RL)
-            strategy = self._create_strategy_from_config(strategy_name)
-
-            if strategy:
-                player._strategy = strategy
-            else:
-                # Fall back to registry
-                try:
-                    player._strategy = create_strategy(strategy_name)
-                except KeyError:
-                    logger.warning(
-                        f"Strategy '{strategy_name}' not found in registry. Defaulting to 'random'."
-                    )
-                    player.strategy_name = "random"
-                    player._strategy = None
+            try:
+                player._strategy = create_strategy_instance(strategy_name, configs)
+            except KeyError:
+                logger.error(
+                    f"Strategy '{strategy_name}' not found. Defaulting to 'random'."
+                )
+                player.strategy_name = "random"
+                player._strategy = None
 
         return game, state
 

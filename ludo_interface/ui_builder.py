@@ -3,11 +3,6 @@ from typing import List
 import gradio as gr
 
 from .event_handler import HISTORY_LIMIT, EventHandler
-from .llm_config_ui import (
-    StrategyConfigManager,
-    create_llm_config_ui,
-    create_rl_config_ui,
-)
 from .models import PlayerColor
 
 
@@ -20,20 +15,14 @@ class UIBuilder:
         default_players: List[PlayerColor],
         show_token_ids: bool,
         handler: EventHandler,
-        config_manager: StrategyConfigManager,
     ):
         self.ai_strategies = ai_strategies
         self.default_players = default_players
         self.show_token_ids = show_token_ids
         self.handler = handler  # The object with event handler methods (e.g., LudoApp)
-        self.config_manager = config_manager
 
     def create_ui(self):
         """Creates and returns the Gradio UI for the Ludo game."""
-
-        # Store strategy dropdowns for dynamic updates
-        self.strategy_dropdowns = []
-
         with gr.Blocks(
             title="🎲 Enhanced Ludo AI Visualizer",
             theme=gr.themes.Soft(),
@@ -88,8 +77,6 @@ class UIBuilder:
                     )
                 with gr.TabItem("🏆 Simulate Multiple Games"):
                     self._build_simulation_tab()
-                with gr.TabItem("⚙️ Strategy Configuration"):
-                    self._build_strategy_config_tab()
 
             gr.Markdown(
                 """
@@ -136,8 +123,6 @@ class UIBuilder:
                         )
                         for i, color in enumerate(self.default_players)
                     ]
-                    # Store for dynamic updates
-                    self.strategy_dropdowns.extend(strategy_inputs)
 
                 with gr.Accordion("🎮 Controls", open=True):
                     init_btn = gr.Button("🎮 New Game", variant="primary", size="sm")
@@ -437,8 +422,6 @@ class UIBuilder:
                         )
                         for i, color in enumerate(self.default_players)
                     ]
-                    # Store for dynamic updates
-                    self.strategy_dropdowns.extend(sim_strat_inputs)
 
                 with gr.Accordion("⚙️ Simulation Parameters", open=True):
                     bulk_games = gr.Slider(
@@ -544,35 +527,4 @@ class UIBuilder:
             self.handler._ui_run_bulk,
             [bulk_games] + sim_strat_inputs,
             [bulk_results, detailed_results, simulation_status, chart_placeholder],
-        )
-
-    def _build_strategy_config_tab(self):
-        """Builds the Strategy Configuration tab."""
-        gr.Markdown("# Strategy Configuration")
-        gr.Markdown("Configure LLM providers and RL models to use in games.")
-
-        # Create LLM configuration UI
-        create_llm_config_ui(self.config_manager, self.strategy_dropdowns)
-
-        # Create RL configuration UI
-        create_rl_config_ui(self.config_manager, self.strategy_dropdowns)
-
-        gr.Markdown("---")
-        gr.Markdown("### How to use:")
-        gr.Markdown(
-            """
-        **LLM Strategies:**
-        1. Select your provider (Ollama, OpenAI, Gemini, etc.)
-        2. Enter the model name (e.g., `qwen3`, `gpt-4`)
-        3. Add a label for easy identification
-        4. Provide API key if required
-        5. Click "Add LLM Strategy"
-        6. Strategy appears immediately in all dropdowns as `llm:YourLabel`
-        
-        **RL Strategies:**
-        1. Enter a label for your model
-        2. Provide the path to your trained model file (.zip)
-        3. Click "Add RL Strategy"
-        4. Strategy appears immediately in all dropdowns as `rl:YourLabel`
-        """
         )

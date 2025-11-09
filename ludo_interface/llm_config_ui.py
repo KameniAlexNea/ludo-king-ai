@@ -88,7 +88,7 @@ class StrategyConfigManager:
 
 
 def create_llm_config_ui(
-    config_manager: StrategyConfigManager, strategy_dropdowns: List
+    config_manager: StrategyConfigManager, base_strategies: list[str], strategy_dropdowns: List
 ):
     """Create the LLM configuration UI."""
 
@@ -137,12 +137,9 @@ def create_llm_config_ui(
 
         # Event handlers
         def add_llm(provider, model, label, api_key):
-            from ludo_rl.strategy.registry import available as get_available_strategies
-
             result = config_manager.add_llm_config(provider, model, label, api_key)
 
             # Update all strategy dropdowns
-            base_strategies = list(get_available_strategies(False).keys())
             all_strategies = config_manager.get_all_strategy_names(base_strategies)
             dropdown_updates = [
                 gr.update(choices=all_strategies) for _ in strategy_dropdowns
@@ -190,7 +187,7 @@ def create_llm_config_ui(
 
 
 def create_rl_config_ui(
-    config_manager: StrategyConfigManager, strategy_dropdowns: List
+    config_manager: StrategyConfigManager, base_strategies: list[str], strategy_dropdowns: List
 ):
     """Create the RL model configuration UI."""
 
@@ -219,8 +216,6 @@ def create_rl_config_ui(
 
         # Event handlers
         def add_rl(label, path):
-            from ludo_rl.strategy.registry import available as get_available_strategies
-
             if not label or not path:
                 return ["❌ Label and path are required", gr.update()] + [
                     gr.update() for _ in strategy_dropdowns
@@ -228,7 +223,6 @@ def create_rl_config_ui(
             result = config_manager.add_rl_config(label, path)
 
             # Update all strategy dropdowns
-            base_strategies = list(get_available_strategies(False).keys())
             all_strategies = config_manager.get_all_strategy_names(base_strategies)
             dropdown_updates = [
                 gr.update(choices=all_strategies) for _ in strategy_dropdowns

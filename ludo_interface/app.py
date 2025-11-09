@@ -13,10 +13,10 @@ from ludo_rl.strategy.registry import available as get_available_strategies
 from .board_viz import preload_board_template
 from .event_handler import EventHandler
 from .game_manager import GameManager
-from .llm_config_ui import StrategyConfigManager
 from .models import ALL_COLORS, PlayerColor
 from .ui_builder import UIBuilder
 from .utils import Utils
+from .llm_config_ui import StrategyConfigManager
 
 AI_STRATEGIES = list(get_available_strategies(False).keys())
 DEFAULT_PLAYERS = ALL_COLORS
@@ -37,19 +37,11 @@ class LudoApp:
         """
         self.default_players = players if players is not None else DEFAULT_PLAYERS
         self.show_token_ids = show_token_ids
-
-        # Build available strategies list - filter out llm and rl since none configured yet
-        self.ai_strategies = [
-            s for s in AI_STRATEGIES if not s in ("llm", "rl")
-        ]
-
-        # Initialize strategy config manager
-        self.config_manager = StrategyConfigManager()
+        self.ai_strategies = [i for i in AI_STRATEGIES if i not in ("llm", "rl")]
+        self.strategy_config_manager = StrategyConfigManager()
 
         # Initialize components
-        self.game_manager = GameManager(
-            self.default_players, self.show_token_ids, self.config_manager
-        )
+        self.game_manager = GameManager(self.default_players, self.show_token_ids)
         self.utils = Utils()
         self.event_handler = EventHandler(
             self.game_manager,
@@ -63,13 +55,11 @@ class LudoApp:
             self.default_players,
             self.show_token_ids,
             self.event_handler,
-            self.config_manager,
         )
 
         # Preload assets
         preload_board_template()
         print("🚀 Initializing Enhanced Ludo Game...")
-        print(f"📊 Available strategies: {', '.join(self.ai_strategies)}")
 
     def create_ui(self):
         """Creates and returns the Gradio UI for the Ludo game."""
