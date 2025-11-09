@@ -4,3 +4,5 @@ sb3-contrib
 tensorboard
 loguru
 dotenv
+llm-output-parser
+langchain

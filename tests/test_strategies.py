@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import random
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 import numpy as np
 
@@ -14,11 +16,14 @@ from ludo_rl.strategy import (
     HoarderStrategy,
     HomebodyStrategy,
     KillerStrategy,
+    LLMStrategy,
     ProbabilityStrategy,
     RetaliatorStrategy,
+    RLStrategy,
     RusherStrategy,
     SupportStrategy,
 )
+from ludo_rl.strategy.llm_agent import DEFAULT_SYSTEM_PROMPT
 from ludo_rl.strategy.types import MoveOption, StrategyContext
 
 
@@ -301,6 +306,123 @@ class StrategySelectionTests(unittest.TestCase):
             with self.subTest(strategy=strategy_cls.__name__):
                 instance = strategy_cls.create_instance(random.Random(idx))
                 self.assertIsInstance(instance, strategy_cls)
+
+
+class RLStrategyTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        RLStrategy.config = None
+
+    def test_create_without_configuration_errors(self) -> None:
+        RLStrategy.config = None
+        with self.assertRaises(NotImplementedError):
+            RLStrategy.create_instance()
+
+    def test_select_move_uses_model_prediction(self) -> None:
+        class DummyModel:
+            def __init__(self) -> None:
+                self.policy = SimpleNamespace(set_training_mode=lambda *_: None)
+
+            def predict(self, obs, action_masks=None, deterministic=True):
+                legal = np.flatnonzero(action_masks)
+                return np.array([int(legal[-1])]), None
+
+        strategy = RLStrategy.configure(model=DummyModel(), deterministic=True)
+
+        moves = [
+            _move(piece_id=0, current=0, new=6, progress=6, distance=51),
+            _move(piece_id=1, current=0, new=7, progress=7, distance=50),
+        ]
+        ctx = _make_context(moves, action_mask=np.array([True, True, False, False]))
+        choice = strategy.select_move(ctx)
+        self.assertIsNotNone(choice)
+        self.assertEqual(choice.piece_id, 1)
+
+    def test_configure_from_path_loads_model(self) -> None:
+        dummy_model = SimpleNamespace(
+            policy=SimpleNamespace(set_training_mode=lambda *_: None)
+        )
+        with mock.patch(
+            "ludo_rl.strategy.rl_agent.MaskablePPO.load", return_value=dummy_model
+        ) as loader:
+            strategy = RLStrategy.configure_from_path("/tmp/model.zip", device="cpu")
+        loader.assert_called_once_with("/tmp/model.zip", device="cpu")
+        self.assertIsInstance(strategy, RLStrategy)
+
+
+class LLMStrategyTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        LLMStrategy.config = None
+
+    def test_create_without_configuration_errors(self) -> None:
+        with self.assertRaises(NotImplementedError):
+            LLMStrategy.create_instance()
+
+    def test_select_move_parses_json_response(self) -> None:
+        class FakeChatModel:
+            def __init__(self) -> None:
+                self.invocations = 0
+
+            def invoke(self, messages):
+                self.invocations += 1
+                return {"content": '{"piece_id": 1, "reason": "capture"}'}
+
+        strategy = LLMStrategy.configure(FakeChatModel())
+
+        moves = [
+            _move(piece_id=0, current=0, new=6, progress=6, distance=51),
+            _move(piece_id=1, current=0, new=7, progress=7, distance=50),
+        ]
+        ctx = _make_context(moves, action_mask=np.array([True, True, False, False]))
+        choice = strategy.select_move(ctx)
+        self.assertEqual(choice.piece_id, 1)
+
+    def test_select_move_retries_and_falls_back(self) -> None:
+        class FailingChatModel:
+            def __init__(self) -> None:
+                self.outputs = iter(
+                    [
+                        {"content": "I choose piece A"},
+                        {"content": "No idea"},
+                    ]
+                )
+
+            def invoke(self, messages):
+                try:
+                    return next(self.outputs)
+                except StopIteration:
+                    raise RuntimeError("exhausted")
+
+        strategy = (
+            LLMStrategy.configure(  # two retries => fall back to first legal move
+                model=FailingChatModel(),
+                system_prompt=DEFAULT_SYSTEM_PROMPT,
+                max_retries=1,
+            )
+        )
+
+        moves = [
+            _move(piece_id=2, current=5, new=9, progress=4, distance=48),
+            _move(piece_id=3, current=10, new=14, progress=4, distance=43),
+        ]
+        action_mask = np.array([False, False, True, True])
+        ctx = _make_context(moves, action_mask=action_mask)
+        choice = strategy.select_move(ctx)
+        self.assertEqual(choice.piece_id, 2)
+
+    def test_configure_with_model_name_uses_init_chat_model(self) -> None:
+        fake_model = SimpleNamespace(invoke=lambda *_: {"content": '{"piece_id": 0}'})
+
+        with mock.patch(
+            "ludo_rl.strategy.llm_agent.init_chat_model", return_value=fake_model
+        ) as init_mock:
+            strategy = LLMStrategy.configure_with_model_name(
+                "gpt-5-nano",
+                system_prompt="Test",
+                temperature=0.2,
+            )
+
+        init_mock.assert_called_once_with("gpt-5-nano", temperature=0.2)
+        self.assertIsInstance(strategy, LLMStrategy)
 
 
 if __name__ == "__main__":

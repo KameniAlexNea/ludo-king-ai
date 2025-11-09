@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 
 
@@ -7,11 +8,17 @@ class Config:
     PATH_LENGTH = 58  # 0=yard, 1-51=track, 52-56=home, 57=finished
     NUM_PLAYERS = 4
     PIECES_PER_PLAYER = 4
-    MAX_TURNS = 200
+    MAX_TURNS = int(os.getenv("MAX_TURNS", 1000))
 
     # Absolute positions on the 52-square board
-    PLAYER_START_SQUARES = [1, 14, 27, 40]  # Blue, Red, Green, Yellow
+    PLAYER_START_SQUARES = [1, 14, 27, 40]  # Red, Green, Yellow, Blue
     SAFE_SQUARES_ABS = [1, 9, 14, 22, 27, 35, 40, 48]
+
+    # Viz Variables
+    HOME_ENTRY = [51, 12, 25, 38]  # Red, Green, Yellow, Blue
+    HOME_COLUMN_ENTRIES = 52  # All enter home column at position 52
+    HOME_COLUMN_SIZE = 6
+    STAR_SQUARES = [9, 22, 35, 48]
 
 
 @dataclass(slots=True)

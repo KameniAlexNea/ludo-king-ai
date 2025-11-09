@@ -1,0 +1,28 @@
+n_games: 5
+seed: 42
+deterministic: false
+device: cpu # RL checkpoints only
+
+opp1:
+  type: llm
+  label: strategist
+  model: gpt-4o-mini
+  params:
+    api_key: ${OPENAI_API_KEY}
+  system_prompt: "You are a bold Ludo player."
+  max_retries: 1
+
+opp2:
+  type: rl
+  label: ppo_1m
+  path: training/ludo_models/ppo_ludo/checkpoint_1000000.zip
+
+opp3:
+  type: rl
+  label: ppo_2m
+  path: training/ludo_models/ppo_ludo/checkpoint_2000000.zip
+
+opp4:
+  type: static
+  label: killer
+  strategy: killer

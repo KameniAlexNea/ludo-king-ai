@@ -6,7 +6,7 @@ from typing import Dict, List
 import torch
 
 from .config import config
-from .game import LudoGame
+from .game import LudoGame, TurnOutcome
 
 
 @dataclass(slots=True)
@@ -86,23 +86,18 @@ class GameSimulator:
                 extra_turn = True
 
                 while extra_turn:
-                    dice_roll = self.game.roll_dice()
-                    valid_moves = self.game.get_valid_moves(opp_index, dice_roll)
+                    outcome: TurnOutcome = self.game.take_turn(opp_index)
 
-                    if not valid_moves:
+                    if outcome.skipped or not outcome.move or not outcome.result:
                         extra_turn = False
                         continue
 
-                    move = self._decide_move(opp_index, dice_roll, valid_moves)
-                    result = self.game.make_move(
-                        opp_index, move["piece"], move["new_pos"], dice_roll
-                    )
-                    self.update_summaries(opp_index, move, result)
+                    self.update_summaries(opp_index, outcome.move, outcome.result)
 
-                    for player_idx, value in result["rewards"].items():
+                    for player_idx, value in outcome.result["rewards"].items():
                         cumulative_rewards[player_idx] += value
 
-                    extra_turn = result["extra_turn"]
+                    extra_turn = outcome.extra_turn
 
             return cumulative_rewards
 
@@ -123,14 +118,6 @@ class GameSimulator:
             player._strategy = None
             pos += 1
 
-    def _decide_move(self, player_index: int, dice_roll: int, valid_moves: list[dict]):
-        player = self.game.players[player_index]
-        board_stack = self.game.build_board_tensor(player_index)
-        move = player.decide(board_stack, dice_roll, valid_moves)
-        if move is not None:
-            return move
-        return random.choice(valid_moves)
-
     def step_opponents_only(self):
         """Called when agent has no moves. Resets summaries and simulates opponents."""
         self.reset_summaries()
@@ -146,23 +133,22 @@ class GameSimulator:
         self.reset_summaries()
 
         dice_roll = agent_move.get("dice_roll")
-        if dice_roll is None:
-            dice_roll = self.game.roll_dice()
 
-        # 1. Execute agent's move
         with torch.autograd.profiler.record_function("agent_make_move"):
-            agent_result = self.game.make_move(
-                self.agent_index, agent_move["piece"], agent_move["new_pos"], dice_roll
+            outcome: TurnOutcome = self.game.take_turn(
+                self.agent_index,
+                dice_roll=dice_roll,
+                move=agent_move,
             )
 
-        # Record the agent's own transition before opponents respond.
-        self.update_summaries(self.agent_index, agent_move, agent_result)
-
         total_rewards = [0.0] * config.NUM_PLAYERS
-        for player_idx, value in agent_result["rewards"].items():
-            total_rewards[player_idx] += value
 
-        extra_turn = agent_result["extra_turn"]
+        if not outcome.skipped and outcome.move and outcome.result:
+            self.update_summaries(self.agent_index, outcome.move, outcome.result)
+            for player_idx, value in outcome.result["rewards"].items():
+                total_rewards[player_idx] += value
+
+        extra_turn = bool(outcome.extra_turn)
 
         # 3. Simulate opponent turns if no extra turn was earned
         if not extra_turn:

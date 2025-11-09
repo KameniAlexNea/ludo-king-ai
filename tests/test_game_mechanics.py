@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import random
 import unittest
+from unittest import mock
 
 import numpy as np
 
+from ludo_rl.ludo.board import LudoBoard
 from ludo_rl.ludo.config import config
 from ludo_rl.ludo.game import LudoGame
-from ludo_rl.ludo.model import Piece
 from ludo_rl.ludo.moves import MoveManagement
+from ludo_rl.ludo.piece import Piece
 from ludo_rl.ludo.player import Player
 from ludo_rl.ludo.reward import compute_move_rewards, reward_config
 
@@ -28,89 +30,142 @@ class PieceModelTests(unittest.TestCase):
         piece.position = 57
         self.assertTrue(piece.is_finished())
 
+    def test_piece_move_helpers(self) -> None:
+        piece = Piece(color=1, piece_id=2)
+        self.assertTrue(piece.in_yard())
+        self.assertIsNone(piece.destination_for_roll(3))
+        self.assertEqual(piece.destination_for_roll(6), 1)
+        piece.move_to(10)
+        self.assertEqual(piece.position, 10)
+        self.assertFalse(piece.in_yard())
+        self.assertEqual(piece.destination_for_roll(2), 12)
+        piece.move_to(52)
+        self.assertTrue(piece.in_home_column())
+        self.assertEqual(piece.destination_for_roll(5), 57)
+        self.assertIsNone(piece.destination_for_roll(6))
+        piece.move_to(51)
+        self.assertEqual(piece.destination_for_roll(6), 57)
+        piece.move_to(57)
+        self.assertIsNone(piece.destination_for_roll(1))
+        piece.send_home()
+        self.assertTrue(piece.in_yard())
 
-class MoveManagementTests(unittest.TestCase):
+
+class BoardAndPlayerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.players = make_players()
-        self.manager = MoveManagement(self.players)
+        self.board = LudoBoard(self.players)
+        self.player = self.players[0]
 
     def test_absolute_and_relative_position_conversion(self) -> None:
-        abs_pos = self.manager.get_absolute_position(0, 10)
+        abs_pos = self.board.absolute_position(0, 10)
         self.assertEqual(abs_pos, 10)
-        self.assertEqual(self.manager.get_agent_relative_pos(0, abs_pos), 10)
-        self.assertEqual(self.manager.get_absolute_position(0, 0), -1)
-        self.assertEqual(self.manager.get_agent_relative_pos(0, 0), -1)
+        self.assertEqual(self.board.relative_position(0, abs_pos), 10)
+        self.assertEqual(self.board.absolute_position(0, 0), -1)
+        self.assertEqual(self.board.relative_position(0, 0), -1)
 
     def test_valid_moves_from_yard_and_blockade(self) -> None:
-        player = self.players[0]
-        moves = self.manager.get_valid_moves(0, 6)
+        moves = self.player.get_valid_moves(self.board, 6)
         self.assertEqual(len(moves), 4)  # all pieces can enter
         # Create a blockade at position 5 and ensure third piece cannot join
-        player.pieces[0].position = 4
-        player.pieces[1].position = 5
-        player.pieces[2].position = 5
-        moves = self.manager.get_valid_moves(0, 1)
+        self.player.pieces[0].position = 4
+        self.player.pieces[1].position = 5
+        self.player.pieces[2].position = 5
+        moves = self.player.get_valid_moves(self.board, 1)
         self.assertFalse(any(move["new_pos"] == 5 for move in moves))
 
     def test_valid_moves_home_column_limits(self) -> None:
-        player = self.players[0]
-        player.pieces[0].position = 52
-        moves = self.manager.get_valid_moves(0, 3)
+        self.player.pieces[0].position = 52
+        moves = self.player.get_valid_moves(self.board, 3)
         self.assertTrue(
             any(
-                move["piece"] is player.pieces[0] and move["new_pos"] == 55
+                move["piece"] is self.player.pieces[0] and move["new_pos"] == 55
                 for move in moves
             )
         )
-        moves = self.manager.get_valid_moves(0, 6)
-        self.assertFalse(any(move["piece"] is player.pieces[0] for move in moves))
+        moves = self.player.get_valid_moves(self.board, 6)
+        self.assertFalse(any(move["piece"] is self.player.pieces[0] for move in moves))
 
     def test_make_move_capture_and_extra_turn(self) -> None:
-        mover = self.players[0].pieces[0]
+        mover = self.player.pieces[0]
         mover.position = 10
         target_rel = 11
-        target_abs = self.manager.get_absolute_position(0, target_rel)
+        target_abs = self.board.absolute_position(0, target_rel)
         opponent_piece = self.players[1].pieces[0]
-        opponent_rel = self.manager.get_agent_relative_pos(1, target_abs)
+        opponent_rel = self.board.relative_position(1, target_abs)
         opponent_piece.position = opponent_rel
 
-        result = self.manager.make_move(0, mover, target_rel, dice_roll=1)
-        self.assertTrue(result["events"]["knockouts"])
+        resolution = self.player.move_piece(self.board, mover, target_rel, dice_roll=1)
+        rewards = compute_move_rewards(
+            len(self.players),
+            0,
+            resolution.old_position,
+            resolution.new_position,
+            resolution.events,
+        )
+        self.assertTrue(resolution.events["knockouts"])
         self.assertEqual(opponent_piece.position, 0)
-        self.assertGreater(result["reward"], 0)
-        self.assertTrue(result["extra_turn"])
+        self.assertGreater(rewards[0], 0)
+        self.assertTrue(resolution.extra_turn)
 
     def test_make_move_hits_blockade(self) -> None:
-        mover = self.players[0].pieces[0]
+        mover = self.player.pieces[0]
         new_position = 12
-        abs_target = self.manager.get_absolute_position(0, new_position)
-        while self.manager.is_safe(abs_target) or new_position <= 1:
+        abs_target = self.board.absolute_position(0, new_position)
+        while self.board.is_safe_square(abs_target) or new_position <= 1:
             new_position += 1
-            abs_target = self.manager.get_absolute_position(0, new_position)
-        opponent_rel = self.manager.get_agent_relative_pos(1, abs_target)
+            abs_target = self.board.absolute_position(0, new_position)
+        opponent_rel = self.board.relative_position(1, abs_target)
         self.assertNotEqual(opponent_rel, -1)
         self.players[1].pieces[0].position = opponent_rel
         self.players[1].pieces[1].position = opponent_rel
 
         mover.position = new_position - 1
-        result = self.manager.make_move(0, mover, new_position, dice_roll=1)
-        self.assertTrue(result["events"]["hit_blockade"])
-        self.assertFalse(result["events"]["move_resolved"])
+        resolution = self.player.move_piece(
+            self.board, mover, new_position, dice_roll=1
+        )
+        rewards = compute_move_rewards(
+            len(self.players),
+            0,
+            resolution.old_position,
+            resolution.new_position,
+            resolution.events,
+        )
+        self.assertTrue(resolution.events["hit_blockade"])
+        self.assertFalse(resolution.events["move_resolved"])
         self.assertEqual(mover.position, new_position - 1)
-        self.assertEqual(result["reward"], reward_config.hit_blockade)
+        self.assertEqual(rewards[0], reward_config.hit_blockade)
 
     def test_make_move_forms_blockade(self) -> None:
-        player = self.players[0]
-        mover = player.pieces[0]
+        mover = self.player.pieces[0]
         mover.position = 8
-        player.pieces[1].position = 10
-        result = self.manager.make_move(0, mover, 10, dice_roll=2)
-        self.assertTrue(result["events"]["blockades"])
-        self.assertIn({"player": 0, "relative_pos": 10}, result["events"]["blockades"])
+        self.player.pieces[1].position = 10
+        resolution = self.player.move_piece(self.board, mover, 10, dice_roll=2)
+        rewards = compute_move_rewards(
+            len(self.players),
+            0,
+            resolution.old_position,
+            resolution.new_position,
+            resolution.events,
+        )
+        self.assertTrue(resolution.events["blockades"])
+        self.assertIn({"player": 0, "relative_pos": 10}, resolution.events["blockades"])
         self.assertAlmostEqual(
-            result["reward"],
+            rewards[0],
             reward_config.progress + reward_config.blockade,
         )
+
+
+class MoveManagementCompatibilityTests(unittest.TestCase):
+    def test_wrapper_delegates_to_board(self) -> None:
+        players = make_players()
+        manager = MoveManagement(players)
+        moves = manager.get_valid_moves(0, 6)
+        self.assertEqual(len(moves), 4)
+        piece = players[0].pieces[0]
+        outcome = manager.make_move(0, piece, 1, dice_roll=6)
+        self.assertIn("events", outcome)
+        self.assertTrue(outcome["extra_turn"])
 
 
 class LudoGameTests(unittest.TestCase):
@@ -140,6 +195,36 @@ class LudoGameTests(unittest.TestCase):
         result = game.make_move(0, piece, 1, dice_roll=6)
         self.assertIn("reward", result)
         self.assertIn("events", result)
+
+    def test_take_turn_random_fallback(self) -> None:
+        game = LudoGame()
+        player = game.players[0]
+
+        with (
+            mock.patch(
+                "ludo_rl.ludo.player.Player.decide",
+                autospec=True,
+                return_value=None,
+            ),
+            mock.patch.object(game.rng, "choice", wraps=game.rng.choice) as choice_mock,
+        ):
+            outcome = game.take_turn(0, dice_roll=6)
+
+        self.assertFalse(outcome.skipped)
+        self.assertIsNotNone(outcome.move)
+        self.assertIn(outcome.move["piece"], player.pieces)
+        choice_mock.assert_called()
+
+    def test_take_turn_invalid_move_skips(self) -> None:
+        game = LudoGame()
+        piece = game.players[0].pieces[0]
+        piece.position = 0
+        invalid_move = {"piece": piece, "new_pos": 3, "dice_roll": 6}
+
+        outcome = game.take_turn(0, dice_roll=6, move=invalid_move)
+
+        self.assertTrue(outcome.skipped)
+        self.assertIsNone(outcome.result)
 
 
 class RewardComputationTests(unittest.TestCase):

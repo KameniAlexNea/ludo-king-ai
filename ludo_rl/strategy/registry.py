@@ -8,9 +8,12 @@ from .finish_line import FinishLineStrategy
 from .heatseeker import HeatSeekerStrategy
 from .hoarder import HoarderStrategy
 from .homebody import HomebodyStrategy
+from .human import HumanStrategy
 from .killer import KillerStrategy
+from .llm_agent import LLMStrategy
 from .probability import ProbabilityStrategy
 from .retaliator import RetaliatorStrategy
+from .rl_agent import RLStrategy
 from .rusher import RusherStrategy
 from .support import SupportStrategy
 
@@ -26,6 +29,9 @@ STRATEGY_REGISTRY: Dict[str, Type] = {
     RusherStrategy.name: RusherStrategy,
     SupportStrategy.name: SupportStrategy,
     RetaliatorStrategy.name: RetaliatorStrategy,
+    RLStrategy.name: RLStrategy,
+    LLMStrategy.name: LLMStrategy,
+    HumanStrategy.name: HumanStrategy,
 }
 
 
@@ -38,5 +44,11 @@ def create(strategy_name: str, use_create=True, **kwargs):
     return cls(**kwargs)
 
 
-def available() -> Dict[str, Type]:
+def available(ignore_human: bool = True) -> Dict[str, Type]:
+    if ignore_human:
+        return {
+            name: cls
+            for name, cls in STRATEGY_REGISTRY.items()
+            if name != HumanStrategy.name
+        }
     return dict(STRATEGY_REGISTRY)

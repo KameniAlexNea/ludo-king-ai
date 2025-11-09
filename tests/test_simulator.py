@@ -115,27 +115,6 @@ class GameSimulatorTests(unittest.TestCase):
         self.assertEqual(rewards, [0.0] * config.NUM_PLAYERS)
         simulate_mock.assert_called_once_with(sim)
 
-    def test_decide_move_falls_back_to_random_choice(self) -> None:
-        sim = GameSimulator(agent_index=0)
-        player_index = (sim.agent_index + 1) % config.NUM_PLAYERS
-        player = sim.game.players[player_index]
-        valid_moves = [{"piece": player.pieces[0], "new_pos": 1, "dice_roll": 6}]
-
-        with (
-            mock.patch(
-                "ludo_rl.ludo.player.Player.decide",
-                autospec=True,
-                return_value=None,
-            ),
-            mock.patch(
-                "ludo_rl.ludo.simulator.random.choice", return_value=valid_moves[0]
-            ) as choice_mock,
-        ):
-            move = sim._decide_move(player_index, 6, valid_moves)
-
-        self.assertIs(move, valid_moves[0])
-        choice_mock.assert_called_once()
-
     def test_build_board_stack_shape(self) -> None:
         sim = GameSimulator(agent_index=0)
         stack = sim.game.build_board_tensor(sim.agent_index)
