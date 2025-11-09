@@ -65,5 +65,6 @@ class Piece:
             return self.position
 
         start_square = config.PLAYER_START_SQUARES[self.color]
-        abs_pos = ((start_square + self.position - 2 + 52) % 52) + 1
+        # abs_pos = ((start_square + self.position - 2 + 52) % 52) + 1
+        abs_pos = (start_square + self.position - 1) % 52
         return abs_pos
