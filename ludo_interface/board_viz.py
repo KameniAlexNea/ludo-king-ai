@@ -5,7 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 from ludo_rl.ludo.config import config
 from ludo_rl.ludo.piece import Piece as Token
 
-from .models import ALL_COLORS, PlayerColor
+from .models import ALL_COLORS, HOME_ENTRY, PLAYER_START_SQUARES, PlayerColor
 
 # Enhanced Styling with gradients and better colors
 COLOR_MAP = {
@@ -313,7 +313,7 @@ def _home_column_positions_for_color(color: PlayerColor) -> Dict[int, Tuple[int,
     """
     mapping: Dict[int, Tuple[int, int]] = {}
     center = (7, 7)
-    entry_index = config.HOME_ENTRY[color.value]
+    entry_index = HOME_ENTRY[color]
     entry_coord = PATH_INDEX_TO_COORD[entry_index]
     ex, ey = entry_coord
     dx = 0 if ex == center[0] else (1 if center[0] > ex else -1)
@@ -331,10 +331,8 @@ HOME_COLUMN_COORDS = {
     color: _home_column_positions_for_color(color) for color in ALL_COLORS
 }
 
-START_POSITIONS = {
-    color: config.PLAYER_START_SQUARES[color.value] for color in ALL_COLORS
-}
-HOME_COLUMN_ENTRIES = {color: config.HOME_ENTRY[color.value] for color in ALL_COLORS}
+START_POSITIONS = {color: PLAYER_START_SQUARES[color] for color in ALL_COLORS}
+HOME_COLUMN_ENTRIES = {color: HOME_ENTRY[color] for color in ALL_COLORS}
 
 
 def _generate_board_template() -> Image.Image:

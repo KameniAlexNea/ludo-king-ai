@@ -432,7 +432,7 @@ class EventHandler:
 
     def _ui_run_bulk(self, n_games, *strats):
         ai_strats = [s if s != "human" else "random" for s in strats]
-        win_counts = {c.name: 0 for c in self.default_players}
+        win_counts = {c.value: 0 for c in self.default_players}
 
         # Run the simulation
         total_games = int(n_games)
@@ -444,7 +444,7 @@ class EventHandler:
                 turns_taken += 1
             if state.game_over and state.winner_index is not None:
                 winner_color = self.default_players[state.winner_index]
-                win_counts[winner_color.name] += 1
+                win_counts[winner_color.value] += 1
 
         # Calculate statistics
         total = sum(win_counts.values()) or 1
@@ -585,5 +585,5 @@ class EventHandler:
             stats = dict(stats)
             stats["games"] += 1
             winner_color = self.default_players[state.winner_index]
-            stats["wins"][winner_color.name] += 1
+            stats["wins"][winner_color.value] += 1
         return stats

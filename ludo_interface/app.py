@@ -17,7 +17,7 @@ from .models import ALL_COLORS, PlayerColor
 from .ui_builder import UIBuilder
 from .utils import Utils
 
-AI_STRATEGIES = list(get_available_strategies().keys())
+AI_STRATEGIES = list(get_available_strategies(False).keys())
 DEFAULT_PLAYERS = ALL_COLORS
 
 

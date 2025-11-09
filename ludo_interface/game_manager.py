@@ -5,7 +5,7 @@ from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.piece import Piece as Token
 from ludo_rl.strategy.registry import create as create_strategy
 
-from .models import PlayerColor
+from .models import PlayerColor, PTOPlayerColor
 
 
 class GameState:
@@ -47,7 +47,7 @@ class GameManager:
         token_map: Dict[PlayerColor, List[Token]] = {c: [] for c in PlayerColor}
         for p in game.players:
             for t in p.pieces:
-                token_map[PlayerColor(p.color)].append(t)
+                token_map[PTOPlayerColor[p.color]].append(t)
         return token_map
 
     def is_human_turn(self, game: LudoGame, state: GameState) -> bool:
