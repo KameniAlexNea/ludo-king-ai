@@ -56,6 +56,7 @@ class LudoApp:
             self.default_players,
             self.show_token_ids,
             self.event_handler,
+            self.strategy_config_manager,
         )
 
         # Preload assets

@@ -3,6 +3,11 @@ from typing import List
 import gradio as gr
 
 from .event_handler import HISTORY_LIMIT, EventHandler
+from .llm_config_ui import (
+    StrategyConfigManager,
+    create_llm_config_ui,
+    create_rl_config_ui,
+)
 from .models import PlayerColor
 
 
@@ -15,11 +20,13 @@ class UIBuilder:
         default_players: List[PlayerColor],
         show_token_ids: bool,
         handler: EventHandler,
+        strategy_config_manager: StrategyConfigManager,
     ):
         self.ai_strategies = ai_strategies
         self.default_players = default_players
         self.show_token_ids = show_token_ids
         self.handler = handler  # The object with event handler methods (e.g., LudoApp)
+        self.strategy_config_manager = strategy_config_manager
         self.strategy_dropdowns = []  # To be populated with strategy dropdown components
 
     def create_ui(self):
@@ -79,21 +86,13 @@ class UIBuilder:
                 with gr.TabItem("🏆 Simulate Multiple Games"):
                     self._build_simulation_tab()
                 with gr.TabItem("⚙️ Configure Strategies"):
-                    from .llm_config_ui import (
-                        StrategyConfigManager,
-                        create_llm_config_ui,
-                        create_rl_config_ui,
-                    )
-
-                    config_manager = StrategyConfigManager()
-
                     create_llm_config_ui(
-                        config_manager,
+                        self.strategy_config_manager,
                         self.ai_strategies,
                         self.strategy_dropdowns,
                     )
                     create_rl_config_ui(
-                        config_manager,
+                        self.strategy_config_manager,
                         self.ai_strategies,
                         self.strategy_dropdowns,
                     )
