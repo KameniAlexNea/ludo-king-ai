@@ -24,7 +24,7 @@ from ludo_rl.strategy.rusher import RusherStrategy
 class StrategyRegistryTests(unittest.TestCase):
     def test_available_matches_registry(self) -> None:
         expected = set(STRATEGY_REGISTRY.keys())
-        self.assertEqual(set(available().keys()), expected)
+        self.assertEqual(set(available(False).keys()), expected)
 
     def test_create_returns_strategy_instance(self) -> None:
         strategy = create("rusher")

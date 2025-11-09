@@ -327,8 +327,7 @@ class RLStrategyTests(unittest.TestCase):
                 legal = np.flatnonzero(action_masks)
                 return np.array([int(legal[-1])]), None
 
-        RLStrategy.configure(model=DummyModel(), deterministic=True)
-        strategy = RLStrategy.create_instance()
+        strategy = RLStrategy.configure(model=DummyModel(), deterministic=True)
 
         moves = [
             _move(piece_id=0, current=0, new=6, progress=6, distance=51),
@@ -346,9 +345,9 @@ class RLStrategyTests(unittest.TestCase):
         with mock.patch(
             "ludo_rl.strategy.rl_agent.MaskablePPO.load", return_value=dummy_model
         ) as loader:
-            RLStrategy.configure_from_path("/tmp/model.zip", device="cpu")
+            strategy = RLStrategy.configure_from_path("/tmp/model.zip", device="cpu")
         loader.assert_called_once_with("/tmp/model.zip", device="cpu")
-        self.assertIsInstance(RLStrategy.config, RLStrategyConfig)
+        self.assertIsInstance(strategy, RLStrategy)
 
 
 class LLMStrategyTests(unittest.TestCase):
@@ -368,8 +367,7 @@ class LLMStrategyTests(unittest.TestCase):
                 self.invocations += 1
                 return {"content": '{"piece_id": 1, "reason": "capture"}'}
 
-        LLMStrategy.configure(model=FakeChatModel())
-        strategy = LLMStrategy.create_instance()
+        strategy = LLMStrategy.configure(FakeChatModel())
 
         moves = [
             _move(piece_id=0, current=0, new=6, progress=6, distance=51),
@@ -395,12 +393,11 @@ class LLMStrategyTests(unittest.TestCase):
                 except StopIteration:
                     raise RuntimeError("exhausted")
 
-        LLMStrategy.configure(  # two retries => fall back to first legal move
+        strategy = LLMStrategy.configure(  # two retries => fall back to first legal move
             model=FailingChatModel(),
             system_prompt=DEFAULT_SYSTEM_PROMPT,
             max_retries=1,
         )
-        strategy = LLMStrategy.create_instance()
 
         moves = [
             _move(piece_id=2, current=5, new=9, progress=4, distance=48),
@@ -417,14 +414,14 @@ class LLMStrategyTests(unittest.TestCase):
         with mock.patch(
             "ludo_rl.strategy.llm_agent.init_chat_model", return_value=fake_model
         ) as init_mock:
-            LLMStrategy.configure_with_model_name(
+            strategy = LLMStrategy.configure_with_model_name(
                 "gpt-5-nano",
                 system_prompt="Test",
                 temperature=0.2,
             )
 
         init_mock.assert_called_once_with("gpt-5-nano", temperature=0.2)
-        self.assertIsInstance(LLMStrategy.config, LLMStrategyConfig)
+        self.assertIsInstance(strategy, LLMStrategy)
 
 
 if __name__ == "__main__":
