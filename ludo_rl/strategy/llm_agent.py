@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Optional, Sequence
 
 from llm_output_parser import parse_json as _parse_json
+from loguru import logger
 
 from .base import BaseStrategy, BaseStrategyConfig
 from .types import MoveOption, StrategyContext
@@ -142,6 +143,7 @@ class LLMStrategy(BaseStrategy):
         for _ in range(self.max_retries + 1):
             try:
                 response = self.model.invoke(messages)
+                logger.debug(f"LLM response: {response}")
             except Exception:
                 continue
 

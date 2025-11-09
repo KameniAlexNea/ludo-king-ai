@@ -165,7 +165,11 @@ class Player:
                 move_choices[piece_id] = move
 
         ctx = build_move_options(board_stack, dice_roll, action_mask, move_choices)
-        decision = self._strategy.select_move(ctx)
+        moves = list(ctx.iter_legal())
+        if len(moves) <= 1:
+            decision = moves[0] if moves else None
+        else:
+            decision = self._strategy.select_move(ctx)
 
         if decision is None:
             return random.choice(valid_moves)
