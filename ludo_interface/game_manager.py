@@ -46,8 +46,7 @@ class GameManager:
         """Extracts token information from the game state."""
         token_map: Dict[PlayerColor, List[Token]] = {c: [] for c in PlayerColor}
         for p in game.players:
-            for t in p.pieces:
-                token_map[PTOPlayerColor[p.color]].append(t)
+            token_map[PTOPlayerColor[p.color]] = [t for t in p.pieces]
         return token_map
 
     def is_human_turn(self, game: LudoGame, state: GameState) -> bool:

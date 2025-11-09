@@ -294,7 +294,7 @@ def _draw_stacked_tokens(
                 )
 
 
-def _token_home_grid_position(color: str, token_id: int) -> Tuple[int, int]:
+def _token_home_grid_position(color: PlayerColor, token_id: int) -> Tuple[int, int]:
     (c0, c1), (r0, r1) = HOME_QUADRANTS[color]
     cols = [c0 + 1, c0 + 3]
     rows = [r0 + 1, r0 + 3]
@@ -305,11 +305,11 @@ def _token_home_grid_position(color: str, token_id: int) -> Tuple[int, int]:
 
 def _home_column_positions_for_color(color: PlayerColor) -> Dict[int, Tuple[int, int]]:
     """
-    Map home column indices (100..104) to board coordinates; 105 is final finish.
+    Map home column indices (52..56) to board coordinates; 57 is final finish.
 
-    GameConstants.HOME_COLUMN_SIZE = 6 covers 100..105 inclusive, but per spec 105 is
-    not a drawable lane square—tokens reaching 105 are considered finished and moved
-    to the center aggregation. We therefore only allocate 5 visual squares (100-104).
+    GameConstants.HOME_COLUMN_SIZE = 6 covers 52..57 inclusive, but per spec 57 is
+    not a drawable lane square—tokens reaching 57 are considered finished and moved
+    to the center aggregation. We therefore only allocate 5 visual squares (52-56).
     """
     mapping: Dict[int, Tuple[int, int]] = {}
     center = (7, 7)
