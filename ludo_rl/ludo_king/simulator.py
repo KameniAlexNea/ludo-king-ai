@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import random
 
 from .game import Game
 from .types import Move
@@ -53,3 +54,37 @@ class Simulator:
 
         terminated = self.game.players[self.agent_index].check_won()
         return terminated, extra
+
+    def step_opponents_only(self) -> None:
+        """Simulate all opponents in turn order until it returns to the agent.
+
+        Handles extra turns for opponents according to game rules.
+        """
+        total = len(self.game.players)
+        idx = (self.agent_index + 1) % total
+        while idx != self.agent_index:
+            player = self.game.players[idx]
+            if player.check_won():
+                idx = (idx + 1) % total
+                continue
+
+            extra = True
+            while extra:
+                dice = self.game.roll_dice()
+                legal = self.game.legal_moves(idx, dice)
+                if not legal:
+                    extra = False
+                    continue
+                agent_color = int(player.color)
+                board_stack = self.game.board.build_tensor(agent_color)
+                decision = None
+                if hasattr(player, "choose"):
+                    try:
+                        decision = player.choose(board_stack, dice, legal)
+                    except Exception:
+                        decision = None
+                mv = decision if decision is not None else random.choice(legal)
+                result = self.game.apply_move(mv)
+                extra = result.extra_turn and result.events.move_resolved
+
+            idx = (idx + 1) % total

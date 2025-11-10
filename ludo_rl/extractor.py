@@ -3,7 +3,7 @@ import torch
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from torch import nn
 
-from .ludo.config import config, net_config
+from .ludo_king.config import config, net_config
 
 
 def _extract_piece_positions(

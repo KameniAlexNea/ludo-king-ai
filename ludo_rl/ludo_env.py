@@ -1,12 +1,19 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
+import os
+import random
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from .ludo.config import config
+from .ludo_king.config import config as king_config
+from .ludo_king.game import Game
+from .ludo_king.enums import Color
+from .ludo_king.player import Player
+from .ludo_king.board import Board
+from .ludo_king.simulator import Simulator
 from .ludo.reward import reward_config
-from .ludo.simulator import GameSimulator
+from .strategy.registry import STRATEGY_REGISTRY, available as available_strategies
 
 
 class LudoEnv(gym.Env):
@@ -31,73 +38,57 @@ class LudoEnv(gym.Env):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__()
         self.agent_index = 0  # We are always Player 0
-        self.simulator = GameSimulator(self.agent_index)
         self.render_mode = render_mode
 
-        self.max_game_turns = config.MAX_TURNS
+        self.max_game_turns = king_config.MAX_TURNS
         self.current_turn = 0
 
-        # Action Space: Choose one of 4 pieces
-        self.action_space = spaces.Discrete(4)
+        # Internal game state
+        self.game: Game | None = None
+        self.current_dice_roll: int = 1
+        self.current_player_index: int = 0
+        self.move_map: Dict[int, object] = {}
+        self.rng = random.Random()
 
-        # Observation Space: As designed
+        # Opponent strategies
+        self.opponents: List[str] = [s for s in os.getenv("OPPONENTS", ",".join(available_strategies())).split(",") if s]
+
+        # Action Space: Choose one of 4 pieces
+        self.action_space = spaces.Discrete(king_config.PIECES_PER_PLAYER)
+
+        # Observation Space: 10 channels x PATH_LENGTH, dice as 0..5
         self.observation_space = spaces.Dict(
             {
-                # (channels, path_length)
-                # Channels: my, opp1, opp2, opp3, safe, move_heat, my_ko, opp_ko, blockades, reward_heat
                 "board": spaces.Box(
                     low=-50.0,
                     high=50.0,
-                    shape=(10, config.PATH_LENGTH),
+                    shape=(10, king_config.PATH_LENGTH),
                     dtype=np.float32,
                 ),
-                # Dice roll (1-6) will be 0-5 for one-hot encoding
                 "dice_roll": spaces.Box(low=0, high=5, shape=(1,), dtype=np.int64),
             }
         )
 
-    def _obs_data_to_gym_space(self, obs_data):
-        """Converts the simulator's observation dict to the gym observation."""
-        board_state = obs_data["board_state"]
-        summary = obs_data["transition_summary"]
-
-        board_stack = np.stack(
-            [
-                board_state["my_pieces"],
-                board_state["opp1_pieces"],
-                board_state["opp2_pieces"],
-                board_state["opp3_pieces"],
-                board_state["safe_zones"],
-                summary["movement_heatmap"],
-                summary["my_knockouts"],
-                summary["opp_knockouts"],
-                summary["new_blockades"],
-                obs_data["reward_heatmap"],
-            ],
-            dtype=np.float32,
-        )
-
-        dice_val = np.array([obs_data["dice_roll"] - 1], dtype=np.int64)
-
+    def _build_observation(self) -> Dict[str, np.ndarray]:
+        assert self.game is not None
+        agent_color = int(self.game.players[self.agent_index].color)
+        board_stack = self.game.board.build_tensor(agent_color).astype(np.float32, copy=False)
+        dice_val = np.array([self.current_dice_roll - 1], dtype=np.int64)
         return {"board": board_stack, "dice_roll": dice_val}
 
     def _get_info(self):
         """Generates the info dict, including the crucial action mask."""
-        valid_moves = self.simulator.game.get_valid_moves(
-            self.agent_index, self.current_dice_roll
-        )
+        assert self.game is not None
+        valid_moves = self.game.legal_moves(self.agent_index, self.current_dice_roll)
         # Use bool for the mask as recommended by Gymnasium
-        action_mask = np.zeros(4, dtype=np.bool_)
+        action_mask = np.zeros(king_config.PIECES_PER_PLAYER, dtype=np.bool_)
         self.move_map = {}
 
         for move in valid_moves:
-            piece_id = move["piece"].piece_id
+            piece_id = int(move.piece_id)
             action_mask[piece_id] = True
-            # Store the first valid move found for a piece
             if piece_id not in self.move_map:
-                move_copy = move.copy()
-                move_copy["dice_roll"] = self.current_dice_roll
-                self.move_map[piece_id] = move_copy
+                self.move_map[piece_id] = move
 
         return {"action_mask": action_mask}
 
@@ -107,8 +98,9 @@ class LudoEnv(gym.Env):
         or if the game has hit the turn limit (truncated).
         """
         # 1. Check for termination (win condition)
-        player = self.simulator.game.players[self.agent_index]
-        terminated = player.has_won()
+        assert self.game is not None
+        player = self.game.players[self.agent_index]
+        terminated = player.check_won()
 
         # 2. Check for truncation (turn limit)
         truncated = self.current_turn >= self.max_game_turns
@@ -118,72 +110,96 @@ class LudoEnv(gym.Env):
     def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
         super().reset(seed=seed)
 
-        # Re-initialize the game
-        self.simulator = GameSimulator(self.agent_index)
-        self.current_dice_roll = self.simulator.game.roll_dice()
+        # Re-initialize the game with 2 or 4 players based on config
+        if king_config.NUM_PLAYERS == 2:
+            color_ids = [int(Color.RED), int(Color.YELLOW)]
+        else:
+            color_ids = [int(Color.RED), int(Color.GREEN), int(Color.YELLOW), int(Color.BLUE)][: king_config.NUM_PLAYERS]
+        players = [Player(color=c) for c in color_ids]
+        self.game = Game(players=players)
+        self.current_player_index = self.agent_index
+        self.sim = Simulator.for_game(self.game, agent_index=self.agent_index)
 
-        # --- RESET TURN COUNTER ---
+        # Attach opponents
+        for idx, pl in enumerate(self.game.players):
+            for pc in pl.pieces:
+                pc.position = 0
+            pl.has_finished = False
+            if idx != self.agent_index:
+                strat_name = self.opponents[(idx - 1) % len(self.opponents)].strip()
+                if strat_name and strat_name in STRATEGY_REGISTRY:
+                    cls = STRATEGY_REGISTRY[strat_name]
+                    try:
+                        pl.strategy = cls.create_instance(self.rng)
+                    except NotImplementedError:
+                        pl.strategy = cls()
+                    pl.strategy_name = strat_name  # type: ignore[attr-defined]
+
+        # Reset counters and dice
         self.current_turn = 0
+        self.current_dice_roll = self.game.roll_dice()
 
-        obs_data = self.simulator.get_agent_observation(self.current_dice_roll)
-        obs = self._obs_data_to_gym_space(obs_data)
+        obs = self._build_observation()
         info = self._get_info()
 
-        # Handle "no valid moves" on the very first turn
+        # Handle no valid moves for agent on first turn: opponents play until agent has a move
         while not np.any(info["action_mask"]):
             self.current_turn += 1
-            self.simulator.step_opponents_only()
-            self.current_dice_roll = self.simulator.game.roll_dice()
-
-            obs_data = self.simulator.get_agent_observation(self.current_dice_roll)
-            obs = self._obs_data_to_gym_space(obs_data)
+            self.sim.step_opponents_only()
+            self.current_dice_roll = self.game.roll_dice()
+            obs = self._build_observation()
             info = self._get_info()
-
             if self.current_turn >= self.max_game_turns:
                 return obs, info
 
         return obs, info
 
     def step(self, action: int):
-        extra_turn = False
+        assert self.game is not None
+        reward = 0.0
 
-        # 1. Check if the chosen action is valid
-        if self.move_map.get(action) is None:
-            # Agent chose an invalid piece. This shouldn't happen with MaskablePPO.
-            # If it does, penalize and skip turn.
-            reward = reward_config.lose  # Heavy penalty
-            opponent_rewards = self.simulator.step_opponents_only()
-            reward += opponent_rewards[self.agent_index]
+        # 1) Validate action and map to a chosen move
+        mv = self.move_map.get(int(action))
+        if mv is None:
+            # Invalid action - penalize and pass turn to opponents
+            reward += reward_config.lose
             self.current_turn += 1
-            # Get observation for next turn
-            self.current_dice_roll = self.simulator.game.roll_dice()
-            next_obs_data = self.simulator.get_agent_observation(self.current_dice_roll)
+            self.sim.step_opponents_only()
+            self.current_dice_roll = self.game.roll_dice()
+            obs = self._build_observation()
+            info = self._get_info()
+            terminated, truncated = self._check_game_over()
+            return obs, reward, terminated, truncated, info
 
-        else:
-            # 2. Execute the valid move
-            chosen_move = self.move_map[action]
+        # 2) Apply agent move
+        result = self.game.apply_move(mv)
+        extra_turn = result.extra_turn and result.events.move_resolved
 
-            # `step` executes agent move, simulates opponents, and returns next obs
-            next_obs_data, reward, extra_turn = self.simulator.step(chosen_move)
-            if not extra_turn:
-                self.current_turn += 1
+        # Simple shaping: reward for finish/capture/extra turn
+        if result.events.finished:
+            reward += reward_config.win
+        if result.events.knockouts:
+            reward += reward_config.capture if hasattr(reward_config, "capture") else 0.0
 
-        self.current_dice_roll = next_obs_data["dice_roll"]
-        obs = self._obs_data_to_gym_space(next_obs_data)
+        # 3) If no extra turn, opponents play until agent's turn
+        if not extra_turn:
+            self.current_turn += 1
+            self.sim.step_opponents_only()
+
+        # 4) Prepare next observation
+        self.current_dice_roll = self.game.roll_dice()
+        obs = self._build_observation()
         info = self._get_info()
 
-        # 3. Check for game over (win or turn limit)
+        # 5) Check for termination/truncation
         terminated, truncated = self._check_game_over()
-
         if terminated:
-            players = self.simulator.game.players
-            rank = sum(p.has_won() for p in players)
-            if rank == len(players):
+            # Rank: number of players who have won at this point
+            rank = sum(p.check_won() for p in self.game.players)
+            if rank == len(self.game.players):
                 reward += reward_config.lose
             else:
-                reward += (
-                    reward_config.win * (len(players) - rank + 1) / len(players)
-                )  # Large bonus for winning
+                reward += reward_config.win * (len(self.game.players) - rank + 1) / len(self.game.players)
             info["final_rank"] = rank
             return obs, reward, terminated, truncated, info
 
@@ -193,29 +209,28 @@ class LudoEnv(gym.Env):
             info["TimeLimit.truncated"] = True
             return obs, reward, terminated, truncated, info
 
-        # 4. Handle "no valid moves" for the *next* turn
-        # Loop until the agent has a move to make
+        # 6) If agent has no valid moves for next turn, simulate opponents until it does
         while not np.any(info["action_mask"]) and not terminated and not truncated:
-            reward += reward_config.skipped_turn  # Small penalty for a skipped turn
-            opponent_rewards = self.simulator.step_opponents_only()
-            reward += opponent_rewards[self.agent_index]
+            reward += reward_config.skipped_turn
             self.current_turn += 1
             if self.current_turn >= self.max_game_turns:
                 truncated = True
                 break
-
-            self.current_dice_roll = self.simulator.game.roll_dice()
-            next_obs_data = self.simulator.get_agent_observation(self.current_dice_roll)
-            obs = self._obs_data_to_gym_space(next_obs_data)
+            self._step_opponents_only()
+            self.current_dice_roll = self.game.roll_dice()
+            obs = self._build_observation()
             info = self._get_info()
-            terminated, truncated = self._check_game_over()  # Re-check every loop
+            terminated, truncated = self._check_game_over()
 
         if truncated:
             reward += reward_config.draw
             info["final_rank"] = 0
             info["TimeLimit.truncated"] = True
             return obs, reward, terminated, truncated, info
+
         return obs, reward, terminated, truncated, info
+
+    # --- Internal helpers ---
 
     def render(self):
         return format_env_state(self)
@@ -227,7 +242,9 @@ class LudoEnv(gym.Env):
 def format_env_state(env: "LudoEnv") -> str:
     """Returns a string snapshot of the current game state."""
     lines = [f"--- Turn {env.current_turn}/{env.max_game_turns} ---"]
-    for idx, player in enumerate(env.simulator.game.players):
+    if env.game is None:
+        return "\n".join(lines)
+    for idx, player in enumerate(env.game.players):
         label = "AGENT (P0)" if idx == env.agent_index else f"Opponent (P{idx})"
         positions = [piece.position for piece in player.pieces]
         lines.append(f"   {label}: {positions}")
