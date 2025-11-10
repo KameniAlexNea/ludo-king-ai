@@ -5,16 +5,6 @@ from .game import Game
 from .piece import Piece
 from .player import Player
 from .simulator import Simulator
-
-__all__ = [
-    "config",
-    "Color",
-    "Piece",
-    "Board",
-    "Player",
-    "Game",
-    "Simulator",
-]
 from .types import Move, MoveEvents, MoveResult
 
 __all__ = [
