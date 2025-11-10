@@ -1,19 +1,19 @@
-from typing import Dict, Optional, List
-
 import os
 import random
+from typing import Dict, List, Optional
+
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from .ludo_king.config import config as king_config
-from .ludo_king.game import Game
-from .ludo_king.enums import Color
-from .ludo_king.player import Player
-from .ludo_king.board import Board
-from .ludo_king.simulator import Simulator
 from .ludo.reward import reward_config
-from .strategy.registry import STRATEGY_REGISTRY, available as available_strategies
+from .ludo_king.config import config as king_config
+from .ludo_king.enums import Color
+from .ludo_king.game import Game
+from .ludo_king.player import Player
+from .ludo_king.simulator import Simulator
+from .strategy.registry import STRATEGY_REGISTRY
+from .strategy.registry import available as available_strategies
 
 
 class LudoEnv(gym.Env):
@@ -51,7 +51,11 @@ class LudoEnv(gym.Env):
         self.rng = random.Random()
 
         # Opponent strategies
-        self.opponents: List[str] = [s for s in os.getenv("OPPONENTS", ",".join(available_strategies())).split(",") if s]
+        self.opponents: List[str] = [
+            s
+            for s in os.getenv("OPPONENTS", ",".join(available_strategies())).split(",")
+            if s
+        ]
 
         # Action Space: Choose one of 4 pieces
         self.action_space = spaces.Discrete(king_config.PIECES_PER_PLAYER)
@@ -72,7 +76,9 @@ class LudoEnv(gym.Env):
     def _build_observation(self) -> Dict[str, np.ndarray]:
         assert self.game is not None
         agent_color = int(self.game.players[self.agent_index].color)
-        board_stack = self.game.board.build_tensor(agent_color).astype(np.float32, copy=False)
+        board_stack = self.game.board.build_tensor(agent_color).astype(
+            np.float32, copy=False
+        )
         dice_val = np.array([self.current_dice_roll - 1], dtype=np.int64)
         return {"board": board_stack, "dice_roll": dice_val}
 
@@ -114,7 +120,12 @@ class LudoEnv(gym.Env):
         if king_config.NUM_PLAYERS == 2:
             color_ids = [int(Color.RED), int(Color.YELLOW)]
         else:
-            color_ids = [int(Color.RED), int(Color.GREEN), int(Color.YELLOW), int(Color.BLUE)][: king_config.NUM_PLAYERS]
+            color_ids = [
+                int(Color.RED),
+                int(Color.GREEN),
+                int(Color.YELLOW),
+                int(Color.BLUE),
+            ][: king_config.NUM_PLAYERS]
         players = [Player(color=c) for c in color_ids]
         self.game = Game(players=players)
         self.current_player_index = self.agent_index
@@ -179,7 +190,9 @@ class LudoEnv(gym.Env):
         if result.events.finished:
             reward += reward_config.win
         if result.events.knockouts:
-            reward += reward_config.capture if hasattr(reward_config, "capture") else 0.0
+            reward += (
+                reward_config.capture if hasattr(reward_config, "capture") else 0.0
+            )
 
         # 3) If no extra turn, opponents play until agent's turn
         if not extra_turn:
@@ -199,7 +212,11 @@ class LudoEnv(gym.Env):
             if rank == len(self.game.players):
                 reward += reward_config.lose
             else:
-                reward += reward_config.win * (len(self.game.players) - rank + 1) / len(self.game.players)
+                reward += (
+                    reward_config.win
+                    * (len(self.game.players) - rank + 1)
+                    / len(self.game.players)
+                )
             info["final_rank"] = rank
             return obs, reward, terminated, truncated, info
 
