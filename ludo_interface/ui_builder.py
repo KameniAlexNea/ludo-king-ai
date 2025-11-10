@@ -3,12 +3,12 @@ from typing import List
 import gradio as gr
 
 from .event_handler import EventHandler
+from .models import PlayerColor
 from .views.llm_config_ui import (
     StrategyConfigManager,
     create_llm_config_ui,
     create_rl_config_ui,
 )
-from .models import PlayerColor
 from .views.play_tab import PlayTabView
 from .views.simulation_tab import SimulationTabView
 
