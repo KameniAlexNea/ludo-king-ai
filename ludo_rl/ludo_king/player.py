@@ -5,6 +5,9 @@ from typing import Sequence, Any
 import inspect
 import numpy as np
 
+from ludo_rl.strategy import BaseStrategy, HumanStrategy, build_move_options
+from ludo_rl.ludo.config import strategy_config as legacy_strategy_cfg
+
 from .enums import Color
 from .piece import Piece
 from .types import Move
@@ -13,7 +16,7 @@ from .types import Move
 @dataclass(slots=True)
 class Player:
     color: int | Color
-    strategy: object | None = None
+    strategy: BaseStrategy = field(default_factory=HumanStrategy)
     pieces: list[Piece] = field(init=False)
     has_finished: bool = field(default=False, init=False)
 
@@ -47,31 +50,23 @@ class Player:
         if not self.strategy:
             return None
 
-        # Prefer a 'decide' method if present (board, dice, moves)
-        decide = getattr(self.strategy, "decide", None)
-        if callable(decide):
-            try:
-                return decide(board_stack, dice_roll, legal_moves)
-            except TypeError:
-                pass
-
-        # Fallback to 'select_move' with flexible arity
-        sel = getattr(self.strategy, "select_move", None)
-        if callable(sel):
-            try:
-                sig = inspect.signature(sel)
-                params = len(sig.parameters)
-            except Exception:
-                params = 3
-
-            if params >= 3:
-                try:
-                    return sel(board_stack, dice_roll, legal_moves)
-                except TypeError:
-                    pass
-            try:
-                return sel(legal_moves)
-            except TypeError:
-                return None
-
+        # Build move_choices and action_mask per legacy extractor expectations
+        pieces_per_player = len(self.pieces)
+        move_choices: list[dict | None] = [None] * pieces_per_player
+        action_mask = np.zeros(pieces_per_player, dtype=bool)
+        for mv in legal_moves:
+            if 0 <= mv.piece_id < pieces_per_player and move_choices[mv.piece_id] is None:
+                action_mask[mv.piece_id] = True
+                move_choices[mv.piece_id] = {
+                    "piece": self.pieces[mv.piece_id],
+                    "new_pos": mv.new_pos,
+                }
+        ctx = build_move_options(board_stack, int(dice_roll), action_mask, move_choices)
+        decided = self.strategy.select_move(ctx)
+        if decided is None:
+            return None
+        # Map back to our Move by piece_id
+        for mv in legal_moves:
+            if mv.piece_id == decided.piece_id:
+                return mv
         return None

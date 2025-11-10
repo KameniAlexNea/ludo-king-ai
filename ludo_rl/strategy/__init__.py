@@ -16,6 +16,8 @@ from .rl_agent import RLStrategy
 from .rusher import RusherStrategy
 from .support import SupportStrategy
 from .types import MoveOption, StrategyContext
+from .human import HumanStrategy
+from .base import BaseStrategy
 
 __all__ = [
     "MoveOption",
@@ -36,4 +38,6 @@ __all__ = [
     "SupportStrategy",
     "available",
     "create",
+    "HumanStrategy",
+    "BaseStrategy",
 ]

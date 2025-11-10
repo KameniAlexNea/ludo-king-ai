@@ -1,11 +1,17 @@
 import random
+from typing import ClassVar
 
-from .base import BaseStrategy
+from .types import MoveOption, StrategyContext
 
+from .base import BaseStrategy, BaseStrategyConfig
+
+class HumanStrategyConfig(BaseStrategyConfig):
+    def sample(self, rng: random.Random | None = None) -> dict[str, object]:
+        return {}
 
 class HumanStrategy(BaseStrategy):
     name = "human"
+    config: ClassVar[HumanStrategyConfig] = HumanStrategyConfig()
 
-    def select_move(self, ctx):
-        moves = list(ctx.iter_legal())
-        return random.choice(moves) if moves else None
+    def _softmax(self, ctx: StrategyContext, move: MoveOption):
+        return 1.0
