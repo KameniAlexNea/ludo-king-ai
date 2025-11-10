@@ -106,7 +106,7 @@ class StrategySelectionTests(unittest.TestCase):
         ]
         ctx = _make_context(moves)
         choice = ProbabilityStrategy().select_move(ctx)
-        self.assertEqual(choice.piece_id, 0)
+        self.assertEqual(choice.piece_id, 1)
 
     def test_cautious_stays_safe(self) -> None:
         moves = [

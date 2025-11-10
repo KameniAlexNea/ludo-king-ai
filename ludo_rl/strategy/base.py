@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass
 from typing import ClassVar, Optional
@@ -22,18 +23,30 @@ class BaseStrategy:
     config: ClassVar[BaseStrategyConfig | None] = None
 
     def select_move(self, ctx: StrategyContext) -> Optional[MoveOption]:
-        best: Optional[MoveOption] = None
-        best_score = float("-inf")
+        scored_moves: list[tuple[MoveOption, float]] = []
 
         for move in ctx.iter_legal():
-            score = self._score_move(ctx, move)
-            if score > best_score or (
-                score == best_score and best and move.piece_id < best.piece_id
-            ):
-                best = move
-                best_score = score
+            scored_moves.append((move, self._score_move(ctx, move)))
 
-        return best
+        if not scored_moves:
+            return None
+
+        weights = self._softmax([score for _, score in scored_moves])
+        population = [move for move, _ in scored_moves]
+        return random.choices(population, weights=weights, k=1)[0]
+
+    @staticmethod
+    def _softmax(scores: list[float]) -> list[float]:
+        if not scores:
+            return []
+        max_score = max(scores)
+        if max_score == float("-inf"):
+            return [1.0] * len(scores)
+        exps = [math.exp(s - max_score) for s in scores]
+        total = sum(exps)
+        if total <= 0:
+            return [1.0] * len(scores)
+        return [value / total for value in exps]
 
     def _score_move(
         self, ctx: StrategyContext, move: MoveOption

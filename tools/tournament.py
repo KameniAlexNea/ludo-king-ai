@@ -1,19 +1,28 @@
 from __future__ import annotations
 
 import argparse
+import os
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from itertools import combinations
 from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
+from loguru import logger
 
 from ludo_rl.ludo.config import config
 from ludo_rl.ludo.game import LudoGame
 from ludo_rl.ludo.player import Player
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
+from ludo_rl.strategy.registry import available as available_strategies
 
-POINTS_TABLE = (4, 3, 1, 0)
+POINTS_TABLE = (3, 2, 1, 0)
+
+
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
 
 
 @dataclass
@@ -35,7 +44,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run a heuristic-only Ludo strategy tournament"
     )
-    parser.add_argument("--games", type=int, default=10, help="Number of games to play")
+    parser.add_argument(
+        "--games",
+        type=int,
+        default=int(os.getenv("NGAMES", "10")),
+        help="Number of games to play",
+    )
     parser.add_argument(
         "--seed",
         type=int,
@@ -45,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--strategies",
         type=str,
-        default=None,
+        default=os.getenv("OPPONENTS", ",".join(available_strategies())),
         help=(
             "Comma-separated list of strategy names to include. "
             "League runs every combination of four distinct strategies."
@@ -90,7 +104,7 @@ def determine_rankings(game: LudoGame, finish_order: List[int]) -> List[int]:
     remaining = [idx for idx in range(config.NUM_PLAYERS) if idx not in ordered]
     remaining.sort(
         key=lambda idx: (
-            sum(piece.position == 57 for piece in game.players[idx].pieces),
+            sum(piece.is_finished() for piece in game.players[idx].pieces),
             player_progress(game.players[idx]),
         ),
         reverse=True,
@@ -100,14 +114,9 @@ def determine_rankings(game: LudoGame, finish_order: List[int]) -> List[int]:
 
 
 def play_game(
-    seats: Sequence[str],
-    rng: random.Random,
-    game_index: int,
+    seats: Sequence[str], rng: random.Random, game_index: int, seed: int = 42
 ) -> GameResult:
     game = LudoGame()
-    game_seed = rng.randint(0, 1_000_000)
-    game.rng.seed(game_seed)
-    random.seed(game_seed)
 
     for player, strategy_name in zip(game.players, seats, strict=True):
         for piece in player.pieces:
@@ -189,20 +198,61 @@ def run_combination_tournament(
     )
 
 
+def log_combination_summary(
+    summary: CombinationSummary, index: int | None = None
+) -> None:
+    """Log a compact per-combination result summary using loguru.
+
+    This is intended to be called immediately after finishing the n games for a
+    given 4-seat combination (even when running in parallel), instead of waiting
+    until the entire league completes.
+    """
+    combo_label = ", ".join(summary.participants)
+    prefix = f"Combination {index:03d}: " if index is not None else "Combination: "
+    logger.info(f"{prefix}{combo_label}")
+    combo_table = sorted(summary.totals.items(), key=lambda item: (-item[1], item[0]))
+    logger.info("  Points collected:")
+    for rank, (name, points) in enumerate(combo_table, start=1):
+        logger.info(f"    {rank}. {name:12s} {points:3d} pts")
+
+
 def run_league(
     strategy_pool: Sequence[str], games: int, rng: random.Random
 ) -> tuple[Dict[str, int], Dict[str, int], List[CombinationSummary]]:
+    """Run a full league across all 4-seat combinations in parallel.
+
+    Uses a thread pool with max_workers = os.cpu_count() to parallelize
+    independent combination tournaments. Each worker receives its own RNG
+    seeded from the provided rng to ensure reproducibility without sharing
+    RNG state across threads.
+    """
     league_totals = {name: 0 for name in strategy_pool}
     games_played = {name: 0 for name in strategy_pool}
     combination_summaries: List[CombinationSummary] = []
 
-    for combo in combinations(strategy_pool, 4):
-        summary = run_combination_tournament(combo, games, rng)
-        combination_summaries.append(summary)
+    all_combos = list(combinations(strategy_pool, 4))
+    # Pre-generate independent seeds for each combo using the provided rng
+    seeds = [rng.randint(0, 2**32 - 1) for _ in all_combos]
 
-        for name, pts in summary.totals.items():
-            league_totals[name] += pts
-            games_played[name] += len(summary.game_results)
+    def _run_combo(combo: Tuple[str, ...], seed: int) -> CombinationSummary:
+        local_rng = random.Random(seed)
+        return run_combination_tournament(combo, games, local_rng)
+
+    max_workers = os.cpu_count() or 1
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(_run_combo, combo, seed): (combo, idx)
+            for idx, (combo, seed) in enumerate(zip(all_combos, seeds, strict=True))
+        }
+        combo_counter = 0
+        for future in as_completed(future_map):
+            summary = future.result()
+            combination_summaries.append(summary)
+            for name, pts in summary.totals.items():
+                league_totals[name] += pts
+                games_played[name] += len(summary.game_results)
+            combo_counter += 1
+            log_combination_summary(summary, combo_counter)
 
     return league_totals, games_played, combination_summaries
 
@@ -213,19 +263,12 @@ def print_summary(
     games_played: Dict[str, int],
     combination_summaries: Sequence[CombinationSummary],
 ) -> None:
-    print("Strategy pool:", ", ".join(strategy_pool))
-    print()
+    logger.info(
+        f"Strategy pool: {', '.join(strategy_pool)}",
+    )
 
-    for combo_index, summary in enumerate(combination_summaries, start=1):
-        combo_label = ", ".join(summary.participants)
-        print(f"Combination {combo_index:03d}: {combo_label}")
-        combo_table = sorted(
-            summary.totals.items(), key=lambda item: (-item[1], item[0])
-        )
-        print("  Points collected:")
-        for rank, (name, points) in enumerate(combo_table, start=1):
-            print(f"    {rank}. {name:12s} {points:3d} pts")
-        print()
+    # Per-combination summaries are logged at completion time during run_league.
+    # Below we print the final league standings only.
 
     print("League standings:")
     for rank, (name, points) in enumerate(
@@ -242,7 +285,8 @@ def print_summary(
 
 def main() -> None:
     args = parse_args()
-    rng = random.Random(args.seed)
+    seed_everything(args.seed)
+    rng = random.Random()
 
     try:
         strategy_pool = select_strategies(args.strategies)

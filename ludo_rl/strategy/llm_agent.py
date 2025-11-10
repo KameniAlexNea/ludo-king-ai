@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-import random
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Optional, Sequence
 
@@ -165,7 +164,7 @@ class LLMStrategy(BaseStrategy):
                     return move
 
         # Fallback: random legal move
-        return random.choice(legal_moves)
+        return legal_moves[0]
 
     # --- Prompt construction ---------------------------------------------------
     def _build_messages(
