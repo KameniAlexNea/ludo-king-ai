@@ -21,9 +21,9 @@ from torch.profiler import (
     schedule,
     tensorboard_trace_handler,
 )
-import wandb
 from wandb.integration.sb3 import WandbCallback
 
+import wandb
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king.config import net_config
