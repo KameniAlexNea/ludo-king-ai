@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Sequence, Optional, TYPE_CHECKING
 
 import numpy as np
 
-from ludo_rl.strategy import BaseStrategy, HumanStrategy, build_move_options
-from ludo_rl.strategy import create as create_strategy
+if TYPE_CHECKING:  # avoid runtime imports to prevent circular deps
+    from ludo_rl.strategy.base import BaseStrategy
 
 from .enums import Color
 from .piece import Piece
@@ -16,7 +16,7 @@ from .types import Move
 @dataclass(slots=True)
 class Player:
     color: int | Color
-    strategy: BaseStrategy = field(default_factory=HumanStrategy)
+    strategy: Optional["BaseStrategy"] = field(default=None)
     strategy_name: str = "unknown"
     pieces: list[Piece] = field(init=False)
     has_finished: bool = field(default=False, init=False)
@@ -51,6 +51,7 @@ class Player:
         # Ensure a strategy instance exists; do not replace existing strategy based on name
         try:
             if not self.strategy:
+                from ludo_rl.strategy.registry import create as create_strategy
                 self.strategy = create_strategy(self.strategy_name)
         except KeyError:
             # Unknown strategy: fallback to random legal move and mark as random
@@ -71,6 +72,8 @@ class Player:
                     "piece": self.pieces[mv.piece_id],
                     "new_pos": mv.new_pos,
                 }
+        # Lazy import to avoid import-time circular dependencies
+        from ludo_rl.strategy.features import build_move_options
         ctx = build_move_options(board_stack, int(dice_roll), action_mask, move_choices)
         decided = self.strategy.select_move(ctx)
         if decided is None:
