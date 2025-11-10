@@ -1,7 +1,18 @@
 from dataclasses import dataclass
-from typing import Dict
+from typing import Any, Dict, Union
+
+from .types import MoveEvents
 
 COEF = 5
+
+
+def _get(events: Union[MoveEvents, Dict[str, Any]], name: str, default=0):
+    """
+    Unified accessor to support both dataclass MoveEvents and dicts.
+    """
+    if isinstance(events, MoveEvents):
+        return getattr(events, name, default)
+    return (events or {}).get(name, default)
 
 
 @dataclass(slots=True)
@@ -28,7 +39,7 @@ def compute_move_rewards(
     mover_index: int,
     old_position: int,
     new_position: int,
-    events: Dict,
+    events: Union[MoveEvents, Dict[str, Any]],
 ) -> Dict[int, float]:
     """
     Calculate per-player rewards for a completed move.
@@ -54,26 +65,26 @@ def compute_move_rewards(
 
     mover_reward = 0.0
 
-    if events.get("move_resolved", True) and old_position != new_position:
+    if _get(events, "move_resolved", True) and old_position != new_position:
         mover_reward += reward_config.progress
 
-    if events.get("exited_home"):
+    if _get(events, "exited_home"):
         mover_reward += reward_config.exit_home
 
-    if events.get("finished"):
+    if _get(events, "finished"):
         mover_reward += reward_config.finish
 
-    knockouts = events.get("knockouts", []) or []
+    knockouts = _get(events, "knockouts", []) or []
     if knockouts:
         mover_reward += reward_config.capture * len(knockouts)
         for knockout in knockouts:
             victim_index = knockout["player"]
             rewards[victim_index] += reward_config.got_capture
 
-    if events.get("hit_blockade"):
+    if _get(events, "hit_blockade"):
         mover_reward += reward_config.hit_blockade
 
-    if events.get("blockades"):
+    if _get(events, "blockades"):
         mover_reward += reward_config.blockade
 
     rewards[mover_index] += mover_reward

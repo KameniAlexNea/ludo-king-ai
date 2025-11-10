@@ -173,14 +173,7 @@ class Game:
             mover_index=mv.player_index,
             old_position=old,
             new_position=pc.position,
-            events={
-                "move_resolved": events.move_resolved,
-                "exited_home": events.exited_home,
-                "finished": events.finished,
-                "knockouts": events.knockouts,
-                "hit_blockade": events.hit_blockade,
-                "blockades": events.blockades,
-            },
+            events=events,
         )
 
         return MoveResult(

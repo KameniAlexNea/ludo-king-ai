@@ -234,15 +234,13 @@ class LudoEnv(gym.Env):
         else:
             if result.events.finished:
                 # Finishing a piece
-                reward += getattr(reward_config, "finish", 0.0)
+                reward += reward_config.finish
             if result.events.knockouts:
-                reward += getattr(reward_config, "capture", 0.0) * len(
-                    result.events.knockouts or []
-                )
+                reward += reward_config.capture * len(result.events.knockouts or [])
             if result.events.hit_blockade and not result.events.move_resolved:
-                reward += getattr(reward_config, "hit_blockade", 0.0)
+                reward += reward_config.hit_blockade
             if result.events.blockades:
-                reward += getattr(reward_config, "blockade", 0.0)
+                reward += reward_config.blockade
 
         # 3) If no extra turn, opponents play until agent's turn
         if not extra_turn:
