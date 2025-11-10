@@ -16,7 +16,8 @@ def _compute_relative_translations() -> Tuple[Tuple[Tuple[int, ...], ...], ...]:
         for agent_start in config.PLAYER_START_SQUARES:
             mapping = [-1] * config.PATH_LENGTH
             for rel_pos in range(1, config.MAIN_TRACK_END + 1):
-                abs_pos = ((player_start + rel_pos - 2 + 52) % 52) + 1
+                # absolute 0..51 per piece.to_absolute
+                abs_pos = (player_start + rel_pos - 1) % 52
                 agent_rel = ((abs_pos - agent_start + 52) % 52) + 1
                 mapping[rel_pos] = agent_rel
             player_rows.append(tuple(mapping))
@@ -35,16 +36,19 @@ class Board:
     _tensor_buffer: np.ndarray | None = field(default=None, init=False, repr=False)
 
     def absolute_position(self, player_color: int, relative_pos: int) -> int:
+        """Map a player's relative position to absolute (0..51) per piece.to_absolute."""
         if not 1 <= relative_pos <= config.MAIN_TRACK_END:
             return -1
         start = config.PLAYER_START_SQUARES[player_color]
-        return ((start + relative_pos - 2 + 52) % 52) + 1
+        return (start + relative_pos - 1) % 52
 
     def relative_position(self, player_color: int, abs_pos: int) -> int:
-        if not 1 <= abs_pos <= 52:
+        """Map absolute (0..51) back to player's relative frame (1..52)."""
+        if not 0 <= abs_pos <= 51:
             return -1
         start = config.PLAYER_START_SQUARES[player_color]
-        return ((abs_pos - start + 52) % 52) + 1
+        rel = (abs_pos - start + 52) % 52
+        return rel + 1
 
     def translate_relative(self, src_color: int, dst_color: int, rel_pos: int) -> int:
         mapping = _RELATIVE_TRANSLATIONS[src_color][dst_color]

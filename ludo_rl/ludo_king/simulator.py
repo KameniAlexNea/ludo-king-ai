@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import List
+import numpy as np
 
 from .game import Game
 from .types import Move
@@ -44,7 +45,10 @@ class Simulator:
                     continue
                 dice = self.game.roll_dice()
                 legals = self.game.legal_moves(idx, dice)
-                mv = self.game.players[idx].choose(legals)
+                # Build agent-relative board stack for this player color
+                agent_color = int(self.game.players[idx].color)
+                board_stack = self.game.board.build_tensor(agent_color)
+                mv = self.game.players[idx].choose(board_stack, dice, legals)
                 if mv is not None:
                     self.game.apply_move(mv)
                 idx = (idx + 1) % total_players
