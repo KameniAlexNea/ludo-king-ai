@@ -110,6 +110,36 @@ class BoardAndGameTests(unittest.TestCase):
         self.assertTrue(all(1 <= roll <= 6 for roll in rolls))
         self.assertEqual(len(rolls), 6)
 
+    def test_safe_square_no_capture(self) -> None:
+        # Place opponent single piece on a global safe square and land on it
+        safe_abs = config.SAFE_SQUARES_ABS[1]
+        opp_rel = self.board.relative_position(int(Color.GREEN), safe_abs)
+        self.players[1].pieces[0].position = opp_rel
+        # Move our piece to the corresponding relative ring pos
+        our_rel = self.board.relative_position(int(Color.RED), safe_abs)
+        self.players[0].pieces[0].position = our_rel - 1 if our_rel > 1 else config.MAIN_TRACK_END
+        mv = Move(player_index=0, piece_id=0, new_pos=our_rel, dice_roll=1)
+        res = self.game.apply_move(mv)
+        # No knockout should happen on safe square
+        self.assertFalse(res.events.knockouts)
+        self.assertTrue(res.events.move_resolved)
+        self.assertNotEqual(self.players[1].pieces[0].position, 0)
+
+    def test_cannot_cross_blockade(self) -> None:
+        # Create opponent blockade ahead on the ring
+        start_rel = 6
+        self.players[0].pieces[0].position = start_rel
+        abs_block = self.board.absolute_position(int(Color.RED), 8)
+        opp_rel = self.board.relative_position(int(Color.GREEN), abs_block)
+        self.players[1].pieces[0].position = opp_rel
+        self.players[1].pieces[1].position = opp_rel
+        # Attempt to move 3 steps (crosses relative squares 7,8,9)
+        mv = Move(player_index=0, piece_id=0, new_pos=9, dice_roll=3)
+        res = self.game.apply_move(mv)
+        self.assertTrue(res.events.hit_blockade)
+        self.assertFalse(res.events.move_resolved)
+        self.assertEqual(self.players[0].pieces[0].position, start_rel)
+
 
 class PlayerBehaviourTests(unittest.TestCase):
     def setUp(self) -> None:

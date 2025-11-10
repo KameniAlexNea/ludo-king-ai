@@ -41,6 +41,7 @@ class PlayerDecisionTests(unittest.TestCase):
     def test_player_decide_uses_configured_strategy(self) -> None:
         player = Player(color=0)
         player.strategy_name = "rusher"
+        player.strategy = None  # ensure strategy is built from name
 
         from ludo_rl.ludo_king.types import Move
         piece_a = player.pieces[0]
@@ -61,6 +62,7 @@ class PlayerDecisionTests(unittest.TestCase):
     def test_player_unknown_strategy_falls_back_to_random(self) -> None:
         player = Player(color=0)
         player.strategy_name = "unknown"
+        player.strategy = None  # trigger unknown-name handling
 
         from ludo_rl.ludo_king.types import Move
         piece_a = player.pieces[0]

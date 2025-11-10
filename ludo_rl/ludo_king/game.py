@@ -60,12 +60,7 @@ class Game:
                 and self.board.count_at_relative(player.color, dest) >= 2
             ):
                 continue
-                # cannot land on an opponent blockade (two or more opponent pieces on ring)
-                if 1 <= dest <= config.MAIN_TRACK_END:
-                    abs_pos = self.board.absolute_position(player.color, dest)
-                    occ = self.board.pieces_at_absolute(abs_pos, exclude_color=int(player.color))
-                    if len(occ) >= 2:
-                        continue
+            # Note: Opponent blockade handling is enforced in apply_move (including crossing/landing)
             moves.append(
                 Move(
                     player_index=player_idx,
@@ -84,6 +79,45 @@ class Game:
         events = MoveEvents()
         old = pc.position
 
+        # Pre-check: cannot cross a blockade on ring squares
+        def iter_ring_path(start_rel: int, end_rel: int) -> list[int]:
+            path: list[int] = []
+            # Only consider ring traversal (1..51)
+            if start_rel == 0:
+                # entering from yard: only the destination on ring matters
+                if 1 <= end_rel <= config.MAIN_TRACK_END:
+                    path.append(end_rel)
+                return path
+            cur = start_rel
+            # Walk forward until we reach end_rel or leave ring
+            while True:
+                nxt = 1 if cur >= config.MAIN_TRACK_END else cur + 1
+                if 1 <= nxt <= config.MAIN_TRACK_END:
+                    path.append(nxt)
+                if nxt == end_rel or not (1 <= end_rel <= config.MAIN_TRACK_END):
+                    break
+                cur = nxt
+            return path
+
+        path = iter_ring_path(old, mv.new_pos)
+        for rel in path:
+            abs_pos = self.board.absolute_position(player.color, rel)
+            occ = self.board.pieces_at_absolute(abs_pos)
+            # Count pieces per color to detect true blockade (same color >= 2)
+            counts: dict[int, int] = {}
+            for col, _ in occ:
+                counts[col] = counts.get(col, 0) + 1
+            if any(c >= 2 for c in counts.values()):
+                events.hit_blockade = True
+                events.move_resolved = False
+                return MoveResult(
+                    old_position=old,
+                    new_position=old,
+                    events=events,
+                    extra_turn=False,
+                    rewards=None,
+                )
+
         if old == 0 and mv.new_pos == config.START_POSITION:
             events.exited_home = True
 
@@ -96,19 +130,17 @@ class Game:
         # resolve interactions on board (captures/blockades) only if on ring
         if 1 <= mv.new_pos <= config.MAIN_TRACK_END:
             abs_pos = self.board.absolute_position(player.color, mv.new_pos)
-            occupants = self.board.pieces_at_absolute(
-                abs_pos, exclude_color=player.color
-            )
-            if len(occupants) == 1:
-                opp_color, opp_piece = occupants[0]
-                opp_piece.send_home()
-                events.knockouts.append(
-                    {
+            occupants = self.board.pieces_at_absolute(abs_pos, exclude_color=player.color)
+            # No captures on global safe squares
+            if abs_pos not in config.SAFE_SQUARES_ABS:
+                if len(occupants) == 1:
+                    opp_color, opp_piece = occupants[0]
+                    opp_piece.send_home()
+                    events.knockouts.append({
                         "player": opp_color,
                         "piece_id": opp_piece.piece_id,
                         "abs_pos": abs_pos,
-                    }
-                )
+                    })
             elif len(occupants) >= 2:
                 # can't land on an opponent blockade; revert
                 pc.move_to(old)
