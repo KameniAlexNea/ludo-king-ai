@@ -8,11 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
+import numpy as np
 from loguru import logger
 from sb3_contrib import MaskablePPO
-import numpy as np
 
-from ludo_rl.ludo_king import Game, Player, Board, Color, config as king_config
+from ludo_rl.ludo_king import Color, Game, Player
+from ludo_rl.ludo_king import config as king_config
 from ludo_rl.strategy.llm_agent import (
     DEFAULT_SYSTEM_PROMPT,
     LLMStrategy,
@@ -53,14 +54,18 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _attach_strategy(player: Player, strategy: object, label: str, rng: random.Random) -> None:
+def _attach_strategy(
+    player: Player, strategy: object, label: str, rng: random.Random
+) -> None:
     # For registry strategies: either accept rng via create_instance or default constructor.
     # Here, strategy is already an instance.
     player.strategy = strategy
     player.strategy_name = label  # type: ignore[attr-defined]
 
 
-def attach_players(game: Game, seats: Sequence[Participant], rng: random.Random) -> tuple[Dict[int, str], Dict[int, Participant]]:
+def attach_players(
+    game: Game, seats: Sequence[Participant], rng: random.Random
+) -> tuple[Dict[int, str], Dict[int, Participant]]:
     labels: Dict[int, str] = {}
     rl_assignments: Dict[int, Participant] = {}
     for idx, player in enumerate(game.players):
@@ -78,7 +83,9 @@ def attach_players(game: Game, seats: Sequence[Participant], rng: random.Random)
             player.strategy_name = participant.label  # type: ignore[attr-defined]
             rl_assignments[idx] = participant
         else:
-            raise SystemExit(f"Invalid participant configuration at seat {idx}: {participant}")
+            raise SystemExit(
+                f"Invalid participant configuration at seat {idx}: {participant}"
+            )
     return labels, rl_assignments
 
 
@@ -89,13 +96,15 @@ def determine_rankings(game: Game, finish_order: List[int]) -> List[int]:
 
     def player_progress(player_index: int) -> tuple[int, int]:
         player = game.players[player_index]
-        finished = sum(1 for pc in player.pieces if pc.position == king_config.HOME_FINISH)
+        finished = sum(
+            1 for pc in player.pieces if pc.position == king_config.HOME_FINISH
+        )
         progress = sum(pc.position for pc in player.pieces)
         return finished, progress
 
     remaining.sort(key=lambda idx: player_progress(idx), reverse=True)
     ordered.extend(remaining)
-    return ordered[: total_players]
+    return ordered[:total_players]
 
 
 def _extract_piece_index(move: object) -> int | None:
@@ -137,7 +146,10 @@ def _decide_with_model(
 
     try:
         action, _ = participant.model.predict(
-            {"board": board_stack[None, ...], "dice_roll": np.array([[dice_roll - 1]], dtype=np.int64)},
+            {
+                "board": board_stack[None, ...],
+                "dice_roll": np.array([[dice_roll - 1]], dtype=np.int64),
+            },
             action_masks=action_mask[None, ...],
             deterministic=participant.deterministic,
         )
@@ -161,7 +173,12 @@ def run_single_game(
     if num == 2:
         color_ids = [int(Color.RED), int(Color.YELLOW)]
     else:
-        color_ids = [int(Color.RED), int(Color.GREEN), int(Color.YELLOW), int(Color.BLUE)][:num]
+        color_ids = [
+            int(Color.RED),
+            int(Color.GREEN),
+            int(Color.YELLOW),
+            int(Color.BLUE),
+        ][:num]
     players = [Player(color=c) for c in color_ids]
     game = Game(players=players)
 
@@ -204,13 +221,17 @@ def run_single_game(
             board_stack = game.board.build_tensor(int(player.color))
 
             if current_index in rl_assignments:
-                mv = _decide_with_model(rl_assignments[current_index], board_stack, dice, legal, base_rng)
+                mv = _decide_with_model(
+                    rl_assignments[current_index], board_stack, dice, legal, base_rng
+                )
             else:
                 decision = player.choose(board_stack, dice, legal)
                 mv = decision if decision is not None else base_rng.choice(legal)
 
             result = game.apply_move(mv)
-            _log_outcome(game_index, label, mv, dice, skipped=False, extra=result.extra_turn)
+            _log_outcome(
+                game_index, label, mv, dice, skipped=False, extra=result.extra_turn
+            )
             extra = result.extra_turn and result.events.move_resolved
 
             if player.check_won() and current_index not in finish_order:
@@ -240,7 +261,9 @@ def _log_outcome(
     extra: bool,
 ) -> None:
     if skipped:
-        logger.info(f"[Game {game_index:02d}] Player {label} skipped turn (dice={dice}).")
+        logger.info(
+            f"[Game {game_index:02d}] Player {label} skipped turn (dice={dice})."
+        )
         return
     pid = _extract_piece_index(move)
     extras = []

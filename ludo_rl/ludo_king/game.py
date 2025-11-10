@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Dict, List, Sequence
+from typing import List
 
 from .board import Board
 from .config import config
@@ -55,9 +55,19 @@ class Game:
             if dest is None:
                 continue
             # cannot stack beyond 2 on main track
-            if dest <= config.MAIN_TRACK_END and self.board.count_at_relative(player.color, dest) >= 2:
+            if (
+                dest <= config.MAIN_TRACK_END
+                and self.board.count_at_relative(player.color, dest) >= 2
+            ):
                 continue
-            moves.append(Move(player_index=player_idx, piece_id=pc.piece_id, new_pos=dest, dice_roll=dice))
+            moves.append(
+                Move(
+                    player_index=player_idx,
+                    piece_id=pc.piece_id,
+                    new_pos=dest,
+                    dice_roll=dice,
+                )
+            )
         return moves
 
     # --- Applying a move ---
@@ -80,11 +90,19 @@ class Game:
         # resolve interactions on board (captures/blockades) only if on ring
         if 1 <= mv.new_pos <= config.MAIN_TRACK_END:
             abs_pos = self.board.absolute_position(player.color, mv.new_pos)
-            occupants = self.board.pieces_at_absolute(abs_pos, exclude_color=player.color)
+            occupants = self.board.pieces_at_absolute(
+                abs_pos, exclude_color=player.color
+            )
             if len(occupants) == 1:
                 opp_color, opp_piece = occupants[0]
                 opp_piece.send_home()
-                events.knockouts.append({"player": opp_color, "piece_id": opp_piece.piece_id, "abs_pos": abs_pos})
+                events.knockouts.append(
+                    {
+                        "player": opp_color,
+                        "piece_id": opp_piece.piece_id,
+                        "abs_pos": abs_pos,
+                    }
+                )
             elif len(occupants) >= 2:
                 # can't land on an opponent blockade; revert
                 pc.move_to(old)

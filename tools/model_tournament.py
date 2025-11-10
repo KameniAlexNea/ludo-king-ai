@@ -19,13 +19,8 @@ import numpy as np
 from loguru import logger
 from sb3_contrib import MaskablePPO
 
-from ludo_rl.ludo_king import (
-    Game,
-    Player,
-    Board,
-    Color,
-    config as king_config,
-)
+from ludo_rl.ludo_king import Board, Color, Game, Player
+from ludo_rl.ludo_king import config as king_config
 
 POINTS_TABLE = (4, 3, 1, 0)
 
@@ -268,13 +263,17 @@ def determine_rankings(game: Game, finish_order: List[int]) -> List[int]:
     remaining = [idx for idx in range(total_players) if idx not in ordered]
     remaining.sort(
         key=lambda idx: (
-            sum(1 for pc in game.players[idx].pieces if pc.position == king_config.HOME_FINISH),
+            sum(
+                1
+                for pc in game.players[idx].pieces
+                if pc.position == king_config.HOME_FINISH
+            ),
             player_progress(game.players[idx]),
         ),
         reverse=True,
     )
     ordered.extend(remaining)
-    return ordered[: total_players]
+    return ordered[:total_players]
 
 
 def play_game(
@@ -290,7 +289,12 @@ def play_game(
     if num == 2:
         color_ids = [int(Color.RED), int(Color.YELLOW)]  # opposite seats
     else:
-        color_ids = [int(Color.RED), int(Color.GREEN), int(Color.YELLOW), int(Color.BLUE)][:num]
+        color_ids = [
+            int(Color.RED),
+            int(Color.GREEN),
+            int(Color.YELLOW),
+            int(Color.BLUE),
+        ][:num]
     players = [Player(color=c) for c in color_ids]
     game = Game(players=players)
 
@@ -353,10 +357,14 @@ def play_game(
         turns_taken += 1
 
     rankings = determine_rankings(game, finish_order)
-    placement_names = [getattr(game.players[idx], "strategy_name", "?") for idx in rankings]
+    placement_names = [
+        getattr(game.players[idx], "strategy_name", "?") for idx in rankings
+    ]
     points = {name: POINTS_TABLE[pos] for pos, name in enumerate(placement_names)}
 
-    return GameResult(index=game_index, turns=turns_taken, placements=placement_names, points=points)
+    return GameResult(
+        index=game_index, turns=turns_taken, placements=placement_names, points=points
+    )
 
 
 def run_combination_tournament(
@@ -403,7 +411,9 @@ def run_league(
 
     for combo_idx, combo in enumerate(combos, start=1):
         logger.info(f"[{combo_idx}/{len(combos)}] Running: {', '.join(combo)}")
-        summary = run_combination_tournament(combo, models_dict, games, deterministic, rng)
+        summary = run_combination_tournament(
+            combo, models_dict, games, deterministic, rng
+        )
         combination_summaries.append(summary)
 
         for name, pts in summary.totals.items():

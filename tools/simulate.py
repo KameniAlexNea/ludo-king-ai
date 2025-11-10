@@ -6,8 +6,10 @@ from typing import Optional
 import numpy as np
 from sb3_contrib import MaskablePPO
 
-from ludo_rl.ludo_king import Game, Player, Board, Color, config as king_config
-from ludo_rl.strategy.registry import available as available_strategies, STRATEGY_REGISTRY
+from ludo_rl.ludo_king import Board, Color, Game, Player
+from ludo_rl.ludo_king import config as king_config
+from ludo_rl.strategy.registry import STRATEGY_REGISTRY
+from ludo_rl.strategy.registry import available as available_strategies
 
 
 def seed_environ(seed_value: Optional[int] = None):
@@ -16,7 +18,9 @@ def seed_environ(seed_value: Optional[int] = None):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Simulate a trained Ludo agent (ludo_king)")
+    parser = argparse.ArgumentParser(
+        description="Simulate a trained Ludo agent (ludo_king)"
+    )
     parser.add_argument(
         "--model-path",
         type=str,

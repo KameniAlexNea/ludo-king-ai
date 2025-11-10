@@ -1,13 +1,14 @@
 import random
 from typing import ClassVar
 
+from .base import BaseStrategy, BaseStrategyConfig
 from .types import MoveOption, StrategyContext
 
-from .base import BaseStrategy, BaseStrategyConfig
 
 class HumanStrategyConfig(BaseStrategyConfig):
     def sample(self, rng: random.Random | None = None) -> dict[str, object]:
         return {}
+
 
 class HumanStrategy(BaseStrategy):
     name = "human"

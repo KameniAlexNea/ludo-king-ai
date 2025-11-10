@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 from enum import Enum
+
 from .config import config
 
 MAIN_TRACK_END = config.HOME_COLUMN_ENTRIES - 1
 HOME_COLUMN_START = config.HOME_COLUMN_ENTRIES
 HOME_FINISH = config.PATH_LENGTH - 1
 ENTRY_POSITION = config.START_POSITION
+
 
 class PlayerColor(Enum):
     RED = 0
@@ -73,7 +75,7 @@ class Piece:
         start_square = config.PLAYER_START_SQUARES[self.color]
         abs_pos = (start_square + self.position - 1) % 52
         return abs_pos
-    
+
     def to_rel(self, start_square: int) -> int:
         """
         Convert an absolute position to a relative position based on start square.

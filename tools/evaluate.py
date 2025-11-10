@@ -9,7 +9,8 @@ import numpy as np
 from loguru import logger
 from sb3_contrib import MaskablePPO
 
-from ludo_rl.ludo_king import Game, Player, Board, Color, config as king_config
+from ludo_rl.ludo_king import Board, Color, Game, Player
+from ludo_rl.ludo_king import config as king_config
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
 
@@ -23,7 +24,9 @@ def seed_everything(seed: int | None) -> random.Random:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate a trained Ludo agent (ludo_king)")
+    parser = argparse.ArgumentParser(
+        description="Evaluate a trained Ludo agent (ludo_king)"
+    )
     parser.add_argument("--model-path", type=str, required=True)
     parser.add_argument(
         "--episodes-per-combo",
@@ -117,7 +120,9 @@ def decide_with_model(
             moves_by_piece.setdefault(pid, []).append(mv)
 
     try:
-        action, _ = model.predict(obs, action_masks=action_mask[None, ...], deterministic=deterministic)
+        action, _ = model.predict(
+            obs, action_masks=action_mask[None, ...], deterministic=deterministic
+        )
         pid = int(action.item())
         candidates = moves_by_piece.get(pid)
         if candidates:
@@ -133,7 +138,11 @@ def determine_rankings(game: Game, finish_order: list[int]) -> list[int]:
     remaining = [i for i in range(total) if i not in ordered]
     remaining.sort(
         key=lambda idx: (
-            sum(1 for pc in game.players[idx].pieces if pc.position == king_config.HOME_FINISH),
+            sum(
+                1
+                for pc in game.players[idx].pieces
+                if pc.position == king_config.HOME_FINISH
+            ),
             sum(pc.position for pc in game.players[idx].pieces),
         ),
         reverse=True,
@@ -156,8 +165,15 @@ def evaluate_triplet(
         # Build game and seat opponents
         num = king_config.NUM_PLAYERS
         if num != 4:
-            raise SystemExit("This evaluator expects NUM_PLAYERS=4 in ludo_king config.")
-        color_ids = [int(Color.RED), int(Color.GREEN), int(Color.YELLOW), int(Color.BLUE)]
+            raise SystemExit(
+                "This evaluator expects NUM_PLAYERS=4 in ludo_king config."
+            )
+        color_ids = [
+            int(Color.RED),
+            int(Color.GREEN),
+            int(Color.YELLOW),
+            int(Color.BLUE),
+        ]
         players = [Player(color=c) for c in color_ids]
         game = Game(players=players)
 
@@ -193,7 +209,9 @@ def evaluate_triplet(
 
                 board_stack = build_board_stack(game.board, int(pl.color))
                 if cur == 0:
-                    mv = decide_with_model(model, board_stack, dice, legal, deterministic, rng)
+                    mv = decide_with_model(
+                        model, board_stack, dice, legal, deterministic, rng
+                    )
                 else:
                     decision = pl.choose(board_stack, dice, legal)
                     mv = decision if decision is not None else rng.choice(legal)
@@ -219,13 +237,17 @@ def evaluate_triplet(
         "wins": wins,
         "win_rate": wins / episodes if episodes else 0.0,
         "avg_rank": (
-            sum(rank * count for rank, count in rank_counter.items()) / episodes if episodes else 0.0
+            sum(rank * count for rank, count in rank_counter.items()) / episodes
+            if episodes
+            else 0.0
         ),
         "rank_counts": dict(rank_counter),
     }
 
 
-def iter_triplets(limit: int | None, strategies: Sequence[str]) -> Iterable[Sequence[str]]:
+def iter_triplets(
+    limit: int | None, strategies: Sequence[str]
+) -> Iterable[Sequence[str]]:
     combos = list(itertools.combinations(strategies, 3))
     if limit is not None and limit < len(combos):
         random.shuffle(combos)

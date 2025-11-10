@@ -31,6 +31,7 @@ _RELATIVE_TRANSLATIONS = _compute_relative_translations()
 @dataclass(slots=True)
 class Board:
     """Owns piece placement and mapping utilities (no rule logic)."""
+
     players: Sequence[Sequence[Piece]]  # players (engine order) -> their pieces
     colors: Sequence[int]  # engine order -> color ids (0..3)
     _tensor_buffer: np.ndarray | None = field(default=None, init=False, repr=False)
@@ -61,7 +62,9 @@ class Board:
         mapping = _RELATIVE_TRANSLATIONS[src_color][dst_color]
         return mapping[rel_pos] if 0 <= rel_pos < len(mapping) else -1
 
-    def pieces_at_absolute(self, abs_pos: int, *, exclude_color: int | None = None) -> list[tuple[int, Piece]]:
+    def pieces_at_absolute(
+        self, abs_pos: int, *, exclude_color: int | None = None
+    ) -> list[tuple[int, Piece]]:
         out: list[tuple[int, Piece]] = []
         for idx, pieces in enumerate(self.players):
             color_id = self.colors[idx]
@@ -79,21 +82,25 @@ class Board:
         idx = self._resolve_index(player_color)
         return sum(1 for p in self.players[idx] if p.position == rel_pos)
 
-    def build_tensor(self, agent_color: int, out: np.ndarray | None = None) -> np.ndarray:
+    def build_tensor(
+        self, agent_color: int, out: np.ndarray | None = None
+    ) -> np.ndarray:
         if out is not None:
             board = out
             if board.shape != (10, config.PATH_LENGTH):
                 raise ValueError("Expected board tensor of shape (10, PATH_LENGTH)")
         else:
             if self._tensor_buffer is None:
-                self._tensor_buffer = np.zeros((10, config.PATH_LENGTH), dtype=np.float32)
+                self._tensor_buffer = np.zeros(
+                    (10, config.PATH_LENGTH), dtype=np.float32
+                )
             board = self._tensor_buffer
 
         board.fill(0.0)
 
         # safe channel
         safe = board[4]
-        safe[config.HOME_COLUMN_START:config.HOME_FINISH] = 1.0
+        safe[config.HOME_COLUMN_START : config.HOME_FINISH] = 1.0
         for abs_pos in config.SAFE_SQUARES_ABS:
             rel = self.relative_position(agent_color, abs_pos)
             if rel != -1:

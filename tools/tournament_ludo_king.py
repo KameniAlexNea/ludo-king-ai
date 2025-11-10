@@ -11,9 +11,11 @@ from typing import Dict, List, Sequence, Tuple
 import numpy as np
 from loguru import logger
 
-from ludo_rl.ludo_king import Game, Player, Simulator, Board, Color, config as king_config
+from ludo_rl.ludo_king import Board, Color, Game, Player
+from ludo_rl.ludo_king import config as king_config
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
+
 
 def _points_table(num_players: int) -> Tuple[int, ...]:
     # Highest rank gets most points; last gets 0
@@ -44,7 +46,9 @@ class CombinationSummary:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run a Ludo King (new engine) strategy tournament")
+    parser = argparse.ArgumentParser(
+        description="Run a Ludo King (new engine) strategy tournament"
+    )
     parser.add_argument(
         "--games",
         type=int,
@@ -79,7 +83,9 @@ def select_strategies(provided: str | None) -> List[str]:
         available = chosen
 
     if len(available) < king_config.NUM_PLAYERS:
-        raise RuntimeError(f"Need at least {king_config.NUM_PLAYERS} strategies to stage a league.")
+        raise RuntimeError(
+            f"Need at least {king_config.NUM_PLAYERS} strategies to stage a league."
+        )
     return available
 
 
@@ -106,13 +112,17 @@ def determine_rankings(game: Game, finish_order: List[int]) -> List[int]:
     remaining = [idx for idx in range(total_players) if idx not in ordered]
     remaining.sort(
         key=lambda idx: (
-            sum(1 for pc in game.players[idx].pieces if pc.position == king_config.HOME_FINISH),
+            sum(
+                1
+                for pc in game.players[idx].pieces
+                if pc.position == king_config.HOME_FINISH
+            ),
             player_progress(game.players[idx]),
         ),
         reverse=True,
     )
     ordered.extend(remaining)
-    return ordered[: total_players]
+    return ordered[:total_players]
 
 
 def play_game(seats: Sequence[str], rng: random.Random, game_index: int) -> GameResult:
@@ -121,7 +131,12 @@ def play_game(seats: Sequence[str], rng: random.Random, game_index: int) -> Game
     if num == 2:
         color_ids = [int(Color.RED), int(Color.YELLOW)]  # 0 vs 2 (opposite)
     else:
-        color_ids = [int(Color.RED), int(Color.GREEN), int(Color.YELLOW), int(Color.BLUE)][:num]
+        color_ids = [
+            int(Color.RED),
+            int(Color.GREEN),
+            int(Color.YELLOW),
+            int(Color.BLUE),
+        ][:num]
     players = [Player(color=c) for c in color_ids]
     game = Game(players=players)
 
@@ -168,7 +183,9 @@ def play_game(seats: Sequence[str], rng: random.Random, game_index: int) -> Game
         turns_taken += 1
 
     rankings = determine_rankings(game, finish_order)
-    placement_names = [getattr(game.players[idx], "strategy_name", "?") for idx in rankings]
+    placement_names = [
+        getattr(game.players[idx], "strategy_name", "?") for idx in rankings
+    ]
     pt = _points_table(len(game.players))
     points = {name: pt[pos] for pos, name in enumerate(placement_names)}
 
@@ -180,7 +197,9 @@ def play_game(seats: Sequence[str], rng: random.Random, game_index: int) -> Game
     )
 
 
-def run_combination_tournament(participants: Sequence[str], games: int, rng: random.Random) -> CombinationSummary:
+def run_combination_tournament(
+    participants: Sequence[str], games: int, rng: random.Random
+) -> CombinationSummary:
     totals = {name: 0 for name in participants}
     results: List[GameResult] = []
 
@@ -192,10 +211,14 @@ def run_combination_tournament(participants: Sequence[str], games: int, rng: ran
         for name, pts in result.points.items():
             totals[name] += pts
 
-    return CombinationSummary(participants=tuple(participants), game_results=results, totals=totals)
+    return CombinationSummary(
+        participants=tuple(participants), game_results=results, totals=totals
+    )
 
 
-def log_combination_summary(summary: CombinationSummary, index: int | None = None) -> None:
+def log_combination_summary(
+    summary: CombinationSummary, index: int | None = None
+) -> None:
     combo_label = ", ".join(summary.participants)
     prefix = f"Combination {index:03d}: " if index is not None else "Combination: "
     logger.info(f"{prefix}{combo_label}")
@@ -205,7 +228,9 @@ def log_combination_summary(summary: CombinationSummary, index: int | None = Non
         logger.info(f"    {rank}. {name:12s} {points:3d} pts")
 
 
-def run_league(strategy_pool: Sequence[str], games: int, rng: random.Random) -> tuple[Dict[str, int], Dict[str, int], List[CombinationSummary]]:
+def run_league(
+    strategy_pool: Sequence[str], games: int, rng: random.Random
+) -> tuple[Dict[str, int], Dict[str, int], List[CombinationSummary]]:
     league_totals = {name: 0 for name in strategy_pool}
     games_played = {name: 0 for name in strategy_pool}
     combination_summaries: List[CombinationSummary] = []
@@ -236,12 +261,21 @@ def run_league(strategy_pool: Sequence[str], games: int, rng: random.Random) -> 
     return league_totals, games_played, combination_summaries
 
 
-def print_summary(strategy_pool: Sequence[str], league_totals: Dict[str, int], games_played: Dict[str, int], combination_summaries: Sequence[CombinationSummary]) -> None:
+def print_summary(
+    strategy_pool: Sequence[str],
+    league_totals: Dict[str, int],
+    games_played: Dict[str, int],
+    combination_summaries: Sequence[CombinationSummary],
+) -> None:
     logger.info(f"Strategy pool: {', '.join(strategy_pool)}")
 
     print("League standings:")
-    for rank, (name, points) in enumerate(sorted(league_totals.items(), key=lambda item: (-item[1], item[0])), start=1):
-        print(f"  {rank:2d}. {name:12s} {points:5d} pts across {games_played[name]:4d} games")
+    for rank, (name, points) in enumerate(
+        sorted(league_totals.items(), key=lambda item: (-item[1], item[0])), start=1
+    ):
+        print(
+            f"  {rank:2d}. {name:12s} {points:5d} pts across {games_played[name]:4d} games"
+        )
 
     winner = max(league_totals.items(), key=lambda item: (item[1], item[0]))[0]
     print()
@@ -257,7 +291,9 @@ def main() -> None:
     except (RuntimeError, ValueError) as exc:
         raise SystemExit(str(exc))
 
-    league_totals, games_played, combo_summaries = run_league(strategy_pool, args.games, rng)
+    league_totals, games_played, combo_summaries = run_league(
+        strategy_pool, args.games, rng
+    )
     print_summary(strategy_pool, league_totals, games_played, combo_summaries)
 
 

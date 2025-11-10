@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
-import numpy as np
+
 
 from .game import Game
 from .types import Move

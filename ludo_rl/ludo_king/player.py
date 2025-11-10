@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence, Any
-import inspect
+from typing import Sequence
+
 import numpy as np
 
 from ludo_rl.strategy import BaseStrategy, HumanStrategy, build_move_options
-from ludo_rl.ludo.config import strategy_config as legacy_strategy_cfg
 
 from .enums import Color
 from .piece import Piece
@@ -56,7 +55,10 @@ class Player:
         move_choices: list[dict | None] = [None] * pieces_per_player
         action_mask = np.zeros(pieces_per_player, dtype=bool)
         for mv in legal_moves:
-            if 0 <= mv.piece_id < pieces_per_player and move_choices[mv.piece_id] is None:
+            if (
+                0 <= mv.piece_id < pieces_per_player
+                and move_choices[mv.piece_id] is None
+            ):
                 action_mask[mv.piece_id] = True
                 move_choices[mv.piece_id] = {
                     "piece": self.pieces[mv.piece_id],
