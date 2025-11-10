@@ -66,8 +66,8 @@ if __name__ == "__main__":
         train_env = DummyVecEnv([LudoEnv])
     else:
         train_env = SubprocVecEnv([LudoEnv for _ in range(args.num_envs)])
-    train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
     train_env = VecMonitor(train_env)
+    train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
 
     logger.debug("--- Setting up Callbacks ---")
 
@@ -117,35 +117,35 @@ if __name__ == "__main__":
 
     # --- Initialize Model ---
     # We MUST use MaskablePPO from sb3_contrib
-    if args.resume is not None:
+    init_kwargs = dict(
+        verbose=1,
+        tensorboard_log=log_path,
+        n_steps=args.n_steps,
+        batch_size=args.batch_size,
+        n_epochs=args.n_epochs,
+        gamma=args.gamma,
+        gae_lambda=args.gae_lambda,
+        clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
+        ent_coef=args.ent_coef,
+        device=args.device,
+        learning_rate=lr_schedule(
+            lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
+        ),
+        target_kl=0.03,
+    )
+    if args.resume:
         logger.info(f"--- Resuming training from {args.resume} ---")
         model = MaskablePPO.load(
             args.resume,
             env=train_env,
-            device=args.device,
-            learning_rate=lr_schedule(
-                lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
-            ),
-            clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
+            **init_kwargs,
         )
     else:
         model = MaskablePPO(
             "MultiInputPolicy",  # Use MlpPolicy as our extractor outputs a flat vector
             train_env,
             policy_kwargs=policy_kwargs,
-            verbose=1,
-            tensorboard_log=log_path,
-            n_steps=args.n_steps,
-            batch_size=args.batch_size,
-            n_epochs=args.n_epochs,
-            gamma=args.gamma,
-            gae_lambda=args.gae_lambda,
-            clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
-            ent_coef=args.ent_coef,
-            device=args.device,
-            learning_rate=lr_schedule(
-                lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
-            ),
+            **init_kwargs,
         )
 
     final_model_path = os.path.join(model_save_path, "init_model")

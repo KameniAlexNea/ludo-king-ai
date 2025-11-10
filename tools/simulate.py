@@ -1,4 +1,5 @@
 import argparse
+import os
 import random
 import time
 from typing import Optional
@@ -26,6 +27,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         required=True,
         help="Path to the MaskablePPO model zip file",
+    )
+    parser.add_argument(
+        "--num-players",
+        type=int,
+        default=int(os.getenv("NUM_PLAYERS", 4)),
+        help="Number of players in the game",
     )
     return parser.parse_args()
 
@@ -69,7 +76,15 @@ def main() -> None:
     print(f"Max game turns set to: {king_config.MAX_TURNS}")
 
     # Build a 4-player game: agent at RED, opponents are default strategies
-    color_ids = [int(Color.RED), int(Color.GREEN), int(Color.YELLOW), int(Color.BLUE)]
+    if args.num_players == 2:
+        color_ids = [int(Color.RED), int(Color.YELLOW)]
+    else:
+        color_ids = [
+            int(Color.RED),
+            int(Color.GREEN),
+            int(Color.YELLOW),
+            int(Color.BLUE),
+        ][: args.num_players]
     players = [Player(color=c) for c in color_ids]
     game = Game(players=players)
 
@@ -142,15 +157,16 @@ def main() -> None:
                 action, _ = model.predict(obs, action_masks=action_mask[None, ...])
                 pid = int(action.item())
                 mv = rng.choice(moves_by_piece.get(pid, legal))
-                print(
-                    f"Step {step_count}, Agent piece {pid}, Dice: {dice}, Legal: {len(legal)}"
-                )
             else:
                 decision = player.choose(board_stack, dice, legal)
                 mv = decision if decision is not None else rng.choice(legal)
 
             result = game.apply_move(mv)
             extra = result.extra_turn and result.events.move_resolved
+            if current == 0:
+                print(
+                    f"Step {step_count}, Agent piece {pid}, Dice: {dice}, Extra turn: {extra}, Reward: {result.rewards}, events: {result.events}"
+                )
 
             if player.check_won() and current not in finish_order:
                 finish_order.append(current)
