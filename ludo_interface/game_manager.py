@@ -1,7 +1,6 @@
 import random
 from typing import Dict, List, Optional, Union
 
-from loguru import logger
 
 from ludo_rl.ludo_king import Color, Game, Player
 from ludo_rl.ludo_king.piece import Piece as Token
@@ -53,25 +52,52 @@ class GameManager:
         strategies: List[str],
         configs: dict[str, Union[RLModelConfig, LLMProviderConfig]],
     ) -> tuple[Game, GameState]:
-        """Initializes a new Ludo game with the given strategies (ludo_king)."""
-        # Map UI player colors to engine Player objects in fixed order
+        """Initializes a new Ludo game with the given strategies.
+
+        Supports 4-player and 2-player games. Any dropdown set to 'empty' is
+        excluded; if exactly two non-empty strategies are provided, a 2-player
+        game is created using only those seats (in the provided color order).
+        Otherwise, a standard 4-player game is created, treating 'empty' as
+        'random'.
+        """
         color_order = [Color.RED, Color.GREEN, Color.YELLOW, Color.BLUE]
+
+        # Pair each seat with its chosen strategy
+        seat_specs = list(zip(color_order, strategies))
+        active_specs = [
+            (color, strat)
+            for color, strat in seat_specs
+            if str(strat).strip().lower() != "empty"
+        ]
+
+        if len(active_specs) == 2:
+            # Two-player game with selected seats only
+            players = [Player(color=int(color)) for color, _ in active_specs]
+            game = Game(players=players)
+            state = GameState()
+            # Attach strategies to the two players
+            for player, (_, strategy_name) in zip(game.players, active_specs):
+                player.strategy_name = strategy_name
+                try:
+                    player.strategy = create_strategy_instance(strategy_name, configs)
+                except KeyError:
+                    player.strategy_name = "human"
+            return game, state
+
+        # Default: 4-player game (replace 'empty' with 'random')
+        norm_strategies = [
+            (str(s).strip().lower() if str(s).strip().lower() != "empty" else "random")
+            for s in strategies
+        ]
         players = [Player(color=int(c)) for c in color_order]
         game = Game(players=players)
         state = GameState()
-
-        # Attach strategies
-        for idx, (player, strategy_name) in enumerate(zip(game.players, strategies)):
+        for player, strategy_name in zip(game.players, norm_strategies):
             player.strategy_name = strategy_name
             try:
-                strat = create_strategy_instance(strategy_name, configs)
-                player.strategy = strat
+                player.strategy = create_strategy_instance(strategy_name, configs)
             except KeyError:
-                logger.error(
-                    f"Strategy '{strategy_name}' not found. Defaulting to 'human'."
-                )
                 player.strategy_name = "human"
-
         return game, state
 
     def game_state_tokens(self, game: Game) -> Dict[PlayerColor, List[Token]]:

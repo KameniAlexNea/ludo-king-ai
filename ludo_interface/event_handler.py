@@ -452,7 +452,10 @@ class EventHandler:
                 game, state, _, _, _, _ = self.game_manager.play_step(game, state)
                 turns_taken += 1
             if state.game_over and state.winner_index is not None:
-                winner_color = self.default_players[state.winner_index]
+                # Map actual game winner color to UI color key
+                from .models import PTOPlayerColor
+
+                winner_color = PTOPlayerColor[game.players[state.winner_index].color]
                 win_counts[winner_color.value] += 1
 
         # Calculate statistics
@@ -593,6 +596,8 @@ class EventHandler:
         if game and state and state.game_over and state.winner_index is not None:
             stats = dict(stats)
             stats["games"] += 1
-            winner_color = self.default_players[state.winner_index]
+            from .models import PTOPlayerColor
+
+            winner_color = PTOPlayerColor[game.players[state.winner_index].color]
             stats["wins"][winner_color.value] += 1
         return stats

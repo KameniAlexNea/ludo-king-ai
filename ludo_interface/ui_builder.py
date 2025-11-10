@@ -126,7 +126,7 @@ class UIBuilder:
                 with gr.Accordion("👥 Players", open=True):
                     strategy_inputs = [
                         gr.Dropdown(
-                            choices=self.ai_strategies,
+                            choices=self.ai_strategies + ["empty"],
                             value=(
                                 "human"
                                 if i == 0
@@ -429,7 +429,8 @@ class UIBuilder:
                     gr.Markdown("**Configure AI strategies for bulk simulation**")
                     sim_strat_inputs = [
                         gr.Dropdown(
-                            choices=[s for s in self.ai_strategies if s != "human"],
+                            choices=[s for s in self.ai_strategies if s != "human"]
+                            + ["empty"],
                             value=[s for s in self.ai_strategies if s != "human"][
                                 min(
                                     i,
