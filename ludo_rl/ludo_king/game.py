@@ -130,17 +130,21 @@ class Game:
         # resolve interactions on board (captures/blockades) only if on ring
         if 1 <= mv.new_pos <= config.MAIN_TRACK_END:
             abs_pos = self.board.absolute_position(player.color, mv.new_pos)
-            occupants = self.board.pieces_at_absolute(abs_pos, exclude_color=player.color)
+            occupants = self.board.pieces_at_absolute(
+                abs_pos, exclude_color=player.color
+            )
             # No captures on global safe squares
             if abs_pos not in config.SAFE_SQUARES_ABS:
                 if len(occupants) == 1:
                     opp_color, opp_piece = occupants[0]
                     opp_piece.send_home()
-                    events.knockouts.append({
-                        "player": opp_color,
-                        "piece_id": opp_piece.piece_id,
-                        "abs_pos": abs_pos,
-                    })
+                    events.knockouts.append(
+                        {
+                            "player": opp_color,
+                            "piece_id": opp_piece.piece_id,
+                            "abs_pos": abs_pos,
+                        }
+                    )
             elif len(occupants) >= 2:
                 # can't land on an opponent blockade; revert
                 pc.move_to(old)

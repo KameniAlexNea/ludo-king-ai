@@ -13,9 +13,9 @@ from ludo_rl.extractor import (
     LudoTransformerExtractor,
     _extract_piece_positions,
 )
+from ludo_rl.ludo_env import format_env_state
 from ludo_rl.ludo_king.config import config
 from ludo_rl.ludo_king.player import Player
-from ludo_rl.ludo_env import format_env_state
 from ludo_rl.strategy import available, create
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.rusher import RusherStrategy
@@ -44,6 +44,7 @@ class PlayerDecisionTests(unittest.TestCase):
         player.strategy = None  # ensure strategy is built from name
 
         from ludo_rl.ludo_king.types import Move
+
         piece_a = player.pieces[0]
         piece_b = player.pieces[1]
         piece_a.position = 0
@@ -65,6 +66,7 @@ class PlayerDecisionTests(unittest.TestCase):
         player.strategy = None  # trigger unknown-name handling
 
         from ludo_rl.ludo_king.types import Move
+
         piece_a = player.pieces[0]
         piece_b = player.pieces[1]
         piece_a.position = 0

@@ -5,10 +5,10 @@ from unittest.mock import patch
 
 import numpy as np
 
-from ludo_rl.ludo_king.config import config
-from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo.reward import reward_config
 from ludo_rl.ludo_env import LudoEnv
+from ludo_rl.ludo_king.config import config
+from ludo_rl.ludo_king.game import Game
 
 
 class LudoEnvTests(unittest.TestCase):
@@ -36,7 +36,9 @@ class LudoEnvTests(unittest.TestCase):
 
         with (
             patch.object(Game, "roll_dice", rigged_roll),
-            patch("ludo_rl.ludo_env.Simulator.step_opponents_only", return_value=None) as step_mock,
+            patch(
+                "ludo_rl.ludo_env.Simulator.step_opponents_only", return_value=None
+            ) as step_mock,
         ):
             _, info = self.env.reset()
 

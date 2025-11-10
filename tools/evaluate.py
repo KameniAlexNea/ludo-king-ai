@@ -6,6 +6,7 @@ from collections import Counter
 from typing import Iterable, Sequence
 
 import numpy as np
+from dotenv import load_dotenv
 from loguru import logger
 from sb3_contrib import MaskablePPO
 
@@ -13,8 +14,9 @@ from ludo_rl.ludo_king import Board, Color, Game, Player
 from ludo_rl.ludo_king import config as king_config
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
-from dotenv import load_dotenv
+
 load_dotenv()
+
 
 def seed_everything(seed: int | None) -> random.Random:
     rng = random.Random()

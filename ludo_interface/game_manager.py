@@ -3,12 +3,12 @@ from typing import Dict, List, Optional, Union
 
 from loguru import logger
 
-from ludo_rl.ludo_king import Game, Player, Color
+from ludo_rl.ludo_king import Color, Game, Player
 from ludo_rl.ludo_king.piece import Piece as Token
 from ludo_rl.ludo_king.types import Move, MoveResult
 from ludo_rl.strategy.llm_agent import LLMStrategy
-from ludo_rl.strategy.rl_agent import RLStrategy
 from ludo_rl.strategy.registry import create as create_strategy
+from ludo_rl.strategy.rl_agent import RLStrategy
 
 from .llm_config_ui import LLMProviderConfig, RLModelConfig
 from .models import PlayerColor, PTOPlayerColor
@@ -119,7 +119,9 @@ class GameManager:
             for ko in result.events.knockouts:
                 knocked_player = ko["player"]
                 knocked_piece = ko["piece_id"]
-                knockout_details.append(f"Player {knocked_player} piece {knocked_piece}")
+                knockout_details.append(
+                    f"Player {knocked_player} piece {knocked_piece}"
+                )
             parts.append(f"knocked out {', '.join(knockout_details)}")
         if result.events.finished:
             parts.append("finished")
@@ -159,7 +161,10 @@ class GameManager:
 
         if not valid_moves:
             token_positions = ", ".join(
-                [f"piece {i}: {p.position}" for i, p in enumerate(current_player.pieces)]
+                [
+                    f"piece {i}: {p.position}"
+                    for i, p in enumerate(current_player.pieces)
+                ]
             )
             desc = f"Player {state.current_player_index} rolled {dice} - no moves | Positions: {token_positions}"
             total = len(game.players)
@@ -170,12 +175,16 @@ class GameManager:
         is_human = current_player.strategy_name.lower() == "human"
         if is_human and human_move_choice is None:
             move_options = self.get_human_move_options(game, state, dice)
-            desc = f"Player {state.current_player_index} rolled {dice} - Choose your move:"
+            desc = (
+                f"Player {state.current_player_index} rolled {dice} - Choose your move:"
+            )
             return game, state, desc, self.game_state_tokens(game), move_options, True
 
         # Select move
         if is_human and human_move_choice is not None:
-            chosen_move = next((m for m in valid_moves if m.piece_id == human_move_choice), None)
+            chosen_move = next(
+                (m for m in valid_moves if m.piece_id == human_move_choice), None
+            )
         else:
             board_stack = game.board.build_tensor(int(current_player.color))
             chosen_move = current_player.choose(board_stack, dice, valid_moves)

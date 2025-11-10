@@ -5,7 +5,8 @@ from typing import Sequence
 
 import numpy as np
 
-from ludo_rl.strategy import BaseStrategy, HumanStrategy, build_move_options, create as create_strategy
+from ludo_rl.strategy import BaseStrategy, HumanStrategy, build_move_options
+from ludo_rl.strategy import create as create_strategy
 
 from .enums import Color
 from .piece import Piece
