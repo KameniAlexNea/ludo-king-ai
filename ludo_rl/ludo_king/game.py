@@ -8,8 +8,8 @@ from .board import Board
 from .config import config
 from .piece import Piece
 from .player import Player
-from .types import Move, MoveEvents, MoveResult
 from .reward import compute_move_rewards
+from .types import Move, MoveEvents, MoveResult
 
 
 @dataclass(slots=True)
