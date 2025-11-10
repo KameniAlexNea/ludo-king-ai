@@ -11,9 +11,9 @@ from ludo_rl.ludo_king import Game
 
 from .board_viz import draw_board
 from .game_manager import GameManager, GameState
-from .llm_config_ui import StrategyConfigManager
 from .models import PlayerColor
 from .utils import Utils
+from .views.llm_config_ui import StrategyConfigManager
 
 HISTORY_LIMIT = 50
 

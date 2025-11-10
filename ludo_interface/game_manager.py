@@ -8,8 +8,8 @@ from ludo_rl.strategy.llm_agent import LLMStrategy
 from ludo_rl.strategy.registry import create as create_strategy
 from ludo_rl.strategy.rl_agent import RLStrategy
 
-from .llm_config_ui import LLMProviderConfig, RLModelConfig
 from .models import PlayerColor, PTOPlayerColor
+from .views.llm_config_ui import LLMProviderConfig, RLModelConfig
 
 
 def create_strategy_instance(
