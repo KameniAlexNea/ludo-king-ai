@@ -21,6 +21,8 @@ from torch.profiler import (
     schedule,
     tensorboard_trace_handler,
 )
+import wandb
+from wandb.integration.sb3 import WandbCallback
 
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo_env import LudoEnv
@@ -85,8 +87,10 @@ if __name__ == "__main__":
     )
 
     callbacks = [entropy_callback]
+    wandb.init(project="ludo-king-ppo", name=run_id, config=vars(args))
     if not args.profile:
         callbacks.append(checkpoint_callback)
+        callbacks.append(WandbCallback())
 
     # --- Policy Kwargs ---
     # Define the custom feature extractor
