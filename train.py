@@ -112,7 +112,9 @@ if __name__ == "__main__":
             args.resume,
             env=train_env,
             device=args.device,
-            learning_rate=lr_schedule(lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate),
+            learning_rate=lr_schedule(
+                lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
+            ),
             clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
         )
     else:

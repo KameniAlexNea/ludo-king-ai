@@ -1,7 +1,6 @@
 import random
 from typing import Dict, List, Optional, Union
 
-
 from ludo_rl.ludo_king import Color, Game, Player
 from ludo_rl.ludo_king.piece import Piece as Token
 from ludo_rl.ludo_king.types import Move, MoveResult

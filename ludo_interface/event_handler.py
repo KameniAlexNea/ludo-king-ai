@@ -1,6 +1,8 @@
 import json
+import os
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 
 import gradio as gr
@@ -441,9 +443,10 @@ class EventHandler:
         ai_strats = [s if s != "human" else "random" for s in strats]
         win_counts = {c.value: 0 for c in self.default_players}
 
-        # Run the simulation
+        # Run the simulation (parallelized)
         total_games = int(n_games)
-        for _ in range(total_games):
+
+        def run_one():
             game, state = self.game_manager.init_game(
                 list(ai_strats), self.strategy_config_manager
             )
@@ -452,11 +455,19 @@ class EventHandler:
                 game, state, _, _, _, _ = self.game_manager.play_step(game, state)
                 turns_taken += 1
             if state.game_over and state.winner_index is not None:
-                # Map actual game winner color to UI color key
                 from .models import PTOPlayerColor
 
                 winner_color = PTOPlayerColor[game.players[state.winner_index].color]
-                win_counts[winner_color.value] += 1
+                return winner_color.value
+            return None
+
+        max_workers = max(1, (os.cpu_count() or 1) // 2)
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures = [ex.submit(run_one) for _ in range(total_games)]
+            for fut in as_completed(futures):
+                res = fut.result()
+                if res in win_counts:
+                    win_counts[res] += 1
 
         # Calculate statistics
         total = sum(win_counts.values()) or 1
