@@ -228,13 +228,21 @@ class LudoEnv(gym.Env):
         result = self.game.apply_move(mv)
         extra_turn = result.extra_turn and result.events.move_resolved
 
-        # Simple shaping: reward for finish/capture/extra turn
-        if result.events.finished:
-            reward += reward_config.win
-        if result.events.knockouts:
-            reward += (
-                reward_config.capture if hasattr(reward_config, "capture") else 0.0
-            )
+        # Reward shaping: prefer per-move rewards if provided; fallback to simple shaping
+        if result.rewards is not None:
+            reward += float(result.rewards.get(self.agent_index, 0.0))
+        else:
+            if result.events.finished:
+                # Finishing a piece
+                reward += getattr(reward_config, "finish", 0.0)
+            if result.events.knockouts:
+                reward += getattr(reward_config, "capture", 0.0) * len(
+                    result.events.knockouts or []
+                )
+            if result.events.hit_blockade and not result.events.move_resolved:
+                reward += getattr(reward_config, "hit_blockade", 0.0)
+            if result.events.blockades:
+                reward += getattr(reward_config, "blockade", 0.0)
 
         # 3) If no extra turn, opponents play until agent's turn
         if not extra_turn:

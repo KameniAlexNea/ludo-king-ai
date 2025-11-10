@@ -9,6 +9,7 @@ from .config import config
 from .piece import Piece
 from .player import Player
 from .types import Move, MoveEvents, MoveResult
+from .reward import compute_move_rewards
 
 
 @dataclass(slots=True)
@@ -138,9 +139,15 @@ class Game:
                 if len(occupants) == 1:
                     opp_color, opp_piece = occupants[0]
                     opp_piece.send_home()
+                    # Map victim color to current game player index
+                    victim_index = 0
+                    for i, pl in enumerate(self.players):
+                        if int(pl.color) == opp_color:
+                            victim_index = i
+                            break
                     events.knockouts.append(
                         {
-                            "player": opp_color,
+                            "player": victim_index,
                             "piece_id": opp_piece.piece_id,
                             "abs_pos": abs_pos,
                         }
@@ -152,11 +159,34 @@ class Game:
                 events.move_resolved = False
 
         extra = bool(events.knockouts) or bool(events.finished) or mv.dice_roll == 6
+        # If move resolved and we are on the ring, check if we formed a blockade (two of our pieces)
+        if (
+            events.move_resolved
+            and 1 <= pc.position <= config.MAIN_TRACK_END
+            and self.board.count_at_relative(player.color, pc.position) >= 2
+        ):
+            events.blockades.append({"player": mv.player_index, "rel": pc.position})
+
+        # Compute per-player rewards (optional; env may or may not use)
+        rewards = compute_move_rewards(
+            num_players=len(self.players),
+            mover_index=mv.player_index,
+            old_position=old,
+            new_position=pc.position,
+            events={
+                "move_resolved": events.move_resolved,
+                "exited_home": events.exited_home,
+                "finished": events.finished,
+                "knockouts": events.knockouts,
+                "hit_blockade": events.hit_blockade,
+                "blockades": events.blockades,
+            },
+        )
 
         return MoveResult(
             old_position=old,
             new_position=pc.position,
             events=events,
             extra_turn=extra,
-            rewards=None,
+            rewards=rewards,
         )
