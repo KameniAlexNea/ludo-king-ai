@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
         "--episodes-per-combo",
         type=int,
         default=int(os.getenv("NGAMES", "20")),
-        help="Number of evaluation games per opponent triplet",
+        help="Number of evaluation games per opponent lineup",
     )
     parser.add_argument(
         "--opponents",
@@ -167,20 +167,20 @@ def evaluate_triplet(
     for _ in range(episodes):
         # Build game and seat opponents
         num = king_config.NUM_PLAYERS
-        if num != 4:
-            raise SystemExit(
-                "This evaluator expects NUM_PLAYERS=4 in ludo_king config."
-            )
-        color_ids = [
-            int(Color.RED),
-            int(Color.GREEN),
-            int(Color.YELLOW),
-            int(Color.BLUE),
-        ]
+        # Support 2 players (opposite seats) or 4 players
+        if num == 2:
+            color_ids = [int(Color.RED), int(Color.YELLOW)]
+        else:
+            color_ids = [
+                int(Color.RED),
+                int(Color.GREEN),
+                int(Color.YELLOW),
+                int(Color.BLUE),
+            ][:num]
         players = [Player(color=c) for c in color_ids]
         game = Game(players=players)
 
-        # Agent at seat 0 (RED); opponents occupy seats 1..3
+        # Agent at seat 0 (RED); opponents occupy seats 1..(num-1)
         for seat_idx, player in enumerate(game.players):
             for piece in player.pieces:
                 piece.position = 0
@@ -251,7 +251,9 @@ def evaluate_triplet(
 def iter_triplets(
     limit: int | None, strategies: Sequence[str]
 ) -> Iterable[Sequence[str]]:
-    combos = list(itertools.combinations(strategies, 3))
+    # Build opponent lineups of size NUM_PLAYERS-1
+    opp_count = max(1, king_config.NUM_PLAYERS - 1)
+    combos = list(itertools.combinations(strategies, opp_count))
     if limit is not None and limit < len(combos):
         random.shuffle(combos)
         combos = combos[:limit]
@@ -281,7 +283,7 @@ def main() -> None:
 
         triplet_label = ",".join(triplet)
         logger.info(
-            f"RL vs Triplet {triplet_label:<40} | Win-rate: {stats['win_rate']:.2%} | Avg Rank: {stats['avg_rank']:.2f}"
+            f"RL vs Opponents {triplet_label:<40} | Win-rate: {stats['win_rate']:.2%} | Avg Rank: {stats['avg_rank']:.2f}"
         )
 
     if not results:

@@ -21,7 +21,13 @@ from ludo_rl.strategy.llm_agent import (
 )
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 
-POINTS_TABLE = (3, 2, 1, 0)
+
+def _points_table(num_players: int) -> tuple[int, ...]:
+    """Dynamic points table: highest rank gets most points; last gets 0.
+
+    Matches tools/tournament.py behavior and supports both 2 and 4 players.
+    """
+    return tuple(max(0, num_players - 1 - i) for i in range(num_players))
 
 
 try:  # Optional dependency guard for YAML parsing
@@ -168,7 +174,7 @@ def run_single_game(
     *,
     game_index: int,
 ) -> Dict[str, object]:
-    # Seat colors: RED, GREEN, YELLOW, BLUE (default 4 players)
+    # Seat colors: support 2 players (opposite seats) or 4 players
     num = king_config.NUM_PLAYERS
     if num == 2:
         color_ids = [int(Color.RED), int(Color.YELLOW)]
@@ -450,10 +456,10 @@ def main() -> None:
         result = run_single_game(rng, participants, game_index=game_idx)
         winner = result["rankings"][0]
         leaderboard[winner] += 1
-        points_table = POINTS_TABLE[: len(result["rankings"])]
+        pts = _points_table(len(result["rankings"]))
         awarded_points: Dict[str, int] = {}
         for position, name in enumerate(result["rankings"]):
-            points = points_table[position] if position < len(points_table) else 0
+            points = pts[position] if position < len(pts) else 0
             points_board[name] += points
             awarded_points[name] = points
 

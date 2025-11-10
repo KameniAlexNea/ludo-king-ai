@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Sequence
 
 import numpy as np
 
@@ -52,6 +52,7 @@ class Player:
         try:
             if not self.strategy:
                 from ludo_rl.strategy.registry import create as create_strategy
+
                 self.strategy = create_strategy(self.strategy_name)
         except KeyError:
             # Unknown strategy: fallback to random legal move and mark as random
@@ -74,6 +75,7 @@ class Player:
                 }
         # Lazy import to avoid import-time circular dependencies
         from ludo_rl.strategy.features import build_move_options
+
         ctx = build_move_options(board_stack, int(dice_roll), action_mask, move_choices)
         decided = self.strategy.select_move(ctx)
         if decided is None:
