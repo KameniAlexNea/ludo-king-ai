@@ -13,10 +13,10 @@ from ludo_rl.strategy.registry import available as get_available_strategies
 from .board_viz import preload_board_template
 from .event_handler import EventHandler
 from .game_manager import GameManager
-from .llm_config_ui import StrategyConfigManager
 from .models import ALL_COLORS, PlayerColor
 from .ui_builder import UIBuilder
 from .utils import Utils
+from .views.llm_config_ui import StrategyConfigManager
 
 AI_STRATEGIES = list(get_available_strategies(False).keys())
 DEFAULT_PLAYERS = ALL_COLORS
@@ -26,7 +26,10 @@ class LudoApp:
     """Encapsulates the Ludo game application logic and Gradio UI."""
 
     def __init__(
-        self, players: Optional[List[PlayerColor]] = None, show_token_ids: bool = True
+        self,
+        players: Optional[List[PlayerColor]] = DEFAULT_PLAYERS,
+        show_token_ids: bool = True,
+        ai_strategies: Optional[List[str]] = AI_STRATEGIES,
     ):
         """
         Initializes the Ludo application.
@@ -37,7 +40,8 @@ class LudoApp:
         """
         self.default_players = players if players is not None else DEFAULT_PLAYERS
         self.show_token_ids = show_token_ids
-        self.ai_strategies = [i for i in AI_STRATEGIES if i not in ("llm", "rl")]
+        ai_strategies = ai_strategies if ai_strategies is not None else AI_STRATEGIES
+        self.ai_strategies = [i for i in ai_strategies if i not in ("llm", "rl")]
         self.strategy_config_manager = StrategyConfigManager()
 
         # Initialize components

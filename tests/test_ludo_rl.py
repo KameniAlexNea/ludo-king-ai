@@ -13,9 +13,9 @@ from ludo_rl.extractor import (
     LudoTransformerExtractor,
     _extract_piece_positions,
 )
-from ludo_rl.ludo.config import config
-from ludo_rl.ludo.player import Player
 from ludo_rl.ludo_env import format_env_state
+from ludo_rl.ludo_king.config import config
+from ludo_rl.ludo_king.player import Player
 from ludo_rl.strategy import available, create
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.rusher import RusherStrategy
@@ -41,6 +41,9 @@ class PlayerDecisionTests(unittest.TestCase):
     def test_player_decide_uses_configured_strategy(self) -> None:
         player = Player(color=0)
         player.strategy_name = "rusher"
+        player.strategy = None  # ensure strategy is built from name
+
+        from ludo_rl.ludo_king.types import Move
 
         piece_a = player.pieces[0]
         piece_b = player.pieces[1]
@@ -48,18 +51,21 @@ class PlayerDecisionTests(unittest.TestCase):
         piece_b.position = 10
 
         valid_moves = [
-            {"piece": piece_a, "new_pos": 11},
-            {"piece": piece_b, "new_pos": 12},
+            Move(player_index=0, piece_id=piece_a.piece_id, new_pos=11, dice_roll=6),
+            Move(player_index=0, piece_id=piece_b.piece_id, new_pos=12, dice_roll=6),
         ]
 
-        decision = player.decide(self._board_stack(), 6, valid_moves)
+        decision = player.choose(self._board_stack(), 6, valid_moves)
         self.assertIsNotNone(decision)
-        self.assertIs(decision["piece"], piece_a)
-        self.assertEqual(decision["new_pos"], 11)
+        self.assertEqual(decision.piece_id, piece_a.piece_id)
+        self.assertEqual(decision.new_pos, 11)
 
     def test_player_unknown_strategy_falls_back_to_random(self) -> None:
         player = Player(color=0)
         player.strategy_name = "unknown"
+        player.strategy = None  # trigger unknown-name handling
+
+        from ludo_rl.ludo_king.types import Move
 
         piece_a = player.pieces[0]
         piece_b = player.pieces[1]
@@ -67,14 +73,14 @@ class PlayerDecisionTests(unittest.TestCase):
         piece_b.position = 10
 
         valid_moves = [
-            {"piece": piece_a, "new_pos": 6},
-            {"piece": piece_b, "new_pos": 16},
+            Move(player_index=0, piece_id=piece_a.piece_id, new_pos=6, dice_roll=6),
+            Move(player_index=0, piece_id=piece_b.piece_id, new_pos=16, dice_roll=6),
         ]
 
-        decision = player.decide(self._board_stack(), 6, valid_moves)
+        decision = player.choose(self._board_stack(), 6, valid_moves)
         self.assertEqual(player.strategy_name, "random")
         self.assertIsNotNone(decision)
-        self.assertIn(decision["piece"], (piece_a, piece_b))
+        self.assertIn(decision.piece_id, (piece_a.piece_id, piece_b.piece_id))
 
 
 class FormatEnvStateTests(unittest.TestCase):
@@ -94,15 +100,13 @@ class FormatEnvStateTests(unittest.TestCase):
             current_turn=5,
             max_game_turns=200,
             agent_index=0,
-            simulator=SimpleNamespace(
-                game=SimpleNamespace(
-                    players=[
-                        DummyPlayer([0, 0, 0, 0]),
-                        DummyPlayer([1, 2, 3, 4]),
-                        DummyPlayer([5, 6, 7, 8]),
-                        DummyPlayer([9, 10, 11, 12]),
-                    ]
-                )
+            game=SimpleNamespace(
+                players=[
+                    DummyPlayer([0, 0, 0, 0]),
+                    DummyPlayer([1, 2, 3, 4]),
+                    DummyPlayer([5, 6, 7, 8]),
+                    DummyPlayer([9, 10, 11, 12]),
+                ]
             ),
         )
 

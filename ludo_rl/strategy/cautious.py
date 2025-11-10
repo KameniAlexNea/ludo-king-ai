@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass
 from typing import ClassVar
 
-from ludo_rl.ludo.config import strategy_config
+from ludo_rl.ludo_king.config import strategy_config
 
 from .base import BaseStrategy, BaseStrategyConfig
 from .features import nearest_opponent_distance

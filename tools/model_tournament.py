@@ -1,7 +1,9 @@
 """
-Tournament script for competing multiple RL model versions against each other.
+Tournament script for competing multiple RL model versions against each other
+using the new ludo_king engine.
 
-Similar to tournament.py but uses trained PPO models instead of heuristic strategies.
+This replaces the old ludo (gym-based) game usage with direct integration of
+the ludo_king game classes and APIs, similar to tools/tournament_ludo_king.py.
 """
 
 from __future__ import annotations
@@ -17,9 +19,8 @@ import numpy as np
 from loguru import logger
 from sb3_contrib import MaskablePPO
 
-from ludo_rl.ludo.config import config
-from ludo_rl.ludo.game import LudoGame
-from ludo_rl.ludo.player import Player
+from ludo_rl.ludo_king import Board, Color, Game, Player
+from ludo_rl.ludo_king import config as king_config
 
 POINTS_TABLE = (4, 3, 1, 0)
 
@@ -170,9 +171,9 @@ def parse_checkpoint_ids(checkpoint_str: str) -> List[str]:
     return [ckpt.strip() for ckpt in checkpoint_str.split(",") if ckpt.strip()]
 
 
-def build_board_stack(game: LudoGame, player_index: int) -> np.ndarray:
-    """Build board state tensor for RL model input."""
-    return game.build_board_tensor(player_index)
+def build_board_stack(board: Board, player_color: int) -> np.ndarray:
+    """Build board state tensor for RL model input (ludo_king)."""
+    return board.build_tensor(player_color)
 
 
 def player_progress(player: Player) -> int:
@@ -181,68 +182,98 @@ def player_progress(player: Player) -> int:
 
 
 def attach_model(player: Player, model_wrapper: ModelWrapper) -> None:
-    """Attach an RL model to a player."""
-    player.strategy_name = model_wrapper.name
-    player._strategy = None  # Clear any strategy
+    """Attach an RL model label to a player (no heuristic strategy)."""
+    # We just name the player; decisions are done via model policy.
+    player.strategy_name = model_wrapper.name  # type: ignore[attr-defined]
+
+
+def _extract_piece_index(move: object) -> int | None:
+    """Best-effort extraction of the piece index from a ludo_king move object.
+
+    Different move implementations may expose either `piece_id`, `piece.index`,
+    `piece.piece_id`, or another similar attribute. This helper tries common
+    variants and returns None if not found.
+    """
+    # Direct attribute on move
+    for attr in ("piece_id", "token", "piece_index"):
+        if hasattr(move, attr):
+            try:
+                val = int(getattr(move, attr))
+                return val
+            except Exception:
+                pass
+    # Nested piece object
+    piece = getattr(move, "piece", None)
+    if piece is not None:
+        for attr in ("piece_id", "index", "id"):
+            if hasattr(piece, attr):
+                try:
+                    val = int(getattr(piece, attr))
+                    return val
+                except Exception:
+                    pass
+    return None
 
 
 def decide_with_model(
     model_wrapper: ModelWrapper,
     board_stack: np.ndarray,
     dice_roll: int,
-    valid_moves: list[dict],
+    valid_moves: list[object],
     deterministic: bool,
     rng: random.Random,
-) -> dict | None:
-    """Use RL model to decide on a move."""
-    # Prepare observation
-    obs = {
-        "board": board_stack,
-        "dice_roll": np.array([dice_roll - 1], dtype=np.int64),
+) -> object | None:
+    """Use RL model to decide on a move for ludo_king."""
+    # Prepare observation (dice encoded 0..5)
+    obs_tensor = {
+        "board": board_stack[None, ...],
+        "dice_roll": np.array([[dice_roll - 1]], dtype=np.int64),
     }
 
-    # Create action mask
-    action_mask = np.zeros(config.PIECES_PER_PLAYER, dtype=bool)
-    piece_id_to_move = {}
-    for move in valid_moves:
-        piece_id = move["piece"].piece_id
-        action_mask[piece_id] = True
-        piece_id_to_move[piece_id] = move
+    # Create action mask across pieces
+    action_mask = np.zeros(king_config.PIECES_PER_PLAYER, dtype=bool)
+    moves_by_piece: dict[int, list[object]] = {}
+    for mv in valid_moves:
+        pid = _extract_piece_index(mv)
+        if pid is None:
+            continue
+        if 0 <= pid < king_config.PIECES_PER_PLAYER:
+            action_mask[pid] = True
+            moves_by_piece.setdefault(pid, []).append(mv)
 
-    # Get action from model
     try:
-        # Convert to format expected by model
-        obs_tensor = {
-            "board": obs["board"][None, ...],  # Add batch dimension
-            "dice_roll": obs["dice_roll"][None, ...],
-        }
         action, _state = model_wrapper.model.predict(
             obs_tensor, action_masks=action_mask[None, ...], deterministic=deterministic
         )
-        piece_id = action.item()
-
-        if piece_id in piece_id_to_move and action_mask[piece_id]:
-            return piece_id_to_move[piece_id]
+        piece_id = int(action.item())
+        candidates = moves_by_piece.get(piece_id)
+        if candidates:
+            return rng.choice(candidates)
     except Exception as e:
         logger.warning(f"Model prediction failed: {e}")
 
-    # Fallback to random
+    # Fallback to random legal
     return rng.choice(valid_moves) if valid_moves else None
 
 
-def determine_rankings(game: LudoGame, finish_order: List[int]) -> List[int]:
-    """Determine final rankings including unfinished players."""
+def determine_rankings(game: Game, finish_order: List[int]) -> List[int]:
+    """Determine final rankings including unfinished players (ludo_king)."""
     ordered = finish_order.copy()
-    remaining = [idx for idx in range(config.NUM_PLAYERS) if idx not in ordered]
+    total_players = len(game.players)
+    remaining = [idx for idx in range(total_players) if idx not in ordered]
     remaining.sort(
         key=lambda idx: (
-            sum(piece.position == 57 for piece in game.players[idx].pieces),
+            sum(
+                1
+                for pc in game.players[idx].pieces
+                if pc.position == king_config.HOME_FINISH
+            ),
             player_progress(game.players[idx]),
         ),
         reverse=True,
     )
     ordered.extend(remaining)
-    return ordered[: config.NUM_PLAYERS]
+    return ordered[:total_players]
 
 
 def play_game(
@@ -252,25 +283,29 @@ def play_game(
     rng: random.Random,
     game_index: int,
 ) -> GameResult:
-    """Play a single game with the given participants.
+    """Play a single game with the given participants (ludo_king)."""
+    # Build seats based on configured number of players
+    num = king_config.NUM_PLAYERS
+    if num == 2:
+        color_ids = [int(Color.RED), int(Color.YELLOW)]  # opposite seats
+    else:
+        color_ids = [
+            int(Color.RED),
+            int(Color.GREEN),
+            int(Color.YELLOW),
+            int(Color.BLUE),
+        ][:num]
+    players = [Player(color=c) for c in color_ids]
+    game = Game(players=players)
 
-    participants are ModelWrapper instances.
-    """
-    game = LudoGame()
-    game_seed = rng.randint(0, 1_000_000)
-    game.rng.seed(game_seed)
-    random.seed(game_seed)
-
-    # Initialize players
+    # Initialize players and attach model names
     model_assignments: Dict[int, ModelWrapper] = {}
-
     for seat_index, (player, participant) in enumerate(
         zip(game.players, participants, strict=True)
     ):
         for piece in player.pieces:
             piece.position = 0
         player.has_finished = False
-        player._strategy = None
 
         if participant not in models_dict:
             raise ValueError(f"Unknown participant '{participant}'")
@@ -282,62 +317,53 @@ def play_game(
     finish_order: List[int] = []
     turns_taken = 0
     current_index = 0
+    total_players = len(game.players)
 
-    while turns_taken < config.MAX_TURNS and len(finish_order) < config.NUM_PLAYERS:
+    while turns_taken < king_config.MAX_TURNS and len(finish_order) < total_players:
         player = game.players[current_index]
-        if player.has_won():
+        if player.check_won():
             if current_index not in finish_order:
                 finish_order.append(current_index)
-            current_index = (current_index + 1) % config.NUM_PLAYERS
+            current_index = (current_index + 1) % total_players
             continue
 
         extra_turn = True
         while extra_turn:
             dice_roll = game.roll_dice()
-            valid_moves = game.get_valid_moves(current_index, dice_roll)
-            if not valid_moves:
+            legal = game.legal_moves(current_index, dice_roll)
+            if not legal:
                 extra_turn = False
                 continue
 
-            board_stack = build_board_stack(game, current_index)
-
+            board_stack = build_board_stack(game.board, int(player.color))
             model_wrapper = model_assignments[current_index]
             decision = decide_with_model(
                 model_wrapper,
                 board_stack,
                 dice_roll,
-                valid_moves,
+                legal,
                 deterministic,
                 rng,
             )
+            move = decision if decision is not None else rng.choice(legal)
 
-            move = decision if decision is not None else rng.choice(valid_moves)
+            result = game.apply_move(move)
+            extra_turn = result.extra_turn and result.events.move_resolved
 
-            result = game.make_move(
-                current_index, move["piece"], move["new_pos"], dice_roll
-            )
-
-            if not result["events"]["move_resolved"]:
-                extra_turn = False
-            else:
-                extra_turn = result["extra_turn"]
-
-            if player.has_won() and current_index not in finish_order:
+            if player.check_won() and current_index not in finish_order:
                 finish_order.append(current_index)
 
-        current_index = (current_index + 1) % config.NUM_PLAYERS
+        current_index = (current_index + 1) % total_players
         turns_taken += 1
 
     rankings = determine_rankings(game, finish_order)
-    placement_names = [game.players[idx].strategy_name for idx in rankings]
-
+    placement_names = [
+        getattr(game.players[idx], "strategy_name", "?") for idx in rankings
+    ]
     points = {name: POINTS_TABLE[pos] for pos, name in enumerate(placement_names)}
 
     return GameResult(
-        index=game_index,
-        turns=turns_taken,
-        placements=placement_names,
-        points=points,
+        index=game_index, turns=turns_taken, placements=placement_names, points=points
     )
 
 
@@ -380,7 +406,7 @@ def run_league(
     games_played = {name: 0 for name in participant_pool}
     combination_summaries: List[CombinationSummary] = []
 
-    combos = list(combinations(participant_pool, 4))
+    combos = list(combinations(participant_pool, king_config.NUM_PLAYERS))
     logger.info(f"Running league with {len(combos)} combinations of 4 participants...")
 
     for combo_idx, combo in enumerate(combos, start=1):

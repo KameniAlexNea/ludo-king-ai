@@ -6,7 +6,7 @@ from typing import ClassVar
 
 import numpy as np
 
-from ludo_rl.ludo.config import strategy_config
+from ludo_rl.ludo_king.config import strategy_config
 
 from .base import BaseStrategy, BaseStrategyConfig
 from .types import MoveOption, StrategyContext

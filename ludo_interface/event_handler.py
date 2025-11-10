@@ -1,17 +1,19 @@
 import json
+import os
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 
 import gradio as gr
 
-from ludo_rl.ludo.game import LudoGame
+from ludo_rl.ludo_king import Game
 
 from .board_viz import draw_board
 from .game_manager import GameManager, GameState
-from .llm_config_ui import StrategyConfigManager
 from .models import PlayerColor
 from .utils import Utils
+from .views.llm_config_ui import StrategyConfigManager
 
 HISTORY_LIMIT = 50
 
@@ -179,7 +181,7 @@ class EventHandler:
             )
 
     def _ui_run_auto(
-        self, n, delay, game: LudoGame, state: GameState, history: List[str], show: bool
+        self, n, delay, game: Game, state: GameState, history: List[str], show: bool
     ):
         if game is None or state is None:
             yield (
@@ -209,7 +211,7 @@ class EventHandler:
         for _ in range(int(n)):
             if self.game_manager.is_human_turn(game, state):
                 dice = game.roll_dice()
-                valid_moves = game.get_valid_moves(state.current_player_index, dice)
+                valid_moves = game.legal_moves(state.current_player_index, dice)
 
                 if valid_moves:
                     pil_img = draw_board(
@@ -371,7 +373,7 @@ class EventHandler:
         self,
         remaining,
         delay,
-        game: LudoGame,
+        game: Game,
         state: GameState,
         history: List[str],
         show: bool,
@@ -423,7 +425,7 @@ class EventHandler:
         for out in self._ui_run_auto(rem, delay, game, state, history, show):
             yield out
 
-    def _ui_export(self, game: LudoGame, state: GameState):
+    def _ui_export(self, game: Game, state: GameState):
         if not game or not state:
             return "No game"
         state_dict = {
@@ -441,9 +443,10 @@ class EventHandler:
         ai_strats = [s if s != "human" else "random" for s in strats]
         win_counts = {c.value: 0 for c in self.default_players}
 
-        # Run the simulation
+        # Run the simulation (parallelized)
         total_games = int(n_games)
-        for _ in range(total_games):
+
+        def run_one():
             game, state = self.game_manager.init_game(
                 list(ai_strats), self.strategy_config_manager
             )
@@ -452,8 +455,19 @@ class EventHandler:
                 game, state, _, _, _, _ = self.game_manager.play_step(game, state)
                 turns_taken += 1
             if state.game_over and state.winner_index is not None:
-                winner_color = self.default_players[state.winner_index]
-                win_counts[winner_color.value] += 1
+                from .models import PTOPlayerColor
+
+                winner_color = PTOPlayerColor[game.players[state.winner_index].color]
+                return winner_color.value
+            return None
+
+        max_workers = max(1, (os.cpu_count() or 1) // 2)
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures = [ex.submit(run_one) for _ in range(total_games)]
+            for fut in as_completed(futures):
+                res = fut.result()
+                if res in win_counts:
+                    win_counts[res] += 1
 
         # Calculate statistics
         total = sum(win_counts.values()) or 1
@@ -589,10 +603,12 @@ class EventHandler:
 
         return chart_html
 
-    def _ui_update_stats(self, stats, game: LudoGame, state: GameState):
+    def _ui_update_stats(self, stats, game: Game, state: GameState):
         if game and state and state.game_over and state.winner_index is not None:
             stats = dict(stats)
             stats["games"] += 1
-            winner_color = self.default_players[state.winner_index]
+            from .models import PTOPlayerColor
+
+            winner_color = PTOPlayerColor[game.players[state.winner_index].color]
             stats["wins"][winner_color.value] += 1
         return stats

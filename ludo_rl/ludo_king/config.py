@@ -1,12 +1,16 @@
 import os
 from dataclasses import dataclass
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 @dataclass(slots=True)
 class Config:
     # --- Constants ---
     PATH_LENGTH = 58  # 0=yard, 1-51=track, 52-56=home, 57=finished
-    NUM_PLAYERS = 4
+    NUM_PLAYERS = int(os.getenv("NUM_PLAYERS", 4))
     PIECES_PER_PLAYER = 4
     MAX_TURNS = int(os.getenv("MAX_TURNS", 1000))
 
@@ -19,6 +23,20 @@ class Config:
     HOME_COLUMN_ENTRIES = 52  # All enter home column at position 52
     HOME_COLUMN_SIZE = 6
     STAR_SQUARES = [9, 22, 35, 48]
+    START_POSITION = 1
+
+    # Derived (populated in __post_init__ due to slots)
+    MAIN_TRACK_END: int = 0
+    HOME_COLUMN_START: int = 0
+    HOME_FINISH: int = 0
+
+    # Derived positions (computed in __post_init__ for convenience)
+    def __post_init__(self):
+        # Main ring covers 1..51
+        self.MAIN_TRACK_END = self.HOME_COLUMN_ENTRIES - 1
+        # Home column starts at 52 and ends at 56
+        self.HOME_COLUMN_START = self.HOME_COLUMN_ENTRIES
+        self.HOME_FINISH = self.PATH_LENGTH - 1
 
 
 @dataclass(slots=True)

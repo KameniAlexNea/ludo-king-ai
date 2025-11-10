@@ -152,6 +152,9 @@ def create_llm_config_ui(
 
             # Update all strategy dropdowns
             all_strategies = config_manager.get_all_strategy_names(base_strategies)
+            # Preserve the special 'empty' seat option in all dropdowns
+            if "empty" not in all_strategies:
+                all_strategies = all_strategies + ["empty"]
             dropdown_updates = [
                 gr.update(choices=all_strategies) for _ in strategy_dropdowns
             ]
@@ -173,6 +176,8 @@ def create_llm_config_ui(
             # Update all strategy dropdowns
             base_strategies = list(get_available_strategies(False).keys())
             all_strategies = config_manager.get_all_strategy_names(base_strategies)
+            if "empty" not in all_strategies:
+                all_strategies = all_strategies + ["empty"]
             dropdown_updates = [
                 gr.update(choices=all_strategies) for _ in strategy_dropdowns
             ]
@@ -237,6 +242,8 @@ def create_rl_config_ui(
 
             # Update all strategy dropdowns
             all_strategies = config_manager.get_all_strategy_names(base_strategies)
+            if "empty" not in all_strategies:
+                all_strategies = all_strategies + ["empty"]
             dropdown_updates = [
                 gr.update(choices=all_strategies) for _ in strategy_dropdowns
             ]
@@ -258,6 +265,8 @@ def create_rl_config_ui(
             # Update all strategy dropdowns
             base_strategies = list(get_available_strategies(False).keys())
             all_strategies = config_manager.get_all_strategy_names(base_strategies)
+            if "empty" not in all_strategies:
+                all_strategies = all_strategies + ["empty"]
             dropdown_updates = [
                 gr.update(choices=all_strategies) for _ in strategy_dropdowns
             ]

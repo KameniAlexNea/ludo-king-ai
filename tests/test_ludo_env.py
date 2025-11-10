@@ -5,10 +5,10 @@ from unittest.mock import patch
 
 import numpy as np
 
-from ludo_rl.ludo.config import config
-from ludo_rl.ludo.game import LudoGame
-from ludo_rl.ludo.reward import reward_config
 from ludo_rl.ludo_env import LudoEnv
+from ludo_rl.ludo_king.config import config
+from ludo_rl.ludo_king.game import Game
+from ludo_rl.ludo_king.reward import reward_config
 
 
 class LudoEnvTests(unittest.TestCase):
@@ -35,10 +35,9 @@ class LudoEnvTests(unittest.TestCase):
                 return 6
 
         with (
-            patch.object(LudoGame, "roll_dice", rigged_roll),
+            patch.object(Game, "roll_dice", rigged_roll),
             patch(
-                "ludo_rl.ludo_env.GameSimulator.step_opponents_only",
-                return_value=[0.0] * config.NUM_PLAYERS,
+                "ludo_rl.ludo_env.Simulator.step_opponents_only", return_value=None
             ) as step_mock,
         ):
             _, info = self.env.reset()
@@ -53,11 +52,8 @@ class LudoEnvTests(unittest.TestCase):
             return 6
 
         with (
-            patch(
-                "ludo_rl.ludo_env.GameSimulator.step_opponents_only",
-                return_value=[0.0] * config.NUM_PLAYERS,
-            ),
-            patch.object(LudoGame, "roll_dice", fixed_roll),
+            patch("ludo_rl.ludo_env.Simulator.step_opponents_only", return_value=None),
+            patch.object(Game, "roll_dice", fixed_roll),
         ):
             self.env.move_map = {}
             obs, reward, terminated, truncated, info = self.env.step(0)
@@ -82,10 +78,10 @@ class LudoEnvTests(unittest.TestCase):
 
     def test_step_handles_win_condition(self) -> None:
         self.env.reset()
-        piece = self.env.simulator.game.players[0].pieces[0]
+        piece = self.env.game.players[0].pieces[0]
         piece.position = 56
         self.env.current_dice_roll = 1
-        for other in self.env.simulator.game.players[0].pieces[1:]:
+        for other in self.env.game.players[0].pieces[1:]:
             other.position = 57
         self.env._get_info()
         obs, reward, terminated, truncated, info = self.env.step(0)

@@ -23,8 +23,8 @@ from torch.profiler import (
 )
 
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
-from ludo_rl.ludo.config import net_config
 from ludo_rl.ludo_env import LudoEnv
+from ludo_rl.ludo_king.config import net_config
 from tools.arguments import parse_train_args
 from tools.scheduler import CoefScheduler, lr_schedule
 
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     entropy_callback = CoefScheduler(
         total_timesteps=args.total_timesteps,
         att="ent_coef",
-        schedule=lr_schedule(lr_min=0.005, lr_max=args.ent_coef),
+        schedule=lr_schedule(lr_min=args.ent_coef * 0.3, lr_max=args.ent_coef),
     )
 
     callbacks = [entropy_callback]
@@ -112,7 +112,9 @@ if __name__ == "__main__":
             args.resume,
             env=train_env,
             device=args.device,
-            learning_rate=lr_schedule(lr_max=args.learning_rate),
+            learning_rate=lr_schedule(
+                lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
+            ),
             clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
         )
     else:
@@ -131,7 +133,7 @@ if __name__ == "__main__":
             ent_coef=args.ent_coef,
             device=args.device,
             learning_rate=lr_schedule(
-                lr_min=args.learning_rate * 0.5, lr_max=args.learning_rate
+                lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
             ),
         )
 

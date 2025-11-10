@@ -1,6 +1,6 @@
 from enum import Enum
 
-from ludo_rl.ludo.config import config
+from ludo_rl.ludo_king.config import config
 
 
 class PlayerColor(Enum):

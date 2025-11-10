@@ -2,8 +2,8 @@ from typing import Dict, List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
-from ludo_rl.ludo.config import config
-from ludo_rl.ludo.piece import Piece as Token
+from ludo_rl.ludo_king.config import config
+from ludo_rl.ludo_king.piece import Piece as Token
 
 from .models import ALL_COLORS, HOME_ENTRY, PLAYER_START_SQUARES, PlayerColor
 
@@ -503,34 +503,35 @@ def draw_board(
 
     for color, tlist in tokens.items():
         for tk in tlist:
-            pos = tk.to_absolute()
+            rel = int(tk.position)
 
-            if tk.in_yard():
+            if rel == 0:
                 # Home tokens - render individually in their designated spots
                 c, r = _token_home_grid_position(color, tk.piece_id)
                 bbox = _cell_bbox(c, r)
                 cx, cy = (bbox[0] + bbox[2]) // 2, (bbox[1] + bbox[3]) // 2
                 _draw_stacked_tokens(d, [(color, tk)], cx, cy, CELL // 2 - 6, show_ids)
 
-            elif HOME_COLUMN_START <= pos <= HOME_COLUMN_END:
+            elif HOME_COLUMN_START <= rel < HOME_COLUMN_END:
                 # Home column tokens
                 coord_map = HOME_COLUMN_COORDS[color]
-                if pos in coord_map:
-                    key = f"home_column_{color.name}_{pos}"
+                if rel in coord_map:
+                    key = f"home_column_{color.name}_{rel}"
                     if key not in position_groups:
                         position_groups[key] = []
                     position_groups[key].append((color, tk))
 
-            elif tk.is_finished():
+            elif rel == config.HOME_FINISH:
                 # Finished tokens - stack at finish anchor
                 key = f"finished_{color.name}"
                 if key not in position_groups:
                     position_groups[key] = []
                 position_groups[key].append((color, tk))
 
-            else:  # active on main path
-                if 0 <= pos < len(PATH_INDEX_TO_COORD):
-                    key = f"main_path_{pos}"
+            else:  # active on main path (relative ring 1..51)
+                abs_idx = (START_POSITIONS[color] + rel - 1) % 52
+                if 0 <= abs_idx < len(PATH_INDEX_TO_COORD):
+                    key = f"main_path_{abs_idx}"
                     if key not in position_groups:
                         position_groups[key] = []
                     position_groups[key].append((color, tk))
