@@ -19,6 +19,7 @@ class Config:
     HOME_COLUMN_ENTRIES = 52  # All enter home column at position 52
     HOME_COLUMN_SIZE = 6
     STAR_SQUARES = [9, 22, 35, 48]
+    START_POSITION = 1
 
 
 @dataclass(slots=True)
