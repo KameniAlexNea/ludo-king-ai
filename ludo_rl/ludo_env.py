@@ -233,7 +233,7 @@ class LudoEnv(gym.Env):
             if self.current_turn >= self.max_game_turns:
                 truncated = True
                 break
-            self._step_opponents_only()
+            self.sim.step_opponents_only()
             self.current_dice_roll = self.game.roll_dice()
             obs = self._build_observation()
             info = self._get_info()
