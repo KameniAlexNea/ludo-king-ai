@@ -23,8 +23,8 @@ from torch.profiler import (
 )
 
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
-from ludo_rl.ludo.config import net_config
 from ludo_rl.ludo_env import LudoEnv
+from ludo_rl.ludo_king.config import net_config
 from tools.arguments import parse_train_args
 from tools.scheduler import CoefScheduler, lr_schedule
 

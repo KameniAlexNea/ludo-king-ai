@@ -7,7 +7,7 @@ from unittest import mock
 
 import numpy as np
 
-from ludo_rl.ludo.config import config, strategy_config
+from ludo_rl.ludo_king.config import config, strategy_config
 from ludo_rl.strategy import (
     CautiousStrategy,
     DefensiveStrategy,

@@ -5,10 +5,10 @@ from unittest.mock import patch
 
 import numpy as np
 
-from ludo_rl.ludo.reward import reward_config
 from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king.config import config
 from ludo_rl.ludo_king.game import Game
+from ludo_rl.ludo_king.reward import reward_config
 
 
 class LudoEnvTests(unittest.TestCase):

@@ -6,11 +6,11 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from .ludo.reward import reward_config
 from .ludo_king.config import config as king_config
 from .ludo_king.enums import Color
 from .ludo_king.game import Game
 from .ludo_king.player import Player
+from .ludo_king.reward import reward_config
 from .ludo_king.simulator import Simulator
 from .strategy.registry import STRATEGY_REGISTRY
 from .strategy.registry import available as available_strategies

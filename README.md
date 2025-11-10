@@ -19,18 +19,18 @@ ludo_rl
 │  ├─ wraps GameSimulator to expose observation dict & masked Discrete(4) actions
 │  ├─ handles invalid moves, turn limit, reward shaping, and rendering snapshots
 │  └─ converts simulator telemetry into 10-channel board tensor + dice_roll token
-├─ ludo.simulator.GameSimulator
+├─ .ludo_king.simulator.GameSimulator
 │  ├─ owns LudoGame, tracks agent_index, and keeps heatmaps/summary channels
 │  ├─ steps agent move, then rolls opponents (respecting extra turns)
 │  └─ injects scripted opponent strategies via environment variables
-├─ ludo.game.LudoGame
+├─ .ludo_king.game.LudoGame
 │  ├─ instantiates 4 Player objects and provides dice + move plumbing
 │  ├─ delegates legal-move logic to MoveManagement
 │  └─ builds per-agent board_state channels consumed by env + strategies
-├─ ludo.moves.MoveManagement
+├─ .ludo_king.moves.MoveManagement
 │  ├─ enforces rules: entry, home stretch, captures, blockades, extra turns
 │  └─ invokes reward.compute_move_rewards for dense shaping events
-├─ ludo.player.Player
+├─ .ludo_king.player.Player
 │  ├─ keeps Piece state, win detection, and chooses moves via strategies
 │  └─ falls back to random if requested heuristic unavailable
 ├─ strategy package

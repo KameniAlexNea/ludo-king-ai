@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 from loguru import logger
 from sb3_contrib import MaskablePPO
 
-from ludo_rl.ludo.config import config
-from ludo_rl.ludo.game import LudoGame
+from ludo_rl.ludo_king.config import config
+from ludo_rl.ludo_king.game import LudoGame
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 
 load_dotenv()

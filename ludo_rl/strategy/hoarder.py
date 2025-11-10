@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass, field
 from typing import ClassVar, FrozenSet, Iterable, Optional
 
-from ludo_rl.ludo.config import config
+from ludo_rl.ludo_king.config import config
 
 from .base import BaseStrategy, BaseStrategyConfig
 from .types import MoveOption, StrategyContext
