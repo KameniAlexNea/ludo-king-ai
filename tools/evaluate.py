@@ -13,7 +13,8 @@ from ludo_rl.ludo_king import Board, Color, Game, Player
 from ludo_rl.ludo_king import config as king_config
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
-
+from dotenv import load_dotenv
+load_dotenv()
 
 def seed_everything(seed: int | None) -> random.Random:
     rng = random.Random()
@@ -31,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--episodes-per-combo",
         type=int,
-        default=10,
+        default=int(os.getenv("NGAMES", "20")),
         help="Number of evaluation games per opponent triplet",
     )
     parser.add_argument(
@@ -278,7 +279,7 @@ def main() -> None:
 
         triplet_label = ",".join(triplet)
         logger.info(
-            f"Triplet {triplet_label:<40} | Win-rate: {stats['win_rate']:.2%} | Avg Rank: {stats['avg_rank']:.2f}"
+            f"RL vs Triplet {triplet_label:<40} | Win-rate: {stats['win_rate']:.2%} | Avg Rank: {stats['avg_rank']:.2f}"
         )
 
     if not results:
