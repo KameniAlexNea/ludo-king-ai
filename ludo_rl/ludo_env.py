@@ -56,6 +56,15 @@ class LudoEnv(gym.Env):
             for s in os.getenv("OPPONENTS", ",".join(available_strategies())).split(",")
             if s
         ]
+        # 0 = random per seat, 1 = sequential cycling
+        try:
+            self.strategy_selection: int = int(
+                os.getenv("STRATEGY_SELECTION", "0") or "0"
+            )
+        except ValueError:
+            self.strategy_selection = 0
+        # Track resets to advance sequential selection across episodes
+        self._reset_count: int = 0
 
         # Action Space: Choose one of 4 pieces
         self.action_space = spaces.Discrete(king_config.PIECES_PER_PLAYER)
@@ -114,7 +123,7 @@ class LudoEnv(gym.Env):
         return terminated, truncated
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
-        super().reset(seed=seed)
+        super().reset(seed=seed, options=options)
 
         # Re-initialize the game with 2 or 4 players based on config
         if king_config.NUM_PLAYERS == 2:
@@ -132,12 +141,34 @@ class LudoEnv(gym.Env):
         self.sim = Simulator.for_game(self.game, agent_index=self.agent_index)
 
         # Attach opponents
+        # Build an opponent lineup for this episode based on selection mode
+        num_opponents = len(self.game.players) - 1
+        if num_opponents > 0:
+            if self.strategy_selection == 0:
+                # Simple: pick each opponent independently at random (with replacement)
+                lineup = [self.rng.choice(self.opponents) for _ in range(num_opponents)]
+            else:
+                # Sequential cycling through provided opponents across episodes
+                start = (self._reset_count * num_opponents) % max(
+                    1, len(self.opponents)
+                )
+                lineup = [
+                    self.opponents[(start + i) % len(self.opponents)]
+                    for i in range(num_opponents)
+                ]
+        else:
+            raise ValueError(
+                "LudoEnv requires at least 2 players (1 agent + 1 opponent)"
+            )
+
+        opp_seat = 0
         for idx, pl in enumerate(self.game.players):
             for pc in pl.pieces:
                 pc.position = 0
             pl.has_finished = False
             if idx != self.agent_index:
-                strat_name = self.opponents[(idx - 1) % len(self.opponents)].strip()
+                strat_name = lineup[opp_seat].strip() if opp_seat < len(lineup) else ""
+                opp_seat += 1
                 if strat_name and strat_name in STRATEGY_REGISTRY:
                     cls = STRATEGY_REGISTRY[strat_name]
                     try:
@@ -145,6 +176,10 @@ class LudoEnv(gym.Env):
                     except NotImplementedError:
                         pl.strategy = cls()
                     pl.strategy_name = strat_name  # type: ignore[attr-defined]
+                else:
+                    # Unknown or empty strategy -> leave None; Player.choose will fallback to random
+                    pl.strategy = None
+                    pl.strategy_name = "random"  # type: ignore[attr-defined]
 
         # Reset counters and dice
         self.current_turn = 0
@@ -163,6 +198,8 @@ class LudoEnv(gym.Env):
             if self.current_turn >= self.max_game_turns:
                 return obs, info
 
+        # Advance reset counter for sequential selection
+        self._reset_count += 1
         return obs, info
 
     def step(self, action: int):
