@@ -14,7 +14,7 @@ from .ludo_king.reward import reward_config
 from .ludo_king.simulator import Simulator
 from .strategy.registry import STRATEGY_REGISTRY
 from .strategy.registry import available as available_strategies
-
+from loguru import logger
 
 class LudoEnv(gym.Env):
     """
@@ -56,6 +56,7 @@ class LudoEnv(gym.Env):
             for s in os.getenv("OPPONENTS", ",".join(available_strategies())).split(",")
             if s
         ]
+        logger.info(f"Configured opponents ({king_config.NUM_PLAYERS} players): {self.opponents}")
         # 0 = random per seat, 1 = sequential cycling
         try:
             self.strategy_selection: int = int(
@@ -63,6 +64,7 @@ class LudoEnv(gym.Env):
             )
         except ValueError:
             self.strategy_selection = 0
+        logger.info(f"Strategy selection mode: {self.strategy_selection}")
         # Track resets to advance sequential selection across episodes
         self._reset_count: int = 0
 
