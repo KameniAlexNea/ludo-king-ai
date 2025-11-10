@@ -60,6 +60,12 @@ class Game:
                 and self.board.count_at_relative(player.color, dest) >= 2
             ):
                 continue
+                # cannot land on an opponent blockade (two or more opponent pieces on ring)
+                if 1 <= dest <= config.MAIN_TRACK_END:
+                    abs_pos = self.board.absolute_position(player.color, dest)
+                    occ = self.board.pieces_at_absolute(abs_pos, exclude_color=int(player.color))
+                    if len(occ) >= 2:
+                        continue
             moves.append(
                 Move(
                     player_index=player_idx,

@@ -5,7 +5,7 @@ from typing import Sequence
 
 import numpy as np
 
-from ludo_rl.strategy import BaseStrategy, HumanStrategy, build_move_options
+from ludo_rl.strategy import BaseStrategy, HumanStrategy, build_move_options, create as create_strategy
 
 from .enums import Color
 from .piece import Piece
@@ -47,8 +47,14 @@ class Player:
         legacy decide(board, dice, moves) contract. For flexibility, we also
         support simple strategies that accept only (moves).
         """
-        if not self.strategy:
-            return None
+        # Ensure a strategy instance exists; do not replace existing strategy based on name
+        try:
+            if not self.strategy:
+                self.strategy = create_strategy(self.strategy_name)
+        except KeyError:
+            # Unknown strategy: fallback to random legal move and mark as random
+            self.strategy_name = "random"
+            return next(iter(legal_moves), None) if legal_moves else None
 
         # Build move_choices and action_mask per legacy extractor expectations
         pieces_per_player = len(self.pieces)

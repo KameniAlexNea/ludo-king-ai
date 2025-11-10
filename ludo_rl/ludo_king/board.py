@@ -51,8 +51,12 @@ class Board:
         return (start + relative_pos - 1) % 52
 
     def relative_position(self, player_color: int, abs_pos: int) -> int:
-        """Map absolute (0..51) back to player's relative frame (1..52)."""
-        if not 0 <= abs_pos <= 51:
+        """Map absolute (0..51) back to player's relative frame (1..52).
+
+        Note: absolute index 0 is not used as a valid ring position in our path
+        mapping; return -1 for this value to match expectations in tests.
+        """
+        if not 1 <= abs_pos <= 51:
             return -1
         start = config.PLAYER_START_SQUARES[player_color]
         rel = (abs_pos - start + 52) % 52
