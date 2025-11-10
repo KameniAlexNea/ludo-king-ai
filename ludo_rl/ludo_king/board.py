@@ -108,13 +108,17 @@ class Board:
             for pc in pieces:
                 pos = pc.position
                 if pos == 0:
+                    # Piece in yard
                     ch[0] += 1.0
-                elif pos <= config.MAIN_TRACK_END:
+                elif 1 <= pos <= config.MAIN_TRACK_END:
                     if rel_idx == 0:
                         ch[pos] += 1.0
                     else:
                         translated = self.translate_relative(color_id, agent_color, pos)
                         if translated != -1:
                             ch[translated] += 1.0
-                # home column and finished not represented on ring channels here
+                elif config.HOME_COLUMN_START <= pos <= config.HOME_FINISH:
+                    # Represent home column (52..56) and finished (57) directly at their indices
+                    # for all players. These do not require translation.
+                    ch[pos] += 1.0
         return board
