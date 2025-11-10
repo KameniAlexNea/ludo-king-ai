@@ -512,7 +512,7 @@ def draw_board(
                 cx, cy = (bbox[0] + bbox[2]) // 2, (bbox[1] + bbox[3]) // 2
                 _draw_stacked_tokens(d, [(color, tk)], cx, cy, CELL // 2 - 6, show_ids)
 
-            elif HOME_COLUMN_START <= rel <= HOME_COLUMN_END:
+            elif HOME_COLUMN_START <= rel < HOME_COLUMN_END:
                 # Home column tokens
                 coord_map = HOME_COLUMN_COORDS[color]
                 if rel in coord_map:
