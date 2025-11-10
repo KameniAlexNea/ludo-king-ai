@@ -18,9 +18,12 @@ class Game:
     rng: random.Random = field(default_factory=random.Random, init=False)
 
     def __post_init__(self) -> None:
-        # Board owns references to players' pieces in order of Color (0..3)
-        pieces_by_color: List[Sequence[Piece]] = [p.pieces for p in self.players]
-        self.board = Board(players=pieces_by_color)
+        # Board expects players indexed by Color id (0..3). Build a fixed map.
+        pieces_by_color: List[List[Piece]] = [[] for _ in range(4)]
+        for pl in self.players:
+            pieces_by_color[int(pl.color)] = list(pl.pieces)
+        colors = list(range(len(pieces_by_color)))
+        self.board = Board(players=pieces_by_color, colors=colors)
 
     # --- Dice ---
     def roll_dice(self) -> int:

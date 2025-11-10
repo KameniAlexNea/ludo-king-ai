@@ -31,9 +31,16 @@ _RELATIVE_TRANSLATIONS = _compute_relative_translations()
 @dataclass(slots=True)
 class Board:
     """Owns piece placement and mapping utilities (no rule logic)."""
-
-    players: Sequence[Sequence[Piece]]  # players -> their pieces
+    players: Sequence[Sequence[Piece]]  # players (engine order) -> their pieces
+    colors: Sequence[int]  # engine order -> color ids (0..3)
     _tensor_buffer: np.ndarray | None = field(default=None, init=False, repr=False)
+
+    def _resolve_index(self, player_color: int) -> int:
+        """Map a color id (0..3) to engine index in self.players/colors."""
+        for idx, col in enumerate(self.colors):
+            if col == player_color:
+                return idx
+        raise IndexError("Player color not found in Board.colors")
 
     def absolute_position(self, player_color: int, relative_pos: int) -> int:
         """Map a player's relative position to absolute (0..51) per piece.to_absolute."""
@@ -56,19 +63,21 @@ class Board:
 
     def pieces_at_absolute(self, abs_pos: int, *, exclude_color: int | None = None) -> list[tuple[int, Piece]]:
         out: list[tuple[int, Piece]] = []
-        for color, pieces in enumerate(self.players):
-            if exclude_color is not None and color == exclude_color:
+        for idx, pieces in enumerate(self.players):
+            color_id = self.colors[idx]
+            if exclude_color is not None and color_id == exclude_color:
                 continue
-            r = self.relative_position(color, abs_pos)
+            r = self.relative_position(color_id, abs_pos)
             if r == -1:
                 continue
             for pc in pieces:
                 if pc.position == r:
-                    out.append((color, pc))
+                    out.append((color_id, pc))
         return out
 
     def count_at_relative(self, player_color: int, rel_pos: int) -> int:
-        return sum(1 for p in self.players[player_color] if p.position == rel_pos)
+        idx = self._resolve_index(player_color)
+        return sum(1 for p in self.players[idx] if p.position == rel_pos)
 
     def build_tensor(self, agent_color: int, out: np.ndarray | None = None) -> np.ndarray:
         if out is not None:
@@ -91,9 +100,10 @@ class Board:
                 safe[rel] = 1.0
 
         # my + opponents
-        for color, pieces in enumerate(self.players):
+        for idx, pieces in enumerate(self.players):
             # fixed channel layout my, opp1, opp2, opp3
-            rel_idx = (color - agent_color) % 4
+            color_id = self.colors[idx]
+            rel_idx = (color_id - agent_color) % 4
             ch = board[rel_idx]
             for pc in pieces:
                 pos = pc.position
@@ -103,7 +113,7 @@ class Board:
                     if rel_idx == 0:
                         ch[pos] += 1.0
                     else:
-                        translated = self.translate_relative(color, agent_color, pos)
+                        translated = self.translate_relative(color_id, agent_color, pos)
                         if translated != -1:
                             ch[translated] += 1.0
                 # home column and finished not represented on ring channels here

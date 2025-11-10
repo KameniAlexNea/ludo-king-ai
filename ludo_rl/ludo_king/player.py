@@ -17,6 +17,7 @@ from .types import Move
 class Player:
     color: int | Color
     strategy: BaseStrategy = field(default_factory=HumanStrategy)
+    strategy_name: str = "unknown"
     pieces: list[Piece] = field(init=False)
     has_finished: bool = field(default=False, init=False)
 
