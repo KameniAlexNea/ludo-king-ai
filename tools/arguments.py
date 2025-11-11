@@ -22,6 +22,7 @@ class TrainConfig:
     device: str
     checkpoint_freq: int
     learning_rate: float
+    target_kl: float
     use_transformer: bool = False
     profile: bool = False
 
@@ -42,6 +43,7 @@ def build_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--checkpoint-freq", type=int, default=1_000_000)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
+    parser.add_argument("--target-kl", type=float, default=0.2)
     parser.add_argument(
         "--use-transformer",
         action="store_true",
@@ -83,4 +85,5 @@ def parse_train_args(args: list[str] | None = None) -> TrainConfig:
         resume=namespace.resume,
         use_transformer=namespace.use_transformer,
         profile=namespace.profile,
+        target_kl=namespace.target_kl,
     )

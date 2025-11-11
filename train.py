@@ -131,7 +131,7 @@ if __name__ == "__main__":
         learning_rate=lr_schedule(
             lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
         ),
-        target_kl=0.05,
+        target_kl=args.target_kl,
     )
     if args.resume:
         logger.info(f"--- Resuming training from {args.resume} ---")
