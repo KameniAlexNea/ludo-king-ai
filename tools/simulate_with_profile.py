@@ -10,7 +10,6 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from sb3_contrib import MaskablePPO
 
-from ludo_rl.ludo_king import Board
 from ludo_rl.ludo_king import config as king_config
 from ludo_rl.ludo_king.enums import Color
 from ludo_rl.ludo_king.game import Game
@@ -21,10 +20,10 @@ from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
 from ludo_rl.strategy.rl_agent import RLStrategy
 
-
 # -----------------------------
 # CLI and utilities
 # -----------------------------
+
 
 def seed_everything(seed: Optional[int]) -> random.Random:
     rng = random.Random(seed)
@@ -89,6 +88,7 @@ def parse_args() -> argparse.Namespace:
 # -----------------------------
 # Profiling core
 # -----------------------------
+
 
 @dataclass
 class StepRecord:
@@ -163,7 +163,9 @@ def segment_profiles(
         best_ratio = 0.0
         for n in names:
             ratio = counters[n] / max(1, win_len)
-            if ratio > best_ratio or (ratio == best_ratio and n == (selected[-1] if selected else n)):
+            if ratio > best_ratio or (
+                ratio == best_ratio and n == (selected[-1] if selected else n)
+            ):
                 best_ratio = ratio
                 best_name = n
         if best_ratio < threshold:
@@ -177,11 +179,17 @@ def segment_profiles(
         start_idx = 0
         for i in range(1, len(selected)):
             if selected[i] != cur:
-                seg_records = [r for r, lab in zip(records[start_idx:i], selected[start_idx:i]) if lab == cur]
+                seg_records = [
+                    r
+                    for r, lab in zip(records[start_idx:i], selected[start_idx:i])
+                    if lab == cur
+                ]
                 acc = 0.0
                 if cur != "mixed" and seg_records:
                     total = len(seg_records)
-                    acc = sum(1 for r in seg_records if r.aligned.get(cur, False)) / total
+                    acc = (
+                        sum(1 for r in seg_records if r.aligned.get(cur, False)) / total
+                    )
                 segments.append(
                     Segment(
                         start=records[start_idx].step,
@@ -193,7 +201,9 @@ def segment_profiles(
                 cur = selected[i]
                 start_idx = i
         # last segment
-        seg_records = [r for r, lab in zip(records[start_idx:], selected[start_idx:]) if lab == cur]
+        seg_records = [
+            r for r, lab in zip(records[start_idx:], selected[start_idx:]) if lab == cur
+        ]
         acc = 0.0
         if cur != "mixed" and seg_records:
             total = len(seg_records)
@@ -223,9 +233,12 @@ def run_single_game(
     if num_players == 2:
         color_ids = [int(Color.RED), int(Color.YELLOW)]
     else:
-        color_ids = [int(Color.RED), int(Color.GREEN), int(Color.YELLOW), int(Color.BLUE)][
-            : num_players
-        ]
+        color_ids = [
+            int(Color.RED),
+            int(Color.GREEN),
+            int(Color.YELLOW),
+            int(Color.BLUE),
+        ][:num_players]
     players = [Player(color=c) for c in color_ids]
     game = Game(players=players)
 
@@ -282,7 +295,9 @@ def run_single_game(
             if current == 0:
                 # Build context once for all strategies
                 action_mask, move_choices = build_action_mask_and_choices(player, legal)
-                ctx = build_move_options(board_stack, int(dice), action_mask, move_choices)
+                ctx = build_move_options(
+                    board_stack, int(dice), action_mask, move_choices
+                )
 
                 # Agent decision
                 agent_decision = rl_agent.select_move(ctx)
@@ -291,7 +306,9 @@ def run_single_game(
                     agent_piece_id = int(mv.piece_id)
                 else:
                     agent_piece_id = int(agent_decision.piece_id)
-                    mv = choose_move_by_piece(legal, agent_piece_id) or rng.choice(legal)
+                    mv = choose_move_by_piece(legal, agent_piece_id) or rng.choice(
+                        legal
+                    )
 
                 # Compare with each heuristic strategy
                 aligned: Dict[str, bool] = {}
@@ -305,7 +322,12 @@ def run_single_game(
 
                 step_idx += 1
                 step_records.append(
-                    StepRecord(step=step_idx, dice=dice, agent_piece=agent_piece_id, aligned=aligned)
+                    StepRecord(
+                        step=step_idx,
+                        dice=dice,
+                        agent_piece=agent_piece_id,
+                        aligned=aligned,
+                    )
                 )
             else:
                 # Opponent move using their attached strategy (or random fallback in Player.choose)
@@ -324,7 +346,9 @@ def run_single_game(
     elapsed = time.time() - start_time
 
     # Aggregate profile segments
-    timeline, segments = segment_profiles(step_records, window=window, threshold=threshold)
+    timeline, segments = segment_profiles(
+        step_records, window=window, threshold=threshold
+    )
 
     # Per-strategy accuracy within this game
     totals: Dict[str, int] = defaultdict(int)
@@ -334,7 +358,10 @@ def run_single_game(
             totals[name] += 1
             if ok:
                 hits[name] += 1
-    game_accuracy = {name: (hits[name] / totals[name]) if totals[name] > 0 else 0.0 for name in totals}
+    game_accuracy = {
+        name: (hits[name] / totals[name]) if totals[name] > 0 else 0.0
+        for name in totals
+    }
 
     # Prepare JSON-serializable output
     return {
@@ -398,11 +425,15 @@ def main() -> None:
         for name, hit in game_res.get("strategy_hits", {}).items():
             global_hits[name] += int(hit)
         print(
-            f"Game {gi+1}/{args.num_games}: steps={game_res['steps']} segments={len(game_res['profile_segments'])}"
+            f"Game {gi + 1}/{args.num_games}: steps={game_res['steps']} segments={len(game_res['profile_segments'])}"
         )
 
     global_accuracy = {
-        name: (global_hits[name] / global_totals[name]) if global_totals[name] > 0 else 0.0
+        name: (
+            (global_hits[name] / global_totals[name])
+            if global_totals[name] > 0
+            else 0.0
+        )
         for name in global_totals
     }
 
