@@ -17,7 +17,9 @@ def seed_environ(seed_value: Optional[int] = None):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Simulate a trained Ludo agent using LudoEnv")
+    parser = argparse.ArgumentParser(
+        description="Simulate a trained Ludo agent using LudoEnv"
+    )
     parser.add_argument(
         "--model-path",
         type=str,
@@ -86,7 +88,9 @@ def main() -> None:
 
         # Predict action using mask
         if np.any(mask):
-            action, _ = model.predict(obs, action_masks=mask[None, ...], deterministic=args.deterministic)
+            action, _ = model.predict(
+                obs, action_masks=mask[None, ...], deterministic=args.deterministic
+            )
             action = int(np.asarray(action).item())
         else:
             action = 0

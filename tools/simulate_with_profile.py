@@ -15,6 +15,7 @@ from ludo_rl.ludo_king.enums import Color
 from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo_king.player import Player
 from ludo_rl.ludo_king.types import Move
+from ludo_rl.strategy.base import BaseStrategy
 from ludo_rl.strategy.features import build_move_options
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
@@ -222,7 +223,7 @@ def segment_profiles(
 
 def run_single_game(
     model: MaskablePPO,
-    strategy_pool: Dict[str, object],
+    strategy_pool: Dict[str, BaseStrategy],
     num_players: int,
     rng: random.Random,
     window: int,

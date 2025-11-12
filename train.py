@@ -3,7 +3,6 @@ import time
 
 import torch
 from loguru import logger
-from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import (
     BaseCallback,
     CallbackList,
@@ -27,6 +26,7 @@ import wandb
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king.config import net_config
+from ludo_rl.maskable_ppo import MaskablePPOAdvWeighted
 from tools.arguments import parse_train_args
 from tools.scheduler import CoefScheduler, lr_schedule
 
@@ -135,13 +135,13 @@ if __name__ == "__main__":
     )
     if args.resume:
         logger.info(f"--- Resuming training from {args.resume} ---")
-        model = MaskablePPO.load(
+        model = MaskablePPOAdvWeighted.load(
             args.resume,
             env=train_env,
             **init_kwargs,
         )
     else:
-        model = MaskablePPO(
+        model = MaskablePPOAdvWeighted(
             "MultiInputPolicy",  # Use MlpPolicy as our extractor outputs a flat vector
             train_env,
             policy_kwargs=policy_kwargs,
