@@ -7,11 +7,10 @@ import numpy as np
 
 from ludo_rl.ludo_king.board import Board
 from ludo_rl.ludo_king.config import config
-from ludo_rl.ludo_king.enums import Color
 from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo_king.player import Player
 from ludo_rl.ludo_king.reward import compute_move_rewards, reward_config
-from ludo_rl.ludo_king.types import Move
+from ludo_rl.ludo_king.types import Color, Move
 
 
 def make_players() -> list[Player]:

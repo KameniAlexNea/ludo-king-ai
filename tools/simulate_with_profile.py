@@ -11,10 +11,9 @@ import numpy as np
 from sb3_contrib import MaskablePPO
 
 from ludo_rl.ludo_king import config as king_config
-from ludo_rl.ludo_king.enums import Color
 from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo_king.player import Player
-from ludo_rl.ludo_king.types import Move
+from ludo_rl.ludo_king.types import Color, Move
 from ludo_rl.strategy.base import BaseStrategy
 from ludo_rl.strategy.features import build_move_options
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY

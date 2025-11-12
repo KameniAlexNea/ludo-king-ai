@@ -8,9 +8,8 @@ import numpy as np
 if TYPE_CHECKING:  # avoid runtime imports to prevent circular deps
     from ludo_rl.strategy.base import BaseStrategy
 
-from .enums import Color
 from .piece import Piece
-from .types import Move
+from .types import Color, Move
 
 
 @dataclass(slots=True)
