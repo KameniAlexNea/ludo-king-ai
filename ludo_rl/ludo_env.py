@@ -257,11 +257,11 @@ class LudoEnv(gym.Env):
         if terminated:
             # Rank: number of players who have won at this point
             rank = sum(p.check_won() for p in self.game.players)
-            if rank == len(self.game.players):
-                reward += reward_config.lose
+            if rank == 1:
+                reward += reward_config.win
             else:
                 reward += (
-                    reward_config.win
+                    reward_config.lose
                     * (len(self.game.players) - rank + 1)
                     / len(self.game.players)
                 )
