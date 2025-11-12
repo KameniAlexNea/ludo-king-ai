@@ -132,6 +132,7 @@ if __name__ == "__main__":
             lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
         ),
         target_kl=args.target_kl,
+        vf_coef=args.vf_coef,
     )
     if args.resume:
         logger.info(f"--- Resuming training from {args.resume} ---")

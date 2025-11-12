@@ -15,6 +15,7 @@ class TrainConfig:
     gae_lambda: float
     clip_range: float
     ent_coef: float
+    vf_coef: float
     num_envs: int
     log_dir: str
     model_dir: str
@@ -37,6 +38,7 @@ def build_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--clip-range", type=float, default=0.2)
     parser.add_argument("--ent-coef", type=float, default=0.1)
+    parser.add_argument("--vf-coef", type=float, default=0.1)
     parser.add_argument("--num-envs", type=int, default=0)
     parser.add_argument("--log-dir", type=str, default="training/ludo_logs")
     parser.add_argument("--model-dir", type=str, default="training/ludo_models")
@@ -86,4 +88,5 @@ def parse_train_args(args: list[str] | None = None) -> TrainConfig:
         use_transformer=namespace.use_transformer,
         profile=namespace.profile,
         target_kl=namespace.target_kl,
+        vf_coef=namespace.vf_coef,
     )
