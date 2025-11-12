@@ -30,6 +30,8 @@ class Config:
     HOME_COLUMN_START: int = 0
     HOME_FINISH: int = 0
 
+    FIXED_OPPONENTS_STEPS = 100_000
+
     # Derived positions (computed in __post_init__ for convenience)
     def __post_init__(self):
         # Main ring covers 1..51
@@ -37,6 +39,9 @@ class Config:
         # Home column starts at 52 and ends at 56
         self.HOME_COLUMN_START = self.HOME_COLUMN_ENTRIES
         self.HOME_FINISH = self.PATH_LENGTH - 1
+
+        if self.NUM_PLAYERS < 2 or self.NUM_PLAYERS > 4:
+            raise ValueError("NUM_PLAYERS must be between 2 and 4")
 
 
 @dataclass(slots=True)

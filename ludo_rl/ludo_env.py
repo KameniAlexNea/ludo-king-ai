@@ -36,7 +36,9 @@ class LudoEnv(gym.Env):
         # Helper for sb3_contrib.common.masking.ActionMasker
         return self._get_info()["action_mask"]
 
-    def __init__(self, render_mode: Optional[str] = None):
+    def __init__(
+        self, render_mode: Optional[str] = None, use_fixed_opponents: bool = True
+    ):
         super().__init__()
         self.agent_index = 0  # We are always Player 0
         self.render_mode = render_mode
@@ -86,6 +88,8 @@ class LudoEnv(gym.Env):
                 "dice_roll": spaces.Box(low=0, high=5, shape=(1,), dtype=np.int64),
             }
         )
+        self._fixed_opponents_strategies: list[str] = None
+        self.use_fixed_opponents = use_fixed_opponents
 
     def _build_observation(self) -> Dict[str, np.ndarray]:
         assert self.game is not None
@@ -127,6 +131,23 @@ class LudoEnv(gym.Env):
 
         return terminated, truncated
 
+    def _get_lineup(self, num_opponents: int) -> List[str]:
+        if self.use_fixed_opponents and self._fixed_opponents_strategies is not None:
+            if self._reset_count % king_config.FIXED_OPPONENTS_STEPS != 0:
+                return self._fixed_opponents_strategies
+        if self.strategy_selection == 0:
+            # Simple: pick each opponent independently at random (with replacement)
+            lineup = [self.rng.choice(self.opponents) for _ in range(num_opponents)]
+        else:
+            # Sequential cycling through provided opponents across episodes
+            start = (self._reset_count * num_opponents) % max(1, len(self.opponents))
+            lineup = [
+                self.opponents[(start + i) % len(self.opponents)]
+                for i in range(num_opponents)
+            ]
+        self._fixed_opponents_strategies = lineup
+        return lineup
+
     def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
         super().reset(seed=seed, options=options)
 
@@ -148,23 +169,8 @@ class LudoEnv(gym.Env):
         # Attach opponents
         # Build an opponent lineup for this episode based on selection mode
         num_opponents = len(self.game.players) - 1
-        if num_opponents > 0:
-            if self.strategy_selection == 0:
-                # Simple: pick each opponent independently at random (with replacement)
-                lineup = [self.rng.choice(self.opponents) for _ in range(num_opponents)]
-            else:
-                # Sequential cycling through provided opponents across episodes
-                start = (self._reset_count * num_opponents) % max(
-                    1, len(self.opponents)
-                )
-                lineup = [
-                    self.opponents[(start + i) % len(self.opponents)]
-                    for i in range(num_opponents)
-                ]
-        else:
-            raise ValueError(
-                "LudoEnv requires at least 2 players (1 agent + 1 opponent)"
-            )
+
+        lineup = self._get_lineup(num_opponents)
 
         opp_seat = 0
         for idx, pl in enumerate(self.game.players):
