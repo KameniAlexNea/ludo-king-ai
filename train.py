@@ -1,5 +1,6 @@
 import os
 import time
+from dataclasses import asdict
 
 import torch
 from loguru import logger
@@ -25,9 +26,10 @@ from wandb.integration.sb3 import WandbCallback
 import wandb
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo_env import LudoEnv
-from ludo_rl.ludo_king.config import net_config
+from ludo_rl.ludo_king.config import config, net_config
+from ludo_rl.ludo_king.reward import reward_config
 from ludo_rl.maskable_ppo import MaskablePPOAdvWeighted
-from tools.arguments import parse_train_args
+from tools.arguments import TrainingSetup, parse_train_args
 from tools.scheduler import CoefScheduler, lr_schedule
 
 
@@ -90,7 +92,14 @@ if __name__ == "__main__":
     wandb.init(
         project="ludo-king-ppo",
         name=run_id,
-        config=vars(args),
+        config=asdict(
+            TrainingSetup(
+                config=config,
+                network_config=net_config,
+                reward_config=reward_config,
+                train_config=args,
+            )
+        ),
         sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
         monitor_gym=True,  # auto-upload the videos of agents playing the game
         save_code=True,  # optional

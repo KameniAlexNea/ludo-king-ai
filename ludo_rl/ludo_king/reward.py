@@ -3,7 +3,7 @@ from typing import Any, Dict, Union
 
 from .types import MoveEvents
 
-COEF = 5
+COEF = 1
 
 
 def _get(events: Union[MoveEvents, Dict[str, Any]], name: str, default=0):
@@ -17,8 +17,8 @@ def _get(events: Union[MoveEvents, Dict[str, Any]], name: str, default=0):
 
 @dataclass(slots=True)
 class Reward:
-    win: float = 50
-    lose: float = -50
+    win: float = 100
+    lose: float = -100
     finish: float = 1 * COEF
     capture: float = 0.2 * COEF
     got_capture: float = -0.5 * COEF

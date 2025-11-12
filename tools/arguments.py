@@ -4,6 +4,9 @@ import argparse
 import os
 from dataclasses import dataclass
 
+from ludo_rl.ludo_king.config import Config, NetworkConfig
+from ludo_rl.ludo_king.reward import Reward
+
 
 @dataclass
 class TrainConfig:
@@ -90,3 +93,11 @@ def parse_train_args(args: list[str] | None = None) -> TrainConfig:
         target_kl=namespace.target_kl,
         vf_coef=namespace.vf_coef,
     )
+
+
+@dataclass(slots=True)
+class TrainingSetup:
+    config: Config
+    network_config: NetworkConfig
+    reward_config: Reward
+    train_config: TrainConfig
