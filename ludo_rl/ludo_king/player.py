@@ -71,16 +71,14 @@ class Player:
                 move_choices[mv.piece_id] = {
                     "piece": self.pieces[mv.piece_id],
                     "new_pos": mv.new_pos,
+                    "move": mv,
                 }
-        # Lazy import to avoid import-time circular dependencies
-        from ludo_rl.strategy.features import build_move_options
-
-        ctx = build_move_options(board_stack, int(dice_roll), action_mask, move_choices)
-        decided = self.strategy.select_move(ctx)
+        decided = self.strategy.decide(
+            board_stack, int(dice_roll), action_mask, move_choices
+        )
         if decided is None:
             return None
         # Map back to our Move by piece_id
-        for mv in legal_moves:
-            if mv.piece_id == decided.piece_id:
-                return mv
+        for decided.piece_id in move_choices:
+            return move_choices[decided.piece_id]["move"]
         return None

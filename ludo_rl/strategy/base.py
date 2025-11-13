@@ -5,6 +5,9 @@ import random
 from dataclasses import dataclass
 from typing import ClassVar, Optional
 
+import numpy as np
+
+from .features import build_move_options
 from .types import MoveOption, StrategyContext
 
 
@@ -21,6 +24,16 @@ class BaseStrategy:
 
     name = "base"
     config: ClassVar[BaseStrategyConfig | None] = None
+
+    def decide(
+        self,
+        board_stack: np.ndarray,
+        dice_roll: int,
+        action_mask: np.ndarray,
+        move_choices: list[dict | None],
+    ) -> Optional[MoveOption]:
+        ctx = build_move_options(board_stack, int(dice_roll), action_mask, move_choices)
+        return self.select_move(ctx)
 
     def select_move(self, ctx: StrategyContext) -> Optional[MoveOption]:
         scored_moves: list[tuple[MoveOption, float]] = []
