@@ -3,9 +3,9 @@
 import unittest
 
 from ludo_rl.ludo_env import LudoEnv
+from ludo_rl.ludo_king.config import reward_config
 from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo_king.player import Player
-from ludo_rl.ludo_king.reward import reward_config
 from ludo_rl.ludo_king.types import Color, Move
 
 

@@ -57,8 +57,8 @@ class NetworkConfig:
     paddings: list[int] = field(default_factory=lambda: [3, 2])
     embed_dim: int = 128
     pooled_output_size: int = 4
-    pi: list[int] = field(default_factory=lambda: [256, 128, 64])
-    vf: list[int] = field(default_factory=lambda: [256, 128, 64])
+    pi: list[int] = field(default_factory=lambda: [128, 64])
+    vf: list[int] = field(default_factory=lambda: [128, 64])
 
 
 @dataclass(slots=True)
@@ -73,6 +73,26 @@ class StrategyConfig:
     home_finish: int = 57
 
 
+COEF = 1
+
+
+@dataclass(slots=True)
+class Reward:
+    win: float = 50
+    lose: float = -50
+    finish: float = 1 * COEF
+    capture: float = 0.2 * COEF
+    got_capture: float = -0.5 * COEF
+    blockade: float = 0.3 * COEF
+    hit_blockade: float = -0.4 * COEF
+    exit_home: float = 0.1 * COEF
+    progress: float = 0.01 * COEF
+    safe_position: float = 0.05 * COEF
+    draw: float = -0.5 * COEF
+    skipped_turn: float = -0.01 * COEF
+
+
 config = Config()
 net_config = NetworkConfig()
 strategy_config = StrategyConfig()
+reward_config = Reward()

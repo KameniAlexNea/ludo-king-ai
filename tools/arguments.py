@@ -4,8 +4,7 @@ import argparse
 import os
 from dataclasses import dataclass
 
-from ludo_rl.ludo_king.config import Config, NetworkConfig
-from ludo_rl.ludo_king.reward import Reward
+from ludo_rl.ludo_king.config import Config, NetworkConfig, Reward
 
 
 @dataclass

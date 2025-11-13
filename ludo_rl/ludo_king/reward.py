@@ -1,9 +1,7 @@
-from dataclasses import dataclass
 from typing import Any, Dict, Union
 
+from .config import reward_config
 from .types import MoveEvents
-
-COEF = 1
 
 
 def _get(events: Union[MoveEvents, Dict[str, Any]], name: str, default=0):
@@ -13,25 +11,6 @@ def _get(events: Union[MoveEvents, Dict[str, Any]], name: str, default=0):
     if isinstance(events, MoveEvents):
         return getattr(events, name, default)
     return (events or {}).get(name, default)
-
-
-@dataclass(slots=True)
-class Reward:
-    win: float = 100
-    lose: float = -100
-    finish: float = 1 * COEF
-    capture: float = 0.2 * COEF
-    got_capture: float = -0.5 * COEF
-    blockade: float = 0.3 * COEF
-    hit_blockade: float = -0.4 * COEF
-    exit_home: float = 0.1 * COEF
-    progress: float = 0.01 * COEF
-    safe_position: float = 0.05 * COEF
-    draw: float = -0.5 * COEF
-    skipped_turn: float = -0.01 * COEF
-
-
-reward_config = Reward()
 
 
 def compute_move_rewards(
