@@ -30,147 +30,226 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
     def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
         super().__init__(observation_space, features_dim)
 
-        board_shape = observation_space["board"].shape  # (10, 58)
-        self.board_length = board_shape[1]
+        # Support legacy grid or new token-sequence observations
+        self.use_tokens = "positions" in observation_space.spaces
         self.dice_roll_dim = 6
-        self.position_channels = 4  # my pieces + three opponents
-        self.context_channels = board_shape[0] - self.position_channels
 
-        # Position-focused CNN stream (agent + opponents)
-        self.position_conv = nn.Sequential(
-            nn.Conv1d(
-                self.position_channels,
-                net_config.conv_configs[0],
-                kernel_size=net_config.kernel_sizes[0],
-                stride=1,
-                padding=net_config.paddings[0],
-            ),
-            nn.ReLU(),
-            nn.Conv1d(
-                net_config.conv_configs[0],
-                net_config.conv_configs[1],
-                kernel_size=net_config.kernel_sizes[1],
-                stride=1,
-                padding=net_config.paddings[1],
-            ),
-            nn.ReLU(),
-        )
-        self.position_pool = nn.AdaptiveAvgPool1d(
-            output_size=net_config.pooled_output_size
-        )
-        self.position_norm = nn.LayerNorm(
-            net_config.conv_configs[1] * net_config.pooled_output_size
-        )
+        if not self.use_tokens:
+            board_shape = observation_space["board"].shape  # (10, 58)
+            self.board_length = board_shape[1]
+            self.position_channels = 4  # my pieces + three opponents
+            self.context_channels = board_shape[0] - self.position_channels
+        else:
+            pos_shape = observation_space["positions"].shape  # (T, 16)
+            self.T = pos_shape[0]
+            self.N = pos_shape[1]
+            self.embed_dim = net_config.embed_dim
+            # Embeddings
+            self.pos_emb = nn.Embedding(config.PATH_LENGTH, self.embed_dim)
+            self.color_emb = nn.Embedding(4, self.embed_dim)
+            self.piece_idx_emb = nn.Embedding(4, self.embed_dim)
+            self.time_emb = nn.Embedding(self.T, self.embed_dim)
+            self.frame_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
+            self.curr_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
+            # Token projection and pooling
+            self.token_proj = nn.Sequential(
+                nn.Linear(self.embed_dim, self.embed_dim), nn.ReLU(), nn.LayerNorm(self.embed_dim)
+            )
+            # Features: mean pool over tokens and time, concat current dice
+            # Infer total dim for head
+            self.total_feature_dim = self.embed_dim + self.embed_dim
+            self.feature_norm = nn.LayerNorm(self.total_feature_dim)
+            self.head = nn.Sequential(
+                nn.Linear(self.total_feature_dim, features_dim),
+                nn.ReLU(),
+                nn.LayerNorm(features_dim),
+            )
 
-        # Contextual CNN stream (safe zones, heatmaps, knockouts, etc.)
-        self.context_conv = nn.Sequential(
-            nn.Conv1d(
-                self.context_channels,
-                net_config.conv_configs[0],
-                kernel_size=net_config.kernel_sizes[0],
-                stride=1,
-                padding=net_config.paddings[0],
-            ),
-            nn.ReLU(),
-            nn.Conv1d(
-                net_config.conv_configs[0],
-                net_config.conv_configs[1],
-                kernel_size=net_config.kernel_sizes[1],
-                stride=1,
-                padding=net_config.paddings[1],
-            ),
-            nn.ReLU(),
-        )
-        self.context_pool = nn.AdaptiveAvgPool1d(
-            output_size=net_config.pooled_output_size
-        )
-        self.context_norm = nn.LayerNorm(
-            net_config.conv_configs[1] * net_config.pooled_output_size
-        )
+        if not self.use_tokens:
+            # Position-focused CNN stream (agent + opponents)
+            self.position_conv = nn.Sequential(
+                nn.Conv1d(
+                    self.position_channels,
+                    net_config.conv_configs[0],
+                    kernel_size=net_config.kernel_sizes[0],
+                    stride=1,
+                    padding=net_config.paddings[0],
+                ),
+                nn.ReLU(),
+                nn.Conv1d(
+                    net_config.conv_configs[0],
+                    net_config.conv_configs[1],
+                    kernel_size=net_config.kernel_sizes[1],
+                    stride=1,
+                    padding=net_config.paddings[1],
+                ),
+                nn.ReLU(),
+            )
+            self.position_pool = nn.AdaptiveAvgPool1d(
+                output_size=net_config.pooled_output_size
+            )
+            self.position_norm = nn.LayerNorm(
+                net_config.conv_configs[1] * net_config.pooled_output_size
+            )
 
-        # Per-piece embeddings and projection
-        self.position_embed = nn.Embedding(config.PATH_LENGTH, net_config.embed_dim)
-        self.piece_index_embed = nn.Embedding(
-            config.PIECES_PER_PLAYER, net_config.embed_dim
-        )
-        self.piece_mlp = nn.Sequential(
-            nn.Linear(
-                net_config.embed_dim * 2 + net_config.conv_configs[1],
-                net_config.embed_dim,
-            ),
-            nn.ReLU(),
-        )
+            # Contextual CNN stream (safe zones, heatmaps, knockouts, etc.)
+            self.context_conv = nn.Sequential(
+                nn.Conv1d(
+                    self.context_channels,
+                    net_config.conv_configs[0],
+                    kernel_size=net_config.kernel_sizes[0],
+                    stride=1,
+                    padding=net_config.paddings[0],
+                ),
+                nn.ReLU(),
+                nn.Conv1d(
+                    net_config.conv_configs[0],
+                    net_config.conv_configs[1],
+                    kernel_size=net_config.kernel_sizes[1],
+                    stride=1,
+                    padding=net_config.paddings[1],
+                ),
+                nn.ReLU(),
+            )
+            self.context_pool = nn.AdaptiveAvgPool1d(
+                output_size=net_config.pooled_output_size
+            )
+            self.context_norm = nn.LayerNorm(
+                net_config.conv_configs[1] * net_config.pooled_output_size
+            )
 
-        # Dice embedding to mirror transformer behaviour
-        self.dice_embed = nn.Embedding(self.dice_roll_dim, net_config.embed_dim)
+            # Per-piece embeddings and projection
+            self.position_embed = nn.Embedding(config.PATH_LENGTH, net_config.embed_dim)
+            self.piece_index_embed = nn.Embedding(
+                config.PIECES_PER_PLAYER, net_config.embed_dim
+            )
+            self.piece_mlp = nn.Sequential(
+                nn.Linear(
+                    net_config.embed_dim * 2 + net_config.conv_configs[1],
+                    net_config.embed_dim,
+                ),
+                nn.ReLU(),
+            )
 
-        self.register_buffer(
-            "piece_indices",
-            torch.arange(config.PIECES_PER_PLAYER, dtype=torch.long).unsqueeze(0),
-            persistent=False,
-        )
+            # Dice embedding to mirror transformer behaviour
+            self.dice_embed = nn.Embedding(self.dice_roll_dim, net_config.embed_dim)
 
-        # Infer flattened dimensions using a sample observation
-        with torch.no_grad():
-            dummy_board = torch.as_tensor(
-                observation_space["board"].sample()[None]
-            ).float()
-            pos_flat = self.position_pool(
-                self.position_conv(dummy_board[:, : self.position_channels, :])
-            ).flatten(1)
-            ctx_flat = self.context_pool(
-                self.context_conv(dummy_board[:, self.position_channels :, :])
-            ).flatten(1)
+            self.register_buffer(
+                "piece_indices",
+                torch.arange(config.PIECES_PER_PLAYER, dtype=torch.long).unsqueeze(0),
+                persistent=False,
+            )
 
-        self.piece_feature_dim = config.PIECES_PER_PLAYER * net_config.embed_dim
-        self.total_feature_dim = (
-            pos_flat.shape[1]
-            + ctx_flat.shape[1]
-            + self.piece_feature_dim
-            + net_config.embed_dim
-        )
+            # Infer flattened dimensions using a sample observation
+            with torch.no_grad():
+                dummy_board = torch.as_tensor(
+                    observation_space["board"].sample()[None]
+                ).float()
+                pos_flat = self.position_pool(
+                    self.position_conv(dummy_board[:, : self.position_channels, :])
+                ).flatten(1)
+                ctx_flat = self.context_pool(
+                    self.context_conv(dummy_board[:, self.position_channels :, :])
+                ).flatten(1)
 
-        self.feature_norm = nn.LayerNorm(self.total_feature_dim)
-        self.head = nn.Sequential(
-            nn.Linear(self.total_feature_dim, features_dim),
-            nn.ReLU(),
-            nn.LayerNorm(features_dim),
-        )
+            self.piece_feature_dim = config.PIECES_PER_PLAYER * net_config.embed_dim
+            self.total_feature_dim = (
+                pos_flat.shape[1]
+                + ctx_flat.shape[1]
+                + self.piece_feature_dim
+                + net_config.embed_dim
+            )
+
+            self.feature_norm = nn.LayerNorm(self.total_feature_dim)
+            self.head = nn.Sequential(
+                nn.Linear(self.total_feature_dim, features_dim),
+                nn.ReLU(),
+                nn.LayerNorm(features_dim),
+            )
 
     def forward(self, observations: dict) -> torch.Tensor:
-        board = observations["board"].float()
+        if not self.use_tokens:
+            board = observations["board"].float()
 
-        position_board = board[:, : self.position_channels, :]
-        context_board = board[:, self.position_channels :, :]
+            position_board = board[:, : self.position_channels, :]
+            context_board = board[:, self.position_channels :, :]
 
-        position_conv = self.position_conv(position_board)
-        position_flat = self.position_pool(position_conv).flatten(1)
-        position_flat = self.position_norm(position_flat)
+            position_conv = self.position_conv(position_board)
+            position_flat = self.position_pool(position_conv).flatten(1)
+            position_flat = self.position_norm(position_flat)
 
-        context_conv = self.context_conv(context_board)
-        context_flat = self.context_pool(context_conv).flatten(1)
-        context_flat = self.context_norm(context_flat)
+            context_conv = self.context_conv(context_board)
+            context_flat = self.context_pool(context_conv).flatten(1)
+            context_flat = self.context_norm(context_flat)
 
-        my_channel = board[:, 0, :]
-        piece_positions = _extract_piece_positions(my_channel, self.board_length)
-        piece_indices = self.piece_indices.expand(board.shape[0], -1)
+            my_channel = board[:, 0, :]
+            piece_positions = _extract_piece_positions(my_channel, self.board_length)
+            piece_indices = self.piece_indices.expand(board.shape[0], -1)
 
-        position_embed = self.position_embed(piece_positions)
-        index_embed = self.piece_index_embed(piece_indices)
-        conv_gather = self._gather_piece_context(position_conv, piece_positions)
+            position_embed = self.position_embed(piece_positions)
+            index_embed = self.piece_index_embed(piece_indices)
+            conv_gather = self._gather_piece_context(position_conv, piece_positions)
 
-        piece_features = torch.cat([position_embed, index_embed, conv_gather], dim=-1)
-        piece_features = self.piece_mlp(piece_features)
-        piece_flat = piece_features.reshape(board.shape[0], -1)
+            piece_features = torch.cat([position_embed, index_embed, conv_gather], dim=-1)
+            piece_features = self.piece_mlp(piece_features)
+            piece_flat = piece_features.reshape(board.shape[0], -1)
 
-        dice_roll = (
-            observations["dice_roll"].long().clamp(0, self.dice_roll_dim - 1).squeeze(1)
-        )
-        dice_emb = self.dice_embed(dice_roll)
+            dice_roll = (
+                observations["dice_roll"].long().clamp(0, self.dice_roll_dim - 1).squeeze(1)
+            )
+            dice_emb = self.dice_embed(dice_roll)
 
-        combined = torch.cat([position_flat, context_flat, piece_flat, dice_emb], dim=1)
-        combined = self.feature_norm(combined)
-        return self.head(combined)
+            combined = torch.cat([position_flat, context_flat, piece_flat, dice_emb], dim=1)
+            combined = self.feature_norm(combined)
+            return self.head(combined)
+        else:
+            # Token mode
+            positions = observations["positions"].long()  # (B, T, N) or (T,N)?
+            if positions.dim() == 2:
+                positions = positions.unsqueeze(0)
+            dice_hist = observations["dice_history"].long()
+            if dice_hist.dim() == 1:
+                dice_hist = dice_hist.unsqueeze(0)
+            token_mask = observations["token_mask"].to(dtype=torch.bool)
+            if token_mask.dim() == 2:
+                token_mask = token_mask.unsqueeze(0)
+            token_colors = observations["token_colors"].long()
+            if token_colors.dim() == 1:
+                token_colors = token_colors.unsqueeze(0)
+            current_dice = observations["current_dice"].long()
+            if current_dice.dim() == 1:
+                current_dice = current_dice
+
+            B, T, N = positions.shape
+            device = positions.device
+            # Build per-token embeddings
+            pos_e = self.pos_emb(positions)  # (B,T,N,d)
+            # Colors are per token, expand across time
+            colors = token_colors.unsqueeze(1).expand(B, T, N)
+            color_e = self.color_emb(colors)
+            piece_idx = (torch.arange(N, device=device) % 4).view(1, 1, N).expand(B, T, N)
+            piece_e = self.piece_idx_emb(piece_idx)
+            time_idx = torch.arange(T, device=device).view(1, T, 1).expand(B, T, N)
+            time_e = self.time_emb(time_idx)
+            frame_dice = dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
+            frame_dice_e = self.frame_dice_emb(frame_dice)
+
+            tok = pos_e + color_e + piece_e + time_e + frame_dice_e
+            tok = self.token_proj(tok)
+            # Apply token mask: zero-out invalid tokens
+            m = token_mask.to(dtype=tok.dtype).unsqueeze(-1)
+            tok = tok * m
+
+            # Mean pool over tokens and time (avoid division by zero)
+            valid_counts = m.sum(dim=(1, 2)).clamp(min=1.0)
+            pooled = tok.sum(dim=(1, 2)) / valid_counts
+
+            curr_d = current_dice.clamp(0, self.dice_roll_dim)
+            curr_e = self.curr_dice_emb(curr_d.squeeze(1))
+
+            combined = torch.cat([pooled, curr_e], dim=1)
+            combined = self.feature_norm(combined)
+            return self.head(combined)
 
     def _gather_piece_context(
         self, conv_map: torch.Tensor, piece_positions: torch.Tensor
@@ -195,86 +274,166 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
     ):
         super().__init__(observation_space, features_dim)
 
-        board_channels, board_length = observation_space["board"].shape
-
-        self.board_length = board_length
+        self.use_tokens = "positions" in observation_space.spaces
         self.dice_roll_dim = 6
         self.embed_dim = net_config.embed_dim
 
-        # Square token encoding (per square: combine all channels)
-        reduced_dim = max(self.embed_dim // 2, 1)
-        self.square_norm = nn.LayerNorm(board_channels)
-        self.square_proj = nn.Sequential(
-            nn.Linear(board_channels, reduced_dim),
-            nn.GELU(),
-            nn.Linear(reduced_dim, self.embed_dim),
-        )
-        self.square_pos_embed = nn.Embedding(board_length, self.embed_dim)
+        if not self.use_tokens:
+            board_channels, board_length = observation_space["board"].shape
 
-        # Learnable tokens and embeddings
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
-        self.dice_embed = nn.Embedding(self.dice_roll_dim, self.embed_dim)
-        self.piece_position_embed = nn.Embedding(config.PATH_LENGTH, self.embed_dim)
-        self.piece_index_embed = nn.Embedding(config.PIECES_PER_PLAYER, self.embed_dim)
+            self.board_length = board_length
 
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=self.embed_dim,
-            nhead=nhead,
-            dim_feedforward=self.embed_dim * 3,
-            dropout=0.1,
-            activation="gelu",
-            batch_first=True,
-        )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
+            # Square token encoding (per square: combine all channels)
+            reduced_dim = max(self.embed_dim // 2, 1)
+            self.square_norm = nn.LayerNorm(board_channels)
+            self.square_proj = nn.Sequential(
+                nn.Linear(board_channels, reduced_dim),
+                nn.GELU(),
+                nn.Linear(reduced_dim, self.embed_dim),
+            )
+            self.square_pos_embed = nn.Embedding(board_length, self.embed_dim)
 
-        self.sequence_dropout = nn.Dropout(p=0.1)
-        self.output_norm = nn.LayerNorm(self.embed_dim)
-        self.head = nn.Sequential(
-            nn.Linear(self.embed_dim, features_dim),
-            nn.ReLU(),
-            nn.LayerNorm(features_dim),
-        )
+            # Learnable tokens and embeddings
+            self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
+            self.dice_embed = nn.Embedding(self.dice_roll_dim, self.embed_dim)
+            self.piece_position_embed = nn.Embedding(config.PATH_LENGTH, self.embed_dim)
+            self.piece_index_embed = nn.Embedding(config.PIECES_PER_PLAYER, self.embed_dim)
 
-        self.register_buffer(
-            "square_position_indices",
-            torch.arange(board_length, dtype=torch.long).unsqueeze(0),
-            persistent=False,
-        )
-        self.register_buffer(
-            "transformer_piece_indices",
-            torch.arange(config.PIECES_PER_PLAYER, dtype=torch.long).unsqueeze(0),
-            persistent=False,
-        )
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=self.embed_dim,
+                nhead=nhead,
+                dim_feedforward=self.embed_dim * 3,
+                dropout=0.1,
+                activation="gelu",
+                batch_first=True,
+            )
+            self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
+
+            self.sequence_dropout = nn.Dropout(p=0.1)
+            self.output_norm = nn.LayerNorm(self.embed_dim)
+            self.head = nn.Sequential(
+                nn.Linear(self.embed_dim, features_dim),
+                nn.ReLU(),
+                nn.LayerNorm(features_dim),
+            )
+
+            self.register_buffer(
+                "square_position_indices",
+                torch.arange(board_length, dtype=torch.long).unsqueeze(0),
+                persistent=False,
+            )
+            self.register_buffer(
+                "transformer_piece_indices",
+                torch.arange(config.PIECES_PER_PLAYER, dtype=torch.long).unsqueeze(0),
+                persistent=False,
+            )
+        else:
+            # Token-sequence transformer
+            T, N = observation_space["positions"].shape
+            self.T = T
+            self.N = N
+            self.pos_emb = nn.Embedding(config.PATH_LENGTH, self.embed_dim)
+            self.color_emb = nn.Embedding(4, self.embed_dim)
+            self.piece_index_embed = nn.Embedding(4, self.embed_dim)
+            self.time_emb = nn.Embedding(T, self.embed_dim)
+            self.frame_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
+            self.curr_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
+            self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
+
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=self.embed_dim,
+                nhead=nhead,
+                dim_feedforward=self.embed_dim * 3,
+                dropout=0.1,
+                activation="gelu",
+                batch_first=True,
+            )
+            self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
+            self.output_norm = nn.LayerNorm(self.embed_dim)
+            self.head = nn.Sequential(
+                nn.Linear(self.embed_dim, features_dim),
+                nn.ReLU(),
+                nn.LayerNorm(features_dim),
+            )
 
     def forward(self, observations: dict) -> torch.Tensor:
-        board = observations["board"].float()
-        batch_size = board.shape[0]
+        if not self.use_tokens:
+            board = observations["board"].float()
+            batch_size = board.shape[0]
 
-        # Square tokens: (batch, 58, embed_dim)
-        square_features = board.permute(0, 2, 1)  # (batch, squares, channels)
-        square_features = self.square_norm(square_features)
-        square_tokens = self.square_proj(square_features)
-        position_indices = self.square_position_indices.expand(batch_size, -1)
-        square_tokens = square_tokens + self.square_pos_embed(position_indices)
+            # Square tokens: (batch, 58, embed_dim)
+            square_features = board.permute(0, 2, 1)  # (batch, squares, channels)
+            square_features = self.square_norm(square_features)
+            square_tokens = self.square_proj(square_features)
+            position_indices = self.square_position_indices.expand(batch_size, -1)
+            square_tokens = square_tokens + self.square_pos_embed(position_indices)
 
-        # Dice token: (batch, 1, embed_dim)
-        dice_roll = observations["dice_roll"].long().clamp(0, self.dice_roll_dim - 1)
-        dice_token = self.dice_embed(dice_roll.squeeze(1)).unsqueeze(1)
+            # Dice token: (batch, 1, embed_dim)
+            dice_roll = observations["dice_roll"].long().clamp(0, self.dice_roll_dim - 1)
+            dice_token = self.dice_embed(dice_roll.squeeze(1)).unsqueeze(1)
 
-        # Piece tokens derived from my_pieces channel
-        my_channel = board[:, 0, :]  # (batch, 58)
-        piece_positions = _extract_piece_positions(my_channel, self.board_length)
-        piece_tokens = self.piece_position_embed(piece_positions)
-        piece_indices = self.transformer_piece_indices.expand(batch_size, -1)
-        piece_tokens = piece_tokens + self.piece_index_embed(piece_indices)
+            # Piece tokens derived from my_pieces channel
+            my_channel = board[:, 0, :]  # (batch, 58)
+            piece_positions = _extract_piece_positions(my_channel, self.board_length)
+            piece_tokens = self.piece_position_embed(piece_positions)
+            piece_indices = self.transformer_piece_indices.expand(batch_size, -1)
+            piece_tokens = piece_tokens + self.piece_index_embed(piece_indices)
 
-        # Assemble sequence: [CLS] + dice + squares + pieces
-        cls_tokens = self.cls_token.expand(batch_size, -1, -1)
-        sequence = torch.cat(
-            [cls_tokens, dice_token, square_tokens, piece_tokens], dim=1
-        )
-        sequence = self.sequence_dropout(sequence)
+            # Assemble sequence: [CLS] + dice + squares + pieces
+            cls_tokens = self.cls_token.expand(batch_size, -1, -1)
+            sequence = torch.cat(
+                [cls_tokens, dice_token, square_tokens, piece_tokens], dim=1
+            )
+            sequence = self.sequence_dropout(sequence)
 
-        encoded = self.encoder(sequence)
-        cls_feature = self.output_norm(encoded[:, 0])
-        return self.head(cls_feature)
+            encoded = self.encoder(sequence)
+            cls_feature = self.output_norm(encoded[:, 0])
+            return self.head(cls_feature)
+        else:
+            # Token-sequence path
+            positions = observations["positions"].long()
+            if positions.dim() == 2:
+                positions = positions.unsqueeze(0)
+            dice_hist = observations["dice_history"].long()
+            if dice_hist.dim() == 1:
+                dice_hist = dice_hist.unsqueeze(0)
+            token_mask = observations["token_mask"].to(dtype=torch.bool)
+            if token_mask.dim() == 2:
+                token_mask = token_mask.unsqueeze(0)
+            token_colors = observations["token_colors"].long()
+            if token_colors.dim() == 1:
+                token_colors = token_colors.unsqueeze(0)
+            current_dice = observations["current_dice"].long()
+            if current_dice.dim() == 1:
+                current_dice = current_dice
+
+            B, T, N = positions.shape
+            device = positions.device
+            pos_e = self.pos_emb(positions)  # (B,T,N,d)
+            colors = token_colors.unsqueeze(1).expand(B, T, N)
+            color_e = self.color_emb(colors)
+            piece_idx = (torch.arange(N, device=device) % 4).view(1, 1, N).expand(B, T, N)
+            piece_e = self.piece_index_embed(piece_idx)
+            time_idx = torch.arange(T, device=device).view(1, T, 1).expand(B, T, N)
+            time_e = self.time_emb(time_idx)
+            frame_d = dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
+            frame_d_e = self.frame_dice_emb(frame_d)
+
+            tok = pos_e + color_e + piece_e + time_e + frame_d_e
+            # Flatten sequence
+            seq = tok.view(B, T * N, self.embed_dim)
+            mask = token_mask.view(B, T * N)
+
+            # Prepend [CLS] and current_dice token
+            cls = self.cls_token.expand(B, 1, -1)
+            curr_d = current_dice.clamp(0, self.dice_roll_dim)
+            dice_tok = self.curr_dice_emb(curr_d.squeeze(1)).unsqueeze(1)
+            sequence = torch.cat([cls, dice_tok, seq], dim=1)
+
+            # Build key padding mask (True = pad)
+            pad = torch.zeros(B, 2, dtype=torch.bool, device=device)
+            key_padding_mask = torch.cat([pad, ~mask], dim=1)
+
+            encoded = self.encoder(sequence, src_key_padding_mask=key_padding_mask)
+            cls_feature = self.output_norm(encoded[:, 0])
+            return self.head(cls_feature)

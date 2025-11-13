@@ -108,6 +108,67 @@ class Board:
         self.new_blockades.fill(0.0)
         self.reward_heatmap.fill(0.0)
 
+    # --- Token sequence helpers (for compact observation) ---
+    def token_order_for_agent(self, agent_color: int) -> list[int]:
+        """Return the color order [agent, next, across, previous] relative to agent.
+
+        Colors are integers 0..3. This defines the 16-token fixed order.
+        """
+        return [agent_color, (agent_color + 1) % 4, (agent_color + 2) % 4, (agent_color + 3) % 4]
+
+    def token_colors(self, agent_color: int) -> np.ndarray:
+        """Return a (16,) array of color ids for tokens in fixed order.
+
+        Order: 4 tokens per color block in token_order_for_agent(agent_color).
+        """
+        order = self.token_order_for_agent(agent_color)
+        cols: list[int] = []
+        for c in order:
+            cols.extend([c, c, c, c])
+        return np.asarray(cols, dtype=np.int64)
+
+    def token_exists_mask(self, agent_color: int) -> np.ndarray:
+        """Return a (16,) bool mask for tokens that exist (color/seat present).
+
+        For 2-player games, non-participating colors have no pieces.
+        """
+        order = self.token_order_for_agent(agent_color)
+        mask: list[bool] = []
+        for c in order:
+            try:
+                idx = self._resolve_index(c)
+                exists = len(self.players[idx]) > 0
+            except IndexError:
+                exists = False
+            mask.extend([exists, exists, exists, exists])
+        return np.asarray(mask, dtype=np.bool_)
+
+    def all_token_positions(self, agent_color: int) -> np.ndarray:
+        """Return positions (0..57) for all 16 tokens in fixed order.
+
+        Uses each piece's native relative position (yard=0, ring 1..51,
+        home 52..56, finish 57). Order is 4 tokens per color block as in
+        token_order_for_agent(agent_color), sorted by piece_id within color.
+        """
+        order = self.token_order_for_agent(agent_color)
+        positions: list[int] = []
+        for c in order:
+            try:
+                idx = self._resolve_index(c)
+            except IndexError:
+                # Color not present
+                positions.extend([0, 0, 0, 0])
+                continue
+            pieces = list(self.players[idx])
+            pieces.sort(key=lambda p: int(getattr(p, "piece_id", 0)))
+            # Ensure exactly 4 outputs per color
+            for k in range(4):
+                if k < len(pieces):
+                    positions.append(int(pieces[k].position))
+                else:
+                    positions.append(0)
+        return np.asarray(positions, dtype=np.int64)
+
     def build_tensor(
         self, agent_color: int, out: np.ndarray | None = None
     ) -> np.ndarray:

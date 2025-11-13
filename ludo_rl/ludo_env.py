@@ -22,9 +22,12 @@ class LudoEnv(gym.Env):
     A Gymnasium environment for Ludo King.
 
     Observation Space:
-        A dictionary with:
-        - "board": (10, 58) Box, representing 10 stacked channels.
-        - "dice_roll": (1,) Box, representing the dice roll (0-5).
+        Token-sequence representation:
+        - "positions": (10, 16) int, last 10 atomic moves' positions per token (0..57)
+        - "dice_history": (10,) int, dice per frame (0 for pad, 1..6 actual)
+        - "token_mask": (10, 16) bool, 1 if frame/token valid, else 0 for padding
+        - "token_colors": (16,) int in [0..3], color id per token block
+        - "current_dice": (1,) int, dice for the agent's current decision (1..6)
 
     Action Space:
         Discrete(4), representing the choice of which piece to move (0, 1, 2, or 3).
@@ -76,16 +79,21 @@ class LudoEnv(gym.Env):
         # Action Space: Choose one of 4 pieces
         self.action_space = spaces.Discrete(king_config.PIECES_PER_PLAYER)
 
-        # Observation Space: 10 channels x PATH_LENGTH, dice as 0..5
+        # Observation Space: token sequence (last 10 atomic moves)
         self.observation_space = spaces.Dict(
             {
-                "board": spaces.Box(
-                    low=-50.0,
-                    high=50.0,
-                    shape=(10, king_config.PATH_LENGTH),
-                    dtype=np.float32,
+                "positions": spaces.Box(
+                    low=0,
+                    high=king_config.PATH_LENGTH - 1,
+                    shape=(10, 16),
+                    dtype=np.int64,
                 ),
-                "dice_roll": spaces.Box(low=0, high=5, shape=(1,), dtype=np.int64),
+                "dice_history": spaces.Box(low=0, high=6, shape=(10,), dtype=np.int64),
+                "token_mask": spaces.Box(
+                    low=0, high=1, shape=(10, 16), dtype=np.bool_
+                ),
+                "token_colors": spaces.Box(low=0, high=3, shape=(16,), dtype=np.int64),
+                "current_dice": spaces.Box(low=1, high=6, shape=(1,), dtype=np.int64),
             }
         )
         self._fixed_opponents_strategies: list[str] = None
@@ -93,12 +101,8 @@ class LudoEnv(gym.Env):
 
     def _build_observation(self) -> Dict[str, np.ndarray]:
         assert self.game is not None
-        agent_color = int(self.game.players[self.agent_index].color)
-        board_stack = self.game.board.build_tensor(agent_color).astype(
-            np.float32, copy=False
-        )
-        dice_val = np.array([self.current_dice_roll - 1], dtype=np.int64)
-        return {"board": board_stack, "dice_roll": dice_val}
+        obs = self.sim.get_token_sequence_observation(self.current_dice_roll)
+        return obs
 
     def _get_info(self):
         """Generates the info dict, including the crucial action mask."""

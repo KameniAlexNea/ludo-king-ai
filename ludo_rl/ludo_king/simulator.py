@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
+import numpy as np
 
 from .game import Game
 from .types import Move, MoveResult
@@ -11,6 +12,15 @@ from .types import Move, MoveResult
 class Simulator:
     agent_index: int = 0
     game: Game = field(init=False)
+    # Token-sequence observation buffers
+    history_T: int = 10
+    _pos_hist: np.ndarray = field(default=None, init=False, repr=False)
+    _dice_hist: np.ndarray = field(default=None, init=False, repr=False)
+    _mask_hist: np.ndarray = field(default=None, init=False, repr=False)
+    _token_colors: np.ndarray = field(default=None, init=False, repr=False)
+    _token_exists_mask: np.ndarray = field(default=None, init=False, repr=False)
+    _hist_len: int = field(default=0, init=False, repr=False)
+    _hist_ptr: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
         # Expect Game to be constructed by caller with players and strategies.
@@ -24,7 +34,63 @@ class Simulator:
         obj = object.__new__(cls)
         obj.agent_index = agent_index
         obj.game = game
+        # Initialize token sequence buffers
+        obj._init_token_buffer()
         return obj
+
+    # --- Token sequence observation helpers ---
+    def _init_token_buffer(self) -> None:
+        agent_color = int(self.game.players[self.agent_index].color)
+        self._pos_hist = np.zeros((self.history_T, 16), dtype=np.int64)
+        self._dice_hist = np.zeros((self.history_T,), dtype=np.int64)
+        self._mask_hist = np.zeros((self.history_T, 16), dtype=np.bool_)
+        self._token_colors = self.game.board.token_colors(agent_color)
+        self._token_exists_mask = self.game.board.token_exists_mask(agent_color)
+        self._hist_len = 0
+        self._hist_ptr = 0
+
+    def _append_history(self, dice: int) -> None:
+        agent_color = int(self.game.players[self.agent_index].color)
+        frame_pos = self.game.board.all_token_positions(agent_color)
+        i = self._hist_ptr
+        self._pos_hist[i, :] = frame_pos
+        self._dice_hist[i] = int(dice)
+        self._mask_hist[i, :] = self._token_exists_mask
+        self._hist_ptr = (self._hist_ptr + 1) % self.history_T
+        self._hist_len = min(self._hist_len + 1, self.history_T)
+
+    def get_token_sequence_observation(self, current_dice: int) -> dict:
+        """Return a dict with positions (T,16), dice_history (T,), token_mask (T,16),
+        token_colors (16,), current_dice (1,). Older frames are zero-masked.
+        """
+        T = self.history_T
+        out_pos = np.zeros((T, 16), dtype=np.int64)
+        out_dice = np.zeros((T,), dtype=np.int64)
+        out_mask = np.zeros((T, 16), dtype=np.bool_)
+        k = self._hist_len
+        if k > 0:
+            # Gather in chronological order
+            # Oldest index is (ptr - k) mod T
+            start = (self._hist_ptr - k) % T
+            if start + k <= T:
+                out_pos[T - k : T, :] = self._pos_hist[start : start + k, :]
+                out_dice[T - k : T] = self._dice_hist[start : start + k]
+                out_mask[T - k : T, :] = self._mask_hist[start : start + k, :]
+            else:
+                first = T - start
+                out_pos[T - k : T - k + first, :] = self._pos_hist[start:T, :]
+                out_pos[T - k + first : T, :] = self._pos_hist[0 : k - first, :]
+                out_dice[T - k : T - k + first] = self._dice_hist[start:T]
+                out_dice[T - k + first : T] = self._dice_hist[0 : k - first]
+                out_mask[T - k : T - k + first, :] = self._mask_hist[start:T, :]
+                out_mask[T - k + first : T, :] = self._mask_hist[0 : k - first, :]
+        return {
+            "positions": out_pos,
+            "dice_history": out_dice,
+            "token_mask": out_mask,
+            "token_colors": self._token_colors,
+            "current_dice": np.asarray([int(current_dice)], dtype=np.int64),
+        }
 
     def _update_transition_summaries(
         self, mover_index: int, move: Move, result: MoveResult
@@ -104,6 +170,8 @@ class Simulator:
         # Apply agent's move
         res = self.game.apply_move(agent_move)
         self._update_transition_summaries(self.agent_index, agent_move, res)
+        # Log atomic move in history
+        self._append_history(agent_move.dice_roll)
         extra = res.extra_turn
 
         # simulate others if no extra turn
@@ -123,6 +191,7 @@ class Simulator:
                 if mv is not None:
                     opp_res = self.game.apply_move(mv)
                     self._update_transition_summaries(idx, mv, opp_res)
+                    self._append_history(dice)
                 idx = (idx + 1) % total_players
 
         terminated = self.game.players[self.agent_index].check_won()
@@ -168,6 +237,7 @@ class Simulator:
                 mv = decision if decision is not None else random.choice(legal)
                 result = self.game.apply_move(mv)
                 self._update_transition_summaries(idx, mv, result)
+                self._append_history(dice)
                 extra = result.extra_turn and result.events.move_resolved
 
             idx = (idx + 1) % total
