@@ -84,13 +84,7 @@ class BoardAndGameTests(unittest.TestCase):
             0,
             resolution.old_position,
             resolution.new_position,
-            {
-                "move_resolved": resolution.events.move_resolved,
-                "exited_home": resolution.events.exited_home,
-                "finished": resolution.events.finished,
-                "knockouts": resolution.events.knockouts,
-                "blockades": resolution.events.blockades,
-            },
+            resolution.events,
         )
         self.assertTrue(resolution.events.knockouts)
         self.assertEqual(opponent_piece.position, 0)
@@ -118,12 +112,7 @@ class BoardAndGameTests(unittest.TestCase):
             0,
             resolution.old_position,
             resolution.new_position,
-            {
-                "move_resolved": resolution.events.move_resolved,
-                "hit_blockade": resolution.events.hit_blockade,
-                "knockouts": resolution.events.knockouts,
-                "blockades": resolution.events.blockades,
-            },
+            resolution.events,
         )
         self.assertTrue(resolution.events.hit_blockade)
         self.assertFalse(resolution.events.move_resolved)

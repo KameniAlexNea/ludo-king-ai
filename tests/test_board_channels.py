@@ -2,7 +2,6 @@
 
 import unittest
 
-
 from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo_king.player import Player
 from ludo_rl.ludo_king.simulator import Simulator
