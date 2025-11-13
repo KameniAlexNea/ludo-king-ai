@@ -25,7 +25,11 @@ This channel marks positions where pieces are safe from capture:
 - Values: 1.0 for safe positions, 0.0 otherwise
 
 ### Channels 5-9: Transition Summaries (Dynamic)
-These channels track what happened between the agent's previous turn and current turn. They are **reset at the start of each turn cycle**.
+These channels track what happened between the agent's previous turn and current turn. They **accumulate all activity** from when the agent last interacted with the board until its next turn, including:
+- When the agent makes a move and opponents respond
+- When the agent has no valid moves and opponents play multiple rounds
+
+The summaries are reset only when the agent successfully takes an action.
 
 #### Channel 5: Movement Heatmap
 Tracks all movements (by agent and opponents) since the last agent turn:
@@ -88,12 +92,12 @@ class Board:
 
 ### Simulator Class (`ludo_rl/ludo_king/simulator.py`)
 
-The simulator manages the transition summaries:
+The simulator manages the transition summaries with careful control over when to reset:
 
 ```python
 class Simulator:
     def step(self, agent_move: Move) -> tuple[bool, bool]:
-        # Reset transition summaries at start of turn
+        # Reset transition summaries at start of agent's turn
         self.game.board.reset_transition_summaries()
         
         # Apply agent's move and update summaries
@@ -104,6 +108,25 @@ class Simulator:
         if not extra_turn:
             # Update summaries for each opponent move
             ...
+    
+    def step_opponents_only(self, reset_summaries: bool = True) -> None:
+        # Control whether to reset summaries
+        # Set reset_summaries=False to accumulate across multiple opponent rounds
+        if reset_summaries:
+            self.game.board.reset_transition_summaries()
+        # Simulate all opponents...
+```
+
+### Environment Usage (`ludo_rl/ludo_env.py`)
+
+The environment correctly manages summary accumulation:
+
+```python
+# When agent successfully takes action:
+self.sim.step_opponents_only(reset_summaries=True)  # Reset for fresh cycle
+
+# When agent has no valid moves (in while loop):
+self.sim.step_opponents_only(reset_summaries=False)  # Accumulate activity
 ```
 
 ## Usage Example

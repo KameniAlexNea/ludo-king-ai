@@ -128,13 +128,19 @@ class Simulator:
         terminated = self.game.players[self.agent_index].check_won()
         return terminated, extra
 
-    def step_opponents_only(self) -> None:
+    def step_opponents_only(self, reset_summaries: bool = True) -> None:
         """Simulate all opponents in turn order until it returns to the agent.
 
         Handles extra turns for opponents according to game rules.
+
+        Args:
+            reset_summaries: If True, reset transition summaries before simulating.
+                           Set to False when accumulating multiple opponent rounds
+                           between agent turns (e.g., when agent has no valid moves).
         """
-        # Reset transition summaries when agent had no valid moves
-        self.game.board.reset_transition_summaries()
+        # Reset transition summaries only if requested
+        if reset_summaries:
+            self.game.board.reset_transition_summaries()
 
         total = len(self.game.players)
         idx = (self.agent_index + 1) % total

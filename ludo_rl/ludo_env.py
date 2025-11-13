@@ -200,9 +200,10 @@ class LudoEnv(gym.Env):
         info = self._get_info()
 
         # Handle no valid moves for agent on first turn: opponents play until agent has a move
+        # Don't reset summaries - accumulate activity from the start
         while not np.any(info["action_mask"]):
             self.current_turn += 1
-            self.sim.step_opponents_only()
+            self.sim.step_opponents_only(reset_summaries=False)
             self.current_dice_roll = self.game.roll_dice()
             obs = self._build_observation()
             info = self._get_info()
@@ -234,24 +235,30 @@ class LudoEnv(gym.Env):
         result = self.game.apply_move(mv)
         extra_turn = result.extra_turn and result.events.move_resolved
 
-        # Reward shaping: prefer per-move rewards if provided; fallback to simple shaping
+        # Add rewards based on move result
         if result.rewards is not None:
             reward += float(result.rewards.get(self.agent_index, 0.0))
         else:
+            # Rewards is None when move failed (e.g., hit blockade)
+            # Provide explicit feedback for these events
             if result.events.finished:
                 # Finishing a piece
                 reward += reward_config.finish
             if result.events.knockouts:
-                reward += reward_config.capture * len(result.events.knockouts or [])
+                # Captured opponent pieces
+                reward += reward_config.capture * len(result.events.knockouts)
             if result.events.hit_blockade and not result.events.move_resolved:
+                # Hit a blockade - move failed
                 reward += reward_config.hit_blockade
             if result.events.blockades:
+                # Formed a blockade
                 reward += reward_config.blockade
 
         # 3) If no extra turn, opponents play until agent's turn
+        # Reset summaries here since this is the agent's turn
         if not extra_turn:
             self.current_turn += 1
-            self.sim.step_opponents_only()
+            self.sim.step_opponents_only(reset_summaries=True)
 
         # 4) Prepare next observation
         self.current_dice_roll = self.game.roll_dice()
@@ -281,13 +288,14 @@ class LudoEnv(gym.Env):
             return obs, reward, terminated, truncated, info
 
         # 6) If agent has no valid moves for next turn, simulate opponents until it does
+        # Don't reset summaries here - accumulate all activity between agent turns
         while not np.any(info["action_mask"]) and not terminated and not truncated:
             reward += reward_config.skipped_turn
             self.current_turn += 1
             if self.current_turn >= self.max_game_turns:
                 truncated = True
                 break
-            self.sim.step_opponents_only()
+            self.sim.step_opponents_only(reset_summaries=False)
             self.current_dice_roll = self.game.roll_dice()
             obs = self._build_observation()
             info = self._get_info()
