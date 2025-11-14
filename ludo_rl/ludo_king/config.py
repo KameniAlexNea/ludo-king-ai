@@ -55,7 +55,8 @@ class NetworkConfig:
     conv_configs: list[int] = field(default_factory=lambda: [32, 24])
     kernel_sizes: list[int] = field(default_factory=lambda: [7, 5])
     paddings: list[int] = field(default_factory=lambda: [3, 2])
-    embed_dim: int = 128
+    embed_dim: int = 128  # Output features dimension
+    token_embed_dim: int = 16  # Embedding dimension for tokens
     pooled_output_size: int = 4
     pi: list[int] = field(default_factory=lambda: [128, 64])
     vf: list[int] = field(default_factory=lambda: [128, 64])

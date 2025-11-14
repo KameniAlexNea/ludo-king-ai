@@ -19,7 +19,7 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         self.T = pos_shape[0]
         self.N = pos_shape[1]
         self.dice_roll_dim = 6
-        self.embed_dim = net_config.embed_dim
+        self.embed_dim = net_config.token_embed_dim
         # Embeddings
         self.pos_emb = nn.Embedding(config.PATH_LENGTH, self.embed_dim)
         self.color_emb = nn.Embedding(4, self.embed_dim)
@@ -98,7 +98,7 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
 
 
 class LudoTransformerExtractor(BaseFeaturesExtractor):
-    """Transformer over token sequence: (T×N tokens) with dice conditioning."""
+    """Transformer over token sequence: (TxN tokens) with dice conditioning."""
 
     def __init__(
         self,
@@ -112,7 +112,7 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
             "Token-sequence observation required"
         )
         self.dice_roll_dim = 6
-        self.embed_dim = net_config.embed_dim
+        self.embed_dim = net_config.token_embed_dim
 
         T, N = observation_space["positions"].shape
         self.T = T
