@@ -226,7 +226,8 @@ class LLMStrategy(BaseStrategy):
                 piece_id = int(payload.get("piece_id"))
             else:
                 piece_id = None
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to parse JSON from LLM response: {e}")
             piece_id = None
 
         if piece_id is None:

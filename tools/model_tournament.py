@@ -19,7 +19,7 @@ import numpy as np
 from loguru import logger
 from sb3_contrib import MaskablePPO
 
-from ludo_rl.ludo_king import Board, Color, Game, Player
+from ludo_rl.ludo_king import Board, Color, Game, Player, Simulator
 from ludo_rl.ludo_king import config as king_config
 
 POINTS_TABLE = (4, 3, 1, 0)
@@ -217,18 +217,15 @@ def _extract_piece_index(move: object) -> int | None:
 
 def decide_with_model(
     model_wrapper: ModelWrapper,
-    board_stack: np.ndarray,
+    simulator: Simulator,
     dice_roll: int,
     valid_moves: list[object],
     deterministic: bool,
     rng: random.Random,
 ) -> object | None:
     """Use RL model to decide on a move for ludo_king."""
-    # Prepare observation (dice encoded 0..5)
-    obs_tensor = {
-        "board": board_stack[None, ...],
-        "dice_roll": np.array([[dice_roll - 1]], dtype=np.int64),
-    }
+    # Get token-sequence observation from simulator
+    obs = simulator.get_token_sequence_observation(dice_roll)
 
     # Create action mask across pieces
     action_mask = np.zeros(king_config.PIECES_PER_PLAYER, dtype=bool)
@@ -243,7 +240,7 @@ def decide_with_model(
 
     try:
         action, _state = model_wrapper.model.predict(
-            obs_tensor, action_masks=action_mask[None, ...], deterministic=deterministic
+            obs, action_masks=action_mask[None, ...], deterministic=deterministic
         )
         piece_id = int(action.item())
         candidates = moves_by_piece.get(piece_id)
@@ -298,6 +295,11 @@ def play_game(
     players = [Player(color=c) for c in color_ids]
     game = Game(players=players)
 
+    # Create simulators for each player (to track their history independently)
+    simulators: Dict[int, Simulator] = {
+        i: Simulator.for_game(game, agent_index=i) for i in range(len(players))
+    }
+
     # Initialize players and attach model names
     model_assignments: Dict[int, ModelWrapper] = {}
     for seat_index, (player, participant) in enumerate(
@@ -331,15 +333,19 @@ def play_game(
         while extra_turn:
             dice_roll = game.roll_dice()
             legal = game.legal_moves(current_index, dice_roll)
+
+            # Update simulator history for current player
+            simulator = simulators[current_index]
+            simulator._append_history(dice_roll, current_index)
+
             if not legal:
                 extra_turn = False
                 continue
 
-            board_stack = build_board_stack(game.board, int(player.color))
             model_wrapper = model_assignments[current_index]
             decision = decide_with_model(
                 model_wrapper,
-                board_stack,
+                simulator,
                 dice_roll,
                 legal,
                 deterministic,

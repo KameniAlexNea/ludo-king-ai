@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch as th
 from gymnasium import spaces
+from loguru import logger
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.utils import explained_variance
 from torch.nn import functional as F
@@ -171,8 +172,8 @@ class MaskablePPOAdvWeighted(MaskablePPO):
         # log final loss scalar from last computed loss
         try:
             self.logger.record("train/loss", loss.item())
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to record training loss: {e}")
         self.logger.record("train/explained_variance", explained_var)
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         self.logger.record("train/clip_range", clip_range)

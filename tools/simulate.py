@@ -5,6 +5,7 @@ import time
 from typing import Optional
 
 import numpy as np
+from loguru import logger
 from sb3_contrib import MaskablePPO
 
 from ludo_rl.ludo_env import LudoEnv
@@ -41,10 +42,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def _dice_from_obs(obs: dict) -> int:
-    # obs["dice_roll"] is in 0..5; convert back to 1..6 for display
+    # obs["current_dice"] contains the actual dice value (1..6)
     try:
-        return int(obs["dice_roll"][0]) + 1
-    except Exception:
+        return int(obs["current_dice"][0])
+    except Exception as e:
+        logger.warning(f"Failed to extract dice from observation, defaulting to 1: {e}")
         return 1
 
 
@@ -56,8 +58,10 @@ def main() -> None:
     # Apply requested number of players to runtime config
     try:
         king_config.NUM_PLAYERS = int(args.num_players)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            f"Failed to set NUM_PLAYERS to {args.num_players}, using default: {e}"
+        )
 
     env = LudoEnv()
     # Show configured opponents from env
@@ -65,8 +69,8 @@ def main() -> None:
         print("Opponents:")
         # Agent is seat 0; env chooses opponents internally
         print(f"  Configured list: {env.opponents}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to display opponent configuration: {e}")
 
     model = MaskablePPO.load(args.model_path)
     model.policy.set_training_mode(False)
