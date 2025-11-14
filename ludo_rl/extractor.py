@@ -7,7 +7,7 @@ from .ludo_king.config import config, net_config
 
 
 class LudoCnnExtractor(BaseFeaturesExtractor):
-    """Token-sequence features with simple pooling + MLP head."""
+    """Token-sequence features with LSTM for temporality + MLP head."""
 
     def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
         super().__init__(observation_space, features_dim)
@@ -28,13 +28,14 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         self.frame_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
         self.player_emb = nn.Embedding(4, self.embed_dim)  # Player who made the move
         self.curr_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
-        # Token projection and pooling
+        # Token projection and LSTM for temporality
         self.token_proj = nn.Sequential(
             nn.Linear(self.embed_dim, self.embed_dim),
             nn.GELU(),
             nn.LayerNorm(self.embed_dim),
         )
-        # Features: mean pool over tokens and time, concat current dice
+        self.lstm = nn.LSTM(self.embed_dim, self.embed_dim, batch_first=True)
+        # Features: pool over tokens, concat current dice
         self.total_feature_dim = self.embed_dim + self.embed_dim
         self.feature_norm = nn.LayerNorm(self.total_feature_dim)
         self.head = nn.Sequential(
@@ -86,8 +87,23 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         m = token_mask.to(dtype=tok.dtype).unsqueeze(-1)
         tok = tok * m
 
-        valid_counts = m.sum(dim=(1, 2)).clamp(min=1.0)
-        pooled = tok.sum(dim=(1, 2)) / valid_counts
+        # Apply LSTM over time for each token
+        # tok: (B, T, N, d) -> permute to (B, N, T, d) for easier reshaping
+        tok_permuted = tok.permute(0, 2, 1, 3)  # (B, N, T, d)
+        tok_reshaped = tok_permuted.contiguous().view(
+            B * N, T, self.embed_dim
+        )  # (B*N, T, d)
+        lstm_out, _ = self.lstm(tok_reshaped)  # (B*N, T, d)
+        # Take the last time step
+        last_hidden = lstm_out[:, -1, :]  # (B*N, d)
+        # Reshape back to (B, N, d)
+        pooled_per_token = last_hidden.view(B, N, self.embed_dim)
+
+        # Pool over tokens, masking invalid ones
+        token_valid = token_mask.any(dim=1)  # (B, N) - valid if any frame has data
+        mask_float = token_valid.float().unsqueeze(-1)  # (B, N, 1)
+        valid_counts = mask_float.sum(dim=1).clamp(min=1.0)  # (B, 1)
+        pooled = (pooled_per_token * mask_float).sum(dim=1) / valid_counts  # (B, d)
 
         curr_d = current_dice.clamp(0, self.dice_roll_dim)
         curr_e = self.curr_dice_emb(curr_d.squeeze(1))
