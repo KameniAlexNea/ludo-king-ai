@@ -218,6 +218,7 @@ class LudoEnv(gym.Env):
             obs = self._build_observation()
             info = self._get_info()
             if self.current_turn >= self.max_game_turns:
+                info["TimeLimit.truncated"] = True
                 return obs, info
 
         # Advance reset counter for sequential selection

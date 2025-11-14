@@ -96,17 +96,6 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         combined = self.feature_norm(combined)
         return self.head(combined)
 
-    def _gather_piece_context(
-        self, conv_map: torch.Tensor, piece_positions: torch.Tensor
-    ) -> torch.Tensor:
-        """Extract local conv features for each agent piece."""
-
-        _, channels, seq_len = conv_map.shape
-        clamped_positions = piece_positions.clamp(0, seq_len - 1)
-        gather_index = clamped_positions.unsqueeze(1).expand(-1, channels, -1)
-        gathered = torch.gather(conv_map, dim=2, index=gather_index)
-        return gathered.transpose(1, 2)
-
 
 class LudoTransformerExtractor(BaseFeaturesExtractor):
     """Transformer over token sequence: (T×N tokens) with dice conditioning."""
