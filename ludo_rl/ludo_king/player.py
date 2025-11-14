@@ -79,6 +79,4 @@ class Player:
         if decided is None:
             return None
         # Map back to our Move by piece_id
-        for decided.piece_id in move_choices:
-            return move_choices[decided.piece_id]["move"]
-        return None
+        return move_choices[decided.piece_id]["move"]
