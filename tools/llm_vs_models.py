@@ -186,7 +186,7 @@ def run_single_game(
         ][:num]
     players = [Player(color=c) for c in color_ids]
     game = Game(players=players)
-    
+
     # Create simulators for each player (to track their history independently)
     simulators: Dict[int, Simulator] = {
         i: Simulator.for_game(game, agent_index=i) for i in range(len(players))
@@ -223,11 +223,11 @@ def run_single_game(
         while extra:
             dice = game.roll_dice()
             legal = game.legal_moves(current_index, dice)
-            
+
             # Update simulator history for current player
             simulator = simulators[current_index]
             simulator._append_history(dice, current_index)
-            
+
             if not legal:
                 _log_outcome(game_index, label, None, dice, skipped=True, extra=False)
                 extra = False

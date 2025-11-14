@@ -111,7 +111,7 @@ if __name__ == "__main__":
     # --- Policy Kwargs ---
     # Define the custom feature extractor
     policy_kwargs = dict(
-        activation_fn=torch.nn.Tanh,
+        activation_fn=torch.nn.GELU,  # GELU for smooth, non-saturating gradients (best for transformers)
         features_extractor_class=(
             LudoTransformerExtractor if args.use_transformer else LudoCnnExtractor
         ),
@@ -157,6 +157,9 @@ if __name__ == "__main__":
             policy_kwargs=policy_kwargs,
             **init_kwargs,
         )
+
+    print("--- Model Summary ---")
+    print(model.policy)
 
     final_model_path = os.path.join(model_save_path, "init_model")
     logger.info(f"--- Training Started. Saving initial model to {final_model_path} ---")

@@ -31,7 +31,7 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         # Token projection and pooling
         self.token_proj = nn.Sequential(
             nn.Linear(self.embed_dim, self.embed_dim),
-            nn.ReLU(),
+            nn.GELU(),
             nn.LayerNorm(self.embed_dim),
         )
         # Features: mean pool over tokens and time, concat current dice
@@ -39,7 +39,7 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         self.feature_norm = nn.LayerNorm(self.total_feature_dim)
         self.head = nn.Sequential(
             nn.Linear(self.total_feature_dim, features_dim),
-            nn.ReLU(),
+            nn.GELU(),
             nn.LayerNorm(features_dim),
         )
 
@@ -149,7 +149,7 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         self.output_norm = nn.LayerNorm(self.embed_dim)
         self.head = nn.Sequential(
             nn.Linear(self.embed_dim, features_dim),
-            nn.ReLU(),
+            nn.GELU(),
             nn.LayerNorm(features_dim),
         )
 

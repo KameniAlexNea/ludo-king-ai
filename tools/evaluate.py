@@ -110,7 +110,7 @@ def decide_with_model(
 ) -> object | None:
     # Get token-sequence observation from simulator
     obs = simulator.get_token_sequence_observation(dice_roll)
-    
+
     action_mask = np.zeros(king_config.PIECES_PER_PLAYER, dtype=bool)
     moves_by_piece: dict[int, list[object]] = {}
     for mv in legal_moves:
@@ -212,7 +212,7 @@ def evaluate_triplet(
 
                 # Append move to history for both agent and opponents
                 simulator._append_history(dice, cur)
-                
+
                 if cur == 0:
                     mv = decide_with_model(
                         model, simulator, dice, legal, deterministic, rng
