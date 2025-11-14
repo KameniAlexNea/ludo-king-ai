@@ -36,11 +36,12 @@ class Board:
     players: Sequence[Sequence[Piece]]  # players (engine order) -> their pieces
     colors: Sequence[int]  # engine order -> color ids (0..3)
     _tensor_buffer: np.ndarray | None = field(default=None, init=False, repr=False)
-    # Transition summary tracking (channels 5-9)
+    # Transition summary tracking (channels 5-10)
     movement_heatmap: np.ndarray = field(default=None, init=False, repr=False)
     my_knockouts: np.ndarray = field(default=None, init=False, repr=False)
     opp_knockouts: np.ndarray = field(default=None, init=False, repr=False)
     new_blockades: np.ndarray = field(default=None, init=False, repr=False)
+    blockade_hits: np.ndarray = field(default=None, init=False, repr=False)  # Opponents hit my blockades
     reward_heatmap: np.ndarray = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -49,6 +50,7 @@ class Board:
         self.my_knockouts = np.zeros(config.PATH_LENGTH, dtype=np.float32)
         self.opp_knockouts = np.zeros(config.PATH_LENGTH, dtype=np.float32)
         self.new_blockades = np.zeros(config.PATH_LENGTH, dtype=np.float32)
+        self.blockade_hits = np.zeros(config.PATH_LENGTH, dtype=np.float32)
         self.reward_heatmap = np.zeros(config.PATH_LENGTH, dtype=np.float32)
 
     def _resolve_index(self, player_color: int) -> int:
@@ -107,6 +109,7 @@ class Board:
         self.my_knockouts.fill(0.0)
         self.opp_knockouts.fill(0.0)
         self.new_blockades.fill(0.0)
+        self.blockade_hits.fill(0.0)
         self.reward_heatmap.fill(0.0)
 
     # --- Token sequence helpers (for compact observation) ---
@@ -245,6 +248,7 @@ class Board:
         board[6] = self.my_knockouts
         board[7] = self.opp_knockouts
         board[8] = self.new_blockades
+        board[9] = self.blockade_hits
         board[9] = self.reward_heatmap
 
         return board

@@ -269,6 +269,10 @@ class LudoEnv(gym.Env):
         if not extra_turn:
             self.current_turn += 1
             self.sim.step_opponents_only(reset_summaries=True)
+            
+            # Check if opponents hit agent's blockades during their turns
+            if self.game.board.blockade_hits.sum() > 0:
+                reward += reward_config.blockade_hit * self.game.board.blockade_hits.sum()
 
         # 4) Prepare next observation
         self.current_dice_roll = self.game.roll_dice()

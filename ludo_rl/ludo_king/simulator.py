@@ -178,6 +178,27 @@ class Simulator:
                     if agent_rel_pos != -1:
                         self.game.board.new_blockades[agent_rel_pos] = 1.0
 
+        # Track when opponent hits agent's blockade
+        if (
+            result.events.hit_blockade
+            and not result.events.move_resolved
+            and mover_index != self.agent_index
+        ):
+            # Opponent failed to move due to blockade - check if it's the agent's blockade
+            target_rel = result.new_position  # Position they tried to move to
+            mover_color = int(self.game.players[mover_index].color)
+            if 1 <= target_rel <= 51:
+                abs_pos = self.game.board.absolute_position(mover_color, target_rel)
+                agent_rel_pos = self.game.board.relative_position(agent_color, abs_pos)
+                if agent_rel_pos != -1:
+                    # Check if agent has a blockade at this position
+                    agent_pieces_at_pos = self.game.board.count_at_relative(
+                        agent_color, agent_rel_pos
+                    )
+                    if agent_pieces_at_pos >= 2:
+                        # Agent's blockade stopped the opponent!
+                        self.game.board.blockade_hits[agent_rel_pos] = 1.0
+
     def step(self, agent_move: Move) -> tuple[bool, bool]:
         """Apply agent move, then simulate opponents unless extra turn.
 

@@ -73,7 +73,7 @@ class StrategyConfig:
     home_finish: int = 57
 
 
-COEF = 1
+COEF = 5
 
 
 @dataclass(slots=True)
@@ -83,13 +83,14 @@ class Reward:
     finish: float = 1 * COEF
     capture: float = 0.2 * COEF
     got_capture: float = -0.5 * COEF
-    blockade: float = 0.3 * COEF
-    hit_blockade: float = -0.4 * COEF
+    blockade: float = 0.15 * COEF
+    hit_blockade: float = -0.1 * COEF
+    blockade_hit: float = 0.1 * COEF  # Bonus when opponent hits your blockade
     exit_home: float = 0.1 * COEF
-    progress: float = 0.01 * COEF
+    progress: float = 0.01
     safe_position: float = 0.05 * COEF
-    draw: float = -0.5 * COEF
-    skipped_turn: float = -0.01 * COEF
+    draw: float = -2 * COEF
+    skipped_turn: float = -0.01
 
 
 config = Config()
