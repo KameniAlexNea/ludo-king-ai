@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import List, Sequence, Tuple
 
 import numpy as np
+from loguru import logger
 
 from .config import config
 from .piece import Piece
@@ -114,7 +115,12 @@ class Board:
 
         Colors are integers 0..3. This defines the 16-token fixed order.
         """
-        return [agent_color, (agent_color + 1) % 4, (agent_color + 2) % 4, (agent_color + 3) % 4]
+        return [
+            agent_color,
+            (agent_color + 1) % 4,
+            (agent_color + 2) % 4,
+            (agent_color + 3) % 4,
+        ]
 
     def token_colors(self, agent_color: int) -> np.ndarray:
         """Return a (16,) array of color ids for tokens in fixed order.
@@ -138,7 +144,10 @@ class Board:
             try:
                 idx = self._resolve_index(c)
                 exists = len(self.players[idx]) > 0
-            except IndexError:
+            except IndexError as e:
+                logger.warning(
+                    f"Failed to resolve color index {c} in token_exists_mask: {e}"
+                )
                 exists = False
             mask.extend([exists, exists, exists, exists])
         return np.asarray(mask, dtype=np.bool_)
@@ -155,7 +164,10 @@ class Board:
         for c in order:
             try:
                 idx = self._resolve_index(c)
-            except IndexError:
+            except IndexError as e:
+                logger.warning(
+                    f"Failed to resolve color index {c} in all_token_positions: {e}"
+                )
                 # Color not present
                 positions.extend([0, 0, 0, 0])
                 continue

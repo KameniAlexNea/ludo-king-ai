@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
+
 import numpy as np
+from loguru import logger
 
 from .game import Game
 from .types import Move, MoveResult
@@ -241,7 +243,10 @@ class Simulator:
                 if hasattr(player, "choose"):
                     try:
                         decision = player.choose(board_stack, dice, legal)
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(
+                            f"Opponent strategy failed for player {idx}, falling back to random: {e}"
+                        )
                         decision = None
                 mv = decision if decision is not None else random.choice(legal)
                 result = self.game.apply_move(mv)

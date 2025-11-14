@@ -12,7 +12,9 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
     def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
         super().__init__(observation_space, features_dim)
         # New token-sequence only
-        assert "positions" in observation_space.spaces, "Token-sequence observation required"
+        assert "positions" in observation_space.spaces, (
+            "Token-sequence observation required"
+        )
         pos_shape = observation_space["positions"].shape  # (T, 16)
         self.T = pos_shape[0]
         self.N = pos_shape[1]
@@ -27,7 +29,9 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         self.curr_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
         # Token projection and pooling
         self.token_proj = nn.Sequential(
-            nn.Linear(self.embed_dim, self.embed_dim), nn.ReLU(), nn.LayerNorm(self.embed_dim)
+            nn.Linear(self.embed_dim, self.embed_dim),
+            nn.ReLU(),
+            nn.LayerNorm(self.embed_dim),
         )
         # Features: mean pool over tokens and time, concat current dice
         self.total_feature_dim = self.embed_dim + self.embed_dim
@@ -66,7 +70,9 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         piece_e = self.piece_idx_emb(piece_idx)
         time_idx = torch.arange(T, device=device).view(1, T, 1).expand(B, T, N)
         time_e = self.time_emb(time_idx)
-        frame_dice = dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
+        frame_dice = (
+            dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
+        )
         frame_dice_e = self.frame_dice_emb(frame_dice)
 
         tok = pos_e + color_e + piece_e + time_e + frame_dice_e
@@ -107,7 +113,9 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
     ):
         super().__init__(observation_space, features_dim)
 
-        assert "positions" in observation_space.spaces, "Token-sequence observation required"
+        assert "positions" in observation_space.spaces, (
+            "Token-sequence observation required"
+        )
         self.dice_roll_dim = 6
         self.embed_dim = net_config.embed_dim
 

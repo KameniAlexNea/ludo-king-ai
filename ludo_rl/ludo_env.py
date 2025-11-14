@@ -70,7 +70,8 @@ class LudoEnv(gym.Env):
             self.strategy_selection: int = int(
                 os.getenv("STRATEGY_SELECTION", "0") or "0"
             )
-        except ValueError:
+        except ValueError as e:
+            logger.warning(f"Invalid STRATEGY_SELECTION value, defaulting to 0: {e}")
             self.strategy_selection = 0
         logger.info(f"Strategy selection mode: {self.strategy_selection}")
         # Track resets to advance sequential selection across episodes
@@ -89,9 +90,7 @@ class LudoEnv(gym.Env):
                     dtype=np.int64,
                 ),
                 "dice_history": spaces.Box(low=0, high=6, shape=(10,), dtype=np.int64),
-                "token_mask": spaces.Box(
-                    low=0, high=1, shape=(10, 16), dtype=np.bool_
-                ),
+                "token_mask": spaces.Box(low=0, high=1, shape=(10, 16), dtype=np.bool_),
                 "token_colors": spaces.Box(low=0, high=3, shape=(16,), dtype=np.int64),
                 "current_dice": spaces.Box(low=1, high=6, shape=(1,), dtype=np.int64),
             }
@@ -188,7 +187,10 @@ class LudoEnv(gym.Env):
                     cls = STRATEGY_REGISTRY[strat_name]
                     try:
                         pl.strategy = cls.create_instance(self.rng)
-                    except NotImplementedError:
+                    except NotImplementedError as e:
+                        logger.warning(
+                            f"Strategy {strat_name} doesn't support create_instance, using default constructor: {e}"
+                        )
                         pl.strategy = cls()
                     pl.strategy_name = strat_name  # type: ignore[attr-defined]
                 else:

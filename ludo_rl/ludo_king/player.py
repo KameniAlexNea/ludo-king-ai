@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional, Sequence
 
 import numpy as np
+from loguru import logger
 
 if TYPE_CHECKING:  # avoid runtime imports to prevent circular deps
     from ludo_rl.strategy.base import BaseStrategy
@@ -53,7 +54,10 @@ class Player:
                 from ludo_rl.strategy.registry import create as create_strategy
 
                 self.strategy = create_strategy(self.strategy_name)
-        except KeyError:
+        except KeyError as e:
+            logger.warning(
+                f"Unknown strategy '{self.strategy_name}', falling back to random: {e}"
+            )
             # Unknown strategy: fallback to random legal move and mark as random
             self.strategy_name = "random"
             return next(iter(legal_moves), None) if legal_moves else None
