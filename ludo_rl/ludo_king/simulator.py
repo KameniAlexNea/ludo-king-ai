@@ -31,23 +31,32 @@ class Simulator:
 
     @classmethod
     def for_game(cls, game: Game, agent_index: int = 0) -> "Simulator":
+        """
+        Create a Simulator instance for a given Game and agent index.
+
+        :param game: The Game instance to simulate.
+        :type game: Game
+        :param agent_index: The index of the agent to simulate for, defaults to 0
+        :type agent_index: int, optional
+        :return: A Simulator instance configured for the given game and agent.
+        :rtype: Simulator
+        """
         obj = object.__new__(cls)
         obj.agent_index = agent_index
         obj.game = game
-        # Initialize token sequence buffers
-        obj._init_token_buffer()
+        # Initialize token sequence buffers directly
+        obj.history_T = 10
+        agent_color = int(game.players[agent_index].color)
+        obj._pos_hist = np.zeros((10, 16), dtype=np.int64)
+        obj._dice_hist = np.zeros((10,), dtype=np.int64)
+        obj._mask_hist = np.zeros((10, 16), dtype=np.bool_)
+        obj._token_colors = game.board.token_colors(agent_color)
+        obj._token_exists_mask = game.board.token_exists_mask(agent_color)
+        obj._hist_len = 0
+        obj._hist_ptr = 0
         return obj
 
     # --- Token sequence observation helpers ---
-    def _init_token_buffer(self) -> None:
-        agent_color = int(self.game.players[self.agent_index].color)
-        self._pos_hist = np.zeros((self.history_T, 16), dtype=np.int64)
-        self._dice_hist = np.zeros((self.history_T,), dtype=np.int64)
-        self._mask_hist = np.zeros((self.history_T, 16), dtype=np.bool_)
-        self._token_colors = self.game.board.token_colors(agent_color)
-        self._token_exists_mask = self.game.board.token_exists_mask(agent_color)
-        self._hist_len = 0
-        self._hist_ptr = 0
 
     def _append_history(self, dice: int) -> None:
         agent_color = int(self.game.players[self.agent_index].color)
