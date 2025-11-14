@@ -4,12 +4,12 @@ from dataclasses import asdict
 
 import torch
 from loguru import logger
+from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import (
     BaseCallback,
     CallbackList,
     CheckpointCallback,
 )
-from sb3_contrib import MaskablePPO
 from stable_baselines3.common.vec_env import (
     DummyVecEnv,
     SubprocVecEnv,

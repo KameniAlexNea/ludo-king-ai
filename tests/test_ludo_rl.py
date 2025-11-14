@@ -8,11 +8,7 @@ import numpy as np
 import torch
 from gymnasium import spaces
 
-from ludo_rl.extractor import (
-    LudoCnnExtractor,
-    LudoTransformerExtractor,
-    _extract_piece_positions,
-)
+from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo_env import format_env_state
 from ludo_rl.ludo_king.config import config
 from ludo_rl.ludo_king.player import Player
@@ -121,13 +117,19 @@ class LudoTransformerExtractorTests(unittest.TestCase):
         self.features_dim = 128
         self.observation_space = spaces.Dict(
             {
-                "board": spaces.Box(
-                    low=-50.0,
-                    high=50.0,
-                    shape=(10, config.PATH_LENGTH),
-                    dtype=np.float32,
+                "positions": spaces.Box(
+                    low=0,
+                    high=config.PATH_LENGTH - 1,
+                    shape=(10, 16),
+                    dtype=np.int64,
                 ),
-                "dice_roll": spaces.Box(low=0, high=5, shape=(1,), dtype=np.int64),
+                "dice_history": spaces.Box(low=0, high=6, shape=(10,), dtype=np.int64),
+                "token_mask": spaces.Box(low=0, high=1, shape=(10, 16), dtype=np.bool_),
+                "player_history": spaces.Box(
+                    low=0, high=3, shape=(10,), dtype=np.int64
+                ),
+                "token_colors": spaces.Box(low=0, high=3, shape=(16,), dtype=np.int64),
+                "current_dice": spaces.Box(low=1, high=6, shape=(1,), dtype=np.int64),
             }
         )
         self.extractor = LudoTransformerExtractor(
@@ -137,14 +139,21 @@ class LudoTransformerExtractorTests(unittest.TestCase):
 
     def test_forward_outputs_expected_shape(self) -> None:
         batch_size = 3
-        board = torch.randn(batch_size, 10, config.PATH_LENGTH, dtype=torch.float32)
-        board[:, 0, :] = 0.0
-        piece_indices = torch.tensor([0, 10, 20, 30], dtype=torch.long)
-        for batch_idx in range(batch_size):
-            board[batch_idx, 0, piece_indices] = 1.0
+        positions = torch.randint(
+            0, config.PATH_LENGTH, (batch_size, 10, 16), dtype=torch.long
+        )
+        dice_history = torch.randint(0, 7, (batch_size, 10), dtype=torch.long)
+        token_mask = torch.ones(batch_size, 10, 16, dtype=torch.bool)
+        player_history = torch.randint(0, 4, (batch_size, 10), dtype=torch.long)
+        token_colors = torch.randint(0, 4, (batch_size, 16), dtype=torch.long)
+        current_dice = torch.randint(1, 7, (batch_size, 1), dtype=torch.long)
         observations = {
-            "board": board,
-            "dice_roll": torch.full((batch_size, 1), 9, dtype=torch.long),
+            "positions": positions,
+            "dice_history": dice_history,
+            "token_mask": token_mask,
+            "player_history": player_history,
+            "token_colors": token_colors,
+            "current_dice": current_dice,
         }
         with torch.no_grad():
             output = self.extractor(observations)
@@ -152,35 +161,25 @@ class LudoTransformerExtractorTests(unittest.TestCase):
         self.assertEqual(output.shape, (batch_size, self.features_dim))
         self.assertFalse(torch.isnan(output).any().item())
 
-    def test_extract_piece_positions_handles_stacks_and_padding(self) -> None:
-        my_channel = torch.zeros(2, config.PATH_LENGTH, dtype=torch.float32)
-        my_channel[0, 4] = 2  # Two pieces stacked at square 4
-        my_channel[0, 10] = 1
-        my_channel[0, 22] = 1
-
-        my_channel[1, 0] = 1  # Piece still in yard
-        my_channel[1, 3] = 1
-        my_channel[1, 15] = 2
-
-        positions = _extract_piece_positions(my_channel, self.extractor.board_length)
-
-        self.assertEqual(positions.shape, (2, config.PIECES_PER_PLAYER))
-        self.assertListEqual(positions[0].tolist(), [4, 4, 10, 22])
-        self.assertListEqual(positions[1].tolist(), [0, 3, 15, 15])
-
 
 class LudoCnnExtractorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.features_dim = 128
         self.observation_space = spaces.Dict(
             {
-                "board": spaces.Box(
-                    low=-50.0,
-                    high=50.0,
-                    shape=(10, config.PATH_LENGTH),
-                    dtype=np.float32,
+                "positions": spaces.Box(
+                    low=0,
+                    high=config.PATH_LENGTH - 1,
+                    shape=(10, 16),
+                    dtype=np.int64,
                 ),
-                "dice_roll": spaces.Box(low=0, high=5, shape=(1,), dtype=np.int64),
+                "dice_history": spaces.Box(low=0, high=6, shape=(10,), dtype=np.int64),
+                "token_mask": spaces.Box(low=0, high=1, shape=(10, 16), dtype=np.bool_),
+                "player_history": spaces.Box(
+                    low=0, high=3, shape=(10,), dtype=np.int64
+                ),
+                "token_colors": spaces.Box(low=0, high=3, shape=(16,), dtype=np.int64),
+                "current_dice": spaces.Box(low=1, high=6, shape=(1,), dtype=np.int64),
             }
         )
         self.extractor = LudoCnnExtractor(
@@ -190,36 +189,27 @@ class LudoCnnExtractorTests(unittest.TestCase):
 
     def test_forward_outputs_expected_shape(self) -> None:
         batch_size = 3
-        board = torch.randn(batch_size, 10, config.PATH_LENGTH, dtype=torch.float32)
-        board[:, 0, :] = 0.0
-        piece_indices = torch.tensor([0, 10, 20, 30], dtype=torch.long)
-        for batch_idx in range(batch_size):
-            board[batch_idx, 0, piece_indices] = 1.0
+        positions = torch.randint(
+            0, config.PATH_LENGTH, (batch_size, 10, 16), dtype=torch.long
+        )
+        dice_history = torch.randint(0, 7, (batch_size, 10), dtype=torch.long)
+        token_mask = torch.ones(batch_size, 10, 16, dtype=torch.bool)
+        player_history = torch.randint(0, 4, (batch_size, 10), dtype=torch.long)
+        token_colors = torch.randint(0, 4, (batch_size, 16), dtype=torch.long)
+        current_dice = torch.randint(1, 7, (batch_size, 1), dtype=torch.long)
         observations = {
-            "board": board,
-            "dice_roll": torch.full((batch_size, 1), 9, dtype=torch.long),
+            "positions": positions,
+            "dice_history": dice_history,
+            "token_mask": token_mask,
+            "player_history": player_history,
+            "token_colors": token_colors,
+            "current_dice": current_dice,
         }
         with torch.no_grad():
             output = self.extractor(observations)
 
         self.assertEqual(output.shape, (batch_size, self.features_dim))
         self.assertFalse(torch.isnan(output).any().item())
-
-    def test_extract_piece_positions_handles_stacks_and_padding(self) -> None:
-        my_channel = torch.zeros(2, config.PATH_LENGTH, dtype=torch.float32)
-        my_channel[0, 4] = 2  # Two pieces stacked at square 4
-        my_channel[0, 10] = 1
-        my_channel[0, 22] = 1
-
-        my_channel[1, 0] = 1  # Piece still in yard
-        my_channel[1, 3] = 1
-        my_channel[1, 15] = 2
-
-        positions = _extract_piece_positions(my_channel, self.extractor.board_length)
-
-        self.assertEqual(positions.shape, (2, config.PIECES_PER_PLAYER))
-        self.assertListEqual(positions[0].tolist(), [4, 4, 10, 22])
-        self.assertListEqual(positions[1].tolist(), [0, 3, 15, 15])
 
 
 if __name__ == "__main__":

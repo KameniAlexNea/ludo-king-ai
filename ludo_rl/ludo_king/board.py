@@ -41,7 +41,9 @@ class Board:
     my_knockouts: np.ndarray = field(default=None, init=False, repr=False)
     opp_knockouts: np.ndarray = field(default=None, init=False, repr=False)
     new_blockades: np.ndarray = field(default=None, init=False, repr=False)
-    blockade_hits: np.ndarray = field(default=None, init=False, repr=False)  # Opponents hit my blockades
+    blockade_hits: np.ndarray = field(
+        default=None, init=False, repr=False
+    )  # Opponents hit my blockades
     reward_heatmap: np.ndarray = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:

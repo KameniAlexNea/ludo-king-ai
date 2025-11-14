@@ -38,8 +38,8 @@ class SummaryAccumulationTests(unittest.TestCase):
                     break
 
                 # After agent's move, summaries should reflect recent activity
-                new_movement = obs["board"][5].sum()
-                new_rewards = obs["board"][9].sum()
+                new_movement = env.game.board.movement_heatmap.sum()
+                new_rewards = env.game.board.reward_heatmap.sum()
 
                 # Verify summaries are non-negative (basic sanity check)
                 self.assertGreaterEqual(
@@ -57,7 +57,7 @@ class SummaryAccumulationTests(unittest.TestCase):
             else:
                 # Agent has no moves - this is the key test case
                 # Summaries should accumulate across multiple opponent rounds
-                prev_movement = obs["board"][5].sum()
+                prev_movement = env.game.board.movement_heatmap.sum()
 
                 # Take any action (will be invalid but env handles it)
                 try:
@@ -67,7 +67,7 @@ class SummaryAccumulationTests(unittest.TestCase):
                     break
 
                 # After invalid action + opponent rounds, summaries should have accumulated
-                new_movement = obs["board"][5].sum()
+                new_movement = env.game.board.movement_heatmap.sum()
 
                 # If there was prior activity, it should be preserved
                 if prev_movement > 0:
@@ -109,8 +109,8 @@ class SummaryAccumulationTests(unittest.TestCase):
 
                 # After action, summaries should reflect only recent activity
                 # (from the agent's move + opponent responses in this cycle)
-                after_movement = obs["board"][5].sum()
-                after_rewards = obs["board"][9].sum()
+                after_movement = env.game.board.movement_heatmap.sum()
+                after_rewards = env.game.board.reward_heatmap.sum()
 
                 # Verify summaries contain data from this turn cycle
                 self.assertGreaterEqual(
