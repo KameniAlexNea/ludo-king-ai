@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from loguru import logger
 from sb3_contrib import MaskablePPO
 
-from ludo_rl.ludo_king import Board, Color, Game, Player
+from ludo_rl.ludo_king import Board, Color, Game, Player, Simulator
 from ludo_rl.ludo_king import config as king_config
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
@@ -102,16 +102,15 @@ def _extract_piece_index(move: object) -> int | None:
 
 def decide_with_model(
     model: MaskablePPO,
-    board_stack: np.ndarray,
+    simulator: Simulator,
     dice_roll: int,
     legal_moves: list[object],
     deterministic: bool,
     rng: random.Random,
 ) -> object | None:
-    obs = {
-        "board": board_stack[None, ...],
-        "dice_roll": np.array([[dice_roll - 1]], dtype=np.int64),
-    }
+    # Get token-sequence observation from simulator
+    obs = simulator.get_token_sequence_observation(dice_roll)
+    
     action_mask = np.zeros(king_config.PIECES_PER_PLAYER, dtype=bool)
     moves_by_piece: dict[int, list[object]] = {}
     for mv in legal_moves:
@@ -179,6 +178,7 @@ def evaluate_triplet(
             ][:num]
         players = [Player(color=c) for c in color_ids]
         game = Game(players=players)
+        simulator = Simulator.for_game(game, agent_index=0)
 
         # Agent at seat 0 (RED); opponents occupy seats 1..(num-1)
         for seat_idx, player in enumerate(game.players):
@@ -210,12 +210,15 @@ def evaluate_triplet(
                     extra = False
                     continue
 
-                board_stack = build_board_stack(game.board, int(pl.color))
+                # Append move to history for both agent and opponents
+                simulator._append_history(dice, cur)
+                
                 if cur == 0:
                     mv = decide_with_model(
-                        model, board_stack, dice, legal, deterministic, rng
+                        model, simulator, dice, legal, deterministic, rng
                     )
                 else:
+                    board_stack = build_board_stack(game.board, int(pl.color))
                     decision = pl.choose(board_stack, dice, legal)
                     mv = decision if decision is not None else rng.choice(legal)
 

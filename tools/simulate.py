@@ -42,9 +42,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def _dice_from_obs(obs: dict) -> int:
-    # obs["dice_roll"] is in 0..5; convert back to 1..6 for display
+    # obs["current_dice"] contains the actual dice value (1..6)
     try:
-        return int(obs["dice_roll"][0]) + 1
+        return int(obs["current_dice"][0])
     except Exception as e:
         logger.warning(f"Failed to extract dice from observation, defaulting to 1: {e}")
         return 1

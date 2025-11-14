@@ -14,6 +14,7 @@ from sb3_contrib import MaskablePPO
 
 from ludo_rl.ludo_king import Color, Game, Player
 from ludo_rl.ludo_king import config as king_config
+from ludo_rl.ludo_king.simulator import Simulator
 from ludo_rl.strategy.llm_agent import (
     DEFAULT_SYSTEM_PROMPT,
     LLMStrategy,
@@ -133,7 +134,7 @@ def _extract_piece_index(move: object) -> int | None:
 
 def _decide_with_model(
     participant: Participant,
-    board_stack: Any,
+    simulator: Simulator,
     dice_roll: int,
     legal: list[object],
     rng: random.Random,
@@ -151,11 +152,9 @@ def _decide_with_model(
             moves_by_piece.setdefault(pid, []).append(mv)
 
     try:
+        obs = simulator.get_token_sequence_observation(dice_roll)
         action, _ = participant.model.predict(
-            {
-                "board": board_stack[None, ...],
-                "dice_roll": np.array([[dice_roll - 1]], dtype=np.int64),
-            },
+            obs,
             action_masks=action_mask[None, ...],
             deterministic=participant.deterministic,
         )
@@ -187,6 +186,11 @@ def run_single_game(
         ][:num]
     players = [Player(color=c) for c in color_ids]
     game = Game(players=players)
+    
+    # Create simulators for each player (to track their history independently)
+    simulators: Dict[int, Simulator] = {
+        i: Simulator.for_game(game, agent_index=i) for i in range(len(players))
+    }
 
     round_seed = base_rng.randint(0, 1_000_000)
     random.seed(round_seed)
@@ -219,18 +223,22 @@ def run_single_game(
         while extra:
             dice = game.roll_dice()
             legal = game.legal_moves(current_index, dice)
+            
+            # Update simulator history for current player
+            simulator = simulators[current_index]
+            simulator._append_history(dice, current_index)
+            
             if not legal:
                 _log_outcome(game_index, label, None, dice, skipped=True, extra=False)
                 extra = False
                 continue
 
-            board_stack = game.board.build_tensor(int(player.color))
-
             if current_index in rl_assignments:
                 mv = _decide_with_model(
-                    rl_assignments[current_index], board_stack, dice, legal, base_rng
+                    rl_assignments[current_index], simulator, dice, legal, base_rng
                 )
             else:
+                board_stack = game.board.build_tensor(int(player.color))
                 decision = player.choose(board_stack, dice, legal)
                 mv = decision if decision is not None else base_rng.choice(legal)
 
