@@ -26,6 +26,7 @@ class LudoEnv(gym.Env):
         - "positions": (10, 16) int, last 10 atomic moves' positions per token (0..57)
         - "dice_history": (10,) int, dice per frame (0 for pad, 1..6 actual)
         - "token_mask": (10, 16) bool, 1 if frame/token valid, else 0 for padding
+        - "player_history": (10,) int, which player (0..3) made each move
         - "token_colors": (16,) int in [0..3], color id per token block
         - "current_dice": (1,) int, dice for the agent's current decision (1..6)
 
@@ -91,6 +92,9 @@ class LudoEnv(gym.Env):
                 ),
                 "dice_history": spaces.Box(low=0, high=6, shape=(10,), dtype=np.int64),
                 "token_mask": spaces.Box(low=0, high=1, shape=(10, 16), dtype=np.bool_),
+                "player_history": spaces.Box(
+                    low=0, high=3, shape=(10,), dtype=np.int64
+                ),
                 "token_colors": spaces.Box(low=0, high=3, shape=(16,), dtype=np.int64),
                 "current_dice": spaces.Box(low=1, high=6, shape=(1,), dtype=np.int64),
             }

@@ -13,6 +13,7 @@ The observation is a dictionary with the following components:
 - **`positions`**: `(10, 16)` int64 array - Last 10 frames of all 16 token positions (0..57)
 - **`dice_history`**: `(10,)` int64 array - Dice rolls for each of the last 10 frames (0 for padding, 1..6 actual)
 - **`token_mask`**: `(10, 16)` bool array - Validity mask (1 if frame/token exists, 0 for padding)
+- **`player_history`**: `(10,)` int64 array - Which player (0..3) made each move in the history
 - **`token_colors`**: `(16,)` int64 array - Color ID for each token block (0..3)
 - **`current_dice`**: `(1,)` int64 array - Current dice roll for agent's decision (1..6)
 
@@ -41,11 +42,12 @@ The simulator maintains a circular buffer of the last 10 atomic moves:
 ```python
 class Simulator:
     history_T: int = 10
-    _pos_hist: np.ndarray  # (10, 16) - position history
-    _dice_hist: np.ndarray # (10,) - dice history
-    _mask_hist: np.ndarray # (10, 16) - validity masks
-    _hist_len: int = 0    # current history length
-    _hist_ptr: int = 0    # circular buffer pointer
+    _pos_hist: np.ndarray    # (10, 16) - position history
+    _dice_hist: np.ndarray   # (10,) - dice history
+    _mask_hist: np.ndarray   # (10, 16) - validity masks
+    _player_hist: np.ndarray # (10,) - player index history
+    _hist_len: int = 0       # current history length
+    _hist_ptr: int = 0       # circular buffer pointer
 ```
 
 ### Frame Updates
@@ -53,13 +55,14 @@ class Simulator:
 Each atomic move (piece movement) appends a new frame to the history:
 
 ```python
-def _append_history(self, dice: int) -> None:
+def _append_history(self, dice: int, player_idx: int) -> None:
     # Capture current board state for agent
     frame_pos = self.game.board.all_token_positions(agent_color)
     i = self._hist_ptr
     self._pos_hist[i, :] = frame_pos
     self._dice_hist[i] = int(dice)
     self._mask_hist[i, :] = self._token_exists_mask
+    self._player_hist[i] = int(player_idx)
     # Advance circular buffer
     self._hist_ptr = (self._hist_ptr + 1) % self.history_T
     self._hist_len = min(self._hist_len + 1, self.history_T)
@@ -74,9 +77,10 @@ def get_token_sequence_observation(self, current_dice: int) -> dict:
     # Return last T frames, oldest first, with padding for early game
     # Handles circular buffer wraparound automatically
     return {
-        "positions": out_pos,      # (10, 16)
-        "dice_history": out_dice,  # (10,)
-        "token_mask": out_mask,    # (10, 16)
+        "positions": out_pos,       # (10, 16)
+        "dice_history": out_dice,   # (10,)
+        "token_mask": out_mask,     # (10, 16)
+        "player_history": out_player, # (10,)
         "token_colors": self._token_colors,  # (16,)
         "current_dice": np.asarray([current_dice], dtype=np.int64),  # (1,)
     }
@@ -111,6 +115,7 @@ class Simulator:
         obj._pos_hist = np.zeros((10, 16), dtype=np.int64)
         obj._dice_hist = np.zeros((10,), dtype=np.int64)
         obj._mask_hist = np.zeros((10, 16), dtype=np.bool_)
+        obj._player_hist = np.zeros((10,), dtype=np.int64)
         obj._token_colors = game.board.token_colors(agent_color)
         obj._token_exists_mask = game.board.token_exists_mask(agent_color)
         obj._hist_len = 0
@@ -128,6 +133,7 @@ class LudoEnv(gym.Env):
         "positions": spaces.Box(low=0, high=57, shape=(10, 16), dtype=np.int64),
         "dice_history": spaces.Box(low=0, high=6, shape=(10,), dtype=np.int64),
         "token_mask": spaces.Box(low=0, high=1, shape=(10, 16), dtype=np.bool_),
+        "player_history": spaces.Box(low=0, high=3, shape=(10,), dtype=np.int64),
         "token_colors": spaces.Box(low=0, high=3, shape=(16,), dtype=np.int64),
         "current_dice": spaces.Box(low=1, high=6, shape=(1,), dtype=np.int64),
     })
@@ -171,6 +177,7 @@ obs, info = env.reset()
 print(obs["positions"].shape)      # (10, 16) - last 10 frames of 16 token positions
 print(obs["dice_history"].shape)   # (10,) - dice for last 10 frames
 print(obs["token_mask"].shape)     # (10, 16) - validity mask
+print(obs["player_history"].shape) # (10,) - which player made each move
 print(obs["token_colors"].shape)   # (16,) - color ID per token
 print(obs["current_dice"].shape)   # (1,) - current dice roll
 
@@ -185,7 +192,8 @@ for frame_idx in range(10):
     if obs["token_mask"][frame_idx].any():
         frame_positions = obs["positions"][frame_idx]
         frame_dice = obs["dice_history"][frame_idx]
-        print(f"Frame {frame_idx}: dice={frame_dice}, positions={frame_positions}")
+        frame_player = obs["player_history"][frame_idx]
+        print(f"Frame {frame_idx}: player={frame_player}, dice={frame_dice}, positions={frame_positions}")
 ```
 
 ## Benefits
@@ -194,10 +202,11 @@ This token-sequence design provides:
 
 1. **Temporal dynamics**: Captures movement patterns over the last 10 moves
 2. **Complete state history**: Agent can see how the game evolved
-3. **Efficient representation**: Only tracks actual token positions, not full board
-4. **Padding support**: Early-game frames are zero-masked for consistent shape
-5. **Agent-centric view**: All positions relative to agent's perspective
-6. **Action context**: Current dice helps inform valid moves
+3. **Explicit causality**: Player history shows who made each move
+4. **Efficient representation**: Only tracks actual token positions, not full board
+5. **Padding support**: Early-game frames are zero-masked for consistent shape
+6. **Agent-centric view**: All positions relative to agent's perspective
+7. **Action context**: Current dice helps inform valid moves
 
 The temporal sequence is particularly valuable for reinforcement learning with Transformers, as the model can:
 

@@ -26,6 +26,7 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         self.piece_idx_emb = nn.Embedding(4, self.embed_dim)
         self.time_emb = nn.Embedding(self.T, self.embed_dim)
         self.frame_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
+        self.player_emb = nn.Embedding(4, self.embed_dim)  # Player who made the move
         self.curr_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
         # Token projection and pooling
         self.token_proj = nn.Sequential(
@@ -50,6 +51,9 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         dice_hist = observations["dice_history"].long()
         if dice_hist.dim() == 1:
             dice_hist = dice_hist.unsqueeze(0)
+        player_hist = observations["player_history"].long()
+        if player_hist.dim() == 1:
+            player_hist = player_hist.unsqueeze(0)
         token_mask = observations["token_mask"].to(dtype=torch.bool)
         if token_mask.dim() == 2:
             token_mask = token_mask.unsqueeze(0)
@@ -74,8 +78,10 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
             dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
         )
         frame_dice_e = self.frame_dice_emb(frame_dice)
+        player_idx = player_hist.view(B, T, 1).expand(B, T, N)
+        player_e = self.player_emb(player_idx)
 
-        tok = pos_e + color_e + piece_e + time_e + frame_dice_e
+        tok = pos_e + color_e + piece_e + time_e + frame_dice_e + player_e
         tok = self.token_proj(tok)
         m = token_mask.to(dtype=tok.dtype).unsqueeze(-1)
         tok = tok * m
@@ -127,6 +133,7 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         self.piece_index_embed = nn.Embedding(4, self.embed_dim)
         self.time_emb = nn.Embedding(T, self.embed_dim)
         self.frame_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
+        self.player_emb = nn.Embedding(4, self.embed_dim)  # Player who made the move
         self.curr_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
         self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
 
@@ -154,6 +161,9 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         dice_hist = observations["dice_history"].long()
         if dice_hist.dim() == 1:
             dice_hist = dice_hist.unsqueeze(0)
+        player_hist = observations["player_history"].long()
+        if player_hist.dim() == 1:
+            player_hist = player_hist.unsqueeze(0)
         token_mask = observations["token_mask"].to(dtype=torch.bool)
         if token_mask.dim() == 2:
             token_mask = token_mask.unsqueeze(0)
@@ -175,8 +185,10 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         time_e = self.time_emb(time_idx)
         frame_d = dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
         frame_d_e = self.frame_dice_emb(frame_d)
+        player_idx = player_hist.view(B, T, 1).expand(B, T, N)
+        player_e = self.player_emb(player_idx)
 
-        tok = pos_e + color_e + piece_e + time_e + frame_d_e
+        tok = pos_e + color_e + piece_e + time_e + frame_d_e + player_e
         seq = tok.view(B, T * N, self.embed_dim)
         mask = token_mask.view(B, T * N)
 
