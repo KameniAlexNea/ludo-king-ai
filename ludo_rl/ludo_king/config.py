@@ -58,8 +58,8 @@ class NetworkConfig:
     embed_dim: int = 128  # Output features dimension
     token_embed_dim: int = 16  # Embedding dimension for tokens
     pooled_output_size: int = 4
-    pi: list[int] = field(default_factory=lambda: [128, 64])
-    vf: list[int] = field(default_factory=lambda: [128, 64])
+    pi: list[int] = field(default_factory=lambda: [64])
+    vf: list[int] = field(default_factory=lambda: [64])
 
 
 @dataclass(slots=True)

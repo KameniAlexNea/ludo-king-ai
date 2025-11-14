@@ -65,9 +65,9 @@ if __name__ == "__main__":
     # We use a lambda to create the environment
     # Vectorize the environment
     if args.num_envs == 1:
-        train_env = DummyVecEnv([LudoEnv])
+        train_env = DummyVecEnv([lambda: LudoEnv()])
     else:
-        train_env = SubprocVecEnv([LudoEnv for _ in range(args.num_envs)])
+        train_env = SubprocVecEnv([lambda: LudoEnv() for _ in range(args.num_envs)])
     train_env = VecMonitor(train_env)
     train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
 
