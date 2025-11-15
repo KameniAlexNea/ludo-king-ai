@@ -3,9 +3,15 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
-from typing import ClassVar, Optional
+from typing import TYPE_CHECKING, ClassVar, Optional
 
+import numpy as np
+
+from .features import build_move_options
 from .types import MoveOption, StrategyContext
+
+if TYPE_CHECKING:
+    from ..ludo_king.game import Game
 
 
 @dataclass(slots=True)
@@ -21,6 +27,24 @@ class BaseStrategy:
 
     name = "base"
     config: ClassVar[BaseStrategyConfig | None] = None
+
+    def decide(
+        self,
+        board_stack: np.ndarray,
+        dice_roll: int,
+        action_mask: np.ndarray,
+        move_choices: list[dict | None],
+    ) -> Optional[MoveOption]:
+        ctx = build_move_options(board_stack, int(dice_roll), action_mask, move_choices)
+        return self.select_move(ctx)
+
+    def update_history(self, game: "Game", mover_index: int, dice_roll: int) -> None:
+        """Optional hook for strategies to maintain a per-player history buffer.
+
+        Default: no-op. RL strategies override this to accumulate a 10-step
+        token-sequence history compatible with training.
+        """
+        return None
 
     def select_move(self, ctx: StrategyContext) -> Optional[MoveOption]:
         scored_moves: list[tuple[MoveOption, float]] = []

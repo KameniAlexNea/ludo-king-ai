@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 
 import gradio as gr
+from loguru import logger
 
 from ludo_rl.ludo_king import Game
 
@@ -380,7 +381,10 @@ class EventHandler:
     ):
         try:
             rem = int(remaining) if remaining is not None else 0
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"Failed to parse remaining time '{remaining}', defaulting to 0: {e}"
+            )
             rem = 0
         if rem <= 0 or game is None or state is None:
             # No resume needed; return a snapshot without changing states

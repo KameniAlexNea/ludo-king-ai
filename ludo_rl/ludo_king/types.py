@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import IntEnum
 from typing import Dict, List, Optional
+
+
+class Color(IntEnum):
+    RED = 0
+    GREEN = 1
+    YELLOW = 2
+    BLUE = 3
 
 
 @dataclass(slots=True)

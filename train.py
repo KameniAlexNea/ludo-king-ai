@@ -1,5 +1,6 @@
 import os
 import time
+from dataclasses import asdict
 
 import torch
 from loguru import logger
@@ -21,11 +22,14 @@ from torch.profiler import (
     schedule,
     tensorboard_trace_handler,
 )
+from wandb.integration.sb3 import WandbCallback
 
+import wandb
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo_env import LudoEnv
-from ludo_rl.ludo_king.config import net_config
-from tools.arguments import parse_train_args
+from ludo_rl.ludo_king.config import config, net_config
+from ludo_rl.ludo_king.reward import reward_config
+from tools.arguments import TrainingSetup, parse_train_args
 from tools.scheduler import CoefScheduler, lr_schedule
 
 
@@ -61,11 +65,11 @@ if __name__ == "__main__":
     # We use a lambda to create the environment
     # Vectorize the environment
     if args.num_envs == 1:
-        train_env = DummyVecEnv([LudoEnv])
+        train_env = DummyVecEnv([lambda: LudoEnv()])
     else:
-        train_env = SubprocVecEnv([LudoEnv for _ in range(args.num_envs)])
-    train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
+        train_env = SubprocVecEnv([lambda: LudoEnv() for _ in range(args.num_envs)])
     train_env = VecMonitor(train_env)
+    train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
 
     logger.debug("--- Setting up Callbacks ---")
 
@@ -85,13 +89,29 @@ if __name__ == "__main__":
     )
 
     callbacks = [entropy_callback]
+    wandb.init(
+        project="ludo-king-ppo",
+        name=run_id,
+        config=asdict(
+            TrainingSetup(
+                config=config,
+                network_config=net_config,
+                reward_config=reward_config,
+                train_config=args,
+            )
+        ),
+        sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
+        monitor_gym=True,  # auto-upload the videos of agents playing the game
+        save_code=True,  # optional
+    )
     if not args.profile:
         callbacks.append(checkpoint_callback)
+        callbacks.append(WandbCallback())
 
     # --- Policy Kwargs ---
     # Define the custom feature extractor
     policy_kwargs = dict(
-        activation_fn=torch.nn.Tanh,
+        activation_fn=torch.nn.GELU,  # GELU for smooth, non-saturating gradients (best for transformers)
         features_extractor_class=(
             LudoTransformerExtractor if args.use_transformer else LudoCnnExtractor
         ),
@@ -106,36 +126,40 @@ if __name__ == "__main__":
 
     # --- Initialize Model ---
     # We MUST use MaskablePPO from sb3_contrib
-    if args.resume is not None:
+    init_kwargs = dict(
+        verbose=1,
+        tensorboard_log=log_path,
+        n_steps=args.n_steps,
+        batch_size=args.batch_size,
+        n_epochs=args.n_epochs,
+        gamma=args.gamma,
+        gae_lambda=args.gae_lambda,
+        clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
+        ent_coef=args.ent_coef,
+        device=args.device,
+        learning_rate=lr_schedule(
+            lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
+        ),
+        target_kl=args.target_kl,
+        vf_coef=args.vf_coef,
+    )
+    if args.resume:
         logger.info(f"--- Resuming training from {args.resume} ---")
         model = MaskablePPO.load(
             args.resume,
             env=train_env,
-            device=args.device,
-            learning_rate=lr_schedule(
-                lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
-            ),
-            clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
+            **init_kwargs,
         )
     else:
         model = MaskablePPO(
             "MultiInputPolicy",  # Use MlpPolicy as our extractor outputs a flat vector
             train_env,
             policy_kwargs=policy_kwargs,
-            verbose=1,
-            tensorboard_log=log_path,
-            n_steps=args.n_steps,
-            batch_size=args.batch_size,
-            n_epochs=args.n_epochs,
-            gamma=args.gamma,
-            gae_lambda=args.gae_lambda,
-            clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
-            ent_coef=args.ent_coef,
-            device=args.device,
-            learning_rate=lr_schedule(
-                lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
-            ),
+            **init_kwargs,
         )
+
+    print("--- Model Summary ---")
+    print(model.policy)
 
     final_model_path = os.path.join(model_save_path, "init_model")
     logger.info(f"--- Training Started. Saving initial model to {final_model_path} ---")

@@ -222,3 +222,4 @@ logs_self
 models_self
 gradio_runtime
 training
+wandb

@@ -3,11 +3,10 @@ from __future__ import annotations
 import unittest
 
 from ludo_rl.ludo_king.config import config
-from ludo_rl.ludo_king.enums import Color
 from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo_king.player import Player
 from ludo_rl.ludo_king.simulator import Simulator
-from ludo_rl.ludo_king.types import Move
+from ludo_rl.ludo_king.types import Color, Move
 
 
 class SimulatorTests(unittest.TestCase):

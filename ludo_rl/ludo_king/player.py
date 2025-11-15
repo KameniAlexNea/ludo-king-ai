@@ -4,13 +4,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional, Sequence
 
 import numpy as np
+from loguru import logger
 
 if TYPE_CHECKING:  # avoid runtime imports to prevent circular deps
     from ludo_rl.strategy.base import BaseStrategy
 
-from .enums import Color
 from .piece import Piece
-from .types import Move
+from .types import Color, Move
 
 
 @dataclass(slots=True)
@@ -54,7 +54,10 @@ class Player:
                 from ludo_rl.strategy.registry import create as create_strategy
 
                 self.strategy = create_strategy(self.strategy_name)
-        except KeyError:
+        except KeyError as e:
+            logger.warning(
+                f"Unknown strategy '{self.strategy_name}', falling back to random: {e}"
+            )
             # Unknown strategy: fallback to random legal move and mark as random
             self.strategy_name = "random"
             return next(iter(legal_moves), None) if legal_moves else None
@@ -72,16 +75,12 @@ class Player:
                 move_choices[mv.piece_id] = {
                     "piece": self.pieces[mv.piece_id],
                     "new_pos": mv.new_pos,
+                    "move": mv,
                 }
-        # Lazy import to avoid import-time circular dependencies
-        from ludo_rl.strategy.features import build_move_options
-
-        ctx = build_move_options(board_stack, int(dice_roll), action_mask, move_choices)
-        decided = self.strategy.select_move(ctx)
+        decided = self.strategy.decide(
+            board_stack, int(dice_roll), action_mask, move_choices
+        )
         if decided is None:
             return None
         # Map back to our Move by piece_id
-        for mv in legal_moves:
-            if mv.piece_id == decided.piece_id:
-                return mv
-        return None
+        return move_choices[decided.piece_id]["move"]

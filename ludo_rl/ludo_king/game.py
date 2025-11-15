@@ -8,6 +8,7 @@ from .board import Board
 from .config import config
 from .piece import Piece
 from .player import Player
+from .reward import compute_move_rewards
 from .types import Move, MoveEvents, MoveResult
 
 
@@ -19,9 +20,11 @@ class Game:
 
     def __post_init__(self) -> None:
         # Board expects players indexed by Color id (0..3). Build a fixed map.
-        pieces_by_color: List[List[Piece]] = [[] for _ in range(4)]
+        pieces_by_color: List[List[Piece]] = [
+            [] for _ in range(config.PIECES_PER_PLAYER)
+        ]
         for pl in self.players:
-            pieces_by_color[int(pl.color)] = list(pl.pieces)
+            pieces_by_color[int(pl.color)] = pl.pieces
         colors = list(range(len(pieces_by_color)))
         self.board = Board(players=pieces_by_color, colors=colors)
 
@@ -110,12 +113,20 @@ class Game:
             if any(c >= 2 for c in counts.values()):
                 events.hit_blockade = True
                 events.move_resolved = False
+                # Even when a move is blocked, compute rewards centrally
+                rewards = compute_move_rewards(
+                    num_players=len(self.players),
+                    mover_index=mv.player_index,
+                    old_position=old,
+                    new_position=old,
+                    events=events,
+                )
                 return MoveResult(
                     old_position=old,
                     new_position=old,
                     events=events,
                     extra_turn=False,
-                    rewards=None,
+                    rewards=rewards,
                 )
 
         if old == 0 and mv.new_pos == config.START_POSITION:
@@ -138,9 +149,15 @@ class Game:
                 if len(occupants) == 1:
                     opp_color, opp_piece = occupants[0]
                     opp_piece.send_home()
+                    # Map victim color to current game player index
+                    victim_index = 0
+                    for i, pl in enumerate(self.players):
+                        if int(pl.color) == opp_color:
+                            victim_index = i
+                            break
                     events.knockouts.append(
                         {
-                            "player": opp_color,
+                            "player": victim_index,
                             "piece_id": opp_piece.piece_id,
                             "abs_pos": abs_pos,
                         }
@@ -152,11 +169,27 @@ class Game:
                 events.move_resolved = False
 
         extra = bool(events.knockouts) or bool(events.finished) or mv.dice_roll == 6
+        # If move resolved and we are on the ring, check if we formed a blockade (two of our pieces)
+        if (
+            events.move_resolved
+            and 1 <= pc.position <= config.MAIN_TRACK_END
+            and self.board.count_at_relative(player.color, pc.position) >= 2
+        ):
+            events.blockades.append({"player": mv.player_index, "rel": pc.position})
+
+        # Compute per-player rewards (optional; env may or may not use)
+        rewards = compute_move_rewards(
+            num_players=len(self.players),
+            mover_index=mv.player_index,
+            old_position=old,
+            new_position=pc.position,
+            events=events,
+        )
 
         return MoveResult(
             old_position=old,
             new_position=pc.position,
             events=events,
             extra_turn=extra,
-            rewards=None,
+            rewards=rewards,
         )

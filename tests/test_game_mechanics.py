@@ -6,12 +6,11 @@ import unittest
 import numpy as np
 
 from ludo_rl.ludo_king.board import Board
-from ludo_rl.ludo_king.config import config
-from ludo_rl.ludo_king.enums import Color
+from ludo_rl.ludo_king.config import config, reward_config
 from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo_king.player import Player
-from ludo_rl.ludo_king.reward import compute_move_rewards, reward_config
-from ludo_rl.ludo_king.types import Move
+from ludo_rl.ludo_king.reward import compute_move_rewards
+from ludo_rl.ludo_king.types import Color, Move
 
 
 def make_players() -> list[Player]:
@@ -85,13 +84,7 @@ class BoardAndGameTests(unittest.TestCase):
             0,
             resolution.old_position,
             resolution.new_position,
-            {
-                "move_resolved": resolution.events.move_resolved,
-                "exited_home": resolution.events.exited_home,
-                "finished": resolution.events.finished,
-                "knockouts": resolution.events.knockouts,
-                "blockades": resolution.events.blockades,
-            },
+            resolution.events,
         )
         self.assertTrue(resolution.events.knockouts)
         self.assertEqual(opponent_piece.position, 0)
@@ -119,12 +112,7 @@ class BoardAndGameTests(unittest.TestCase):
             0,
             resolution.old_position,
             resolution.new_position,
-            {
-                "move_resolved": resolution.events.move_resolved,
-                "hit_blockade": resolution.events.hit_blockade,
-                "knockouts": resolution.events.knockouts,
-                "blockades": resolution.events.blockades,
-            },
+            resolution.events,
         )
         self.assertTrue(resolution.events.hit_blockade)
         self.assertFalse(resolution.events.move_resolved)
@@ -167,6 +155,36 @@ class BoardAndGameTests(unittest.TestCase):
         self.assertTrue(res.events.hit_blockade)
         self.assertFalse(res.events.move_resolved)
         self.assertEqual(self.players[0].pieces[0].position, start_rel)
+
+    def test_forming_own_blockade_sets_event_and_reward(self) -> None:
+        # Choose a ring square that is not a global safe square
+        target_rel = 10
+        target_abs = self.board.absolute_position(int(Color.RED), target_rel)
+        while target_abs in config.SAFE_SQUARES_ABS or target_rel <= 2:
+            target_rel += 1
+            target_abs = self.board.absolute_position(int(Color.RED), target_rel)
+
+        # Place one of our pieces on target_rel and move another onto it to form a blockade
+        p0a = self.players[0].pieces[0]
+        p0b = self.players[0].pieces[1]
+        p0a.position = target_rel
+        # Place the second one just behind (wrap if needed)
+        p0b.position = target_rel - 1 if target_rel > 1 else config.MAIN_TRACK_END
+
+        mv = Move(
+            player_index=0, piece_id=p0b.piece_id, new_pos=target_rel, dice_roll=1
+        )
+        res = self.game.apply_move(mv)
+
+        # Move should resolve and create a blockade event
+        self.assertTrue(res.events.move_resolved)
+        self.assertTrue(res.events.blockades)
+        self.assertGreaterEqual(
+            self.game.board.count_at_relative(int(Color.RED), target_rel), 2
+        )
+        # Rewards should at least include blockade bonus
+        self.assertIsNotNone(res.rewards)
+        self.assertGreaterEqual(res.rewards[0], reward_config.blockade)
 
 
 class PlayerBehaviourTests(unittest.TestCase):
