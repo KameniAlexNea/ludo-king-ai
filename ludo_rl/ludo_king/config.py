@@ -52,15 +52,12 @@ class Config:
 
 @dataclass(slots=True)
 class NetworkConfig:
-    conv_configs: list[int] = field(default_factory=lambda: [32, 24])
-    kernel_sizes: list[int] = field(default_factory=lambda: [7, 5])
-    paddings: list[int] = field(default_factory=lambda: [3, 2])
-    embed_dim: int = 128  # Output features dimension
+    embed_dim: int = 32  # Output features dimension
     token_embed_dim: int = 16  # Embedding dimension for tokens
     pooled_output_size: int = 4
-    pi: list[int] = field(default_factory=lambda: [64])
-    vf: list[int] = field(default_factory=lambda: [64])
-    use_scheduler: bool = False
+    pi: list[int] = field(default_factory=lambda: [64, 32])
+    vf: list[int] = field(default_factory=lambda: [64, 32])
+    use_scheduler: bool = True
 
 
 @dataclass(slots=True)
