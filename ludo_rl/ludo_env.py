@@ -70,18 +70,12 @@ class LudoEnv(gym.Env):
             for s in os.getenv("OPPONENTS", ",".join(available_strategies())).split(",")
             if s
         ]
-        logger.info(
-            f"Configured opponents ({king_config.NUM_PLAYERS} players): {self.opponents}"
-        )
         # 0 = random per seat, 1 = sequential cycling
         try:
-            self.strategy_selection: int = int(
-                os.getenv("STRATEGY_SELECTION", "0") or "0"
-            )
+            self.strategy_selection: int = int(os.getenv("STRATEGY_SELECTION", "0"))
         except ValueError as e:
             logger.warning(f"Invalid STRATEGY_SELECTION value, defaulting to 0: {e}")
             self.strategy_selection = 0
-        logger.info(f"Strategy selection mode: {self.strategy_selection}")
         # Track resets to advance sequential selection across episodes
         self._reset_count: int = 0
 
