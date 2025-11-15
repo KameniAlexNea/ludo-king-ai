@@ -52,11 +52,11 @@ class Config:
 
 @dataclass(slots=True)
 class NetworkConfig:
-    embed_dim: int = 32  # Output features dimension
+    embed_dim: int = 128  # Output features dimension
     token_embed_dim: int = 16  # Embedding dimension for tokens
     pooled_output_size: int = 4
-    pi: list[int] = field(default_factory=lambda: [64, 32])
-    vf: list[int] = field(default_factory=lambda: [64, 32])
+    pi: list[int] = field(default_factory=lambda: [64])
+    vf: list[int] = field(default_factory=lambda: [64])
     use_scheduler: bool = True
 
 
@@ -82,14 +82,14 @@ class Reward:
     finish: float = 1 * COEF
     capture: float = 0.2 * COEF
     got_capture: float = -0.5 * COEF
-    blockade: float = 0.15 * COEF
+    blockade: float = 0.05 * COEF
     hit_blockade: float = -0.1 * COEF
     blockade_hit: float = 0.1 * COEF
     exit_home: float = 0.1 * COEF
-    progress: float = 0.01
+    progress: float = 0.001
     safe_position: float = 0.05 * COEF
     draw: float = -2 * COEF
-    skipped_turn: float = -0.01
+    skipped_turn: float = -0.001
 
     # Risk/Opportunity shaping (potential-based) parameters
     shaping_use: bool = bool(int(os.getenv("SHAPING_USE", 1)))

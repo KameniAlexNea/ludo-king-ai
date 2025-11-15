@@ -134,7 +134,7 @@ if __name__ == "__main__":
         n_epochs=args.n_epochs,
         gamma=args.gamma,
         gae_lambda=args.gae_lambda,
-        clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
+        clip_range=lr_schedule(lr_min=args.clip_range * 0.6, lr_max=args.clip_range),
         ent_coef=args.ent_coef,
         device=args.device,
         learning_rate=(
