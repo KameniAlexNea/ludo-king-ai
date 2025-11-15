@@ -108,8 +108,12 @@ class Reward:
     ro_w_finish_opp: float = float(os.getenv("RO_W_FINISH_OPP", 0.3))
 
     # Opponent progress penalties (sparse signals to encourage urgency)
-    opp_exit_home_penalty: float = float(os.getenv("OPP_EXIT_HOME_PENALTY", -0.05 * COEF))
-    opp_piece_finished_penalty: float = float(os.getenv("OPP_PIECE_FINISHED_PENALTY", -0.3 * COEF))
+    opp_exit_home_penalty: float = float(
+        os.getenv("OPP_EXIT_HOME_PENALTY", -0.05 * COEF)
+    )
+    opp_piece_finished_penalty: float = float(
+        os.getenv("OPP_PIECE_FINISHED_PENALTY", -0.3 * COEF)
+    )
     opp_win_penalty: float = float(os.getenv("OPP_WIN_PENALTY", -0.2 * COEF))
 
 

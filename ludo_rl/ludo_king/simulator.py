@@ -212,7 +212,9 @@ class Simulator:
         # Apply agent's move
         res = self.game.apply_move(agent_move)
         # Accumulate immediate agent reward from own move
-        self._agent_reward_acc += float(res.rewards.get(self.agent_index, 0.0)) if res.rewards else 0.0
+        self._agent_reward_acc += (
+            float(res.rewards.get(self.agent_index, 0.0)) if res.rewards else 0.0
+        )
         self._update_transition_summaries(self.agent_index, agent_move, res)
         # Log atomic move in history
         self._append_history(agent_move.dice_roll, self.agent_index)
@@ -236,7 +238,11 @@ class Simulator:
                     opp_res = self.game.apply_move(mv)
                     self._update_transition_summaries(idx, mv, opp_res)
                     # Accumulate opponent-driven rewards affecting agent (e.g., their finish)
-                    self._agent_reward_acc += float(opp_res.rewards.get(self.agent_index, 0.0)) if opp_res.rewards else 0.0
+                    self._agent_reward_acc += (
+                        float(opp_res.rewards.get(self.agent_index, 0.0))
+                        if opp_res.rewards
+                        else 0.0
+                    )
                     self._append_history(dice, idx)
                 idx = (idx + 1) % total_players
 
@@ -289,7 +295,11 @@ class Simulator:
                 result = self.game.apply_move(mv)
                 self._update_transition_summaries(idx, mv, result)
                 # Accumulate opponent-driven rewards affecting agent
-                self._agent_reward_acc += float(result.rewards.get(self.agent_index, 0.0)) if result.rewards else 0.0
+                self._agent_reward_acc += (
+                    float(result.rewards.get(self.agent_index, 0.0))
+                    if result.rewards
+                    else 0.0
+                )
                 self._append_history(dice, idx)
                 extra = result.extra_turn and result.events.move_resolved
 
