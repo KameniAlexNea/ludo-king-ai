@@ -52,11 +52,11 @@ class Config:
 
 @dataclass(slots=True)
 class NetworkConfig:
-    embed_dim: int = 128  # Output features dimension
-    token_embed_dim: int = 16  # Embedding dimension for tokens
+    embed_dim: int = int(os.getenv("EMBED_DIM", 128))  # Output features dimension
+    token_embed_dim: int = int(os.getenv("TOKEN_EMBED_DIM", 16))  # Embedding dimension for tokens
     pooled_output_size: int = 4
-    pi: list[int] = field(default_factory=lambda: [64])
-    vf: list[int] = field(default_factory=lambda: [64])
+    pi: list[int] = field(default_factory=lambda: [int(x) for x in os.getenv("PI", "64").split(",")])
+    vf: list[int] = field(default_factory=lambda: [int(x) for x in os.getenv("VF", "64").split(",")])
     use_scheduler: bool = True
 
 
