@@ -97,7 +97,9 @@ class Reward:
     shaping_use: bool = bool(int(os.getenv("SHAPING_USE", "1")))
     shaping_alpha: float = float(os.getenv("SHAPING_ALPHA", "0.5"))
     shaping_gamma: float = float(os.getenv("SHAPING_GAMMA", "0.99"))
-    ro_depth: int = int(os.getenv("RO_DEPTH", "2"))  # lookahead depth in plies (approximate)
+    ro_depth: int = int(
+        os.getenv("RO_DEPTH", "2")
+    )  # lookahead depth in plies (approximate)
     # Weights for potential components
     ro_w_progress: float = float(os.getenv("RO_W_PROGRESS", "0.3"))
     ro_w_cap_opp: float = float(os.getenv("RO_W_CAP_OPP", "0.4"))

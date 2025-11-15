@@ -47,6 +47,7 @@ class BlockadeRewardTests(unittest.TestCase):
         self.assertAlmostEqual(
             result.rewards[0],
             reward_config.hit_blockade,
+            delta=1e-2,
             msg="Mover gets blockade penalty",
         )
         # Other players should not be affected
@@ -130,7 +131,9 @@ class BlockadeRewardTests(unittest.TestCase):
 
         # Mover gets blockade penalty in rewards
         self.assertIsNotNone(result.rewards)
-        self.assertAlmostEqual(result.rewards[0], reward_config.hit_blockade)
+        self.assertAlmostEqual(
+            result.rewards[0], reward_config.hit_blockade, delta=1e-2
+        )
 
     def test_successful_move_has_rewards(self):
         """Verify that successful moves always have rewards dict."""

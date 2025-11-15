@@ -1,11 +1,10 @@
-from typing import Any, Dict, Union, TYPE_CHECKING
-
 import math
+from typing import TYPE_CHECKING, Any, Dict, Union
 
 from .config import config as king_config
-
 from .config import reward_config
 from .types import MoveEvents
+
 if TYPE_CHECKING:
     from .game import Game
 
@@ -79,7 +78,8 @@ def compute_move_rewards(
 
 # --- Risk/Opportunity shaping (potential-based) ---
 
-def _rel_positions_for_agent(game: Game, agent_index: int):
+
+def _rel_positions_for_agent(game: "Game", agent_index: int):
     agent_color = int(game.players[agent_index].color)
     my_rels = [int(p.position) for p in game.players[agent_index].pieces]
     opps = []
@@ -90,7 +90,7 @@ def _rel_positions_for_agent(game: Game, agent_index: int):
     return agent_color, my_rels, opps
 
 
-def _cap_opp_probability(game: Game, agent_color: int, my_rels: list[int]) -> float:
+def _cap_opp_probability(game: "Game", agent_color: int, my_rels: list[int]) -> float:
     # Probability to capture on next move averaged across my tokens
     total = 0.0
     count = 0
@@ -103,7 +103,9 @@ def _cap_opp_probability(game: Game, agent_color: int, my_rels: list[int]) -> fl
                     abs_pos = game.board.absolute_position(agent_color, t)
                     if abs_pos in king_config.SAFE_SQUARES_ABS:
                         continue
-                    occ = game.board.pieces_at_absolute(abs_pos, exclude_color=agent_color)
+                    occ = game.board.pieces_at_absolute(
+                        abs_pos, exclude_color=agent_color
+                    )
                     if len(occ) >= 1:
                         ks += 1
             total += ks / 6.0
@@ -111,7 +113,13 @@ def _cap_opp_probability(game: Game, agent_color: int, my_rels: list[int]) -> fl
     return (total / max(1, count)) if count else 0.0
 
 
-def _cap_risk_probability_depth(game: Game, agent_color: int, my_rels: list[int], opps: list[tuple[int, list[int]]], depth: int) -> float:
+def _cap_risk_probability_depth(
+    game: "Game",
+    agent_color: int,
+    my_rels: list[int],
+    opps: list[tuple[int, list[int]]],
+    depth: int,
+) -> float:
     # Approx probability my token gets captured within depth plies
     total = 0.0
     count = 0
@@ -149,7 +157,10 @@ def _finish_opportunity_probability(my_rels: list[int]) -> float:
 
 
 def _progress_normalized(my_rels: list[int]) -> float:
-    vals = [(max(0, min(r, king_config.HOME_FINISH)) / king_config.HOME_FINISH) for r in my_rels]
+    vals = [
+        (max(0, min(r, king_config.HOME_FINISH)) / king_config.HOME_FINISH)
+        for r in my_rels
+    ]
     return (sum(vals) / max(1, len(vals))) if vals else 0.0
 
 
