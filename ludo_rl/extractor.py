@@ -6,12 +6,11 @@ from torch import nn
 from .ludo_king.config import config, net_config
 
 
-class LudoCnnExtractor(BaseFeaturesExtractor):
-    """Token-sequence features with LSTM for temporality + MLP head."""
+class BaseTokenSeqExtractor(BaseFeaturesExtractor):
+    """Shared embedding + input prep for token-sequence extractors."""
 
     def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
         super().__init__(observation_space, features_dim)
-        # New token-sequence only
         assert (
             "positions" in observation_space.spaces
         ), "Token-sequence observation required"
@@ -20,14 +19,85 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         self.N = pos_shape[1]
         self.dice_roll_dim = 6
         self.embed_dim = net_config.token_embed_dim
-        # Embeddings
+        # Embeddings shared by both variants
         self.pos_emb = nn.Embedding(config.PATH_LENGTH, self.embed_dim)
         self.color_emb = nn.Embedding(4, self.embed_dim)
         self.piece_idx_emb = nn.Embedding(4, self.embed_dim)
         self.time_emb = nn.Embedding(self.T, self.embed_dim)
         self.frame_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
-        self.player_emb = nn.Embedding(4, self.embed_dim)  # Player who made the move
+        self.player_emb = nn.Embedding(4, self.embed_dim)
         self.curr_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
+
+    def _prepare_inputs(self, observations: dict):
+        positions = observations["positions"].long()
+        if positions.dim() == 2:
+            positions = positions.unsqueeze(0)
+        dice_hist = observations["dice_history"].long()
+        if dice_hist.dim() == 1:
+            dice_hist = dice_hist.unsqueeze(0)
+        player_hist = observations["player_history"].long()
+        if player_hist.dim() == 1:
+            player_hist = player_hist.unsqueeze(0)
+        token_mask = observations["token_mask"].to(dtype=torch.bool)
+        if token_mask.dim() == 2:
+            token_mask = token_mask.unsqueeze(0)
+        token_colors = observations["token_colors"].long()
+        if token_colors.dim() == 1:
+            token_colors = token_colors.unsqueeze(0)
+        current_dice = observations["current_dice"].long()
+        if current_dice.dim() == 1:
+            current_dice = current_dice
+        B, T, N = positions.shape
+        device = positions.device
+        return (
+            positions,
+            dice_hist,
+            player_hist,
+            token_mask,
+            token_colors,
+            current_dice,
+            B,
+            T,
+            N,
+            device,
+        )
+
+    def _sum_token_embeddings(
+        self,
+        positions: torch.Tensor,
+        dice_hist: torch.Tensor,
+        player_hist: torch.Tensor,
+        token_mask: torch.Tensor,
+        token_colors: torch.Tensor,
+        B: int,
+        T: int,
+        N: int,
+        device: torch.device,
+    ) -> torch.Tensor:
+        pos_e = self.pos_emb(positions)  # (B,T,N,d)
+        colors = token_colors.unsqueeze(1).expand(B, T, N)
+        color_e = self.color_emb(colors)
+        piece_idx = (torch.arange(N, device=device) % 4).view(1, 1, N).expand(B, T, N)
+        piece_e = self.piece_idx_emb(piece_idx)
+        time_idx = torch.arange(T, device=device).view(1, T, 1).expand(B, T, N)
+        time_e = self.time_emb(time_idx)
+        frame_dice = dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
+        frame_dice_e = self.frame_dice_emb(frame_dice)
+        player_idx = player_hist.view(B, T, 1).expand(B, T, N)
+        player_e = self.player_emb(player_idx)
+        tok = pos_e + color_e + piece_e + time_e + frame_dice_e + player_e
+        # Apply mask later in subclasses (after optional projections)
+        return tok
+
+    def _embed_current_dice(self, current_dice: torch.Tensor) -> torch.Tensor:
+        return self.curr_dice_emb(current_dice.clamp(0, self.dice_roll_dim).squeeze(1))
+
+
+class LudoCnnExtractor(BaseTokenSeqExtractor):
+    """Token-sequence features with LSTM for temporality + MLP head."""
+
+    def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
+        super().__init__(observation_space, features_dim)
         # Token projection and LSTM for temporality
         self.token_proj = nn.Sequential(
             nn.Linear(self.embed_dim, self.embed_dim),
@@ -54,44 +124,22 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         )
 
     def forward(self, observations: dict) -> torch.Tensor:
-        # Token mode only
-        positions = observations["positions"].long()  # (B, T, N) or (T,N)
-        if positions.dim() == 2:
-            positions = positions.unsqueeze(0)
-        dice_hist = observations["dice_history"].long()
-        if dice_hist.dim() == 1:
-            dice_hist = dice_hist.unsqueeze(0)
-        player_hist = observations["player_history"].long()
-        if player_hist.dim() == 1:
-            player_hist = player_hist.unsqueeze(0)
-        token_mask = observations["token_mask"].to(dtype=torch.bool)
-        if token_mask.dim() == 2:
-            token_mask = token_mask.unsqueeze(0)
-        token_colors = observations["token_colors"].long()
-        if token_colors.dim() == 1:
-            token_colors = token_colors.unsqueeze(0)
-        current_dice = observations["current_dice"].long()
-        if current_dice.dim() == 1:
-            current_dice = current_dice
+        (
+            positions,
+            dice_hist,
+            player_hist,
+            token_mask,
+            token_colors,
+            current_dice,
+            B,
+            T,
+            N,
+            device,
+        ) = self._prepare_inputs(observations)
 
-        B, T, N = positions.shape
-        device = positions.device
-        # Build per-token embeddings
-        pos_e = self.pos_emb(positions)  # (B,T,N,d)
-        colors = token_colors.unsqueeze(1).expand(B, T, N)
-        color_e = self.color_emb(colors)
-        piece_idx = (torch.arange(N, device=device) % 4).view(1, 1, N).expand(B, T, N)
-        piece_e = self.piece_idx_emb(piece_idx)
-        time_idx = torch.arange(T, device=device).view(1, T, 1).expand(B, T, N)
-        time_e = self.time_emb(time_idx)
-        frame_dice = (
-            dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
+        tok = self._sum_token_embeddings(
+            positions, dice_hist, player_hist, token_mask, token_colors, B, T, N, device
         )
-        frame_dice_e = self.frame_dice_emb(frame_dice)
-        player_idx = player_hist.view(B, T, 1).expand(B, T, N)
-        player_e = self.player_emb(player_idx)
-
-        tok = pos_e + color_e + piece_e + time_e + frame_dice_e + player_e
         tok = self.token_proj(tok)
         m = token_mask.to(dtype=tok.dtype).unsqueeze(-1)
         tok = tok * m
@@ -114,15 +162,14 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         valid_counts = mask_float.sum(dim=1).clamp(min=1.0)  # (B, 1)
         pooled = (pooled_per_token * mask_float).sum(dim=1) / valid_counts  # (B, d)
 
-        curr_d = current_dice.clamp(0, self.dice_roll_dim)
-        curr_e = self.curr_dice_emb(curr_d.squeeze(1))
+        curr_e = self._embed_current_dice(current_dice)
 
         combined = torch.cat([pooled, curr_e], dim=1)
         combined = self.feature_norm(combined)
         return self.head(combined)
 
 
-class LudoTransformerExtractor(BaseFeaturesExtractor):
+class LudoTransformerExtractor(BaseTokenSeqExtractor):
     """Transformer over token sequence: (TxN tokens) with dice conditioning."""
 
     def __init__(
@@ -132,23 +179,6 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         nhead: int = 4,
     ):
         super().__init__(observation_space, features_dim)
-
-        assert (
-            "positions" in observation_space.spaces
-        ), "Token-sequence observation required"
-        self.dice_roll_dim = 6
-        self.embed_dim = net_config.token_embed_dim
-
-        T, N = observation_space["positions"].shape
-        self.T = T
-        self.N = N
-        self.pos_emb = nn.Embedding(config.PATH_LENGTH, self.embed_dim)
-        self.color_emb = nn.Embedding(4, self.embed_dim)
-        self.piece_index_embed = nn.Embedding(4, self.embed_dim)
-        self.time_emb = nn.Embedding(T, self.embed_dim)
-        self.frame_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
-        self.player_emb = nn.Embedding(4, self.embed_dim)  # Player who made the move
-        self.curr_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
         self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
 
         encoder_layer = nn.TransformerEncoderLayer(
@@ -168,47 +198,27 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
         )
 
     def forward(self, observations: dict) -> torch.Tensor:
-        # Token-sequence path only
-        positions = observations["positions"].long()
-        if positions.dim() == 2:
-            positions = positions.unsqueeze(0)
-        dice_hist = observations["dice_history"].long()
-        if dice_hist.dim() == 1:
-            dice_hist = dice_hist.unsqueeze(0)
-        player_hist = observations["player_history"].long()
-        if player_hist.dim() == 1:
-            player_hist = player_hist.unsqueeze(0)
-        token_mask = observations["token_mask"].to(dtype=torch.bool)
-        if token_mask.dim() == 2:
-            token_mask = token_mask.unsqueeze(0)
-        token_colors = observations["token_colors"].long()
-        if token_colors.dim() == 1:
-            token_colors = token_colors.unsqueeze(0)
-        current_dice = observations["current_dice"].long()
-        if current_dice.dim() == 1:
-            current_dice = current_dice
+        (
+            positions,
+            dice_hist,
+            player_hist,
+            token_mask,
+            token_colors,
+            current_dice,
+            B,
+            T,
+            N,
+            device,
+        ) = self._prepare_inputs(observations)
 
-        B, T, N = positions.shape
-        device = positions.device
-        pos_e = self.pos_emb(positions)  # (B,T,N,d)
-        colors = token_colors.unsqueeze(1).expand(B, T, N)
-        color_e = self.color_emb(colors)
-        piece_idx = (torch.arange(N, device=device) % 4).view(1, 1, N).expand(B, T, N)
-        piece_e = self.piece_index_embed(piece_idx)
-        time_idx = torch.arange(T, device=device).view(1, T, 1).expand(B, T, N)
-        time_e = self.time_emb(time_idx)
-        frame_d = dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
-        frame_d_e = self.frame_dice_emb(frame_d)
-        player_idx = player_hist.view(B, T, 1).expand(B, T, N)
-        player_e = self.player_emb(player_idx)
-
-        tok = pos_e + color_e + piece_e + time_e + frame_d_e + player_e
+        tok = self._sum_token_embeddings(
+            positions, dice_hist, player_hist, token_mask, token_colors, B, T, N, device
+        )
         seq = tok.view(B, T * N, self.embed_dim)
         mask = token_mask.view(B, T * N)
 
         cls = self.cls_token.expand(B, 1, -1)
-        curr_d = current_dice.clamp(0, self.dice_roll_dim)
-        dice_tok = self.curr_dice_emb(curr_d.squeeze(1)).unsqueeze(1)
+        dice_tok = self._embed_current_dice(current_dice).unsqueeze(1)
         sequence = torch.cat([cls, dice_tok, seq], dim=1)
 
         pad = torch.zeros(B, 2, dtype=torch.bool, device=device)
