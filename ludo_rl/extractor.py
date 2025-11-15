@@ -11,9 +11,9 @@ class BaseTokenSeqExtractor(BaseFeaturesExtractor):
 
     def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
         super().__init__(observation_space, features_dim)
-        assert (
-            "positions" in observation_space.spaces
-        ), "Token-sequence observation required"
+        assert "positions" in observation_space.spaces, (
+            "Token-sequence observation required"
+        )
         pos_shape = observation_space["positions"].shape  # (T, 16)
         self.T = pos_shape[0]
         self.N = pos_shape[1]
@@ -81,7 +81,9 @@ class BaseTokenSeqExtractor(BaseFeaturesExtractor):
         piece_e = self.piece_idx_emb(piece_idx)
         time_idx = torch.arange(T, device=device).view(1, T, 1).expand(B, T, N)
         time_e = self.time_emb(time_idx)
-        frame_dice = dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
+        frame_dice = (
+            dice_hist.clamp(0, self.dice_roll_dim).view(B, T, 1).expand(B, T, N)
+        )
         frame_dice_e = self.frame_dice_emb(frame_dice)
         player_idx = player_hist.view(B, T, 1).expand(B, T, N)
         player_e = self.player_emb(player_idx)
@@ -176,20 +178,21 @@ class LudoTransformerExtractor(BaseTokenSeqExtractor):
         self,
         observation_space: gym.spaces.Dict,
         features_dim: int = 128,
-        nhead: int = 4,
     ):
         super().__init__(observation_space, features_dim)
         self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.embed_dim,
-            nhead=nhead,
-            dim_feedforward=self.embed_dim * 3,
+            nhead=net_config.trans_nhead,
+            dim_feedforward=self.embed_dim * int(net_config.trans_ff_mult),
             dropout=0.1,
             activation="gelu",
             batch_first=True,
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer, num_layers=int(net_config.trans_num_layers)
+        )
         self.output_norm = nn.LayerNorm(self.embed_dim)
         self.head = nn.Sequential(
             nn.Linear(self.embed_dim, features_dim),

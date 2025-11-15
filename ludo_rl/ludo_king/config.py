@@ -64,6 +64,11 @@ class NetworkConfig:
         default_factory=lambda: [int(x) for x in os.getenv("VF", "64").split(",")]
     )
     use_scheduler: bool = True
+    # Transformer hyperparameters (configurable via env)
+    trans_nhead: int = int(os.getenv("TRANS_NHEAD", 4))
+    trans_num_layers: int = int(os.getenv("TRANS_NUM_LAYERS", 2))
+    # Feed-forward layer size multiplier relative to token/embed dim
+    trans_ff_mult: int = int(os.getenv("TRANS_FF_MULT", 3))
 
 
 @dataclass(slots=True)
