@@ -11,6 +11,13 @@ from .ludo_king.config import config as king_config
 from .ludo_king.config import reward_config
 from .ludo_king.game import Game
 from .ludo_king.player import Player
+from .ludo_king.reward import (
+    compute_blockade_hits_bonus,
+    compute_draw_reward,
+    compute_invalid_action_penalty,
+    compute_skipped_turn_penalty,
+    compute_terminal_reward,
+)
 from .ludo_king.simulator import Simulator
 from .ludo_king.types import Color
 from .strategy.registry import STRATEGY_REGISTRY
@@ -233,7 +240,7 @@ class LudoEnv(gym.Env):
         mv = self.move_map.get(int(action))
         if mv is None:
             # Invalid action - penalize and pass turn to opponents
-            reward += reward_config.lose
+            reward += compute_invalid_action_penalty()
             self.current_turn += 1
             self.sim.step_opponents_only()
             self.current_dice_roll = self.game.roll_dice()
@@ -246,24 +253,9 @@ class LudoEnv(gym.Env):
         result = self.game.apply_move(mv)
         extra_turn = result.extra_turn and result.events.move_resolved
 
-        # Add rewards based on move result
+        # Add rewards based on move result (always computed in reward.py)
         if result.rewards is not None:
             reward += float(result.rewards.get(self.agent_index, 0.0))
-        else:
-            # Rewards is None when move failed (e.g., hit blockade)
-            # Provide explicit feedback for these events
-            if result.events.finished:
-                # Finishing a piece
-                reward += reward_config.finish
-            if result.events.knockouts:
-                # Captured opponent pieces
-                reward += reward_config.capture * len(result.events.knockouts)
-            if result.events.hit_blockade and not result.events.move_resolved:
-                # Hit a blockade - move failed
-                reward += reward_config.hit_blockade
-            if result.events.blockades:
-                # Formed a blockade
-                reward += reward_config.blockade
 
         # 3) If no extra turn, opponents play until agent's turn
         # Reset summaries here since this is the agent's turn
@@ -273,8 +265,8 @@ class LudoEnv(gym.Env):
 
             # Check if opponents hit agent's blockades during their turns
             if self.game.board.blockade_hits.sum() > 0:
-                reward += (
-                    reward_config.blockade_hit * self.game.board.blockade_hits.sum()
+                reward += compute_blockade_hits_bonus(
+                    float(self.game.board.blockade_hits.sum())
                 )
 
         # 4) Prepare next observation
@@ -287,19 +279,12 @@ class LudoEnv(gym.Env):
         if terminated:
             # Rank: number of players who have won at this point
             rank = sum(p.check_won() for p in self.game.players)
-            if rank == 1:
-                reward += reward_config.win
-            else:
-                reward += (
-                    reward_config.lose
-                    * (len(self.game.players) - rank + 1)
-                    / len(self.game.players)
-                )
+            reward += compute_terminal_reward(len(self.game.players), rank)
             info["final_rank"] = rank
             return obs, reward, terminated, truncated, info
 
         if truncated:
-            reward += reward_config.draw
+            reward += compute_draw_reward()
             info["final_rank"] = 0
             info["TimeLimit.truncated"] = True
             return obs, reward, terminated, truncated, info
@@ -307,7 +292,7 @@ class LudoEnv(gym.Env):
         # 6) If agent has no valid moves for next turn, simulate opponents until it does
         # Don't reset summaries here - accumulate all activity between agent turns
         while not np.any(info["action_mask"]) and not terminated and not truncated:
-            reward += reward_config.skipped_turn
+            reward += compute_skipped_turn_penalty()
             self.current_turn += 1
             if self.current_turn >= self.max_game_turns:
                 truncated = True

@@ -69,3 +69,45 @@ def compute_move_rewards(
     rewards[mover_index] += mover_reward
 
     return rewards
+
+
+# --- Supplemental reward helpers to centralize all reward math ---
+
+
+def compute_invalid_action_penalty() -> float:
+    """Penalty applied when the agent selects an invalid action.
+
+    Centralized here to keep env/game logic free of reward constants.
+    """
+    return float(reward_config.lose)
+
+
+def compute_blockade_hits_bonus(count: float) -> float:
+    """Reward bonus proportional to the number of opponent hits on agent blockades."""
+    return float(reward_config.blockade_hit) * float(count)
+
+
+def compute_terminal_reward(num_players: int, rank: int) -> float:
+    """Return terminal reward for the agent based on final rank.
+
+    rank == 1 => win reward
+    otherwise => scaled lose reward (higher rank -> smaller penalty)
+    """
+    if rank == 1:
+        return float(reward_config.win)
+    # Scale the (negative) lose reward linearly by placement severity:
+    # 2nd -> small fraction, ... -> last -> full penalty
+    # Example (4 players): rank 2 => 1/3, rank 3 => 2/3, rank 4 => 1
+    den = max(1, num_players - 1)
+    scale = float(max(1, rank) - 1) / float(den)
+    return float(reward_config.lose) * scale
+
+
+def compute_draw_reward() -> float:
+    """Reward for truncated (draw) episodes."""
+    return float(reward_config.draw)
+
+
+def compute_skipped_turn_penalty() -> float:
+    """Small negative reward when the agent has to skip a turn (no legal moves)."""
+    return float(reward_config.skipped_turn)

@@ -113,12 +113,20 @@ class Game:
             if any(c >= 2 for c in counts.values()):
                 events.hit_blockade = True
                 events.move_resolved = False
+                # Even when a move is blocked, compute rewards centrally
+                rewards = compute_move_rewards(
+                    num_players=len(self.players),
+                    mover_index=mv.player_index,
+                    old_position=old,
+                    new_position=old,
+                    events=events,
+                )
                 return MoveResult(
                     old_position=old,
                     new_position=old,
                     events=events,
                     extra_turn=False,
-                    rewards=None,
+                    rewards=rewards,
                 )
 
         if old == 0 and mv.new_pos == config.START_POSITION:
