@@ -34,16 +34,18 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
             nn.GELU(),
             nn.LayerNorm(self.embed_dim),
         )
+        bidirectional = True
         self.lstm = nn.LSTM(
             self.embed_dim,
             self.embed_dim,
             num_layers=2,
             dropout=0.1,
-            bidirectional=True,
+            bidirectional=bidirectional,
             batch_first=True,
         )
-        # Features: pool over tokens, concat current dice
-        self.total_feature_dim = self.embed_dim * 2
+        # Features: pool over tokens (token_feat_dim), then concat current dice (embed_dim)
+        self.token_feat_dim = self.embed_dim * (2 if bidirectional else 1)
+        self.total_feature_dim = self.token_feat_dim + self.embed_dim
         self.feature_norm = nn.LayerNorm(self.total_feature_dim)
         self.head = nn.Sequential(
             nn.Linear(self.total_feature_dim, features_dim),
@@ -100,11 +102,11 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
         tok_reshaped = tok_permuted.contiguous().view(
             B * N, T, self.embed_dim
         )  # (B*N, T, d)
-        lstm_out, _ = self.lstm(tok_reshaped)  # (B*N, T, d)
+        lstm_out, _ = self.lstm(tok_reshaped)  # (B*N, T, token_feat_dim)
         # Take the last time step
-        last_hidden = lstm_out[:, -1, :]  # (B*N, d)
+        last_hidden = lstm_out[:, -1, :]  # (B*N, token_feat_dim)
         # Reshape back to (B, N, d)
-        pooled_per_token = last_hidden.view(B, N, self.embed_dim)
+        pooled_per_token = last_hidden.view(B, N, self.token_feat_dim)
 
         # Pool over tokens, masking invalid ones
         token_valid = token_mask.any(dim=1)  # (B, N) - valid if any frame has data
