@@ -214,6 +214,7 @@ if __name__ == "__main__":
         model.learn(
             total_timesteps=args.total_timesteps,
             callback=CallbackList(callbacks),
+            log_interval=5
         )
 
     # --- Save the Final Model ---

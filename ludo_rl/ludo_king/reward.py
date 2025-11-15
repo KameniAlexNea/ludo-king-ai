@@ -99,10 +99,20 @@ def _rel_positions_for_agent(game: "Game", agent_index: int):
 
 
 def _cap_opp_probability(game: "Game", agent_color: int, my_rels: list[int]) -> float:
-    """Masked-average by active (ring) tokens, then scale by active ratio.
+    """Approx probability to capture within one ply using set membership.
 
-    Effectively returns sum_per_piece_prob / 4 to retain global context.
+    Masked-average by active (ring) tokens, then scaled by active ratio -> sum/4.
     """
+    opp_abs = set()
+    for pl in game.players:
+        if int(pl.color) == agent_color:
+            continue
+        for p in pl.pieces:
+            rp = int(p.position)
+            if 1 <= rp <= king_config.MAIN_TRACK_END:
+                opp_abs.add(game.board.absolute_position(int(pl.color), rp))
+    safe_abs = set(king_config.SAFE_SQUARES_ABS)
+
     sum_probs = 0.0
     active = 0
     for r in my_rels:
@@ -112,16 +122,12 @@ def _cap_opp_probability(game: "Game", agent_color: int, my_rels: list[int]) -> 
                 t = r + k
                 if 1 <= t <= king_config.MAIN_TRACK_END:
                     abs_pos = game.board.absolute_position(agent_color, t)
-                    if abs_pos in king_config.SAFE_SQUARES_ABS:
+                    if abs_pos in safe_abs:
                         continue
-                    occ = game.board.pieces_at_absolute(
-                        abs_pos, exclude_color=agent_color
-                    )
-                    if len(occ) >= 1:
+                    if abs_pos in opp_abs:
                         ks += 1
             sum_probs += ks / 6.0
             active += 1
-    # masked-average-by-active * active_ratio == (sum_probs/active) * (active/4) == sum_probs/4
     return (sum_probs / 4.0) if active > 0 else 0.0
 
 
@@ -132,29 +138,34 @@ def _cap_risk_probability_depth(
     opps: list[tuple[int, list[int]]],
     depth: int,
 ) -> float:
-    """Approx probability of being captured within depth plies.
+    """Approx probability of being captured within depth plies using reachability sets.
 
-    Masked-average by active ring tokens, then multiply by active ratio -> sum/4.
+    Masked-average by active ring tokens, scaled by active ratio -> sum/4.
     """
+    # Precompute opponent reachability: for each k in 1..6, absolute squares they can hit next move
+    reach_by_k: list[set[int]] = [set() for _ in range(7)]
+    for oc, opp_rels in opps:
+        for rop in opp_rels:
+            if 1 <= rop <= king_config.MAIN_TRACK_END:
+                for k in range(1, 7):
+                    t = rop + k
+                    if 1 <= t <= king_config.MAIN_TRACK_END:
+                        reach_by_k[k].add(game.board.absolute_position(oc, t))
+
+    safe_abs = set(king_config.SAFE_SQUARES_ABS)
     sum_probs = 0.0
     active = 0
     for r in my_rels:
         if 1 <= r <= king_config.MAIN_TRACK_END:
             abs_my = game.board.absolute_position(agent_color, r)
-            if abs_my in king_config.SAFE_SQUARES_ABS:
-                # Active, but risk=0 on global safe
+            if abs_my in safe_abs:
                 active += 1
                 continue
-            ks_union = set()
-            for oc, opp_rels in opps:
-                for rop in opp_rels:
-                    if 1 <= rop <= king_config.MAIN_TRACK_END:
-                        for k in range(1, 7):
-                            t = rop + k
-                            if 1 <= t <= king_config.MAIN_TRACK_END:
-                                if game.board.absolute_position(oc, t) == abs_my:
-                                    ks_union.add(k)
-            p1 = len(ks_union) / 6.0
+            cnt = 0
+            for k in range(1, 7):
+                if abs_my in reach_by_k[k]:
+                    cnt += 1
+            p1 = cnt / 6.0
             p_depth = 1.0 - math.pow(1.0 - p1, max(1, depth))
             sum_probs += p_depth
             active += 1
