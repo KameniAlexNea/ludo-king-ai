@@ -12,8 +12,8 @@ from ludo_rl.ludo_king.types import Color, Move
 class BlockadeRewardTests(unittest.TestCase):
     """Test that blockade scenarios are handled correctly."""
 
-    def test_hit_blockade_returns_none_rewards(self):
-        """Verify that hitting a blockade returns None for rewards."""
+    def test_hit_blockade_returns_penalty_rewards(self):
+        """Verify that hitting a blockade returns a penalty in rewards (not None)."""
         players = [
             Player(Color.RED),
             Player(Color.GREEN),
@@ -41,10 +41,18 @@ class BlockadeRewardTests(unittest.TestCase):
         self.assertTrue(result.events.hit_blockade, "Should hit blockade")
         self.assertFalse(result.events.move_resolved, "Move should not resolve")
 
-        # Key assertion: rewards should be None
-        self.assertIsNone(
-            result.rewards, "Rewards should be None when hitting blockade"
+        # Rewards are always computed centrally; mover gets hit_blockade penalty
+        self.assertIsNotNone(result.rewards, "Rewards should be computed on blockade")
+        self.assertIn(0, result.rewards)
+        self.assertAlmostEqual(
+            result.rewards[0],
+            reward_config.hit_blockade,
+            msg="Mover gets blockade penalty",
         )
+        # Other players should not be affected
+        for i in [1, 2, 3]:
+            self.assertIn(i, result.rewards)
+            self.assertEqual(result.rewards[i], 0.0)
 
         # Piece should not have moved
         self.assertEqual(
@@ -120,10 +128,9 @@ class BlockadeRewardTests(unittest.TestCase):
         self.assertTrue(result.events.hit_blockade, "Should detect blockade hit")
         self.assertFalse(result.events.move_resolved, "Move should fail")
 
-        # In the env, this should result in hit_blockade penalty
-        # We test the logic by checking the reward config
-        expected_penalty = reward_config.hit_blockade
-        self.assertLess(expected_penalty, 0, "Blockade penalty should be negative")
+        # Mover gets blockade penalty in rewards
+        self.assertIsNotNone(result.rewards)
+        self.assertAlmostEqual(result.rewards[0], reward_config.hit_blockade)
 
     def test_successful_move_has_rewards(self):
         """Verify that successful moves always have rewards dict."""
