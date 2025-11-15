@@ -20,9 +20,9 @@ class Game:
 
     def __post_init__(self) -> None:
         # Board expects players indexed by Color id (0..3). Build a fixed map.
-        pieces_by_color: List[List[Piece]] = [[] for _ in range(4)]
+        pieces_by_color: List[List[Piece]] = [[] for _ in range(config.PIECES_PER_PLAYER)]
         for pl in self.players:
-            pieces_by_color[int(pl.color)] = list(pl.pieces)
+            pieces_by_color[int(pl.color)] = pl.pieces
         colors = list(range(len(pieces_by_color)))
         self.board = Board(players=pieces_by_color, colors=colors)
 

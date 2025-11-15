@@ -4,9 +4,10 @@ from typing import Dict, List, Optional, Union
 from ludo_rl.ludo_king import Color, Game, Player
 from ludo_rl.ludo_king.piece import Piece as Token
 from ludo_rl.ludo_king.types import Move, MoveResult
-from ludo_rl.strategy.llm_agent import LLMStrategy
-from ludo_rl.strategy.registry import create as create_strategy
-from ludo_rl.strategy.rl_agent import RLStrategy
+from ludo_rl.strategy import LLMStrategy
+from ludo_rl.strategy import create as create_strategy
+from ludo_rl.strategy import RLStrategy
+from ludo_rl.strategy import HumanStrategy
 
 from .models import PlayerColor, PTOPlayerColor
 from .views.llm_config_ui import LLMProviderConfig, RLModelConfig
@@ -77,10 +78,7 @@ class GameManager:
             # Attach strategies to the two players
             for player, (_, strategy_name) in zip(game.players, active_specs):
                 player.strategy_name = strategy_name
-                try:
-                    player.strategy = create_strategy_instance(strategy_name, configs)
-                except KeyError:
-                    player.strategy_name = "human"
+                player.strategy = create_strategy_instance(strategy_name, configs)
             return game, state
 
         # Default: 4-player game (replace 'empty' with 'random')
@@ -93,17 +91,14 @@ class GameManager:
         state = GameState()
         for player, strategy_name in zip(game.players, norm_strategies):
             player.strategy_name = strategy_name
-            try:
-                player.strategy = create_strategy_instance(strategy_name, configs)
-            except KeyError:
-                player.strategy_name = "human"
+            player.strategy = create_strategy_instance(strategy_name, configs)
         return game, state
 
     def game_state_tokens(self, game: Game) -> Dict[PlayerColor, List[Token]]:
         """Extracts token information from the game state."""
         token_map: Dict[PlayerColor, List[Token]] = {c: [] for c in PlayerColor}
         for p in game.players:
-            token_map[PTOPlayerColor[p.color]] = [t for t in p.pieces]
+            token_map[PTOPlayerColor[p.color]] = p.pieces
         return token_map
 
     def is_human_turn(self, game: Game, state: GameState) -> bool:
@@ -111,7 +106,7 @@ class GameManager:
         if state.game_over:
             return False
         current_player = game.players[state.current_player_index]
-        return current_player.strategy_name.lower() == "human"
+        return isinstance(current_player.strategy, HumanStrategy)
 
     def get_human_move_options(
         self, game: Game, state: GameState, dice: int
