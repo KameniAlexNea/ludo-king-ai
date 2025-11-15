@@ -4,10 +4,8 @@ from typing import Dict, List, Optional, Union
 from ludo_rl.ludo_king import Color, Game, Player
 from ludo_rl.ludo_king.piece import Piece as Token
 from ludo_rl.ludo_king.types import Move, MoveResult
-from ludo_rl.strategy import LLMStrategy
+from ludo_rl.strategy import HumanStrategy, LLMStrategy, RLStrategy
 from ludo_rl.strategy import create as create_strategy
-from ludo_rl.strategy import RLStrategy
-from ludo_rl.strategy import HumanStrategy
 
 from .models import PlayerColor, PTOPlayerColor
 from .views.llm_config_ui import LLMProviderConfig, RLModelConfig
@@ -214,6 +212,16 @@ class GameManager:
 
         # Execute move
         result = game.apply_move(chosen_move)
+
+        # Notify strategies to update their per-player histories (post-move)
+        try:
+            for idx, pl in enumerate(game.players):
+                strat = getattr(pl, "strategy", None)
+                if strat and hasattr(strat, "update_history"):
+                    strat.update_history(game, state.current_player_index, dice)  # type: ignore[attr-defined]
+        except Exception:
+            # History updates are best-effort; do not break gameplay on failures
+            pass
 
         desc = f"Player {state.current_player_index} rolled {dice}: {self.serialize_move(state.current_player_index, chosen_move, result)}"
 
