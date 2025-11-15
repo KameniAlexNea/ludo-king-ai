@@ -91,9 +91,12 @@ def _rel_positions_for_agent(game: "Game", agent_index: int):
 
 
 def _cap_opp_probability(game: "Game", agent_color: int, my_rels: list[int]) -> float:
-    # Probability to capture on next move averaged across my tokens
-    total = 0.0
-    count = 0
+    """Masked-average by active (ring) tokens, then scale by active ratio.
+
+    Effectively returns sum_per_piece_prob / 4 to retain global context.
+    """
+    sum_probs = 0.0
+    active = 0
     for r in my_rels:
         if 1 <= r <= king_config.MAIN_TRACK_END:
             ks = 0
@@ -108,9 +111,10 @@ def _cap_opp_probability(game: "Game", agent_color: int, my_rels: list[int]) -> 
                     )
                     if len(occ) >= 1:
                         ks += 1
-            total += ks / 6.0
-            count += 1
-    return (total / max(1, count)) if count else 0.0
+            sum_probs += ks / 6.0
+            active += 1
+    # masked-average-by-active * active_ratio == (sum_probs/active) * (active/4) == sum_probs/4
+    return (sum_probs / 4.0) if active > 0 else 0.0
 
 
 def _cap_risk_probability_depth(
@@ -120,15 +124,18 @@ def _cap_risk_probability_depth(
     opps: list[tuple[int, list[int]]],
     depth: int,
 ) -> float:
-    # Approx probability my token gets captured within depth plies
-    total = 0.0
-    count = 0
+    """Approx probability of being captured within depth plies.
+
+    Masked-average by active ring tokens, then multiply by active ratio -> sum/4.
+    """
+    sum_probs = 0.0
+    active = 0
     for r in my_rels:
         if 1 <= r <= king_config.MAIN_TRACK_END:
             abs_my = game.board.absolute_position(agent_color, r)
             if abs_my in king_config.SAFE_SQUARES_ABS:
-                total += 0.0
-                count += 1
+                # Active, but risk=0 on global safe
+                active += 1
                 continue
             ks_union = set()
             for oc, opp_rels in opps:
@@ -141,27 +148,40 @@ def _cap_risk_probability_depth(
                                     ks_union.add(k)
             p1 = len(ks_union) / 6.0
             p_depth = 1.0 - math.pow(1.0 - p1, max(1, depth))
-            total += p_depth
-            count += 1
-    return (total / max(1, count)) if count else 0.0
+            sum_probs += p_depth
+            active += 1
+    return (sum_probs / 4.0) if active > 0 else 0.0
 
 
 def _finish_opportunity_probability(my_rels: list[int]) -> float:
-    # Probability to finish a piece on next move (home column only)
-    ps = []
+    """Probability to finish on next move (home column), scaled by active_ratio.
+
+    Returns sum(prob_per_piece)/4.
+    """
+    sum_probs = 0.0
+    active = 0
     for r in my_rels:
         if king_config.HOME_COLUMN_START <= r <= king_config.HOME_FINISH - 1:
             need = king_config.HOME_FINISH - r
-            ps.append(1.0 / 6.0 if 1 <= need <= 6 else 0.0)
-    return (sum(ps) / max(1, len(my_rels))) if my_rels else 0.0
+            sum_probs += (1.0 / 6.0) if 1 <= need <= 6 else 0.0
+            active += 1
+    return (sum_probs / 4.0) if active > 0 else 0.0
 
 
 def _progress_normalized(my_rels: list[int]) -> float:
-    vals = [
-        (max(0, min(r, king_config.HOME_FINISH)) / king_config.HOME_FINISH)
-        for r in my_rels
-    ]
-    return (sum(vals) / max(1, len(vals))) if vals else 0.0
+    """Normalized progress averaged over active tokens, scaled by active_ratio.
+
+    Active tokens are those on the board (r > 0). Returns sum(norm)/4.
+    """
+    sum_norm = 0.0
+    active = 0
+    for r in my_rels:
+        if r > 0:
+            sum_norm += (
+                max(0, min(r, king_config.HOME_FINISH)) / king_config.HOME_FINISH
+            )
+            active += 1
+    return (sum_norm / 4.0) if active > 0 else 0.0
 
 
 def compute_state_potential(game, agent_index: int, depth: int) -> float:
