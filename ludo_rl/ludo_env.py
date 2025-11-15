@@ -268,6 +268,8 @@ class LudoEnv(gym.Env):
                 reward += compute_blockade_hits_bonus(
                     float(self.game.board.blockade_hits.sum())
                 )
+            # Add any opponent-driven rewards that affect agent (urgency signals)
+            reward += float(self.sim._agent_reward_acc)
 
         # 4) Prepare next observation
         self.current_dice_roll = self.game.roll_dice()
@@ -301,6 +303,8 @@ class LudoEnv(gym.Env):
             self.current_dice_roll = self.game.roll_dice()
             obs = self._build_observation()
             info = self._get_info()
+            # Accumulate urgency signals during prolonged opponent rounds
+            reward += float(self.sim._agent_reward_acc)
             terminated, truncated = self._check_game_over()
 
         if truncated:

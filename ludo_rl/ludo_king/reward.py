@@ -54,9 +54,17 @@ def compute_move_rewards(
 
     if _get(events, "exited_home"):
         mover_reward += reward_config.exit_home
+        # Penalize opponents slightly when mover exits home (urgency signal)
+        for idx in range(num_players):
+            if idx != mover_index:
+                rewards[idx] += reward_config.opp_exit_home_penalty
 
     if _get(events, "finished"):
         mover_reward += reward_config.finish
+        # Penalize opponents when mover finishes a piece
+        for idx in range(num_players):
+            if idx != mover_index:
+                rewards[idx] += reward_config.opp_piece_finished_penalty
 
     knockouts = _get(events, "knockouts", []) or []
     if knockouts:

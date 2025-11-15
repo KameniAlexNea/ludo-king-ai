@@ -199,6 +199,12 @@ class Game:
             events=events,
         )
 
+        # If the mover's player just won (all pieces finished), add small opponent penalty
+        if self.players[mv.player_index].check_won():
+            for idx in range(len(self.players)):
+                if idx != mv.player_index:
+                    rewards[idx] += reward_config.opp_win_penalty
+
         # Add potential-based shaping
         if reward_config.shaping_use:
             phi_after = compute_state_potential(

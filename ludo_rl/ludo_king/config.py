@@ -95,17 +95,22 @@ class Reward:
     skipped_turn: float = -0.01
 
     # Risk/Opportunity shaping (potential-based) parameters
-    shaping_use: bool = bool(int(os.getenv("SHAPING_USE", "1")))
-    shaping_alpha: float = float(os.getenv("SHAPING_ALPHA", "2.0"))
-    shaping_gamma: float = float(os.getenv("SHAPING_GAMMA", "0.99"))
+    shaping_use: bool = bool(int(os.getenv("SHAPING_USE", 1)))
+    shaping_alpha: float = float(os.getenv("SHAPING_ALPHA", 2.0))
+    shaping_gamma: float = float(os.getenv("SHAPING_GAMMA", 0.99))
     ro_depth: int = int(
-        os.getenv("RO_DEPTH", "3")
+        os.getenv("RO_DEPTH", 3)
     )  # lookahead depth in plies (approximate)
     # Weights for potential components
-    ro_w_progress: float = float(os.getenv("RO_W_PROGRESS", "0.3"))
-    ro_w_cap_opp: float = float(os.getenv("RO_W_CAP_OPP", "0.4"))
-    ro_w_cap_risk: float = float(os.getenv("RO_W_CAP_RISK", "0.6"))
-    ro_w_finish_opp: float = float(os.getenv("RO_W_FINISH_OPP", "0.3"))
+    ro_w_progress: float = float(os.getenv("RO_W_PROGRESS", 0.3))
+    ro_w_cap_opp: float = float(os.getenv("RO_W_CAP_OPP", 0.4))
+    ro_w_cap_risk: float = float(os.getenv("RO_W_CAP_RISK", 0.6))
+    ro_w_finish_opp: float = float(os.getenv("RO_W_FINISH_OPP", 0.3))
+
+    # Opponent progress penalties (sparse signals to encourage urgency)
+    opp_exit_home_penalty: float = float(os.getenv("OPP_EXIT_HOME_PENALTY", -0.05 * COEF))
+    opp_piece_finished_penalty: float = float(os.getenv("OPP_PIECE_FINISHED_PENALTY", -0.3 * COEF))
+    opp_win_penalty: float = float(os.getenv("OPP_WIN_PENALTY", -0.2 * COEF))
 
 
 config = Config()
