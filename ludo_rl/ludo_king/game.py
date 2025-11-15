@@ -5,10 +5,10 @@ from dataclasses import dataclass, field
 from typing import List
 
 from .board import Board
-from .config import config
+from .config import config, reward_config
 from .piece import Piece
 from .player import Player
-from .reward import compute_move_rewards
+from .reward import compute_move_rewards, compute_state_potential, shaping_delta
 from .types import Move, MoveEvents, MoveResult
 
 
@@ -102,6 +102,13 @@ class Game:
                 cur = nxt
             return path
 
+        # Potential before applying the move (for shaping)
+        phi_before = (
+            compute_state_potential(self, mv.player_index, depth=reward_config.ro_depth)
+            if reward_config.shaping_use
+            else 0.0
+        )
+
         path = iter_ring_path(old, mv.new_pos)
         for rel in path:
             abs_pos = self.board.absolute_position(player.color, rel)
@@ -121,6 +128,12 @@ class Game:
                     new_position=old,
                     events=events,
                 )
+                if reward_config.shaping_use:
+                    # No state change; shaping delta is (gamma-1)*phi_before
+                    sd = shaping_delta(
+                        phi_before, phi_before, gamma=reward_config.shaping_gamma
+                    )
+                    rewards[mv.player_index] += reward_config.shaping_alpha * sd
                 return MoveResult(
                     old_position=old,
                     new_position=old,
@@ -185,6 +198,14 @@ class Game:
             new_position=pc.position,
             events=events,
         )
+
+        # Add potential-based shaping
+        if reward_config.shaping_use:
+            phi_after = compute_state_potential(
+                self, mv.player_index, depth=reward_config.ro_depth
+            )
+            sd = shaping_delta(phi_before, phi_after, gamma=reward_config.shaping_gamma)
+            rewards[mv.player_index] += reward_config.shaping_alpha * sd
 
         return MoveResult(
             old_position=old,
