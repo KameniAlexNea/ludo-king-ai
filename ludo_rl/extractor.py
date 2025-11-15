@@ -12,9 +12,9 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
     def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
         super().__init__(observation_space, features_dim)
         # New token-sequence only
-        assert "positions" in observation_space.spaces, (
-            "Token-sequence observation required"
-        )
+        assert (
+            "positions" in observation_space.spaces
+        ), "Token-sequence observation required"
         pos_shape = observation_space["positions"].shape  # (T, 16)
         self.T = pos_shape[0]
         self.N = pos_shape[1]
@@ -34,9 +34,16 @@ class LudoCnnExtractor(BaseFeaturesExtractor):
             nn.GELU(),
             nn.LayerNorm(self.embed_dim),
         )
-        self.lstm = nn.LSTM(self.embed_dim, self.embed_dim, batch_first=True)
+        self.lstm = nn.LSTM(
+            self.embed_dim,
+            self.embed_dim,
+            num_layers=2,
+            dropout=0.1,
+            bidirectional=True,
+            batch_first=True,
+        )
         # Features: pool over tokens, concat current dice
-        self.total_feature_dim = self.embed_dim + self.embed_dim
+        self.total_feature_dim = self.embed_dim * 2
         self.feature_norm = nn.LayerNorm(self.total_feature_dim)
         self.head = nn.Sequential(
             nn.Linear(self.total_feature_dim, features_dim),
@@ -124,9 +131,9 @@ class LudoTransformerExtractor(BaseFeaturesExtractor):
     ):
         super().__init__(observation_space, features_dim)
 
-        assert "positions" in observation_space.spaces, (
-            "Token-sequence observation required"
-        )
+        assert (
+            "positions" in observation_space.spaces
+        ), "Token-sequence observation required"
         self.dice_roll_dim = 6
         self.embed_dim = net_config.token_embed_dim
 
