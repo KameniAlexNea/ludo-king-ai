@@ -60,6 +60,7 @@ class NetworkConfig:
     pooled_output_size: int = 4
     pi: list[int] = field(default_factory=lambda: [64])
     vf: list[int] = field(default_factory=lambda: [64])
+    use_scheduler: bool = False
 
 
 @dataclass(slots=True)
@@ -86,7 +87,7 @@ class Reward:
     got_capture: float = -0.5 * COEF
     blockade: float = 0.15 * COEF
     hit_blockade: float = -0.1 * COEF
-    blockade_hit: float = 0.1 * COEF  # Bonus when opponent hits your blockade
+    blockade_hit: float = 0.1 * COEF
     exit_home: float = 0.1 * COEF
     progress: float = 0.01
     safe_position: float = 0.05 * COEF
@@ -95,10 +96,10 @@ class Reward:
 
     # Risk/Opportunity shaping (potential-based) parameters
     shaping_use: bool = bool(int(os.getenv("SHAPING_USE", "1")))
-    shaping_alpha: float = float(os.getenv("SHAPING_ALPHA", "0.5"))
+    shaping_alpha: float = float(os.getenv("SHAPING_ALPHA", "2.0"))
     shaping_gamma: float = float(os.getenv("SHAPING_GAMMA", "0.99"))
     ro_depth: int = int(
-        os.getenv("RO_DEPTH", "2")
+        os.getenv("RO_DEPTH", "3")
     )  # lookahead depth in plies (approximate)
     # Weights for potential components
     ro_w_progress: float = float(os.getenv("RO_W_PROGRESS", "0.3"))

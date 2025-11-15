@@ -1,6 +1,5 @@
 import math
 
-
 from ludo_rl.ludo_king.config import reward_config
 from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo_king.player import Player

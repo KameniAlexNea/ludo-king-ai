@@ -56,7 +56,7 @@ class LudoEnvTests(unittest.TestCase):
         ):
             self.env.move_map = {}
             obs, reward, terminated, truncated, info = self.env.step(0)
-        self.assertEqual(reward, reward_config.lose)
+        self.assertEqual(reward, reward_config.skipped_turn)
         self.assertFalse(terminated)
         self.assertFalse(truncated)
         self.assertEqual(obs["positions"].shape, (10, 16))

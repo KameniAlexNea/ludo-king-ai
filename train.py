@@ -137,8 +137,10 @@ if __name__ == "__main__":
         clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
         ent_coef=args.ent_coef,
         device=args.device,
-        learning_rate=lr_schedule(
-            lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
+        learning_rate=(
+            lr_schedule(lr_min=args.learning_rate * 0.6, lr_max=args.learning_rate)
+            if net_config.use_scheduler
+            else args.learning_rate
         ),
         target_kl=args.target_kl,
         vf_coef=args.vf_coef,

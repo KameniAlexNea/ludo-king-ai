@@ -197,7 +197,7 @@ def compute_invalid_action_penalty() -> float:
 
     Centralized here to keep env/game logic free of reward constants.
     """
-    return float(reward_config.lose)
+    return reward_config.skipped_turn
 
 
 def compute_blockade_hits_bonus(count: float) -> float:
