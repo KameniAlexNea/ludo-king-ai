@@ -5,41 +5,49 @@ import os
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Sequence
+from typing import List, Sequence
 
 import numpy as np
 import torch
 from dotenv import load_dotenv
 from loguru import logger
 from sb3_contrib import MaskablePPO
+from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecNormalize
 
-from ludo_rl.ludo_king.config import config
-from ludo_rl.ludo_king.game import LudoGame
+from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
+from ludo_rl.ludo_env import LudoEnv
+from ludo_rl.ludo_king.config import net_config
+from ludo_rl.ludo_king.player import Player
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
+from ludo_rl.strategy.registry import available as available_strategies
 
 load_dotenv()
 
 
 @dataclass(slots=True)
 class SampleBatch:
-    board: np.ndarray
-    dice: np.ndarray
-    mask: np.ndarray
+    positions: np.ndarray
+    dice_history: np.ndarray
+    token_mask: np.ndarray
+    player_history: np.ndarray
+    token_colors: np.ndarray
+    current_dice: np.ndarray
+    action_mask: np.ndarray
     action: np.ndarray
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Collect behaviour-cloning data from scripted strategies and fine-tune "
-            "a PPO checkpoint via supervised imitation."
+            "Iterative imitation learning with LudoEnv: collect N steps from a teacher, "
+            "then supervise-train the PPO policy; repeat for K iterations."
         )
     )
     parser.add_argument(
         "--model-path",
         type=str,
-        required=True,
-        help="Path to the PPO checkpoint to fine-tune.",
+        default="",
+        help="Path to the PPO checkpoint to fine-tune. If empty, initialise a fresh model like train.py.",
     )
     parser.add_argument(
         "--save-path",
@@ -52,40 +60,26 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=os.getenv("TEACHER", "homebody"),
         help=(
-            "Strategy name to imitate when using fixed teacher mode. "
-            "Ignored if --teacher-mode winner is selected."
-        ),
-    )
-    parser.add_argument(
-        "--teacher-mode",
-        type=str,
-        choices=("fixed", "winner"),
-        default=os.getenv("TEACHER_MODE", "winner"),
-        help=(
-            "Select 'fixed' to clone a specific strategy provided via --teacher, "
-            "or 'winner' to imitate whichever scripted player wins each game."
+            "Strategy name to imitate (fixed teacher that controls agent seat during collection)."
         ),
     )
     parser.add_argument(
         "--opponents",
         type=str,
-        default=os.getenv(
-            "OPPONENTS",
-            "homebody,heatseeker,retaliator,hoarder,rusher,finish_line,probability",
-        ),
-        help="Comma-separated list of four strategies to play each game with.",
+        default=os.getenv("OPPONENTS", ",".join(available_strategies())),
+        help="Comma-separated opponent strategy pool (env will select per-episode).",
     )
     parser.add_argument(
-        "--games",
+        "--collect-steps",
         type=int,
-        default=int(os.getenv("GAMES", 10000)),
-        help="Number of games to simulate for data collection.",
+        default=int(os.getenv("COLLECT_STEPS", 65536)),
+        help="Number of agent steps to collect per iteration.",
     )
     parser.add_argument(
-        "--max-samples",
+        "--iters",
         type=int,
-        default=None,
-        help="Optional hard cap on collected samples (useful for memory control).",
+        default=int(os.getenv("IMIT_ITERS", 20)),
+        help="Number of collect->train iterations.",
     )
     parser.add_argument(
         "--seed",
@@ -96,8 +90,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bc-epochs",
         type=int,
-        default=5,
-        help="Number of behaviour-cloning epochs to run after data collection.",
+        default=int(os.getenv("BC_EPOCHS", 1)),
+        help="Behaviour cloning epochs per iteration.",
     )
     parser.add_argument(
         "--bc-batch-size",
@@ -118,10 +112,9 @@ def parse_args() -> argparse.Namespace:
         help="Torch device to use for imitation updates (cpu / cuda / mps).",
     )
     parser.add_argument(
-        "--dataset-out",
-        type=str,
-        default=None,
-        help="Optional path to dump the collected dataset as NPZ for later use.",
+        "--use-transformer",
+        action="store_true",
+        help="When starting fresh (no --model-path), initialise a Transformer-based extractor like train.py.",
     )
     return parser.parse_args()
 
@@ -132,158 +125,83 @@ def validate_strategies(opponents: Sequence[str]) -> None:
         raise ValueError(f"Unknown strategy names: {', '.join(unknown)}")
 
 
-def build_board_stack(game: LudoGame, player_index: int) -> np.ndarray:
-    return game.build_board_tensor(player_index)
+def build_board_stack(env: LudoEnv, player_index: int) -> np.ndarray:
+    return env.game.board.build_tensor(player_index)  # type: ignore[attr-defined]
 
 
-def prepare_players(game: LudoGame, strategies: Sequence[str]) -> None:
-    for player, strategy_name in zip(game.players, strategies):
-        player.strategy_name = strategy_name
-        player._strategy = None  # Reset cached strategy instance
-        player.has_finished = False
-        for piece in player.pieces:
-            piece.position = 0
+def attach_strategy(player: Player, strategy_name: str, rng: random.Random) -> None:
+    cls = STRATEGY_REGISTRY[strategy_name]
+    try:
+        player.strategy = cls.create_instance(rng)
+    except NotImplementedError:
+        player.strategy = cls()
+    player.strategy_name = strategy_name  # type: ignore[attr-defined]
 
 
-def action_mask_from_moves(valid_moves: Sequence[Dict]) -> np.ndarray:
-    mask = np.zeros(config.PIECES_PER_PLAYER, dtype=bool)
-    for move in valid_moves:
-        mask[move["piece"].piece_id] = True
-    return mask
+def decide_with_teacher(env: LudoEnv, teacher: str, rng: random.Random) -> int:
+    """Select agent action (piece id 0..3) using the teacher strategy on current env state."""
+    dice = int(env.current_dice_roll)
+    legal = env.game.legal_moves(0, dice)
+    if not legal:
+        return 0
+    # Ensure agent has teacher strategy
+    attach_strategy(env.game.players[0], teacher, rng)
+    board_stack = build_board_stack(env, player_index=0)
+    decision = env.game.players[0].choose(board_stack, dice, legal)
+    mv = decision if decision is not None else rng.choice(legal)
+    return int(getattr(mv, "piece_id", 0))
 
 
-def collect_teacher_samples(
-    teacher: str | None,
-    teacher_mode: str,
-    opponents: Sequence[str],
-    games: int,
+def collect_fixed_teacher_steps(
+    env: LudoEnv,
+    teacher: str,
+    steps: int,
     rng: random.Random,
-    max_samples: int | None,
 ) -> SampleBatch:
-    records_board: List[np.ndarray] = []
-    records_dice: List[np.ndarray] = []
-    records_mask: List[np.ndarray] = []
-    records_action: List[int] = []
+    pos_list: List[np.ndarray] = []
+    dice_hist_list: List[np.ndarray] = []
+    token_mask_list: List[np.ndarray] = []
+    player_hist_list: List[np.ndarray] = []
+    token_colors_list: List[np.ndarray] = []
+    curr_dice_list: List[np.ndarray] = []
+    action_mask_list: List[np.ndarray] = []
+    actions: List[int] = []
 
-    dynamic_teacher = teacher_mode == "winner"
-
-    for index_game in range(games):
-        pool = list(opponents)
-        rng.shuffle(pool)
-
-        if dynamic_teacher:
-            strategies = pool[: config.NUM_PLAYERS]
-            if len(strategies) < config.NUM_PLAYERS:
-                raise ValueError(
-                    "Need at least four opponents to sample winner-based teachers."
-                )
+    obs, info = env.reset()
+    collected = 0
+    while collected < steps:
+        mask = info.get("action_mask") if isinstance(info, dict) else None
+        if mask is None or not np.any(mask):
+            # still store skipped observation? skip and let opponents play
+            action = 0
         else:
-            assert teacher is not None
-            others = [name for name in pool if name != teacher]
-            if len(others) < config.NUM_PLAYERS - 1:
-                raise ValueError(
-                    "Opponents list must provide at least three non-teacher strategies."
-                )
-            strategies = [teacher] + others[: config.NUM_PLAYERS - 1]
+            action = decide_with_teacher(env, teacher, rng)
 
-        game = LudoGame()
-        prepare_players(game, strategies)
+        # Record only when there is a valid mask (agent turn)
+        if mask is not None and np.any(mask):
+            pos_list.append(np.array(obs["positions"], copy=True))
+            dice_hist_list.append(np.array(obs["dice_history"], copy=True))
+            token_mask_list.append(np.array(obs["token_mask"], copy=True))
+            player_hist_list.append(np.array(obs["player_history"], copy=True))
+            token_colors_list.append(np.array(obs["token_colors"], copy=True))
+            curr_dice_list.append(np.array(obs["current_dice"], copy=True))
+            action_mask_list.append(np.array(mask, copy=True))
+            actions.append(int(action))
+            collected += 1
 
-        player_records: List[Dict[str, List[np.ndarray]]] = [
-            {"board": [], "dice": [], "mask": [], "action": []}
-            for _ in range(config.NUM_PLAYERS)
-        ]
-
-        finish_order: List[int] = []
-        current_index = 0
-        turns_taken = 0
-
-        while turns_taken < config.MAX_TURNS and len(finish_order) < config.NUM_PLAYERS:
-            player = game.players[current_index]
-            if player.has_won():
-                if current_index not in finish_order:
-                    finish_order.append(current_index)
-                current_index = (current_index + 1) % config.NUM_PLAYERS
-                continue
-
-            extra_turn = True
-            while extra_turn and len(finish_order) < config.NUM_PLAYERS:
-                dice_roll = game.roll_dice()
-                valid_moves = game.get_valid_moves(current_index, dice_roll)
-
-                if not valid_moves:
-                    extra_turn = False
-                    continue
-
-                board_stack = build_board_stack(game, current_index)
-                mask = action_mask_from_moves(valid_moves)
-                decision = player.decide(board_stack, dice_roll, valid_moves)
-                move = decision if decision is not None else rng.choice(valid_moves)
-
-                if mask.any():
-                    store = player_records[current_index]
-                    store["board"].append(board_stack)
-                    store["dice"].append(np.array([dice_roll - 1], dtype=np.float32))
-                    store["mask"].append(mask.astype(bool))
-                    store["action"].append(move["piece"].piece_id)
-
-                result = game.make_move(
-                    current_index, move["piece"], move["new_pos"], dice_roll
-                )
-
-                extra_turn = result["extra_turn"] and result["events"].get(
-                    "move_resolved", True
-                )
-
-                if player.has_won() and current_index not in finish_order:
-                    finish_order.append(current_index)
-
-            current_index = (current_index + 1) % config.NUM_PLAYERS
-            turns_taken += 1
-
-        if dynamic_teacher:
-            if finish_order:
-                winner_index = finish_order[0]
-                winner_store = player_records[winner_index]
-                records_board.extend(winner_store["board"])
-                records_dice.extend(winner_store["dice"])
-                records_mask.extend(winner_store["mask"])
-                records_action.extend(winner_store["action"])
-        else:
-            teacher_store = next(
-                (
-                    store
-                    for store, player in zip(player_records, game.players)
-                    if player.strategy_name == teacher
-                ),
-                None,
-            )
-            if teacher_store is not None:
-                records_board.extend(teacher_store["board"])
-                records_dice.extend(teacher_store["dice"])
-                records_mask.extend(teacher_store["mask"])
-                records_action.extend(teacher_store["action"])
-
-        if max_samples is not None and len(records_action) >= max_samples:
-            break
-
-    if not records_action:
-        raise RuntimeError(
-            "No samples were collected. Check strategy names and teacher selection."
-        )
-
-    if max_samples is not None and len(records_action) > max_samples:
-        trim = max_samples
-        records_board = records_board[:trim]
-        records_dice = records_dice[:trim]
-        records_mask = records_mask[:trim]
-        records_action = records_action[:trim]
+        obs, reward, terminated, truncated, info = env.step(int(action))
+        if terminated or truncated:
+            obs, info = env.reset()
 
     return SampleBatch(
-        board=np.stack(records_board, axis=0),
-        dice=np.stack(records_dice, axis=0),
-        mask=np.stack(records_mask, axis=0),
-        action=np.asarray(records_action, dtype=np.int64),
+        positions=np.stack(pos_list, axis=0),
+        dice_history=np.stack(dice_hist_list, axis=0),
+        token_mask=np.stack(token_mask_list, axis=0),
+        player_history=np.stack(player_hist_list, axis=0),
+        token_colors=np.stack(token_colors_list, axis=0),
+        current_dice=np.stack(curr_dice_list, axis=0),
+        action_mask=np.stack(action_mask_list, axis=0),
+        action=np.asarray(actions, dtype=np.int64),
     )
 
 
@@ -294,55 +212,65 @@ def save_dataset(dataset: SampleBatch, path: str | None) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         dest,
-        board=dataset.board,
-        dice=dataset.dice,
-        mask=dataset.mask,
+        positions=dataset.positions,
+        dice_history=dataset.dice_history,
+        token_mask=dataset.token_mask,
+        player_history=dataset.player_history,
+        token_colors=dataset.token_colors,
+        current_dice=dataset.current_dice,
+        action_mask=dataset.action_mask,
         action=dataset.action,
     )
     logger.info(f"Saved dataset with {dataset.action.shape[0]} samples to {dest}")
 
 
-def behaviour_clone(
-    model_path: str,
-    save_path: str,
+def behaviour_clone_step(
+    policy,
     dataset: SampleBatch,
     device: str,
     epochs: int,
     batch_size: int,
     lr: float,
-) -> None:
-    model = MaskablePPO.load(model_path, device=device)
-    policy = model.policy
+) -> float:
     policy.train()
-
     optimiser = torch.optim.Adam(policy.parameters(), lr=lr)
     num_samples = dataset.action.shape[0]
 
-    board_tensor = torch.tensor(dataset.board, dtype=torch.float32, device=device)
-    dice_tensor = torch.tensor(dataset.dice, dtype=torch.float32, device=device)
-    mask_tensor = torch.tensor(dataset.mask, dtype=torch.bool, device=device)
+    # Tensors for token-sequence observation
+    tens = {
+        "positions": torch.tensor(dataset.positions, dtype=torch.long, device=device),
+        "dice_history": torch.tensor(
+            dataset.dice_history, dtype=torch.long, device=device
+        ),
+        "token_mask": torch.tensor(dataset.token_mask, dtype=torch.bool, device=device),
+        "player_history": torch.tensor(
+            dataset.player_history, dtype=torch.long, device=device
+        ),
+        "token_colors": torch.tensor(
+            dataset.token_colors, dtype=torch.long, device=device
+        ),
+        "current_dice": torch.tensor(
+            dataset.current_dice, dtype=torch.long, device=device
+        ),
+    }
+    mask_tensor = torch.tensor(dataset.action_mask, dtype=torch.bool, device=device)
     action_tensor = torch.tensor(dataset.action, dtype=torch.long, device=device)
 
     indices = np.arange(num_samples)
-
-    for epoch in range(epochs):
-        rng = np.random.permutation(indices)
+    last_loss = 0.0
+    for epoch in range(max(1, epochs)):
+        rng_idx = np.random.permutation(indices)
         epoch_loss = 0.0
         batches = 0
-
         for start in range(0, num_samples, batch_size):
             end = min(start + batch_size, num_samples)
-            batch_idx = rng[start:end]
-
-            obs = {
-                "board": board_tensor[batch_idx],
-                "dice_roll": dice_tensor[batch_idx],
-            }
+            batch_idx = rng_idx[start:end]
+            obs = {k: v[batch_idx] for k, v in tens.items()}
             mask_batch = mask_tensor[batch_idx]
             action_batch = action_tensor[batch_idx]
 
-            distribution = policy.get_distribution(obs, action_masks=mask_batch)
-            log_prob = distribution.log_prob(action_batch)
+            dist = policy.get_distribution(obs, action_masks=mask_batch)
+            log_prob = dist.log_prob(action_batch)
             loss = -log_prob.mean()
 
             optimiser.zero_grad()
@@ -350,76 +278,106 @@ def behaviour_clone(
             torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
             optimiser.step()
 
-            epoch_loss += loss.item()
+            epoch_loss += float(loss.item())
             batches += 1
-
-        logger.info(
-            f"Epoch {epoch + 1}/{epochs} - loss {epoch_loss / max(1, batches):.4f}",
-        )
-
-    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-    model.save(save_path)
-    logger.info(f"Saved behaviour-cloned checkpoint to {save_path}")
+        last_loss = epoch_loss / max(1, batches)
+        logger.info(f"BC epoch {epoch + 1}/{epochs} - loss {last_loss:.4f}")
+    return last_loss
 
 
 def main() -> None:
     args = parse_args()
-
-    opponents = [
-        name.strip().lower() for name in args.opponents.split(",") if name.strip()
-    ]
-    validate_strategies(opponents)
-
-    if len(opponents) < config.NUM_PLAYERS:
-        raise ValueError(
-            "Need at least four opponent strategies to run imitation games."
-        )
-
-    teacher_mode = args.teacher_mode.strip().lower()
-    teacher = args.teacher.strip().lower() if args.teacher else None
-
-    if teacher_mode == "fixed":
-        if not teacher:
-            raise ValueError(
-                "Teacher strategy name required when --teacher-mode is 'fixed'."
-            )
-        if teacher not in opponents:
-            raise ValueError("Teacher strategy must be included in opponents list.")
-    else:
-        teacher = None
-
     rng = random.Random(args.seed)
 
-    if teacher_mode == "winner":
-        logger.info(
-            f"Collecting samples from game winners against opponents {opponents}"
-        )
+    teacher = args.teacher.strip().lower()
+    opponents = [s.strip() for s in args.opponents.split(",") if s.strip()]
+    validate_strategies([teacher])
+    validate_strategies(opponents)
+
+    # Load or initialise model
+    if args.model_path and os.path.exists(args.model_path):
+        model = MaskablePPO.load(args.model_path, device=args.device)
+        policy = model.policy
+        logger.info(f"Loaded base model from {args.model_path}")
     else:
-        logger.info(f"Collecting samples from teacher '{teacher}' against {opponents}")
-    dataset = collect_teacher_samples(
-        teacher=teacher,
-        teacher_mode=teacher_mode,
-        opponents=opponents,
-        games=args.games,
-        rng=rng,
-        max_samples=args.max_samples,
+        # Build a minimal VecEnv for policy initialisation (mirrors train.py shapes)
+        def _make_env():
+            return LudoEnv()
+
+        vec = DummyVecEnv([_make_env])
+        vec = VecMonitor(vec)
+        vec = VecNormalize(vec, norm_obs=False, norm_reward=True)
+
+        policy_kwargs = dict(
+            activation_fn=torch.nn.GELU,
+            features_extractor_class=(
+                LudoTransformerExtractor if args.use_transformer else LudoCnnExtractor
+            ),
+            features_extractor_kwargs=dict(features_dim=net_config.embed_dim),
+            net_arch=dict(pi=net_config.pi, vf=net_config.vf),
+            share_features_extractor=True,
+        )
+        model = MaskablePPO(
+            "MultiInputPolicy",
+            vec,
+            policy_kwargs=policy_kwargs,
+            n_steps=1024,
+            batch_size=1024,
+            n_epochs=1,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.2,
+            ent_coef=0.0,
+            learning_rate=3e-4,
+            device=args.device,
+            verbose=0,
+        )
+        policy = model.policy
+        logger.info(
+            "Initialised a fresh PPO policy (%s extractor) for imitation.",
+            "Transformer" if args.use_transformer else "CNN",
+        )
+
+    # Build env and set opponents
+    env = LudoEnv(use_fixed_opponents=True)
+    env.opponents = opponents
+    env.strategy_selection = 0  # random pick per seat from pool
+    env._reset_count = 0
+
+    logger.info(
+        f"Imitation: teacher={teacher}, iters={args.iters}, collect_steps={args.collect_steps}, opponents={opponents}"
     )
-    logger.info(f"Collected {dataset.action.shape[0]} samples")
 
-    save_dataset(dataset, args.dataset_out)
-
-    if args.bc_epochs > 0:
-        behaviour_clone(
-            model_path=args.model_path,
-            save_path=args.save_path,
+    for it in range(1, args.iters + 1):
+        dataset = collect_fixed_teacher_steps(
+            env=env, teacher=teacher, steps=args.collect_steps, rng=rng
+        )
+        logger.info(
+            f"Iter {it}: collected {dataset.action.shape[0]} labelled steps. Starting BC..."
+        )
+        loss = behaviour_clone_step(
+            policy=policy,
             dataset=dataset,
             device=args.device,
             epochs=args.bc_epochs,
             batch_size=args.bc_batch_size,
             lr=args.bc_lr,
         )
-    else:
-        logger.info("Skipping behaviour cloning as --bc-epochs is 0")
+        logger.info(f"Iter {it}: BC loss {loss:.4f}")
+
+        # Optional: save checkpoint each iteration
+        ckpt_path = Path(args.save_path)
+        ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+        iter_path = ckpt_path.with_name(
+            ckpt_path.stem + f"_iter{it}" + ckpt_path.suffix
+        )
+        model.save(str(iter_path))
+        logger.info(f"Saved checkpoint to {iter_path}")
+
+    # Final save
+    Path(args.save_path).parent.mkdir(parents=True, exist_ok=True)
+    model.save(args.save_path)
+    logger.info(f"Saved final behaviour-cloned checkpoint to {args.save_path}")
 
 
 if __name__ == "__main__":

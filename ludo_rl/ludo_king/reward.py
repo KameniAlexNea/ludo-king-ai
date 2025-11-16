@@ -1,5 +1,6 @@
-import math
 from typing import TYPE_CHECKING, Any, Dict, Union
+
+import numpy as np
 
 from .config import config as king_config
 from .config import reward_config
@@ -99,36 +100,59 @@ def _rel_positions_for_agent(game: "Game", agent_index: int):
 
 
 def _cap_opp_probability(game: "Game", agent_color: int, my_rels: list[int]) -> float:
-    """Approx probability to capture within one ply using set membership.
+    """One-ply capture opportunity using ring convolution (no nested loops).
 
-    Masked-average by active (ring) tokens, then scaled by active ratio -> sum/4.
+    For each of our active ring tokens at absolute index a, consider the next 6 ring
+    squares (a+1..a+6) modulo ring length, exclude global safe squares, and count if any
+    opponent occupies those squares. Probability per token is count/6. Return sum/4.
     """
-    opp_abs = set()
+    ring_len = int(king_config.MAIN_TRACK_END)
+    if ring_len <= 0:
+        return 0.0
+
+    # Opponent occupancy on ring as 0/1 vector length ring_len (0-based index for abs 1..ring_len)
+    opp_occ = np.zeros(ring_len, dtype=np.int32)
     for pl in game.players:
         if int(pl.color) == agent_color:
             continue
         for p in pl.pieces:
             rp = int(p.position)
-            if 1 <= rp <= king_config.MAIN_TRACK_END:
-                opp_abs.add(game.board.absolute_position(int(pl.color), rp))
-    safe_abs = set(king_config.SAFE_SQUARES_ABS)
+            if 1 <= rp <= ring_len:
+                abs_pos = int(game.board.absolute_position(int(pl.color), rp))
+                idx = (abs_pos - 1) % ring_len
+                opp_occ[idx] = 1
 
-    sum_probs = 0.0
-    active = 0
+    if not opp_occ.any():
+        return 0.0
+
+    # Safe squares mask (0-based indexing)
+    safe_mask = np.zeros(ring_len, dtype=np.int32)
+    for s in king_config.SAFE_SQUARES_ABS:
+        if 1 <= s <= ring_len:
+            safe_mask[(s - 1) % ring_len] = 1
+
+    # Collect our active tokens' absolute indices
+    my_abs_idx = []
     for r in my_rels:
-        if 1 <= r <= king_config.MAIN_TRACK_END:
-            ks = 0
-            for k in range(1, 7):
-                t = r + k
-                if 1 <= t <= king_config.MAIN_TRACK_END:
-                    abs_pos = game.board.absolute_position(agent_color, t)
-                    if abs_pos in safe_abs:
-                        continue
-                    if abs_pos in opp_abs:
-                        ks += 1
-            sum_probs += ks / 6.0
-            active += 1
-    return (sum_probs / 4.0) if active > 0 else 0.0
+        if 1 <= r <= ring_len:
+            a = int(game.board.absolute_position(agent_color, int(r)))
+            my_abs_idx.append((a - 1) % ring_len)
+
+    if not my_abs_idx:
+        return 0.0
+
+    a_idx = np.asarray(my_abs_idx, dtype=np.int32)  # shape (M,)
+    ks = np.arange(1, 7, dtype=np.int32)  # (6,)
+    # next positions for each token and k: shape (M,6)
+    next_idx = (a_idx[:, None] + ks[None, :]) % ring_len
+    # mask out safe squares
+    not_safe = safe_mask[next_idx] == 0
+    # occupation at those next squares
+    occ_next = opp_occ[next_idx] * not_safe
+    # probability per token = (#occupied among 6)/6
+    prob_per_token = occ_next.sum(axis=1, dtype=np.float32) / 6.0
+    # Sum over tokens, then scale by active_ratio= (#active/4)
+    return float(prob_per_token.sum() / 4.0)
 
 
 def _cap_risk_probability_depth(
@@ -138,38 +162,55 @@ def _cap_risk_probability_depth(
     opps: list[tuple[int, list[int]]],
     depth: int,
 ) -> float:
-    """Approx probability of being captured within depth plies using reachability sets.
+    """Capture risk within depth plies via ring convolution (no nested loops).
 
-    Masked-average by active ring tokens, scaled by active ratio -> sum/4.
+    For absolute square a, one-ply capture probability p1(a) = m(a)/6 where
+    m(a) is the number of k in {1..6} such that an opponent occupies (a-k) on the ring.
+    Then depth aggregation: 1 - (1 - p1)^depth. Sum across our active tokens and /4.
     """
-    # Precompute opponent reachability: for each k in 1..6, absolute squares they can hit next move
-    reach_by_k: list[set[int]] = [set() for _ in range(7)]
-    for oc, opp_rels in opps:
-        for rop in opp_rels:
-            if 1 <= rop <= king_config.MAIN_TRACK_END:
-                for k in range(1, 7):
-                    t = rop + k
-                    if 1 <= t <= king_config.MAIN_TRACK_END:
-                        reach_by_k[k].add(game.board.absolute_position(oc, t))
+    ring_len = int(king_config.MAIN_TRACK_END)
+    if ring_len <= 0:
+        return 0.0
 
-    safe_abs = set(king_config.SAFE_SQUARES_ABS)
-    sum_probs = 0.0
-    active = 0
+    # Opponent occupancy vector on ring
+    opp_occ = np.zeros(ring_len, dtype=np.int32)
+    for oc, opp_rels in opps:
+        for rp in opp_rels:
+            r = int(rp)
+            if 1 <= r <= ring_len:
+                abs_pos = int(game.board.absolute_position(int(oc), r))
+                opp_occ[(abs_pos - 1) % ring_len] = 1
+
+    if not opp_occ.any():
+        return 0.0
+
+    # Precompute sums over the 6 preceding ring squares for each absolute index via rolls
+    # For any absolute index a, the predecessors are (a-1 .. a-6) modulo ring_len
+    m_per_abs = np.zeros(ring_len, dtype=np.int32)
+    for k in range(1, 7):
+        m_per_abs += np.roll(opp_occ, k)
+
+    safe_mask = np.zeros(ring_len, dtype=np.int32)
+    for s in king_config.SAFE_SQUARES_ABS:
+        if 1 <= s <= ring_len:
+            safe_mask[(s - 1) % ring_len] = 1
+
+    # Our tokens' absolute indices
+    a_list = []
     for r in my_rels:
-        if 1 <= r <= king_config.MAIN_TRACK_END:
-            abs_my = game.board.absolute_position(agent_color, r)
-            if abs_my in safe_abs:
-                active += 1
-                continue
-            cnt = 0
-            for k in range(1, 7):
-                if abs_my in reach_by_k[k]:
-                    cnt += 1
-            p1 = cnt / 6.0
-            p_depth = 1.0 - math.pow(1.0 - p1, max(1, depth))
-            sum_probs += p_depth
-            active += 1
-    return (sum_probs / 4.0) if active > 0 else 0.0
+        if 1 <= r <= ring_len:
+            a = int(game.board.absolute_position(agent_color, int(r)))
+            a_list.append((a - 1) % ring_len)
+
+    if not a_list:
+        return 0.0
+
+    a_idx = np.asarray(a_list, dtype=np.int32)
+    # Zero risk on global safes
+    m_tokens = m_per_abs[a_idx] * (1 - safe_mask[a_idx])
+    p1 = m_tokens.astype(np.float32) / 6.0
+    p_depth = 1.0 - np.power(1.0 - p1, max(1, int(depth)))
+    return float(p_depth.sum() / 4.0)
 
 
 def _finish_opportunity_probability(my_rels: list[int]) -> float:
