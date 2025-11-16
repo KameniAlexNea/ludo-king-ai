@@ -125,6 +125,12 @@ def parse_args() -> argparse.Namespace:
         help="Final DAgger agent-execution fraction (anneals 0 -> dagger-frac-max across iterations).",
     )
     parser.add_argument(
+        "--dagger-warmup-iters",
+        type=int,
+        default=int(os.getenv("DAGGER_WARMUP_ITERS", 0)),
+        help="Number of initial iterations to keep DAgger disabled (fraction=0) before annealing.",
+    )
+    parser.add_argument(
         "--ppo-finetune-last",
         type=int,
         default=int(os.getenv("PPO_FINETUNE_LAST", 5)),
@@ -386,7 +392,9 @@ def main() -> None:
 
     # Build env and set opponents
     env = LudoEnv(use_fixed_opponents=True)
+    
     env.opponents = opponents
+    env._fixed_opponents_strategies = opponents
     env.strategy_selection = 0  # random pick per seat from pool
     env._reset_count = 0
 
@@ -395,13 +403,16 @@ def main() -> None:
     )
 
     for it in range(1, args.iters + 1):
-        # Linear anneal DAgger fraction from 0 -> dagger_frac_max
-        if args.iters > 1:
-            dagger_frac = args.dagger_frac_max * float(it - 1) / float(args.iters - 1)
-        else:
-            dagger_frac = 0.0
-
         remaining_for_bc = max(0, args.iters - args.ppo_finetune_last)
+        # Warmup + linear anneal during BC phase only
+        warmup = max(0, int(args.dagger_warmup_iters))
+        if it <= warmup or remaining_for_bc <= warmup:
+            dagger_frac = 0.0
+        else:
+            # map it in [warmup+1 .. remaining_for_bc] -> [0 .. 1]
+            span = max(1, remaining_for_bc - warmup)
+            pos = min(it, remaining_for_bc) - warmup
+            dagger_frac = args.dagger_frac_max * float(pos) / float(span)
         if it <= remaining_for_bc:
             # Behaviour Cloning phase with DAgger mix
             dataset = collect_fixed_teacher_steps(
