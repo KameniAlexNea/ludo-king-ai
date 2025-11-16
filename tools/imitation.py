@@ -17,6 +17,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecNormali
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king.config import net_config
+from ludo_rl.ludo_king import config as king_config
 from ludo_rl.ludo_king.player import Player
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
@@ -189,6 +190,7 @@ def collect_fixed_teacher_steps(
     model: MaskablePPO | None = None,
     dagger_frac: float = 0.0,
     deterministic_agent: bool = True,
+    opponents_pool: Sequence[str] | None = None,
 ) -> SampleBatch:
     pos_list: List[np.ndarray] = []
     dice_hist_list: List[np.ndarray] = []
@@ -201,6 +203,20 @@ def collect_fixed_teacher_steps(
     epi_ids: List[int] = []
     step_ids: List[int] = []
 
+    # Sample 3 opponents (or NUM_PLAYERS-1) from pool and fix lineup for this episode
+    def _choose_lineup() -> List[str]:
+        pool = list(opponents_pool or [])
+        try:
+            pool = [s for s in pool if s != teacher]
+        except Exception:
+            pass
+        k = max(1, getattr(king_config, "NUM_PLAYERS", 4) - 1)
+        if not pool:
+            return ["random"] * k
+        return random.choices(pool, k=k)
+
+    env._fixed_opponents_strategies = _choose_lineup()
+    env._reset_count = 1  # force using fixed lineup immediately
     obs, info = env.reset()
     # Attach teacher once per episode
     attach_strategy(env.game.players[0], teacher, rng)
@@ -240,6 +256,9 @@ def collect_fixed_teacher_steps(
         if terminated or truncated:
             episode_counter += 1
             step_in_epi = 0
+            # New episode -> new opponent lineup
+            env._fixed_opponents_strategies = _choose_lineup()
+            env._reset_count = 1
             obs, info = env.reset()
             attach_strategy(env.game.players[0], teacher, rng)
 
@@ -392,9 +411,7 @@ def main() -> None:
 
     # Build env and set opponents
     env = LudoEnv(use_fixed_opponents=True)
-    
     env.opponents = opponents
-    env._fixed_opponents_strategies = opponents
     env.strategy_selection = 0  # random pick per seat from pool
     env._reset_count = 0
 
@@ -423,6 +440,7 @@ def main() -> None:
                 model=model,
                 dagger_frac=dagger_frac,
                 deterministic_agent=True,
+                opponents_pool=opponents,
             )
             logger.info(
                 f"Iter {it}/{args.iters} (BC): dagger={dagger_frac:.3f}, collected {dataset.action.shape[0]} steps."
