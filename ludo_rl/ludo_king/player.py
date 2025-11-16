@@ -66,6 +66,8 @@ class Player:
         pieces_per_player = len(self.pieces)
         move_choices: list[dict | None] = [None] * pieces_per_player
         action_mask = np.zeros(pieces_per_player, dtype=bool)
+        nlegal = 0
+        selected = None
         for mv in legal_moves:
             if (
                 0 <= mv.piece_id < pieces_per_player
@@ -77,6 +79,12 @@ class Player:
                     "new_pos": mv.new_pos,
                     "move": mv,
                 }
+                nlegal += 1
+                selected = mv
+        if not nlegal:
+            return None  # no legal moves
+        if nlegal == 1:
+            return selected  # only one legal move
         decided = self.strategy.decide(
             board_stack, int(dice_roll), action_mask, move_choices
         )

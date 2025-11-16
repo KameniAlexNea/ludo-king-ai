@@ -80,11 +80,11 @@ def compute_move_rewards(
 def _rel_positions_for_agent(game: "Game", agent_index: int):
     agent_color = int(game.players[agent_index].color)
     my_rels = [int(p.position) for p in game.players[agent_index].pieces]
-    opps = []
-    for i, pl in enumerate(game.players):
-        if i == agent_index:
-            continue
-        opps.append((int(pl.color), [int(p.position) for p in pl.pieces]))
+    opps = [
+        (int(pl.color), [int(p.position) for p in pl.pieces])
+        for i, pl in enumerate(game.players)
+        if i != agent_index
+    ]
     return agent_color, my_rels, opps
 
 
@@ -146,26 +146,23 @@ def _cap_risk_probability_depth(
 
 def _finish_opportunity_probability(my_rels: list[int]) -> float:
     # Probability to finish a piece on next move (home column only)
-    ps = []
+    total = 0.0
     for r in my_rels:
         if king_config.HOME_COLUMN_START <= r <= king_config.HOME_FINISH - 1:
-            need = king_config.HOME_FINISH - r
-            ps.append(1.0 / 6.0 if 1 <= need <= 6 else 0.0)
-    return (sum(ps) / max(1, len(my_rels))) if my_rels else 0.0
+            total += 1.0 / 6.0 if 1 <= king_config.HOME_FINISH - r <= 6 else 0.0
+    return (total / max(1, len(my_rels))) if my_rels else 0.0
 
 
 def _progress_normalized(my_rels: list[int]) -> float:
-    vals = [
-        (max(0, min(r, king_config.HOME_FINISH)) / king_config.HOME_FINISH)
-        for r in my_rels
-    ]
-    return (sum(vals) / max(1, len(vals))) if vals else 0.0
+    total = 0.0
+    for r in my_rels:
+        total += max(0, min(r, king_config.HOME_FINISH)) / king_config.HOME_FINISH
+    return (total / max(1, len(my_rels))) if my_rels else 0.0
 
 
 def compute_state_potential(game, agent_index: int, depth: int) -> float:
-    """Compute a dense potential Φ(s) from risk/opportunity signals.
-
-    Components are normalized to [0,1] and combined with weights from reward_config.
+    """
+    Compute a dense potential Φ(s) from risk/opportunity signals.
     """
 
     agent_color, my_rels, opps = _rel_positions_for_agent(game, agent_index)
@@ -180,8 +177,7 @@ def compute_state_potential(game, agent_index: int, depth: int) -> float:
         - reward_config.ro_w_cap_risk * p_cap_risk
         + reward_config.ro_w_finish_opp * p_finish_opp
     )
-    # Clip potential for stability
-    return max(-1.0, min(1.0, float(phi)))
+    return phi
 
 
 def shaping_delta(phi_before: float, phi_after: float, gamma: float) -> float:
