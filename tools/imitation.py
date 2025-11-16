@@ -34,6 +34,8 @@ class SampleBatch:
     current_dice: np.ndarray
     action_mask: np.ndarray
     action: np.ndarray
+    episode_id: np.ndarray
+    step_in_episode: np.ndarray
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,7 +55,7 @@ def parse_args() -> argparse.Namespace:
         "--save-path",
         type=str,
         required=True,
-        help="Where to store the behaviour-cloned checkpoint.",
+        help="Directory to store imitation checkpoints (iterative and final).",
     )
     parser.add_argument(
         "--teacher",
@@ -116,6 +118,24 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="When starting fresh (no --model-path), initialise a Transformer-based extractor like train.py.",
     )
+    parser.add_argument(
+        "--dagger-frac-max",
+        type=float,
+        default=float(os.getenv("DAGGER_FRAC_MAX", 0.2)),
+        help="Final DAgger agent-execution fraction (anneals 0 -> dagger-frac-max across iterations).",
+    )
+    parser.add_argument(
+        "--ppo-finetune-last",
+        type=int,
+        default=int(os.getenv("PPO_FINETUNE_LAST", 5)),
+        help="Number of last iterations to switch from BC to PPO fine-tuning.",
+    )
+    parser.add_argument(
+        "--ppo-steps-per-iter",
+        type=int,
+        default=int(os.getenv("PPO_STEPS_PER_ITER", 65536)),
+        help="Total timesteps per PPO fine-tune iteration.",
+    )
     return parser.parse_args()
 
 
@@ -144,12 +164,15 @@ def decide_with_teacher(env: LudoEnv, teacher: str, rng: random.Random) -> int:
     legal = env.game.legal_moves(0, dice)
     if not legal:
         return 0
-    # Ensure agent has teacher strategy
-    attach_strategy(env.game.players[0], teacher, rng)
     board_stack = build_board_stack(env, player_index=0)
     decision = env.game.players[0].choose(board_stack, dice, legal)
     mv = decision if decision is not None else rng.choice(legal)
     return int(getattr(mv, "piece_id", 0))
+
+
+def decide_with_agent(model: MaskablePPO, obs: dict, mask: np.ndarray, deterministic: bool) -> int:
+    action, _ = model.predict(obs, action_masks=mask[None, ...], deterministic=deterministic)
+    return int(np.asarray(action).item())
 
 
 def collect_fixed_teacher_steps(
@@ -157,6 +180,9 @@ def collect_fixed_teacher_steps(
     teacher: str,
     steps: int,
     rng: random.Random,
+    model: MaskablePPO | None = None,
+    dagger_frac: float = 0.0,
+    deterministic_agent: bool = True,
 ) -> SampleBatch:
     pos_list: List[np.ndarray] = []
     dice_hist_list: List[np.ndarray] = []
@@ -166,16 +192,28 @@ def collect_fixed_teacher_steps(
     curr_dice_list: List[np.ndarray] = []
     action_mask_list: List[np.ndarray] = []
     actions: List[int] = []
+    epi_ids: List[int] = []
+    step_ids: List[int] = []
 
     obs, info = env.reset()
+    # Attach teacher once per episode
+    attach_strategy(env.game.players[0], teacher, rng)
     collected = 0
+    episode_counter = 0
+    step_in_epi = 0
     while collected < steps:
         mask = info.get("action_mask") if isinstance(info, dict) else None
         if mask is None or not np.any(mask):
             # still store skipped observation? skip and let opponents play
             action = 0
         else:
-            action = decide_with_teacher(env, teacher, rng)
+            # DAgger: choose executor; always label with teacher action
+            teacher_action = decide_with_teacher(env, teacher, rng)
+            use_agent = model is not None and rng.random() < max(0.0, min(1.0, dagger_frac))
+            if use_agent:
+                action = decide_with_agent(model, obs, mask, deterministic_agent)
+            else:
+                action = teacher_action
 
         # Record only when there is a valid mask (agent turn)
         if mask is not None and np.any(mask):
@@ -186,12 +224,18 @@ def collect_fixed_teacher_steps(
             token_colors_list.append(np.array(obs["token_colors"], copy=True))
             curr_dice_list.append(np.array(obs["current_dice"], copy=True))
             action_mask_list.append(np.array(mask, copy=True))
-            actions.append(int(action))
+            actions.append(int(teacher_action))
+            epi_ids.append(episode_counter)
+            step_ids.append(step_in_epi)
             collected += 1
+            step_in_epi += 1
 
         obs, reward, terminated, truncated, info = env.step(int(action))
         if terminated or truncated:
+            episode_counter += 1
+            step_in_epi = 0
             obs, info = env.reset()
+            attach_strategy(env.game.players[0], teacher, rng)
 
     return SampleBatch(
         positions=np.stack(pos_list, axis=0),
@@ -202,6 +246,8 @@ def collect_fixed_teacher_steps(
         current_dice=np.stack(curr_dice_list, axis=0),
         action_mask=np.stack(action_mask_list, axis=0),
         action=np.asarray(actions, dtype=np.int64),
+        episode_id=np.asarray(epi_ids, dtype=np.int64),
+        step_in_episode=np.asarray(step_ids, dtype=np.int64),
     )
 
 
@@ -220,6 +266,8 @@ def save_dataset(dataset: SampleBatch, path: str | None) -> None:
         current_dice=dataset.current_dice,
         action_mask=dataset.action_mask,
         action=dataset.action,
+        episode_id=dataset.episode_id,
+        step_in_episode=dataset.step_in_episode,
     )
     logger.info(f"Saved dataset with {dataset.action.shape[0]} samples to {dest}")
 
@@ -333,10 +381,8 @@ def main() -> None:
             verbose=0,
         )
         policy = model.policy
-        logger.info(
-            "Initialised a fresh PPO policy (%s extractor) for imitation.",
-            "Transformer" if args.use_transformer else "CNN",
-        )
+        extractor_name = "Transformer" if args.use_transformer else "CNN"
+        logger.info(f"Initialised a fresh PPO policy ({extractor_name} extractor) for imitation.")
 
     # Build env and set opponents
     env = LudoEnv(use_fixed_opponents=True)
@@ -349,35 +395,68 @@ def main() -> None:
     )
 
     for it in range(1, args.iters + 1):
-        dataset = collect_fixed_teacher_steps(
-            env=env, teacher=teacher, steps=args.collect_steps, rng=rng
-        )
-        logger.info(
-            f"Iter {it}: collected {dataset.action.shape[0]} labelled steps. Starting BC..."
-        )
-        loss = behaviour_clone_step(
-            policy=policy,
-            dataset=dataset,
-            device=args.device,
-            epochs=args.bc_epochs,
-            batch_size=args.bc_batch_size,
-            lr=args.bc_lr,
-        )
-        logger.info(f"Iter {it}: BC loss {loss:.4f}")
+        # Linear anneal DAgger fraction from 0 -> dagger_frac_max
+        if args.iters > 1:
+            dagger_frac = args.dagger_frac_max * float(it - 1) / float(args.iters - 1)
+        else:
+            dagger_frac = 0.0
 
-        # Optional: save checkpoint each iteration
-        ckpt_path = Path(args.save_path)
-        ckpt_path.parent.mkdir(parents=True, exist_ok=True)
-        iter_path = ckpt_path.with_name(
-            ckpt_path.stem + f"_iter{it}" + ckpt_path.suffix
-        )
+        remaining_for_bc = max(0, args.iters - args.ppo_finetune_last)
+        if it <= remaining_for_bc:
+            # Behaviour Cloning phase with DAgger mix
+            dataset = collect_fixed_teacher_steps(
+                env=env,
+                teacher=teacher,
+                steps=args.collect_steps,
+                rng=rng,
+                model=model,
+                dagger_frac=dagger_frac,
+                deterministic_agent=True,
+            )
+            logger.info(
+                f"Iter {it}/{args.iters} (BC): dagger={dagger_frac:.3f}, collected {dataset.action.shape[0]} steps."
+            )
+            loss = behaviour_clone_step(
+                policy=policy,
+                dataset=dataset,
+                device=args.device,
+                epochs=args.bc_epochs,
+                batch_size=args.bc_batch_size,
+                lr=args.bc_lr,
+            )
+            logger.info(f"Iter {it}: BC loss {loss:.4f}")
+        else:
+            # PPO fine-tuning phase (optimize full trajectories)
+            logger.info(
+                f"Iter {it}/{args.iters} (PPO fine-tune): running {args.ppo_steps_per_iter} timesteps."
+            )
+            # Build a PPO env with same opponents
+            def _make_env_ppo():
+                e = LudoEnv(use_fixed_opponents=True)
+                e.opponents = opponents
+                e.strategy_selection = 0
+                e._reset_count = 0
+                return e
+
+            ppo_env = DummyVecEnv([_make_env_ppo])
+            ppo_env = VecMonitor(ppo_env)
+            ppo_env = VecNormalize(ppo_env, norm_obs=False, norm_reward=True)
+            model.set_env(ppo_env)
+            model.learn(total_timesteps=int(args.ppo_steps_per_iter))
+
+        # Save checkpoint each iteration under the provided folder
+        save_dir = Path(args.save_path)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        iter_path = save_dir / f"imitation_iter{it}.zip"
         model.save(str(iter_path))
         logger.info(f"Saved checkpoint to {iter_path}")
 
-    # Final save
-    Path(args.save_path).parent.mkdir(parents=True, exist_ok=True)
-    model.save(args.save_path)
-    logger.info(f"Saved final behaviour-cloned checkpoint to {args.save_path}")
+    # Final save in the same folder
+    save_dir = Path(args.save_path)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    final_path = save_dir / "imitation_final.zip"
+    model.save(str(final_path))
+    logger.info(f"Saved final behaviour-cloned checkpoint to {final_path}")
 
 
 if __name__ == "__main__":
