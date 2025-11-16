@@ -89,22 +89,23 @@ if __name__ == "__main__":
     )
 
     callbacks = [entropy_callback]
-    wandb.init(
-        project="ludo-king-ppo",
-        name=run_id,
-        config=asdict(
-            TrainingSetup(
-                config=config,
-                network_config=net_config,
-                reward_config=reward_config,
-                train_config=args,
-            )
-        ),
-        sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
-        monitor_gym=True,  # auto-upload the videos of agents playing the game
-        save_code=True,  # optional
-    )
+
     if not args.profile:
+        wandb.init(
+            project="ludo-king-ppo",
+            name=run_id,
+            config=asdict(
+                TrainingSetup(
+                    config=config,
+                    network_config=net_config,
+                    reward_config=reward_config,
+                    train_config=args,
+                )
+            ),
+            sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
+            monitor_gym=True,  # auto-upload the videos of agents playing the game
+            save_code=True,  # optional
+        )
         callbacks.append(checkpoint_callback)
         callbacks.append(WandbCallback())
 

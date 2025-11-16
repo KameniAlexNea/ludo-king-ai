@@ -12,12 +12,13 @@ import torch
 from dotenv import load_dotenv
 from loguru import logger
 from sb3_contrib import MaskablePPO
+from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecNormalize
 
 from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo_env import LudoEnv
-from ludo_rl.ludo_king.config import net_config
 from ludo_rl.ludo_king import config as king_config
+from ludo_rl.ludo_king.config import net_config
 from ludo_rl.ludo_king.player import Player
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
@@ -177,8 +178,12 @@ def decide_with_teacher(env: LudoEnv, teacher: str, rng: random.Random) -> int:
     return int(getattr(mv, "piece_id", 0))
 
 
-def decide_with_agent(model: MaskablePPO, obs: dict, mask: np.ndarray, deterministic: bool) -> int:
-    action, _ = model.predict(obs, action_masks=mask[None, ...], deterministic=deterministic)
+def decide_with_agent(
+    model: MaskablePPO, obs: dict, mask: np.ndarray, deterministic: bool
+) -> int:
+    action, _ = model.predict(
+        obs, action_masks=mask[None, ...], deterministic=deterministic
+    )
     return int(np.asarray(action).item())
 
 
@@ -206,14 +211,12 @@ def collect_fixed_teacher_steps(
     # Sample 3 opponents (or NUM_PLAYERS-1) from pool and fix lineup for this episode
     def _choose_lineup() -> List[str]:
         pool = list(opponents_pool or [])
-        try:
-            pool = [s for s in pool if s != teacher]
-        except Exception:
-            pass
-        k = max(1, getattr(king_config, "NUM_PLAYERS", 4) - 1)
+        pool = [s for s in pool if s != teacher]
+        k = max(1, king_config.NUM_PLAYERS - 1)
         if not pool:
             return ["random"] * k
-        return random.choices(pool, k=k)
+        # Use seeded RNG for determinism when --seed is provided
+        return rng.choices(pool, k=k)
 
     env._fixed_opponents_strategies = _choose_lineup()
     env._reset_count = 1  # force using fixed lineup immediately
@@ -231,7 +234,9 @@ def collect_fixed_teacher_steps(
         else:
             # DAgger: choose executor; always label with teacher action
             teacher_action = decide_with_teacher(env, teacher, rng)
-            use_agent = model is not None and rng.random() < max(0.0, min(1.0, dagger_frac))
+            use_agent = model is not None and rng.random() < max(
+                0.0, min(1.0, dagger_frac)
+            )
             if use_agent:
                 action = decide_with_agent(model, obs, mask, deterministic_agent)
             else:
@@ -298,7 +303,7 @@ def save_dataset(dataset: SampleBatch, path: str | None) -> None:
 
 
 def behaviour_clone_step(
-    policy,
+    policy: MaskableActorCriticPolicy,
     dataset: SampleBatch,
     device: str,
     epochs: int,
@@ -407,7 +412,9 @@ def main() -> None:
         )
         policy = model.policy
         extractor_name = "Transformer" if args.use_transformer else "CNN"
-        logger.info(f"Initialised a fresh PPO policy ({extractor_name} extractor) for imitation.")
+        logger.info(
+            f"Initialised a fresh PPO policy ({extractor_name} extractor) for imitation."
+        )
 
     # Build env and set opponents
     env = LudoEnv(use_fixed_opponents=True)
@@ -459,6 +466,7 @@ def main() -> None:
             logger.info(
                 f"Iter {it}/{args.iters} (PPO fine-tune): running {args.ppo_steps_per_iter} timesteps."
             )
+
             # Build a PPO env with same opponents
             def _make_env_ppo():
                 e = LudoEnv(use_fixed_opponents=True)
