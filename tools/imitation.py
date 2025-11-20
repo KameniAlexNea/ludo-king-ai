@@ -365,7 +365,7 @@ def behaviour_clone_step(
 
 def main() -> None:
     args = parse_args()
-    rng = random.Random(args.seed)
+    rng = random.Random()
 
     teacher = args.teacher.strip().lower()
     opponents = [s.strip() for s in args.opponents.split(",") if s.strip()]
