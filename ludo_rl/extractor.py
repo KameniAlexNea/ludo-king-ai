@@ -46,7 +46,7 @@ class BaseTokenSeqExtractor(BaseFeaturesExtractor):
             token_colors = token_colors.unsqueeze(0)
         current_dice = observations["current_dice"].long()
         if current_dice.dim() == 1:
-            current_dice = current_dice
+            current_dice = current_dice.unsqueeze(0)
         B, T, N = positions.shape
         device = positions.device
         return (

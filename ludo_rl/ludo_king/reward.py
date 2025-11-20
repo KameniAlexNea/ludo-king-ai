@@ -88,10 +88,27 @@ def _rel_positions_for_agent(game: "Game", agent_index: int):
     return agent_color, my_rels, opps
 
 
-def _cap_opp_probability(game: "Game", agent_color: int, my_rels: list[int]) -> float:
+def _occupied_abs_positions_excluding_color(game: "Game", exclude_color: int) -> set[int]:
+    """Build a set of absolute ring positions (1..51) occupied by any opponent piece."""
+    occ: set[int] = set()
+    for pl in game.players:
+        c = int(pl.color)
+        if c == exclude_color:
+            continue
+        for pc in pl.pieces:
+            r = int(pc.position)
+            if 1 <= r <= king_config.MAIN_TRACK_END:
+                occ.add(game.board.absolute_position(c, r))
+    return occ
+
+
+def _cap_opp_probability(
+    game: "Game", agent_color: int, my_rels: list[int], opp_occ_abs: set[int]
+) -> float:
     # Probability to capture on next move averaged across my tokens
     total = 0.0
     count = 0
+    safe_abs = set(king_config.SAFE_SQUARES_ABS)
     for r in my_rels:
         if 1 <= r <= king_config.MAIN_TRACK_END:
             ks = 0
@@ -99,12 +116,9 @@ def _cap_opp_probability(game: "Game", agent_color: int, my_rels: list[int]) -> 
                 t = r + k
                 if 1 <= t <= king_config.MAIN_TRACK_END:
                     abs_pos = game.board.absolute_position(agent_color, t)
-                    if abs_pos in king_config.SAFE_SQUARES_ABS:
+                    if abs_pos in safe_abs:
                         continue
-                    occ = game.board.pieces_at_absolute(
-                        abs_pos, exclude_color=agent_color
-                    )
-                    if len(occ) >= 1:
+                    if abs_pos in opp_occ_abs:
                         ks += 1
             total += ks / 6.0
             count += 1
@@ -118,25 +132,26 @@ def _cap_risk_probability_depth(
     opps: list[tuple[int, list[int]]],
     depth: int,
 ) -> float:
-    # Approx probability my token gets captured within depth plies
+    # Approx probability my token gets captured within depth plies, fast distance math
     total = 0.0
     count = 0
+    safe_abs = set(king_config.SAFE_SQUARES_ABS)
     for r in my_rels:
         if 1 <= r <= king_config.MAIN_TRACK_END:
             abs_my = game.board.absolute_position(agent_color, r)
-            if abs_my in king_config.SAFE_SQUARES_ABS:
+            if abs_my in safe_abs:
                 total += 0.0
                 count += 1
                 continue
-            ks_union = set()
+            ks_union: set[int] = set()
             for oc, opp_rels in opps:
                 for rop in opp_rels:
                     if 1 <= rop <= king_config.MAIN_TRACK_END:
-                        for k in range(1, 7):
-                            t = rop + k
-                            if 1 <= t <= king_config.MAIN_TRACK_END:
-                                if game.board.absolute_position(oc, t) == abs_my:
-                                    ks_union.add(k)
+                        abs_opp = game.board.absolute_position(oc, rop)
+                        # forward distance on ring (1..51). Both abs are in 1..51
+                        d = (abs_my - abs_opp) % 52
+                        if 1 <= d <= 6:
+                            ks_union.add(d)
             p1 = len(ks_union) / 6.0
             p_depth = 1.0 - math.pow(1.0 - p1, max(1, depth))
             total += p_depth
@@ -166,7 +181,13 @@ def compute_state_potential(game, agent_index: int, depth: int) -> float:
     """
 
     agent_color, my_rels, opps = _rel_positions_for_agent(game, agent_index)
-    p_cap_opp = _cap_opp_probability(game, agent_color, my_rels)
+    # Build opponent occupied absolute set once
+    opp_occ_abs: set[int] = set()
+    for oc, opp_rels in opps:
+        for r in opp_rels:
+            if 1 <= r <= king_config.MAIN_TRACK_END:
+                opp_occ_abs.add(game.board.absolute_position(oc, r))
+    p_cap_opp = _cap_opp_probability(game, agent_color, my_rels, opp_occ_abs)
     p_cap_risk = _cap_risk_probability_depth(game, agent_color, my_rels, opps, depth)
     p_finish_opp = _finish_opportunity_probability(my_rels)
     prog = _progress_normalized(my_rels)

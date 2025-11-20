@@ -15,6 +15,7 @@ from stable_baselines3.common.vec_env import (
     SubprocVecEnv,
     VecMonitor,
     VecNormalize,
+    VecCheckNan,
 )
 from torch.profiler import (
     ProfilerActivity,
@@ -69,6 +70,7 @@ if __name__ == "__main__":
     else:
         train_env = SubprocVecEnv([lambda: LudoEnv() for _ in range(args.num_envs)])
     train_env = VecMonitor(train_env)
+    train_env = VecCheckNan(train_env, raise_exception=True)
     train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
 
     logger.debug("--- Setting up Callbacks ---")
