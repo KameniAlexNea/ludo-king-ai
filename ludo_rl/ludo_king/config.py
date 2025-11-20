@@ -107,6 +107,9 @@ class Reward:
     shaping_use: bool = bool(int(os.getenv("SHAPING_USE", 1)))
     shaping_alpha: float = float(os.getenv("SHAPING_ALPHA", 2.0))
     shaping_gamma: float = float(os.getenv("SHAPING_GAMMA", 0.99))
+    # Apply shaping only for a specific agent (speeds up tournaments/opponent turns)
+    shaping_agent_only: bool = bool(int(os.getenv("SHAPING_AGENT_ONLY", 0)))
+    shaping_agent_index: int = int(os.getenv("SHAPING_AGENT_INDEX", 0))
     ro_depth: int = int(
         os.getenv("RO_DEPTH", 3)
     )  # lookahead depth in plies (approximate)

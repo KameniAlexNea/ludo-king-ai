@@ -108,12 +108,18 @@ class Game:
             if start_rel >= config.HOME_COLUMN_START:
                 return path
             # Ring -> ring
-            if 1 <= start_rel <= config.MAIN_TRACK_END and 1 <= end_rel <= config.MAIN_TRACK_END:
+            if (
+                1 <= start_rel <= config.MAIN_TRACK_END
+                and 1 <= end_rel <= config.MAIN_TRACK_END
+            ):
                 for r in range(start_rel + 1, end_rel + 1):
                     path.append(r)
                 return path
             # Ring -> home column: walk to the end of ring (51)
-            if 1 <= start_rel <= config.MAIN_TRACK_END and end_rel >= config.HOME_COLUMN_START:
+            if (
+                1 <= start_rel <= config.MAIN_TRACK_END
+                and end_rel >= config.HOME_COLUMN_START
+            ):
                 for r in range(start_rel + 1, config.MAIN_TRACK_END + 1):
                     path.append(r)
                 return path
@@ -125,10 +131,15 @@ class Game:
         if reward_config.shaping_use and self._phi_valid[mv.player_index]:
             phi_before = self._phi_cache[mv.player_index]
             phi_before_computed = True
+        # Gate shaping to agent-only if requested
+        do_shaping = reward_config.shaping_use and (
+            not reward_config.shaping_agent_only
+            or mv.player_index == reward_config.shaping_agent_index
+        )
 
         # Precompute blockade absolute positions per color (main ring only)
         blockade_abs_to_color: dict[int, int] = {}
-        for pi, pl in enumerate(self.players):
+        for pl in self.players:
             color_id = int(pl.color)
             # Count pieces per relative ring position
             counts: dict[int, int] = {}
@@ -157,14 +168,16 @@ class Game:
                     new_position=old,
                     events=events,
                 )
-                if reward_config.shaping_use:
+                if do_shaping:
                     # No state change; shaping delta is (gamma-1)*phi(s)
                     if not phi_before_computed:
                         phi_before = compute_state_potential(
                             self, mv.player_index, depth=reward_config.ro_depth
                         )
                         phi_before_computed = True
-                    sd = shaping_delta(phi_before, phi_before, gamma=reward_config.shaping_gamma)
+                    sd = shaping_delta(
+                        phi_before, phi_before, gamma=reward_config.shaping_gamma
+                    )
                     rewards[mv.player_index] += reward_config.shaping_alpha * sd
                 return MoveResult(
                     old_position=old,
@@ -248,13 +261,15 @@ class Game:
                     rewards[idx] += reward_config.opp_win_penalty
 
         # Add potential-based shaping
-        if reward_config.shaping_use:
+        if do_shaping:
             if not phi_before_computed:
                 phi_before = compute_state_potential(
                     self, mv.player_index, depth=reward_config.ro_depth
                 )
                 phi_before_computed = True
-            phi_after = compute_state_potential(self, mv.player_index, depth=reward_config.ro_depth)
+            phi_after = compute_state_potential(
+                self, mv.player_index, depth=reward_config.ro_depth
+            )
             sd = shaping_delta(phi_before, phi_after, gamma=reward_config.shaping_gamma)
             rewards[mv.player_index] += reward_config.shaping_alpha * sd
             # Update cache for this player's latest state

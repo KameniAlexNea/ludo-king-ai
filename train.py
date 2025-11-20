@@ -13,9 +13,9 @@ from stable_baselines3.common.callbacks import (
 from stable_baselines3.common.vec_env import (
     DummyVecEnv,
     SubprocVecEnv,
+    VecCheckNan,
     VecMonitor,
     VecNormalize,
-    VecCheckNan,
 )
 from torch.profiler import (
     ProfilerActivity,

@@ -88,7 +88,9 @@ def _rel_positions_for_agent(game: "Game", agent_index: int):
     return agent_color, my_rels, opps
 
 
-def _occupied_abs_positions_excluding_color(game: "Game", exclude_color: int) -> set[int]:
+def _occupied_abs_positions_excluding_color(
+    game: "Game", exclude_color: int
+) -> set[int]:
     """Build a set of absolute ring positions (1..51) occupied by any opponent piece."""
     occ: set[int] = set()
     for pl in game.players:
