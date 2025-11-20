@@ -88,13 +88,20 @@ class LudoEnv(gym.Env):
                 "positions": spaces.Box(
                     low=0,
                     high=king_config.PATH_LENGTH - 1,
-                    shape=(10, 16),
+                    shape=(king_config.HISTORY_LENGTH, 16),
                     dtype=np.int64,
                 ),
-                "dice_history": spaces.Box(low=0, high=6, shape=(10,), dtype=np.int64),
-                "token_mask": spaces.Box(low=0, high=1, shape=(10, 16), dtype=np.bool_),
+                "dice_history": spaces.Box(
+                    low=0, high=6, shape=(king_config.HISTORY_LENGTH,), dtype=np.int64
+                ),
+                "token_mask": spaces.Box(
+                    low=0,
+                    high=1,
+                    shape=(king_config.HISTORY_LENGTH, 16),
+                    dtype=np.bool_,
+                ),
                 "player_history": spaces.Box(
-                    low=0, high=3, shape=(10,), dtype=np.int64
+                    low=0, high=3, shape=(king_config.HISTORY_LENGTH,), dtype=np.int64
                 ),
                 "token_colors": spaces.Box(low=0, high=3, shape=(16,), dtype=np.int64),
                 "current_dice": spaces.Box(low=1, high=6, shape=(1,), dtype=np.int64),

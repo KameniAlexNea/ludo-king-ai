@@ -8,6 +8,7 @@ load_dotenv()
 
 @dataclass(slots=True)
 class Config:
+    HISTORY_LENGTH: int = int(os.getenv("HISTORY_LENGTH", 4))
     # --- Constants ---
     PATH_LENGTH: int = 58  # 0=yard, 1-51=track, 52-56=home, 57=finished
     NUM_PLAYERS: int = int(os.getenv("NUM_PLAYERS", 4))

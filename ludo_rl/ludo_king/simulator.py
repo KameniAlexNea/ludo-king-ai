@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from loguru import logger
 
+from .config import config
 from .game import Game
 from .types import Move, MoveResult
 
@@ -15,7 +16,7 @@ class Simulator:
     agent_index: int = 0
     game: Game = field(init=False)
     # Token-sequence observation buffers
-    history_T: int = 10
+    history_T: int = config.HISTORY_LENGTH
     _pos_hist: np.ndarray = field(default=None, init=False, repr=False)
     _dice_hist: np.ndarray = field(default=None, init=False, repr=False)
     _mask_hist: np.ndarray = field(default=None, init=False, repr=False)
@@ -49,12 +50,12 @@ class Simulator:
         obj.agent_index = agent_index
         obj.game = game
         # Initialize token sequence buffers directly
-        obj.history_T = 10
+        obj.history_T = config.HISTORY_LENGTH
         agent_color = int(game.players[agent_index].color)
-        obj._pos_hist = np.zeros((10, 16), dtype=np.int64)
-        obj._dice_hist = np.zeros((10,), dtype=np.int64)
-        obj._mask_hist = np.zeros((10, 16), dtype=np.bool_)
-        obj._player_hist = np.zeros((10,), dtype=np.int64)
+        obj._pos_hist = np.zeros((config.HISTORY_LENGTH, 16), dtype=np.int64)
+        obj._dice_hist = np.zeros((config.HISTORY_LENGTH,), dtype=np.int64)
+        obj._mask_hist = np.zeros((config.HISTORY_LENGTH, 16), dtype=np.bool_)
+        obj._player_hist = np.zeros((config.HISTORY_LENGTH,), dtype=np.int64)
         obj._token_colors = game.board.token_colors(agent_color)
         obj._token_exists_mask = game.board.token_exists_mask(agent_color)
         obj._hist_len = 0
