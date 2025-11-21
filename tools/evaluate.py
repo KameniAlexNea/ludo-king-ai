@@ -10,9 +10,8 @@ from dotenv import load_dotenv
 from loguru import logger
 from sb3_contrib import MaskablePPO
 
-from ludo_rl.ludo_king import Board, Color, Game, Player, Simulator
+from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king import config as king_config
-from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
 
 load_dotenv()
@@ -69,88 +68,33 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def attach_strategy(player: Player, strategy_name: str, rng: random.Random) -> None:
-    cls = STRATEGY_REGISTRY[strategy_name]
-    try:
-        player.strategy = cls.create_instance(rng)
-    except NotImplementedError:
-        player.strategy = cls()
-    player.strategy_name = strategy_name  # type: ignore[attr-defined]
-
-
-def build_board_stack(board: Board, player_color: int) -> np.ndarray:
-    return board.build_tensor(player_color)
-
-
-def _extract_piece_index(move: object) -> int | None:
-    for attr in ("piece_id", "token", "piece_index"):
-        if hasattr(move, attr):
-            try:
-                return int(getattr(move, attr))
-            except Exception:
-                pass
-    piece = getattr(move, "piece", None)
-    if piece is not None:
-        for attr in ("piece_id", "index", "id"):
-            if hasattr(piece, attr):
-                try:
-                    return int(getattr(piece, attr))
-                except Exception:
-                    pass
-    return None
-
-
-def decide_with_model(
+def _run_episode_with_env(
+    env: LudoEnv,
     model: MaskablePPO,
-    simulator: Simulator,
-    dice_roll: int,
-    legal_moves: list[object],
     deterministic: bool,
-    rng: random.Random,
-) -> object | None:
-    # Get token-sequence observation from simulator
-    obs = simulator.get_token_sequence_observation(dice_roll)
+) -> int:
+    """Run a single episode in LudoEnv and return final rank (1=win, 0=draw/unknown)."""
+    obs, info = env.reset()
+    terminated = False
+    truncated = False
+    final_rank: int = 0
 
-    action_mask = np.zeros(king_config.PIECES_PER_PLAYER, dtype=bool)
-    moves_by_piece: dict[int, list[object]] = {}
-    for mv in legal_moves:
-        pid = _extract_piece_index(mv)
-        if pid is None:
-            continue
-        if 0 <= pid < king_config.PIECES_PER_PLAYER:
-            action_mask[pid] = True
-            moves_by_piece.setdefault(pid, []).append(mv)
+    while not terminated and not truncated and env.current_turn < king_config.MAX_TURNS:
+        mask = env.action_masks()
+        if mask is None or not np.any(mask):
+            action = 0
+        else:
+            action, _ = model.predict(
+                obs, action_masks=mask[None, ...], deterministic=deterministic
+            )
+            action = int(np.asarray(action).item())
 
-    try:
-        action, _ = model.predict(
-            obs, action_masks=action_mask[None, ...], deterministic=deterministic
-        )
-        pid = int(action.item())
-        candidates = moves_by_piece.get(pid)
-        if candidates:
-            return rng.choice(candidates)
-    except Exception:
-        pass
-    return rng.choice(legal_moves) if legal_moves else None
+        obs, reward, terminated, truncated, info = env.step(action)
 
-
-def determine_rankings(game: Game, finish_order: list[int]) -> list[int]:
-    ordered = finish_order.copy()
-    total = len(game.players)
-    remaining = [i for i in range(total) if i not in ordered]
-    remaining.sort(
-        key=lambda idx: (
-            sum(
-                1
-                for pc in game.players[idx].pieces
-                if pc.position == king_config.HOME_FINISH
-            ),
-            sum(pc.position for pc in game.players[idx].pieces),
-        ),
-        reverse=True,
-    )
-    ordered.extend(remaining)
-    return ordered[:total]
+    fr = info.get("final_rank") if isinstance(info, dict) else None
+    if isinstance(fr, (int, np.integer)):
+        final_rank = int(fr)
+    return final_rank
 
 
 def evaluate_triplet(
@@ -160,82 +104,35 @@ def evaluate_triplet(
     deterministic: bool,
     rng: random.Random,
 ) -> dict:
+    """Evaluate a fixed opponent lineup using LudoEnv episodes."""
     rank_counter: Counter[int] = Counter()
     wins = 0
 
+    # Build one env and fix its opponents to this triplet
+    env = LudoEnv(use_fixed_opponents=True)
+    # Override opponent pool and selection to ensure exact lineup
+    triplet = list(triplet)
+    env.opponents = triplet
+    env._fixed_opponents_strategies = triplet
+    env.strategy_selection = 1  # sequential; with fixed_opponents this locks the lineup
+    env._reset_count = 0  # start from first lineup ordering
+
     for _ in range(episodes):
-        # Build game and seat opponents
-        num = king_config.NUM_PLAYERS
-        # Support 2 players (opposite seats) or 4 players
-        if num == 2:
-            color_ids = [int(Color.RED), int(Color.YELLOW)]
-        else:
-            color_ids = [
-                int(Color.RED),
-                int(Color.GREEN),
-                int(Color.YELLOW),
-                int(Color.BLUE),
-            ][:num]
-        players = [Player(color=c) for c in color_ids]
-        game = Game(players=players)
-        simulator = Simulator.for_game(game, agent_index=0)
-
-        # Agent at seat 0 (RED); opponents occupy seats 1..(num-1)
-        for seat_idx, player in enumerate(game.players):
-            for piece in player.pieces:
-                piece.position = 0
-            player.has_finished = False
-            if seat_idx > 0:
-                attach_strategy(player, triplet[seat_idx - 1], rng)
-            else:
-                player.strategy_name = "agent"  # type: ignore[attr-defined]
-
-        finish_order: list[int] = []
-        turns = 0
-        cur = 0
-
-        while turns < king_config.MAX_TURNS and len(finish_order) < len(game.players):
-            pl = game.players[cur]
-            if pl.check_won():
-                if cur not in finish_order:
-                    finish_order.append(cur)
-                cur = (cur + 1) % len(game.players)
-                continue
-
-            extra = True
-            while extra:
-                dice = game.roll_dice()
-                legal = game.legal_moves(cur, dice)
-                if not legal:
-                    extra = False
-                    continue
-
-                # Append move to history for both agent and opponents
-                simulator._append_history(dice, cur)
-
-                if cur == 0:
-                    mv = decide_with_model(
-                        model, simulator, dice, legal, deterministic, rng
-                    )
-                else:
-                    board_stack = build_board_stack(game.board, int(pl.color))
-                    decision = pl.choose(board_stack, dice, legal)
-                    mv = decision if decision is not None else rng.choice(legal)
-
-                result = game.apply_move(mv)
-                extra = result.extra_turn and result.events.move_resolved
-
-                if pl.check_won() and cur not in finish_order:
-                    finish_order.append(cur)
-
-            cur = (cur + 1) % len(game.players)
-            turns += 1
-
-        rankings = determine_rankings(game, finish_order)
-        agent_rank = rankings.index(0) + 1  # 1-based
-        if agent_rank == 1:
+        rng.shuffle(triplet)
+        final_rank = _run_episode_with_env(env, model, deterministic)
+        if final_rank == 1:
             wins += 1
-        rank_counter[agent_rank] += 1
+        if final_rank <= 0:
+            # Treat draw/unknown as worst rank (optional: keep 0)
+            rank_counter[king_config.NUM_PLAYERS] += 1
+        else:
+            rank_counter[final_rank] += 1
+
+    # Clean up
+    try:
+        env.close()
+    except Exception:
+        pass
 
     return {
         "triplet": triplet,

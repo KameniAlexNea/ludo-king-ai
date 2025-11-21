@@ -35,6 +35,7 @@ class Board:
 
     players: Sequence[Sequence[Piece]]  # players (engine order) -> their pieces
     colors: Sequence[int]  # engine order -> color ids (0..3)
+    _color_to_index: dict[int, int] = field(default=None, init=False, repr=False)
     _tensor_buffer: np.ndarray | None = field(default=None, init=False, repr=False)
     # Transition summary tracking (channels 5-10)
     movement_heatmap: np.ndarray = field(default=None, init=False, repr=False)
@@ -47,20 +48,26 @@ class Board:
     reward_heatmap: np.ndarray = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Initialize transition summary arrays."""
+        """Initialize transition summary arrays and color index cache."""
         self.movement_heatmap = np.zeros(config.PATH_LENGTH, dtype=np.float32)
         self.my_knockouts = np.zeros(config.PATH_LENGTH, dtype=np.float32)
         self.opp_knockouts = np.zeros(config.PATH_LENGTH, dtype=np.float32)
         self.new_blockades = np.zeros(config.PATH_LENGTH, dtype=np.float32)
         self.blockade_hits = np.zeros(config.PATH_LENGTH, dtype=np.float32)
         self.reward_heatmap = np.zeros(config.PATH_LENGTH, dtype=np.float32)
+        # Precompute color->engine index mapping for faster resolution
+        self._color_to_index = {col: i for i, col in enumerate(self.colors)}
 
     def _resolve_index(self, player_color: int) -> int:
         """Map a color id (0..3) to engine index in self.players/colors."""
-        for idx, col in enumerate(self.colors):
-            if col == player_color:
-                return idx
-        raise IndexError("Player color not found in Board.colors")
+        try:
+            return self._color_to_index[player_color]
+        except Exception:
+            # Fallback for robustness if cache missing or color absent
+            for idx, col in enumerate(self.colors):
+                if col == player_color:
+                    return idx
+            raise IndexError("Player color not found in Board.colors")
 
     def absolute_position(self, player_color: int, relative_pos: int) -> int:
         """Map a player's relative position to absolute (0..51) per piece.to_absolute."""
@@ -250,7 +257,7 @@ class Board:
         board[6] = self.my_knockouts
         board[7] = self.opp_knockouts
         board[8] = self.new_blockades
-        board[9] = self.blockade_hits
+        # Note: keep channel 9 for reward heatmap; blockade_hits is consumed elsewhere
         board[9] = self.reward_heatmap
 
         return board

@@ -32,8 +32,8 @@ class RLStrategy(BaseStrategy):
         self.model = model
         self.deterministic = deterministic
         self.model.policy.set_training_mode(False)
+        self._hist_T = int(model.observation_space["positions"].shape[0])
         # History buffers (agent-relative) to mirror env/simulator
-        self._hist_T: int = 10
         self._pos_hist: Optional[np.ndarray] = None  # (T,16) int64
         self._dice_hist: Optional[np.ndarray] = None  # (T,) int64
         self._mask_hist: Optional[np.ndarray] = None  # (T,16) bool

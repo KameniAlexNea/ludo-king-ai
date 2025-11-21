@@ -8,6 +8,7 @@ load_dotenv()
 
 @dataclass(slots=True)
 class Config:
+    HISTORY_LENGTH: int = int(os.getenv("HISTORY_LENGTH", 4))
     # --- Constants ---
     PATH_LENGTH: int = 58  # 0=yard, 1-51=track, 52-56=home, 57=finished
     NUM_PLAYERS: int = int(os.getenv("NUM_PLAYERS", 4))
@@ -52,14 +53,22 @@ class Config:
 
 @dataclass(slots=True)
 class NetworkConfig:
-    conv_configs: list[int] = field(default_factory=lambda: [32, 24])
-    kernel_sizes: list[int] = field(default_factory=lambda: [7, 5])
-    paddings: list[int] = field(default_factory=lambda: [3, 2])
-    embed_dim: int = 128  # Output features dimension
-    token_embed_dim: int = 16  # Embedding dimension for tokens
+    embed_dim: int = int(os.getenv("EMBED_DIM", 128))  # Output features dimension
+    token_embed_dim: int = int(
+        os.getenv("TOKEN_EMBED_DIM", 16)
+    )  # Embedding dimension for tokens
     pooled_output_size: int = 4
-    pi: list[int] = field(default_factory=lambda: [64])
-    vf: list[int] = field(default_factory=lambda: [64])
+    pi: list[int] = field(
+        default_factory=lambda: [int(x) for x in os.getenv("PI", "64").split(",")]
+    )
+    vf: list[int] = field(
+        default_factory=lambda: [int(x) for x in os.getenv("VF", "64").split(",")]
+    )
+    # Transformer hyperparameters (configurable via env)
+    trans_nhead: int = int(os.getenv("TRANS_NHEAD", 4))
+    trans_num_layers: int = int(os.getenv("TRANS_NUM_LAYERS", 2))
+    # Feed-forward layer size multiplier relative to token/embed dim
+    trans_ff_mult: int = int(os.getenv("TRANS_FF_MULT", 3))
 
 
 @dataclass(slots=True)
@@ -84,14 +93,39 @@ class Reward:
     finish: float = 1 * COEF
     capture: float = 0.2 * COEF
     got_capture: float = -0.5 * COEF
-    blockade: float = 0.15 * COEF
+    blockade: float = 0.05 * COEF
     hit_blockade: float = -0.1 * COEF
-    blockade_hit: float = 0.1 * COEF  # Bonus when opponent hits your blockade
+    blockade_hit: float = 0.1 * COEF
     exit_home: float = 0.1 * COEF
-    progress: float = 0.01
+    progress: float = 0.001
     safe_position: float = 0.05 * COEF
     draw: float = -2 * COEF
-    skipped_turn: float = -0.01
+    skipped_turn: float = -0.001
+
+    # Risk/Opportunity shaping (potential-based) parameters
+    shaping_use: bool = bool(int(os.getenv("SHAPING_USE", 1)))
+    shaping_alpha: float = float(os.getenv("SHAPING_ALPHA", 2.0))
+    shaping_gamma: float = float(os.getenv("SHAPING_GAMMA", 0.99))
+    # Apply shaping only for a specific agent (speeds up tournaments/opponent turns)
+    shaping_agent_only: bool = bool(int(os.getenv("SHAPING_AGENT_ONLY", 0)))
+    shaping_agent_index: int = int(os.getenv("SHAPING_AGENT_INDEX", 0))
+    ro_depth: int = int(
+        os.getenv("RO_DEPTH", 3)
+    )  # lookahead depth in plies (approximate)
+    # Weights for potential components
+    ro_w_progress: float = float(os.getenv("RO_W_PROGRESS", 0.3))
+    ro_w_cap_opp: float = float(os.getenv("RO_W_CAP_OPP", 0.4))
+    ro_w_cap_risk: float = float(os.getenv("RO_W_CAP_RISK", 0.6))
+    ro_w_finish_opp: float = float(os.getenv("RO_W_FINISH_OPP", 0.3))
+
+    # Opponent progress penalties (sparse signals to encourage urgency)
+    opp_exit_home_penalty: float = float(
+        os.getenv("OPP_EXIT_HOME_PENALTY", -0.05 * COEF)
+    )
+    opp_piece_finished_penalty: float = float(
+        os.getenv("OPP_PIECE_FINISHED_PENALTY", -0.3 * COEF)
+    )
+    opp_win_penalty: float = float(os.getenv("OPP_WIN_PENALTY", -0.2 * COEF))
 
 
 config = Config()

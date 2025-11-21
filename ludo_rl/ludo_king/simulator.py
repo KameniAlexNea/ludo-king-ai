@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from loguru import logger
 
+from .config import config
 from .game import Game
 from .types import Move, MoveResult
 
@@ -15,7 +16,7 @@ class Simulator:
     agent_index: int = 0
     game: Game = field(init=False)
     # Token-sequence observation buffers
-    history_T: int = 10
+    history_T: int = config.HISTORY_LENGTH
     _pos_hist: np.ndarray = field(default=None, init=False, repr=False)
     _dice_hist: np.ndarray = field(default=None, init=False, repr=False)
     _mask_hist: np.ndarray = field(default=None, init=False, repr=False)
@@ -24,6 +25,7 @@ class Simulator:
     _token_exists_mask: np.ndarray = field(default=None, init=False, repr=False)
     _hist_len: int = field(default=0, init=False, repr=False)
     _hist_ptr: int = field(default=0, init=False, repr=False)
+    _agent_reward_acc: float = field(default=0.0, init=False, repr=False)
 
     def __post_init__(self) -> None:
         # Expect Game to be constructed by caller with players and strategies.
@@ -48,16 +50,17 @@ class Simulator:
         obj.agent_index = agent_index
         obj.game = game
         # Initialize token sequence buffers directly
-        obj.history_T = 10
+        obj.history_T = config.HISTORY_LENGTH
         agent_color = int(game.players[agent_index].color)
-        obj._pos_hist = np.zeros((10, 16), dtype=np.int64)
-        obj._dice_hist = np.zeros((10,), dtype=np.int64)
-        obj._mask_hist = np.zeros((10, 16), dtype=np.bool_)
-        obj._player_hist = np.zeros((10,), dtype=np.int64)
+        obj._pos_hist = np.zeros((config.HISTORY_LENGTH, 16), dtype=np.int64)
+        obj._dice_hist = np.zeros((config.HISTORY_LENGTH,), dtype=np.int64)
+        obj._mask_hist = np.zeros((config.HISTORY_LENGTH, 16), dtype=np.bool_)
+        obj._player_hist = np.zeros((config.HISTORY_LENGTH,), dtype=np.int64)
         obj._token_colors = game.board.token_colors(agent_color)
         obj._token_exists_mask = game.board.token_exists_mask(agent_color)
         obj._hist_len = 0
         obj._hist_ptr = 0
+        obj._agent_reward_acc = 0.0
         return obj
 
     # --- Token sequence observation helpers ---
@@ -209,6 +212,10 @@ class Simulator:
 
         # Apply agent's move
         res = self.game.apply_move(agent_move)
+        # Accumulate immediate agent reward from own move
+        self._agent_reward_acc += (
+            float(res.rewards.get(self.agent_index, 0.0)) if res.rewards else 0.0
+        )
         self._update_transition_summaries(self.agent_index, agent_move, res)
         # Log atomic move in history
         self._append_history(agent_move.dice_roll, self.agent_index)
@@ -231,6 +238,12 @@ class Simulator:
                 if mv is not None:
                     opp_res = self.game.apply_move(mv)
                     self._update_transition_summaries(idx, mv, opp_res)
+                    # Accumulate opponent-driven rewards affecting agent (e.g., their finish)
+                    self._agent_reward_acc += (
+                        float(opp_res.rewards.get(self.agent_index, 0.0))
+                        if opp_res.rewards
+                        else 0.0
+                    )
                     self._append_history(dice, idx)
                 idx = (idx + 1) % total_players
 
@@ -250,6 +263,8 @@ class Simulator:
         # Reset transition summaries only if requested
         if reset_summaries:
             self.game.board.reset_transition_summaries()
+        # Reset accumulation for this opponents phase
+        self._agent_reward_acc = 0.0
 
         total = len(self.game.players)
         idx = (self.agent_index + 1) % total
@@ -280,6 +295,12 @@ class Simulator:
                 mv = decision if decision is not None else random.choice(legal)
                 result = self.game.apply_move(mv)
                 self._update_transition_summaries(idx, mv, result)
+                # Accumulate opponent-driven rewards affecting agent
+                self._agent_reward_acc += (
+                    float(result.rewards.get(self.agent_index, 0.0))
+                    if result.rewards
+                    else 0.0
+                )
                 self._append_history(dice, idx)
                 extra = result.extra_turn and result.events.move_resolved
 

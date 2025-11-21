@@ -13,6 +13,7 @@ from stable_baselines3.common.callbacks import (
 from stable_baselines3.common.vec_env import (
     DummyVecEnv,
     SubprocVecEnv,
+    VecCheckNan,
     VecMonitor,
     VecNormalize,
 )
@@ -31,6 +32,9 @@ from ludo_rl.ludo_king.config import config, net_config
 from ludo_rl.ludo_king.reward import reward_config
 from tools.arguments import TrainingSetup, parse_train_args
 from tools.scheduler import CoefScheduler, lr_schedule
+
+os.environ["WANDB_START_METHOD"] = "thread"
+os.environ["WANDB_DISABLE_CODE"] = "false"
 
 
 class ProfilerStepCallback(BaseCallback):
@@ -69,6 +73,7 @@ if __name__ == "__main__":
     else:
         train_env = SubprocVecEnv([lambda: LudoEnv() for _ in range(args.num_envs)])
     train_env = VecMonitor(train_env)
+    train_env = VecCheckNan(train_env, raise_exception=True)
     train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
 
     logger.debug("--- Setting up Callbacks ---")
@@ -89,22 +94,23 @@ if __name__ == "__main__":
     )
 
     callbacks = [entropy_callback]
-    wandb.init(
-        project="ludo-king-ppo",
-        name=run_id,
-        config=asdict(
-            TrainingSetup(
-                config=config,
-                network_config=net_config,
-                reward_config=reward_config,
-                train_config=args,
-            )
-        ),
-        sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
-        monitor_gym=True,  # auto-upload the videos of agents playing the game
-        save_code=True,  # optional
-    )
+
     if not args.profile:
+        wandb.init(
+            project="ludo-king-ppo",
+            name=run_id,
+            config=asdict(
+                TrainingSetup(
+                    config=config,
+                    network_config=net_config,
+                    reward_config=reward_config,
+                    train_config=args,
+                )
+            ),
+            sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
+            monitor_gym=False,  # auto-upload the videos of agents playing the game
+            save_code=False,  # optional
+        )
         callbacks.append(checkpoint_callback)
         callbacks.append(WandbCallback())
 
@@ -134,11 +140,17 @@ if __name__ == "__main__":
         n_epochs=args.n_epochs,
         gamma=args.gamma,
         gae_lambda=args.gae_lambda,
-        clip_range=lr_schedule(lr_min=0.15, lr_max=args.clip_range),
+        clip_range=(
+            lr_schedule(lr_min=args.clip_range * 0.6, lr_max=args.clip_range)
+            if not args.use_constant
+            else args.clip_range
+        ),
         ent_coef=args.ent_coef,
         device=args.device,
-        learning_rate=lr_schedule(
-            lr_min=args.learning_rate * 0.3, lr_max=args.learning_rate
+        learning_rate=(
+            lr_schedule(lr_min=args.learning_rate * 0.6, lr_max=args.learning_rate)
+            if not args.use_constant
+            else args.learning_rate
         ),
         target_kl=args.target_kl,
         vf_coef=args.vf_coef,
@@ -212,6 +224,7 @@ if __name__ == "__main__":
         model.learn(
             total_timesteps=args.total_timesteps,
             callback=CallbackList(callbacks),
+            log_interval=5,
         )
 
     # --- Save the Final Model ---

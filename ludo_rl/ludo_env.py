@@ -70,18 +70,12 @@ class LudoEnv(gym.Env):
             for s in os.getenv("OPPONENTS", ",".join(available_strategies())).split(",")
             if s
         ]
-        logger.info(
-            f"Configured opponents ({king_config.NUM_PLAYERS} players): {self.opponents}"
-        )
         # 0 = random per seat, 1 = sequential cycling
         try:
-            self.strategy_selection: int = int(
-                os.getenv("STRATEGY_SELECTION", "0") or "0"
-            )
+            self.strategy_selection: int = int(os.getenv("STRATEGY_SELECTION", "0"))
         except ValueError as e:
             logger.warning(f"Invalid STRATEGY_SELECTION value, defaulting to 0: {e}")
             self.strategy_selection = 0
-        logger.info(f"Strategy selection mode: {self.strategy_selection}")
         # Track resets to advance sequential selection across episodes
         self._reset_count: int = 0
 
@@ -94,13 +88,20 @@ class LudoEnv(gym.Env):
                 "positions": spaces.Box(
                     low=0,
                     high=king_config.PATH_LENGTH - 1,
-                    shape=(10, 16),
+                    shape=(king_config.HISTORY_LENGTH, 16),
                     dtype=np.int64,
                 ),
-                "dice_history": spaces.Box(low=0, high=6, shape=(10,), dtype=np.int64),
-                "token_mask": spaces.Box(low=0, high=1, shape=(10, 16), dtype=np.bool_),
+                "dice_history": spaces.Box(
+                    low=0, high=6, shape=(king_config.HISTORY_LENGTH,), dtype=np.int64
+                ),
+                "token_mask": spaces.Box(
+                    low=0,
+                    high=1,
+                    shape=(king_config.HISTORY_LENGTH, 16),
+                    dtype=np.bool_,
+                ),
                 "player_history": spaces.Box(
-                    low=0, high=3, shape=(10,), dtype=np.int64
+                    low=0, high=3, shape=(king_config.HISTORY_LENGTH,), dtype=np.int64
                 ),
                 "token_colors": spaces.Box(low=0, high=3, shape=(16,), dtype=np.int64),
                 "current_dice": spaces.Box(low=1, high=6, shape=(1,), dtype=np.int64),
@@ -268,6 +269,8 @@ class LudoEnv(gym.Env):
                 reward += compute_blockade_hits_bonus(
                     float(self.game.board.blockade_hits.sum())
                 )
+            # Add any opponent-driven rewards that affect agent (urgency signals)
+            reward += float(self.sim._agent_reward_acc)
 
         # 4) Prepare next observation
         self.current_dice_roll = self.game.roll_dice()
@@ -301,6 +304,8 @@ class LudoEnv(gym.Env):
             self.current_dice_roll = self.game.roll_dice()
             obs = self._build_observation()
             info = self._get_info()
+            # Accumulate urgency signals during prolonged opponent rounds
+            reward += float(self.sim._agent_reward_acc)
             terminated, truncated = self._check_game_over()
 
         if truncated:

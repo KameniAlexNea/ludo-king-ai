@@ -6,7 +6,7 @@ from unittest.mock import patch
 import numpy as np
 
 from ludo_rl.ludo_env import LudoEnv
-from ludo_rl.ludo_king.config import reward_config
+from ludo_rl.ludo_king.config import config, reward_config
 from ludo_rl.ludo_king.game import Game
 
 
@@ -19,7 +19,7 @@ class LudoEnvTests(unittest.TestCase):
 
     def test_reset_provides_valid_observation_and_mask(self) -> None:
         obs, info = self.env.reset()
-        self.assertEqual(obs["positions"].shape, (10, 16))
+        self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
         self.assertEqual(obs["current_dice"].shape, (1,))
         self.assertTrue(info["action_mask"].any())
         np.testing.assert_array_equal(self.env.action_masks(), info["action_mask"])
@@ -56,10 +56,10 @@ class LudoEnvTests(unittest.TestCase):
         ):
             self.env.move_map = {}
             obs, reward, terminated, truncated, info = self.env.step(0)
-        self.assertEqual(reward, reward_config.lose)
+        self.assertEqual(reward, reward_config.skipped_turn)
         self.assertFalse(terminated)
         self.assertFalse(truncated)
-        self.assertEqual(obs["positions"].shape, (10, 16))
+        self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
         # action_mask should be a sequence of booleans (e.g., list or ndarray)
         self.assertIsInstance(info["action_mask"], (list, np.ndarray))
         self.assertTrue(
@@ -70,7 +70,7 @@ class LudoEnvTests(unittest.TestCase):
         _, info = self.env.reset()
         action = int(np.where(info["action_mask"])[0][0])
         obs, reward, terminated, truncated, next_info = self.env.step(action)
-        self.assertEqual(obs["positions"].shape, (10, 16))
+        self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
         self.assertIsInstance(reward, float)
         self.assertIn("action_mask", next_info)
         self.assertFalse(terminated and truncated)
@@ -88,7 +88,7 @@ class LudoEnvTests(unittest.TestCase):
         self.assertFalse(truncated)
         self.assertIn("final_rank", info)
         self.assertGreater(reward, 0.0)
-        self.assertEqual(obs["positions"].shape, (10, 16))
+        self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
 
     def test_render_returns_summary(self) -> None:
         self.env.reset()
