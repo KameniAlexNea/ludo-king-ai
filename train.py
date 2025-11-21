@@ -33,6 +33,9 @@ from ludo_rl.ludo_king.reward import reward_config
 from tools.arguments import TrainingSetup, parse_train_args
 from tools.scheduler import CoefScheduler, lr_schedule
 
+os.environ["WANDB_START_METHOD"] = "thread"
+os.environ["WANDB_DISABLE_CODE"] = "false"
+
 
 class ProfilerStepCallback(BaseCallback):
     """Steps the PyTorch profiler once per environment step."""
@@ -105,8 +108,8 @@ if __name__ == "__main__":
                 )
             ),
             sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
-            monitor_gym=True,  # auto-upload the videos of agents playing the game
-            save_code=True,  # optional
+            monitor_gym=False,  # auto-upload the videos of agents playing the game
+            save_code=False,  # optional
         )
         callbacks.append(checkpoint_callback)
         callbacks.append(WandbCallback())
@@ -137,12 +140,16 @@ if __name__ == "__main__":
         n_epochs=args.n_epochs,
         gamma=args.gamma,
         gae_lambda=args.gae_lambda,
-        clip_range=lr_schedule(lr_min=args.clip_range * 0.6, lr_max=args.clip_range),
+        clip_range=(
+            lr_schedule(lr_min=args.clip_range * 0.6, lr_max=args.clip_range)
+            if not args.use_constant
+            else args.clip_range
+        ),
         ent_coef=args.ent_coef,
         device=args.device,
         learning_rate=(
             lr_schedule(lr_min=args.learning_rate * 0.6, lr_max=args.learning_rate)
-            if net_config.use_scheduler
+            if not args.use_constant
             else args.learning_rate
         ),
         target_kl=args.target_kl,

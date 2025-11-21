@@ -28,6 +28,7 @@ class TrainConfig:
     target_kl: float
     use_transformer: bool = False
     profile: bool = False
+    use_constant: bool = False
 
 
 def build_train_parser() -> argparse.ArgumentParser:
@@ -48,6 +49,7 @@ def build_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint-freq", type=int, default=1_000_000)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--target-kl", type=float, default=0.2)
+    parser.add_argument("--use-constant", action="store_true", help="Remove annealing")
     parser.add_argument(
         "--use-transformer",
         action="store_true",
@@ -91,6 +93,7 @@ def parse_train_args(args: list[str] | None = None) -> TrainConfig:
         profile=namespace.profile,
         target_kl=namespace.target_kl,
         vf_coef=namespace.vf_coef,
+        use_constant=namespace.use_constant,
     )
 
 

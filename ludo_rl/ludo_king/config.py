@@ -64,7 +64,6 @@ class NetworkConfig:
     vf: list[int] = field(
         default_factory=lambda: [int(x) for x in os.getenv("VF", "64").split(",")]
     )
-    use_scheduler: bool = True
     # Transformer hyperparameters (configurable via env)
     trans_nhead: int = int(os.getenv("TRANS_NHEAD", 4))
     trans_num_layers: int = int(os.getenv("TRANS_NUM_LAYERS", 2))
