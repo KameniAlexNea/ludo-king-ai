@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Optional, Sequence
 
 import numpy as np
 from loguru import logger
+import random
+from ludo_rl.strategy.registry import create as create_strategy
 
 if TYPE_CHECKING:  # avoid runtime imports to prevent circular deps
     from ludo_rl.strategy.base import BaseStrategy
@@ -49,10 +51,10 @@ class Player:
         support simple strategies that accept only (moves).
         """
         # Ensure a strategy instance exists; do not replace existing strategy based on name
+        if self.strategy_name == "random":
+            return random.choice(legal_moves) if legal_moves else None
         try:
             if not self.strategy:
-                from ludo_rl.strategy.registry import create as create_strategy
-
                 self.strategy = create_strategy(self.strategy_name)
         except KeyError as e:
             logger.warning(
@@ -60,7 +62,7 @@ class Player:
             )
             # Unknown strategy: fallback to random legal move and mark as random
             self.strategy_name = "random"
-            return next(iter(legal_moves), None) if legal_moves else None
+            return random.choice(legal_moves) if legal_moves else None
 
         # Build move_choices and action_mask per legacy extractor expectations
         pieces_per_player = len(self.pieces)

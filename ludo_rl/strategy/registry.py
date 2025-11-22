@@ -39,7 +39,7 @@ STRATEGY_REGISTRY: Dict[str, BaseStrategy] = {
 def create(strategy_name: str, use_create=True, **kwargs):
     cls = STRATEGY_REGISTRY.get(strategy_name.lower())
     if cls is None:
-        raise KeyError(f"Unknown strategy '{strategy_name}'.")
+        raise KeyError(f"'{strategy_name}' is not a registered strategy.")
     if use_create:
         return cls.create_instance()
     return cls(**kwargs)

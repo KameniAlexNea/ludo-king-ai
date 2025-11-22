@@ -14,5 +14,5 @@ class HumanStrategy(BaseStrategy):
     name = "human"
     config: ClassVar[HumanStrategyConfig] = HumanStrategyConfig()
 
-    def _softmax(self, ctx: StrategyContext, move: MoveOption):
+    def _score_move(self, ctx: StrategyContext, move: MoveOption):
         return 1.0
