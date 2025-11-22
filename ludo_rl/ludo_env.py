@@ -209,7 +209,12 @@ class LudoEnv(gym.Env):
             # Assign picks to the chosen candidate seats
             for seat_idx, strat_name in zip(seat_indices[:n_added], picks):
                 lineup[seat_idx] = strat_name
-        if self._reset_count in (0, self.curriculum_interval_resets, 2 * self.curriculum_interval_resets, 3 * self.curriculum_interval_resets):
+        if self._reset_count in (
+            0,
+            self.curriculum_interval_resets,
+            2 * self.curriculum_interval_resets,
+            3 * self.curriculum_interval_resets,
+        ):
             logger.info(f"Opponent lineup for reset {self._reset_count}: {lineup}")
         self._fixed_opponents_strategies = lineup
         return lineup

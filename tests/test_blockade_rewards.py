@@ -162,6 +162,37 @@ class BlockadeRewardTests(unittest.TestCase):
             game.players[0].pieces[0].position, 10, "Piece should move to new position"
         )
 
+    def test_own_blockade_blocks_behind_piece(self):
+        """Pieces 0,1 form blockade at pos 6; piece 2 at 3 (dice=3 lands on blockade); only 0,1 valid."""
+        players = [
+            Player(Color.RED),
+            Player(Color.GREEN),
+            Player(Color.YELLOW),
+            Player(Color.BLUE),
+        ]
+        game = Game(players=players)
+
+        agent = game.players[0]
+        blockade_pos = 6
+        agent.pieces[0].position = blockade_pos
+        agent.pieces[1].position = blockade_pos
+        behind_pos = blockade_pos - 1
+        agent.pieces[2].position = behind_pos
+        agent.pieces[3].position = 0  # safe
+
+        # Opponents safe
+        for p in game.players[1:]:
+            for pc in p.pieces:
+                pc.position = 0
+
+        dice = 3
+        legal_moves = game.legal_moves(0, dice)
+        valid_pieces = {int(m.piece_id) for m in legal_moves}
+
+        self.assertIn(0, valid_pieces, "Piece 0 should be movable")
+        self.assertIn(1, valid_pieces, "Piece 1 should be movable")
+        self.assertNotIn(2, valid_pieces, "Piece 2 blocked by own blockade")
+
 
 if __name__ == "__main__":
     unittest.main()
