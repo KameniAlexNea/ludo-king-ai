@@ -138,8 +138,12 @@ class LudoEnv(gym.Env):
         """
         # 1. Check for termination (win condition)
         assert self.game is not None
-        player = self.game.players[self.agent_index]
-        terminated = player.check_won()
+        if king_config.RANK_ENV:
+            player = self.game.players[self.agent_index]
+            terminated = player.check_won()
+        else:
+            # Stop if ANY player wins first
+            terminated = any(p.check_won() for p in self.game.players)
 
         # 2. Check for truncation (turn limit)
         truncated = self.current_turn >= self.max_game_turns
@@ -280,10 +284,20 @@ class LudoEnv(gym.Env):
         # 5) Check for termination/truncation
         terminated, truncated = self._check_game_over()
         if terminated:
-            # Rank: number of players who have won at this point
-            rank = sum(p.check_won() for p in self.game.players)
-            reward += compute_terminal_reward(len(self.game.players), rank)
-            info["final_rank"] = rank
+            if king_config.RANK_ENV:
+                # Continue until agent finishes: rank-based
+                rank = sum(p.check_won() for p in self.game.players)
+                reward += compute_terminal_reward(len(self.game.players), rank)
+                info["final_rank"] = rank
+            else:
+                # Stop at first win (any player)
+                agent_won = self.game.players[self.agent_index].check_won()
+                if agent_won:
+                    reward += reward_config.win
+                    info["win"] = True
+                else:
+                    reward += reward_config.lose
+                    info["win"] = False
             return obs, reward, terminated, truncated, info
 
         if truncated:
@@ -307,6 +321,16 @@ class LudoEnv(gym.Env):
             # Accumulate urgency signals during prolonged opponent rounds
             reward += float(self.sim._agent_reward_acc)
             terminated, truncated = self._check_game_over()
+            if terminated and not king_config.RANK_ENV:
+                # Stop early if any win during no-move loop (non-rank mode)
+                agent_won = self.game.players[self.agent_index].check_won()
+                if agent_won:
+                    reward += reward_config.win
+                    info["win"] = True
+                else:
+                    reward += reward_config.lose
+                    info["win"] = False
+                return obs, reward, terminated, truncated, info
 
         if truncated:
             reward += reward_config.draw
