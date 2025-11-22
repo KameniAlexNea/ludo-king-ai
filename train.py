@@ -1,6 +1,7 @@
 import os
 import time
 from dataclasses import asdict
+from glob import glob
 
 import torch
 from loguru import logger
@@ -35,6 +36,16 @@ from tools.scheduler import CoefScheduler, lr_schedule
 
 os.environ["WANDB_START_METHOD"] = "thread"
 os.environ["WANDB_DISABLE_CODE"] = "false"
+
+
+def load_vecnormalize(path: str, env: VecNormalize) -> VecNormalize:
+    """Load a VecNormalize wrapper from disk and attach to env."""
+    folder = os.path.dirname(path)
+    vect_env_paths = sorted(glob(os.path.join(folder, "*vecnormalize_*_steps.pkl")))
+    loaded_vn = VecNormalize.load(vect_env_paths[-1], env)
+    loaded_vn.training = True  # Keep training
+    loaded_vn.norm_reward = True  # Normalize rewards
+    return loaded_vn
 
 
 class ProfilerStepCallback(BaseCallback):
@@ -74,7 +85,9 @@ if __name__ == "__main__":
         train_env = SubprocVecEnv([lambda: LudoEnv() for _ in range(args.num_envs)])
     train_env = VecMonitor(train_env)
     train_env = VecCheckNan(train_env, raise_exception=True)
-    train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
+    train_env = VecNormalize(
+        train_env, norm_obs=False, norm_reward=True, clip_reward=5.0
+    )
 
     logger.debug("--- Setting up Callbacks ---")
 
@@ -157,6 +170,7 @@ if __name__ == "__main__":
     )
     if args.resume:
         logger.info(f"--- Resuming training from {args.resume} ---")
+        train_env = load_vecnormalize(args.resume, train_env)
         model = MaskablePPO.load(
             args.resume,
             env=train_env,
@@ -169,6 +183,10 @@ if __name__ == "__main__":
             policy_kwargs=policy_kwargs,
             **init_kwargs,
         )
+    seed = getattr(args, "seed", 42)
+    model.set_random_seed(seed)
+    train_env.seed(seed)
+    train_env.reset()
 
     print("--- Model Summary ---")
     print(model.policy)

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional, Sequence
 
 import numpy as np
 from loguru import logger
-import random
+
 from ludo_rl.strategy.registry import create as create_strategy
 
 if TYPE_CHECKING:  # avoid runtime imports to prevent circular deps
