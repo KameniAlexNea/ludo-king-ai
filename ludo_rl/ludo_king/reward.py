@@ -161,7 +161,7 @@ def _progress_normalized(my_rels: list[int]) -> float:
     return (total / max(1, len(my_rels))) if my_rels else 0.0
 
 
-def compute_state_potential(game, agent_index: int, depth: int) -> float:
+def compute_state_potential(game: "Game", agent_index: int, depth: int) -> float:
     """
     Compute a dense potential Φ(s) from risk/opportunity signals.
     """
@@ -213,7 +213,7 @@ def compute_terminal_reward(num_players: int, rank: int) -> float:
     """
 
     if rank == 1:
-        return float(reward_config.win)
+        return reward_config.win
     # Scale the (negative) lose reward linearly by placement severity:
     # 2nd -> small fraction, ... -> last -> full penalty
     # Example (4 players): rank 2 => 1/3, rank 3 => 2/3, rank 4 => 1

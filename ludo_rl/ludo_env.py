@@ -109,6 +109,11 @@ class LudoEnv(gym.Env):
         )
         self._fixed_opponents_strategies: list[str] = None
         self.use_fixed_opponents = use_fixed_opponents
+        # Curriculum interval in resets: each interval replaces one random baseline
+        # opponent with a candidate strategy from `self.opponents`.
+        self.curriculum_interval_resets: int = int(
+            os.getenv("CURRICULUM_INTERVAL_RESETS", "250000")
+        )
 
     def _build_observation(self) -> Dict[str, np.ndarray]:
         assert self.game is not None
@@ -151,19 +156,61 @@ class LudoEnv(gym.Env):
         return terminated, truncated
 
     def _get_lineup(self, num_opponents: int) -> List[str]:
+        # Respect fixed-opponents caching if enabled
         if self.use_fixed_opponents and self._fixed_opponents_strategies is not None:
             if self._reset_count % king_config.FIXED_OPPONENTS_STEPS != 0:
                 return self._fixed_opponents_strategies
-        if self.strategy_selection == 0:
-            # Simple: pick each opponent independently at random (with replacement)
-            lineup = [self.rng.choice(self.opponents) for _ in range(num_opponents)]
+
+        # Curriculum schedule:
+        # - For the first N resets (interval), all opponents are baseline random
+        # - Each interval thereafter, replace one baseline random seat with a
+        #   candidate strategy drawn from `self.opponents`
+        # Example for 3 opponents and interval=250k resets:
+        #   0-250k:   3 random
+        #   250-500k: 2 random + 1 candidate
+        #   500-750k: 1 random + 2 candidates
+        #   750-1M:   0 random + 3 candidates
+
+        # Determine how many candidate seats to fill this reset
+        if self.curriculum_interval_resets <= 0:
+            intervals_elapsed = num_opponents  # fallback: all candidates
         else:
-            # Sequential cycling through provided opponents across episodes
-            start = (self._reset_count * num_opponents) % max(1, len(self.opponents))
-            lineup = [
-                self.opponents[(start + i) % len(self.opponents)]
-                for i in range(num_opponents)
-            ]
+            intervals_elapsed = self._reset_count // self.curriculum_interval_resets
+        n_added = int(min(num_opponents, max(0, intervals_elapsed)))
+
+        # Build seat positions and fill which seats are candidates vs baseline random
+        seat_indices = list(range(num_opponents))
+        self.rng.shuffle(seat_indices)  # randomize which seats get candidates
+
+        # Baseline: explicit 'random' strategy in every seat
+        lineup: List[str] = ["random"] * num_opponents
+
+        # Candidate pool excludes 'random'
+        candidate_pool = [
+            s for s in self.opponents if s and s.strip().lower() != "random"
+        ]
+
+        if n_added > 0 and len(candidate_pool) > 0:
+            if self.strategy_selection == 0:
+                # Randomly sample candidates per added seat (with replacement if needed)
+                picks: List[str] = []
+                for _ in range(n_added):
+                    picks.append(self.rng.choice(candidate_pool))
+            else:
+                # Sequential cycling over candidates across episodes
+                start = (self._reset_count * max(1, n_added)) % max(
+                    1, len(candidate_pool)
+                )
+                picks = [
+                    candidate_pool[(start + i) % len(candidate_pool)]
+                    for i in range(n_added)
+                ]
+
+            # Assign picks to the chosen candidate seats
+            for seat_idx, strat_name in zip(seat_indices[:n_added], picks):
+                lineup[seat_idx] = strat_name
+        if self._reset_count in (0, self.curriculum_interval_resets, 2 * self.curriculum_interval_resets, 3 * self.curriculum_interval_resets):
+            logger.info(f"Opponent lineup for reset {self._reset_count}: {lineup}")
         self._fixed_opponents_strategies = lineup
         return lineup
 
