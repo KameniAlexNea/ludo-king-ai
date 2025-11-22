@@ -19,8 +19,9 @@ import numpy as np
 from loguru import logger
 from sb3_contrib import MaskablePPO
 
-from ludo_rl.ludo_king import Board, Color, Game, Player, Simulator
+from ludo_rl.ludo_king import Board, Color, Game, Simulator
 from ludo_rl.ludo_king import config as king_config
+from ludo_rl.ludo_king.player import Player
 
 POINTS_TABLE = (4, 3, 1, 0)
 

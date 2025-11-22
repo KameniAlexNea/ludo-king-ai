@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 
 from ludo_rl.ludo_king.config import strategy_config
-from ludo_rl.ludo_king.piece import Piece
+
+if TYPE_CHECKING:  # avoid runtime import to prevent circular deps
+    from ludo_rl.ludo_king.piece import Piece
 
 from .types import MoveOption, StrategyContext
 
@@ -17,7 +19,7 @@ def _create_move_options(
     safe_channel: np.ndarray,
     opponent_counts: np.ndarray,
 ) -> MoveOption:
-    piece: Piece = move["piece"]
+    piece: "Piece" = move["piece"]
     new_pos = move["new_pos"]
     current_pos = piece.position
     progress = _compute_progress(current_pos, new_pos)

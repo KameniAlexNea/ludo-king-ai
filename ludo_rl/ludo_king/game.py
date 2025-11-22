@@ -2,19 +2,22 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from .board import Board
 from .config import config, reward_config
 from .piece import Piece
-from .player import Player
+
+if TYPE_CHECKING:  # avoid runtime import to prevent circular deps
+    from .player import Player
+
 from .reward import compute_move_rewards, compute_state_potential, shaping_delta
 from .types import Move, MoveEvents, MoveResult
 
 
 @dataclass(slots=True)
 class Game:
-    players: List[Player]
+    players: List["Player"]
     board: Board = field(init=False)
     rng: random.Random = field(default_factory=random.Random, init=False)
     # Cache for potential-based shaping: last Φ(s) per player

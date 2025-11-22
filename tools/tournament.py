@@ -11,8 +11,9 @@ from typing import Dict, List, Sequence, Tuple
 import numpy as np
 from loguru import logger
 
-from ludo_rl.ludo_king import Board, Color, Game, Player
+from ludo_rl.ludo_king import Board, Color, Game
 from ludo_rl.ludo_king import config as king_config
+from ludo_rl.ludo_king.player import Player
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 from ludo_rl.strategy.registry import available as available_strategies
 
