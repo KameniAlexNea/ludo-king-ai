@@ -29,22 +29,22 @@ class BaseTokenSeqExtractor(BaseFeaturesExtractor):
         self.curr_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
 
     def _prepare_inputs(self, observations: dict):
-        positions = observations["positions"].long()
+        positions: torch.Tensor = observations["positions"].long()
         if positions.dim() == 2:
             positions = positions.unsqueeze(0)
-        dice_hist = observations["dice_history"].long()
+        dice_hist: torch.Tensor = observations["dice_history"].long()
         if dice_hist.dim() == 1:
             dice_hist = dice_hist.unsqueeze(0)
-        player_hist = observations["player_history"].long()
+        player_hist: torch.Tensor = observations["player_history"].long()
         if player_hist.dim() == 1:
             player_hist = player_hist.unsqueeze(0)
-        token_mask = observations["token_mask"].to(dtype=torch.bool)
+        token_mask: torch.Tensor = observations["token_mask"].to(dtype=torch.bool)
         if token_mask.dim() == 2:
             token_mask = token_mask.unsqueeze(0)
-        token_colors = observations["token_colors"].long()
+        token_colors: torch.Tensor = observations["token_colors"].long()
         if token_colors.dim() == 1:
             token_colors = token_colors.unsqueeze(0)
-        current_dice = observations["current_dice"].long()
+        current_dice: torch.Tensor = observations["current_dice"].long()
         if current_dice.dim() == 1:
             current_dice = current_dice.unsqueeze(0)
         B, T, N = positions.shape

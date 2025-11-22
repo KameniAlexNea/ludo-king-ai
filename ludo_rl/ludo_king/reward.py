@@ -88,22 +88,6 @@ def _rel_positions_for_agent(game: "Game", agent_index: int):
     return agent_color, my_rels, opps
 
 
-def _occupied_abs_positions_excluding_color(
-    game: "Game", exclude_color: int
-) -> set[int]:
-    """Build a set of absolute ring positions (1..51) occupied by any opponent piece."""
-    occ: set[int] = set()
-    for pl in game.players:
-        c = int(pl.color)
-        if c == exclude_color:
-            continue
-        for pc in pl.pieces:
-            r = int(pc.position)
-            if 1 <= r <= king_config.MAIN_TRACK_END:
-                occ.add(game.board.absolute_position(c, r))
-    return occ
-
-
 def _cap_opp_probability(
     game: "Game", agent_color: int, my_rels: list[int], opp_occ_abs: set[int]
 ) -> float:

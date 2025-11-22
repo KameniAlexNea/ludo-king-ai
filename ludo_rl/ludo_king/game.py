@@ -64,12 +64,6 @@ class Game:
             dest = self._destination_for_roll(pc.position, dice)
             if dest is None:
                 continue
-            # cannot stack beyond 2 on main track
-            if (
-                dest <= config.MAIN_TRACK_END
-                and self.board.count_at_relative(player.color, dest) >= 2
-            ):
-                continue
             # Note: Opponent blockade handling is enforced in apply_move (including crossing/landing)
             moves.append(
                 Move(

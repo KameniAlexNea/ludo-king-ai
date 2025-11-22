@@ -229,13 +229,19 @@ class Simulator:
                 if self.game.players[idx].check_won():
                     idx = (idx + 1) % total_players
                     continue
-                dice = self.game.roll_dice()
-                legals = self.game.legal_moves(idx, dice)
-                # Build agent-relative board stack for this player color
-                agent_color = int(self.game.players[idx].color)
-                board_stack = self.game.board.build_tensor(agent_color)
-                mv = self.game.players[idx].choose(board_stack, dice, legals)
-                if mv is not None:
+
+                opp_extra = True
+                while opp_extra:
+                    dice = self.game.roll_dice()
+                    legals = self.game.legal_moves(idx, dice)
+                    if not legals:
+                        opp_extra = False
+                        break
+                    agent_color = int(self.game.players[idx].color)
+                    board_stack = self.game.board.build_tensor(agent_color)
+                    mv = self.game.players[idx].choose(board_stack, dice, legals)
+                    if mv is None:
+                        mv = random.choice(legals)
                     opp_res = self.game.apply_move(mv)
                     self._update_transition_summaries(idx, mv, opp_res)
                     # Accumulate opponent-driven rewards affecting agent (e.g., their finish)
@@ -245,6 +251,8 @@ class Simulator:
                         else 0.0
                     )
                     self._append_history(dice, idx)
+                    opp_extra = opp_res.extra_turn and opp_res.events.move_resolved
+
                 idx = (idx + 1) % total_players
 
         terminated = self.game.players[self.agent_index].check_won()

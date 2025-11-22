@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, ClassVar, Dict, Optional
 import numpy as np
 from sb3_contrib import MaskablePPO
 
+from ..ludo_king.config import config
 from .base import BaseStrategy, BaseStrategyConfig
 from .types import MoveOption, StrategyContext
 
@@ -32,7 +33,7 @@ class RLStrategy(BaseStrategy):
         self.model = model
         self.deterministic = deterministic
         self.model.policy.set_training_mode(False)
-        self._hist_T = int(model.observation_space["positions"].shape[0])
+        self._hist_T = int(config.HISTORY_LENGTH)
         # History buffers (agent-relative) to mirror env/simulator
         self._pos_hist: Optional[np.ndarray] = None  # (T,16) int64
         self._dice_hist: Optional[np.ndarray] = None  # (T,) int64
