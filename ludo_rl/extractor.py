@@ -1,7 +1,7 @@
 import gymnasium as gym
 import torch
+import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-from torch import nn
 
 from .ludo_king.config import config, net_config
 
@@ -144,13 +144,12 @@ class LudoCnnExtractor(BaseTokenSeqExtractor):
         tok = self._embed_tokens(
             positions, dice_hist, player_hist, token_mask, token_colors, B, T, N, device
         )
-        m = token_mask.to(dtype=tok.dtype).unsqueeze(-1)
-        tok = tok * m
-
-        # Condition every token on current dice
+        # Condition every token on current dice (before masking)
         base_curr_e = self._embed_current_dice(current_dice)  # (B, d)
         curr_e = base_curr_e.unsqueeze(1).unsqueeze(1).expand(B, T, N, -1)
         tok += curr_e
+        m = token_mask.to(dtype=tok.dtype).unsqueeze(-1)
+        tok *= m
 
         # Per-frame pooling: aggregate tokens with interactions
         frame_valid_count = (
@@ -160,7 +159,10 @@ class LudoCnnExtractor(BaseTokenSeqExtractor):
 
         # LSTM over frames: global temporal modeling
         lstm_out, _ = self.lstm(frame_feats)  # (B, T, token_feat_dim)
-        pooled = torch.mean(lstm_out, dim=1)  # mean over time (B, token_feat_dim)
+        # Bidirectional summary: forward final + backward final
+        forward_final = lstm_out[:, -1, : self.embed_dim]
+        backward_final = lstm_out[:, 0, self.embed_dim :]
+        pooled = torch.cat([forward_final, backward_final], dim=-1)
 
         combined = pooled
         combined = self.feature_norm(combined)
@@ -213,13 +215,13 @@ class LudoTransformerExtractor(BaseTokenSeqExtractor):
         tok = self._embed_tokens(
             positions, dice_hist, player_hist, token_mask, token_colors, B, T, N, device
         )
-        # Mask invalid tokens
-        m = token_mask.to(dtype=tok.dtype).unsqueeze(-1)
-        tok *= m
-        # Condition every token on current dice
+        # Condition every token on current dice (before masking)
         base_curr_e = self._embed_current_dice(current_dice)
         curr_e = base_curr_e.unsqueeze(1).unsqueeze(1).expand(B, T, N, -1)
         tok += curr_e
+        # Mask invalid tokens
+        m = token_mask.to(dtype=tok.dtype).unsqueeze(-1)
+        tok *= m
 
         seq = tok.view(B, T * N, self.embed_dim)
         mask = token_mask.view(B, T * N)

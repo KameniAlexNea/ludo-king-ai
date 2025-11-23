@@ -112,7 +112,7 @@ class LudoEnv(gym.Env):
         # Curriculum interval in resets: each interval replaces one random baseline
         # opponent with a candidate strategy from `self.opponents`.
         self.curriculum_interval_resets: int = int(
-            os.getenv("CURRICULUM_INTERVAL_RESETS", "250000")
+            os.getenv("CURRICULUM_INTERVAL_RESETS", "100000")
         )
 
     def _build_observation(self) -> Dict[str, np.ndarray]:
