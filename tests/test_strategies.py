@@ -240,7 +240,7 @@ class RLStrategyTests(unittest.TestCase):
             policy=SimpleNamespace(set_training_mode=lambda *_: None)
         )
         with mock.patch(
-            "ludo_rl.strategy.rl_agent.MaskablePPO.load", return_value=dummy_model
+            "ludo_rl.strategy.ml_strategies.rl_agent.MaskablePPO.load", return_value=dummy_model
         ) as loader:
             strategy = RLStrategy.configure_from_path("/tmp/model.zip", device="cpu")
         loader.assert_called_once_with("/tmp/model.zip", device="cpu")
@@ -311,7 +311,7 @@ class LLMStrategyTests(unittest.TestCase):
         fake_model = SimpleNamespace(invoke=lambda *_: {"content": '{"piece_id": 0}'})
 
         with mock.patch(
-            "ludo_rl.strategy.llm_agent.init_chat_model", return_value=fake_model
+            "ludo_rl.strategy.ml_strategies.llm_agent.init_chat_model", return_value=fake_model
         ) as init_mock:
             strategy = LLMStrategy.configure_with_model_name(
                 "gpt-5-nano",

@@ -35,7 +35,7 @@ class PlayerDecisionTests(unittest.TestCase):
 
     def test_player_decide_uses_configured_strategy(self) -> None:
         player = Player(color=0)
-        player.strategy_name = "rusher"
+        player.strategy_name = "killer"
         player.strategy = None  # ensure strategy is built from name
 
         from ludo_rl.ludo_king.types import Move
