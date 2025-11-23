@@ -3,14 +3,16 @@ from __future__ import annotations
 from typing import Dict, Type
 
 from .base import BaseStrategy
-from .cautious import CautiousStrategy
-from .defensive import DefensiveStrategy
-from .hoarder import HoarderStrategy
-from .homebody import HomebodyStrategy
 from .human import HumanStrategy
-from .killer import KillerStrategy
 from .llm_agent import LLMStrategy
 from .rl_agent import RLStrategy
+from .scripted_strategies import (
+    CautiousStrategy,
+    DefensiveStrategy,
+    HoarderStrategy,
+    HomebodyStrategy,
+    KillerStrategy,
+)
 
 STRATEGY_REGISTRY: Dict[str, BaseStrategy] = {
     CautiousStrategy.name: CautiousStrategy,
