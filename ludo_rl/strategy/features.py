@@ -171,7 +171,7 @@ def nearest_opponent_distance(distribution: Sequence[float], position: int) -> i
     return strategy_config.main_track_end
 
 
-def model_arena_results(top_k=3):
+def model_arena_results(top_k=None):
     arena = [
         ("defensive", 4962),
         ("cautious", 4710),
@@ -185,4 +185,4 @@ def model_arena_results(top_k=3):
         ("retaliator", 2994),
         ("support", 981),
     ]
-    return arena[:top_k]
+    return arena[:top_k] if top_k is not None else arena

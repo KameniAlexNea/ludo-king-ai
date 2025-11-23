@@ -5,6 +5,7 @@ from .defensive import DefensiveStrategy
 from .hoarder import HoarderStrategy
 from .homebody import HomebodyStrategy
 from .killer import KillerStrategy
+from .zhybrid import HybridStrategy
 
 __all__ = [
     "CautiousStrategy",
@@ -12,4 +13,5 @@ __all__ = [
     "HoarderStrategy",
     "HomebodyStrategy",
     "KillerStrategy",
+    "HybridStrategy",
 ]

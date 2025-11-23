@@ -11,18 +11,17 @@ from .scripted_strategies import (
     DefensiveStrategy,
     HoarderStrategy,
     HomebodyStrategy,
+    HybridStrategy,
     KillerStrategy,
 )
 
-STRATEGY_REGISTRY: Dict[str, BaseStrategy] = {
+STRATEGY_REGISTRY: Dict[str, Type[BaseStrategy]] = {
     CautiousStrategy.name: CautiousStrategy,
-    KillerStrategy.name: KillerStrategy,
     DefensiveStrategy.name: DefensiveStrategy,
     HoarderStrategy.name: HoarderStrategy,
     HomebodyStrategy.name: HomebodyStrategy,
-    RLStrategy.name: RLStrategy,
-    LLMStrategy.name: LLMStrategy,
-    HumanStrategy.name: HumanStrategy,
+    KillerStrategy.name: KillerStrategy,
+    HybridStrategy.name: HybridStrategy,
 }
 
 
