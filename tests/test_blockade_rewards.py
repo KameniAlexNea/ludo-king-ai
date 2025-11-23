@@ -193,6 +193,43 @@ class BlockadeRewardTests(unittest.TestCase):
         self.assertIn(1, valid_pieces, "Piece 1 should be movable")
         self.assertNotIn(2, valid_pieces, "Piece 2 blocked by own blockade")
 
+    def test_piece_on_opponent_safe_square_can_move(self):
+        """Green on Red's start (safe) can still move even if Red has a blockade there."""
+        players = [
+            Player(Color.RED),
+            Player(Color.GREEN),
+            Player(Color.YELLOW),
+            Player(Color.BLUE),
+        ]
+        game = Game(players=players)
+
+        # Red forms a blockade at its start square (relative 1 -> abs 1)
+        red = game.players[0]
+        red.pieces[0].position = 1
+        red.pieces[1].position = 1
+        red.pieces[2].position = 0
+        red.pieces[3].position = 0
+
+        # Place Green piece on Red's start absolute square (abs=1). For Green, that's relative 40.
+        green = game.players[1]
+        green.pieces[0].position = 40
+        green.pieces[1].position = 0
+        green.pieces[2].position = 0
+        green.pieces[3].position = 0
+
+        # Other opponents safe
+        for p in game.players[2:]:
+            for pc in p.pieces:
+                pc.position = 0
+
+        dice = 3
+        legal_moves = game.legal_moves(1, dice)  # Green's turn
+        valid_pieces = {int(m.piece_id) for m in legal_moves}
+
+        self.assertIn(
+            0, valid_pieces, "Green on opponent safe square should be able to move"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

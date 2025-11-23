@@ -169,3 +169,20 @@ def nearest_opponent_distance(distribution: Sequence[float], position: int) -> i
         if distribution[forward] > 0 or distribution[backward] > 0:
             return distance
     return strategy_config.main_track_end
+
+
+def model_arena_results(top_k=3):
+    arena = [
+        ("defensive", 4962),
+        ("cautious", 4710),
+        ("homebody", 4371),
+        ("hoarder", 4276),
+        ("probability", 3582),
+        ("killer", 3528),
+        ("finish_line", 3455),
+        ("heatseeker", 3398),
+        ("rusher", 3343),
+        ("retaliator", 2994),
+        ("support", 981),
+    ]
+    return arena[:top_k]
