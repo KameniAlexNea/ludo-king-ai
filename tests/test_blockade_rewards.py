@@ -68,7 +68,7 @@ class BlockadeRewardTests(unittest.TestCase):
 
         # We can't easily force a blockade scenario in the environment,
         # but we can verify it doesn't crash during normal play
-        obs, info = env.reset(seed=42)
+        _, info = env.reset(seed=42)
 
         steps = 0
         max_steps = 50
@@ -80,7 +80,7 @@ class BlockadeRewardTests(unittest.TestCase):
                     i for i, valid in enumerate(info["action_mask"]) if valid
                 ]
                 action = valid_actions[0]
-                obs, reward, terminated, truncated, info = env.step(action)
+                _, reward, terminated, truncated, info = env.step(action)
 
                 # Reward should always be a valid float
                 self.assertIsInstance(reward, (float, int), "Reward should be numeric")
