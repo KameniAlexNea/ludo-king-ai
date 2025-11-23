@@ -6,8 +6,8 @@ from typing import ClassVar
 
 from ludo_rl.ludo_king.config import strategy_config
 
-from .base import BaseStrategy, BaseStrategyConfig
-from .types import MoveOption, StrategyContext
+from ..base import BaseStrategy, BaseStrategyConfig
+from ..types import MoveOption, StrategyContext
 
 
 @dataclass(slots=True)

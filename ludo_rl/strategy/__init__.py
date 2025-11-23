@@ -3,9 +3,9 @@
 from .base import BaseStrategy
 from .features import build_move_options
 from .human import HumanStrategy
-from .llm_agent import LLMStrategy
+from .ml_strategies.llm_agent import LLMStrategy
+from .ml_strategies.rl_agent import RLStrategy
 from .registry import available, create
-from .rl_agent import RLStrategy
 from .scripted_strategies import (
     CautiousStrategy,
     DefensiveStrategy,

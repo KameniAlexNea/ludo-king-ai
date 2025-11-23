@@ -12,9 +12,8 @@ from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
 from ludo_rl.ludo_env import format_env_state
 from ludo_rl.ludo_king.config import config
 from ludo_rl.ludo_king.player import Player
-from ludo_rl.strategy import available, create
+from ludo_rl.strategy import HoarderStrategy, available, create
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
-from ludo_rl.strategy.rusher import RusherStrategy
 
 
 class StrategyRegistryTests(unittest.TestCase):
@@ -23,8 +22,8 @@ class StrategyRegistryTests(unittest.TestCase):
         self.assertEqual(set(available(False).keys()), expected)
 
     def test_create_returns_strategy_instance(self) -> None:
-        strategy = create("rusher")
-        self.assertIsInstance(strategy, RusherStrategy)
+        strategy = create(HoarderStrategy.name)
+        self.assertIsInstance(strategy, HoarderStrategy)
 
 
 class PlayerDecisionTests(unittest.TestCase):

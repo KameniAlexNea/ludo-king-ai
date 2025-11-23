@@ -11,19 +11,13 @@ from ludo_rl.ludo_king.config import config, strategy_config
 from ludo_rl.strategy import (
     CautiousStrategy,
     DefensiveStrategy,
-    FinishLineStrategy,
-    HeatSeekerStrategy,
     HoarderStrategy,
     HomebodyStrategy,
     KillerStrategy,
     LLMStrategy,
-    ProbabilityStrategy,
-    RetaliatorStrategy,
     RLStrategy,
-    RusherStrategy,
-    SupportStrategy,
 )
-from ludo_rl.strategy.llm_agent import DEFAULT_SYSTEM_PROMPT
+from ludo_rl.strategy.ml_strategies.llm_agent import DEFAULT_SYSTEM_PROMPT
 from ludo_rl.strategy.types import MoveOption, StrategyContext
 
 
@@ -92,22 +86,6 @@ def _move(
 
 
 class StrategySelectionTests(unittest.TestCase):
-    def test_probability_prefers_safer_move(self) -> None:
-        moves = [
-            _move(
-                piece_id=0,
-                current=5,
-                new=11,
-                progress=6,
-                distance=40,
-                enters_safe_zone=True,
-            ),
-            _move(piece_id=1, current=5, new=15, progress=10, distance=36, risk=3.0),
-        ]
-        ctx = _make_context(moves)
-        choice = ProbabilityStrategy().select_move(ctx)
-        self.assertEqual(choice.piece_id, 1)
-
     def test_cautious_stays_safe(self) -> None:
         moves = [
             _move(
@@ -173,24 +151,6 @@ class StrategySelectionTests(unittest.TestCase):
         choice = DefensiveStrategy().select_move(ctx)
         self.assertEqual(choice.piece_id, 0)
 
-    def test_finish_line_closes_game(self) -> None:
-        moves = [
-            _move(
-                piece_id=0, current=54, new=57, progress=3, distance=0, enters_home=True
-            ),
-            _move(
-                piece_id=1,
-                current=50,
-                new=55,
-                progress=5,
-                distance=2,
-                enters_safe_zone=True,
-            ),
-        ]
-        ctx = _make_context(moves)
-        choice = FinishLineStrategy().select_move(ctx)
-        self.assertEqual(choice.piece_id, 0)
-
     def test_hoarder_favors_blockade(self) -> None:
         moves = [
             _move(
@@ -231,75 +191,13 @@ class StrategySelectionTests(unittest.TestCase):
         choice = HomebodyStrategy().select_move(ctx)
         self.assertEqual(choice.piece_id, 0)
 
-    def test_heatseeker_moves_toward_opponents(self) -> None:
-        board = _make_board()
-        board[1, 11] = 1.0  # Opponent near square 11
-        board[2, 40] = 1.0
-        moves = [
-            _move(piece_id=0, current=6, new=10, progress=4, distance=47),
-            _move(piece_id=1, current=20, new=26, progress=6, distance=31),
-        ]
-        ctx = _make_context(moves, board=board)
-        choice = HeatSeekerStrategy().select_move(ctx)
-        self.assertEqual(choice.piece_id, 0)
-
-    def test_retaliator_prefers_engagement(self) -> None:
-        board = _make_board()
-        board[1, 18] = 1.0
-        moves = [
-            _move(
-                piece_id=0,
-                current=12,
-                new=18,
-                progress=6,
-                distance=39,
-                can_capture=True,
-                capture_count=1,
-            ),
-            _move(piece_id=1, current=22, new=26, progress=4, distance=31),
-        ]
-        ctx = _make_context(moves, board=board)
-        choice = RetaliatorStrategy().select_move(ctx)
-        self.assertEqual(choice.piece_id, 0)
-
-    def test_rusher_chases_progress(self) -> None:
-        moves = [
-            _move(
-                piece_id=0, current=0, new=11, progress=11, distance=46, extra_turn=True
-            ),
-            _move(piece_id=1, current=10, new=14, progress=4, distance=33),
-        ]
-        ctx = _make_context(moves)
-        choice = RusherStrategy().select_move(ctx)
-        self.assertEqual(choice.piece_id, 0)
-
-    def test_support_levels_team_development(self) -> None:
-        board = _make_board()
-        board[0, 0] = 1.0  # Yard representation
-        board[0, 20] = 1.0
-        moves = [
-            _move(
-                piece_id=0, current=0, new=6, progress=6, distance=51, extra_turn=True
-            ),
-            _move(piece_id=1, current=20, new=24, progress=4, distance=33),
-        ]
-        ctx = _make_context(moves, board=board)
-        choice = SupportStrategy().select_move(ctx)
-        self.assertEqual(choice.piece_id, 0)
-
     def test_create_instance_builds_strategy(self) -> None:
         strategy_classes = [
             CautiousStrategy,
             DefensiveStrategy,
-            FinishLineStrategy,
-            HeatSeekerStrategy,
             HoarderStrategy,
             HomebodyStrategy,
             KillerStrategy,
-            ProbabilityStrategy,
-            RetaliatorStrategy,
-            RusherStrategy,
-            SupportStrategy,
         ]
 
         for idx, strategy_cls in enumerate(strategy_classes):

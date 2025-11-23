@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, ClassVar, Dict, Optional
 import numpy as np
 from sb3_contrib import MaskablePPO
 
-from ..ludo_king.config import config
-from .base import BaseStrategy, BaseStrategyConfig
-from .types import MoveOption, StrategyContext
+from ...ludo_king.config import config
+from ..base import BaseStrategy, BaseStrategyConfig
+from ..types import MoveOption, StrategyContext
 
 if TYPE_CHECKING:
-    from ..ludo_king.game import Game
+    from ...ludo_king.game import Game
 
 
 @dataclass(slots=True)

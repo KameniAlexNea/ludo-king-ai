@@ -4,8 +4,8 @@ from typing import Dict, Type
 
 from .base import BaseStrategy
 from .human import HumanStrategy
-from .llm_agent import LLMStrategy
-from .rl_agent import RLStrategy
+from .ml_strategies.llm_agent import LLMStrategy
+from .ml_strategies.rl_agent import RLStrategy
 from .scripted_strategies import (
     CautiousStrategy,
     DefensiveStrategy,

@@ -16,7 +16,7 @@ from ludo_rl.ludo_king import Color, Game
 from ludo_rl.ludo_king import config as king_config
 from ludo_rl.ludo_king.player import Player
 from ludo_rl.ludo_king.simulator import Simulator
-from ludo_rl.strategy.llm_agent import (
+from ludo_rl.strategy.ml_strategies.llm_agent import (
     DEFAULT_SYSTEM_PROMPT,
     LLMStrategy,
     init_chat_model,
