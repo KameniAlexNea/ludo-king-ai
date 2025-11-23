@@ -41,7 +41,7 @@ class LudoEnv(gym.Env):
         Discrete(4), representing the choice of which piece to move (0, 1, 2, or 3).
     """
 
-    metadata = {"render_modes": ["human"], "render_fps": 4}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     def action_masks(self):
         # Helper for sb3_contrib.common.masking.ActionMasker
@@ -395,6 +395,17 @@ class LudoEnv(gym.Env):
     # --- Internal helpers ---
 
     def render(self):
+        if self.render_mode == "rgb_array":
+            if self.game is None:
+                return None
+            try:
+                from .ludo_king.render import render_from_game  # lazy import
+            except Exception as e:
+                logger.warning(f"RGB render not available: {e}")
+                return None
+            img = render_from_game(self.game, show_ids=False)
+            return np.asarray(img)
+
         return format_env_state(self)
 
     def close(self):
