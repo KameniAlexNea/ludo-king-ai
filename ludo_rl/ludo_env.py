@@ -112,7 +112,7 @@ class LudoEnv(gym.Env):
         # Curriculum interval in resets: each interval replaces one random baseline
         # opponent with a candidate strategy from `self.opponents`.
         self.curriculum_interval_resets: int = int(
-            os.getenv("CURRICULUM_INTERVAL_RESETS", "100000")
+            os.getenv("CURRICULUM_INTERVAL_RESETS", "500")
         )
 
     def _build_observation(self) -> Dict[str, np.ndarray]:
@@ -183,7 +183,7 @@ class LudoEnv(gym.Env):
         self.rng.shuffle(seat_indices)  # randomize which seats get candidates
 
         # Baseline: explicit 'random' strategy in every seat
-        lineup: List[str] = ["random"] * num_opponents
+        lineup: List[str] = ["killer"] * num_opponents
 
         # Candidate pool excludes 'random'
         candidate_pool = [
