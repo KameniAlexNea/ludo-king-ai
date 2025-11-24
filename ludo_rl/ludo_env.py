@@ -19,7 +19,7 @@ from .ludo_king.reward import (
     compute_terminal_reward,
 )
 from .ludo_king.simulator import Simulator
-from .ludo_king.types import Color
+from .ludo_king.types import Color, Move
 from .strategy.registry import STRATEGY_REGISTRY
 from .strategy.registry import available as available_strategies
 
@@ -88,8 +88,11 @@ class LudoEnv(gym.Env):
         self.game: Game | None = None
         self.current_dice_roll: int = 1
         self.current_player_index: int = 0
-        self.move_map: Dict[int, object] = {}
+        self.move_map: Dict[int, Move] = {}
         self.rng = random.Random()
+        
+        # Cached action mask (recomputed only when state changes)
+        self._cached_action_mask: np.ndarray | None = None
 
         # Opponent strategies
         self.opponents: List[str] = [
@@ -263,6 +266,9 @@ class LudoEnv(gym.Env):
         obs = self._build_observation()
         info = self._get_info()
 
+        # Advance reset counter for sequential selection
+        self._reset_count += 1
+
         # Handle no valid moves for agent on first turn: opponents play until agent has a move
         # Don't reset summaries - accumulate activity from the start
         while not np.any(info["action_mask"]):
@@ -271,12 +277,9 @@ class LudoEnv(gym.Env):
             self.current_dice_roll = self.game.roll_dice()
             obs = self._build_observation()
             info = self._get_info()
-            if self.current_turn >= self.max_game_turns:
-                info["TimeLimit.truncated"] = True
-                return obs, info
-
-        # Advance reset counter for sequential selection
-        self._reset_count += 1
+            if self.current_turn >= self.max_game_turns or self._check_game_over():
+                # Truncated or game over on initial no-move loop 
+                return self.reset(seed=seed, options=options)
         return obs, info
 
     def step(self, action: int):
@@ -375,7 +378,7 @@ class LudoEnv(gym.Env):
                 return obs, reward, terminated, truncated, info
 
         if truncated:
-            reward += reward_config.draw
+            reward += compute_draw_reward()
             info["final_rank"] = 0
             info["TimeLimit.truncated"] = True
             return obs, reward, terminated, truncated, info
