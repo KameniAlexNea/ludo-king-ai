@@ -26,6 +26,12 @@ class Simulator:
     _hist_len: int = field(default=0, init=False, repr=False)
     _hist_ptr: int = field(default=0, init=False, repr=False)
     _agent_reward_acc: float = field(default=0.0, init=False, repr=False)
+    # Pre-allocated output buffers for get_token_sequence_observation
+    _out_pos: np.ndarray = field(default=None, init=False, repr=False)
+    _out_dice: np.ndarray = field(default=None, init=False, repr=False)
+    _out_mask: np.ndarray = field(default=None, init=False, repr=False)
+    _out_player: np.ndarray = field(default=None, init=False, repr=False)
+    _out_current_dice: np.ndarray = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         # Expect Game to be constructed by caller with players and strategies.
@@ -65,6 +71,12 @@ class Simulator:
         obj._hist_len = 0
         obj._hist_ptr = 0
         obj._agent_reward_acc = 0.0
+        # Pre-allocate output buffers for get_token_sequence_observation
+        obj._out_pos = np.zeros((config.HISTORY_LENGTH, 16), dtype=np.int64)
+        obj._out_dice = np.zeros((config.HISTORY_LENGTH,), dtype=np.int64)
+        obj._out_mask = np.zeros((config.HISTORY_LENGTH, 16), dtype=np.bool_)
+        obj._out_player = np.zeros((config.HISTORY_LENGTH,), dtype=np.int64)
+        obj._out_current_dice = np.zeros((1,), dtype=np.int64)
         return obj
 
     # --- Token sequence observation helpers ---
@@ -83,39 +95,48 @@ class Simulator:
     def get_token_sequence_observation(self, current_dice: int) -> dict:
         """Return a dict with positions (T,16), dice_history (T,), token_mask (T,16),
         player_history (T,), token_colors (16,), current_dice (1,). Older frames are zero-masked.
+
+        Note: Uses pre-allocated buffers for efficiency. The returned arrays are
+        views into internal buffers and should be copied if persistence is needed.
         """
         T = self.history_T
-        out_pos = np.zeros((T, 16), dtype=np.int64)
-        out_dice = np.zeros((T,), dtype=np.int64)
-        out_mask = np.zeros((T, 16), dtype=np.bool_)
-        out_player = np.zeros((T,), dtype=np.int64)
         k = self._hist_len
+
+        # Zero out the pre-allocated buffers
+        self._out_pos.fill(0)
+        self._out_dice.fill(0)
+        self._out_mask.fill(False)
+        self._out_player.fill(0)
+
         if k > 0:
             # Gather in chronological order
             # Oldest index is (ptr - k) mod T
             start = (self._hist_ptr - k) % T
             if start + k <= T:
-                out_pos[T - k : T, :] = self._pos_hist[start : start + k, :]
-                out_dice[T - k : T] = self._dice_hist[start : start + k]
-                out_mask[T - k : T, :] = self._mask_hist[start : start + k, :]
-                out_player[T - k : T] = self._player_hist[start : start + k]
+                self._out_pos[T - k : T, :] = self._pos_hist[start : start + k, :]
+                self._out_dice[T - k : T] = self._dice_hist[start : start + k]
+                self._out_mask[T - k : T, :] = self._mask_hist[start : start + k, :]
+                self._out_player[T - k : T] = self._player_hist[start : start + k]
             else:
                 first = T - start
-                out_pos[T - k : T - k + first, :] = self._pos_hist[start:T, :]
-                out_pos[T - k + first : T, :] = self._pos_hist[0 : k - first, :]
-                out_dice[T - k : T - k + first] = self._dice_hist[start:T]
-                out_dice[T - k + first : T] = self._dice_hist[0 : k - first]
-                out_mask[T - k : T - k + first, :] = self._mask_hist[start:T, :]
-                out_mask[T - k + first : T, :] = self._mask_hist[0 : k - first, :]
-                out_player[T - k : T - k + first] = self._player_hist[start:T]
-                out_player[T - k + first : T] = self._player_hist[0 : k - first]
+                self._out_pos[T - k : T - k + first, :] = self._pos_hist[start:T, :]
+                self._out_pos[T - k + first : T, :] = self._pos_hist[0 : k - first, :]
+                self._out_dice[T - k : T - k + first] = self._dice_hist[start:T]
+                self._out_dice[T - k + first : T] = self._dice_hist[0 : k - first]
+                self._out_mask[T - k : T - k + first, :] = self._mask_hist[start:T, :]
+                self._out_mask[T - k + first : T, :] = self._mask_hist[0 : k - first, :]
+                self._out_player[T - k : T - k + first] = self._player_hist[start:T]
+                self._out_player[T - k + first : T] = self._player_hist[0 : k - first]
+
+        self._out_current_dice[0] = int(current_dice)
+
         return {
-            "positions": out_pos,
-            "dice_history": out_dice,
-            "token_mask": out_mask,
-            "player_history": out_player,
+            "positions": self._out_pos,
+            "dice_history": self._out_dice,
+            "token_mask": self._out_mask,
+            "player_history": self._out_player,
             "token_colors": self._token_colors,
-            "current_dice": np.asarray([int(current_dice)], dtype=np.int64),
+            "current_dice": self._out_current_dice,
         }
 
     def _update_transition_summaries(
