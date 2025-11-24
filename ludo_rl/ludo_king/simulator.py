@@ -206,6 +206,86 @@ class Simulator:
                         # Agent's blockade stopped the opponent!
                         self.game.board.blockade_hits[agent_rel_pos] = 1.0
 
+    def _get_opponent_move(self, player_idx: int, legal_moves: list[Move]) -> Move:
+        """Get move from opponent strategy with fallback to random.
+
+        Args:
+            player_idx: Index of the opponent player.
+            legal_moves: List of legal moves available.
+
+        Returns:
+            The chosen move from strategy or random fallback.
+        """
+        player = self.game.players[player_idx]
+        player_color = int(player.color)
+        board_stack = self.game.board.build_tensor(player_color)
+        dice = legal_moves[0].dice_roll  # All moves have same dice
+
+        decision = None
+        if hasattr(player, "choose"):
+            try:
+                decision = player.choose(board_stack, dice, legal_moves)
+            except Exception as e:
+                logger.warning(
+                    f"Opponent strategy failed for player {player_idx}, "
+                    f"falling back to random: {e}"
+                )
+                decision = None
+
+        return decision if decision is not None else random.choice(legal_moves)
+
+    def _process_move_result(
+        self, player_idx: int, move: Move, result: MoveResult
+    ) -> None:
+        """Process a move result: update summaries, accumulate rewards, log history.
+
+        Args:
+            player_idx: Index of the player who made the move.
+            move: The move that was applied.
+            result: The result from applying the move.
+        """
+        self._update_transition_summaries(player_idx, move, result)
+        # Accumulate rewards affecting agent
+        self._agent_reward_acc += (
+            float(result.rewards.get(self.agent_index, 0.0)) if result.rewards else 0.0
+        )
+        self._append_history(move.dice_roll, player_idx)
+
+    def _simulate_single_opponent(self, player_idx: int) -> None:
+        """Simulate all turns for a single opponent (handles extra turns).
+
+        Args:
+            player_idx: Index of the opponent to simulate.
+        """
+        player = self.game.players[player_idx]
+        if player.check_won():
+            return
+
+        extra = True
+        extra_count = 0
+
+        while extra and extra_count < config.MAX_EXTRA_TURNS:
+            extra_count += 1
+            dice = self.game.roll_dice()
+            legal = self.game.legal_moves(player_idx, dice)
+
+            if not legal:
+                break
+
+            mv = self._get_opponent_move(player_idx, legal)
+            result = self.game.apply_move(mv)
+            self._process_move_result(player_idx, mv, result)
+            extra = result.extra_turn and result.events.move_resolved
+
+    def _simulate_all_opponents(self) -> None:
+        """Simulate all opponents in turn order until it returns to the agent."""
+        total = len(self.game.players)
+        idx = (self.agent_index + 1) % total
+
+        while idx != self.agent_index:
+            self._simulate_single_opponent(idx)
+            idx = (idx + 1) % total
+
     def step(self, agent_move: Move) -> tuple[bool, bool]:
         """Apply agent move, then simulate opponents unless extra turn.
 
@@ -216,51 +296,12 @@ class Simulator:
 
         # Apply agent's move
         res = self.game.apply_move(agent_move)
-        # Accumulate immediate agent reward from own move
-        self._agent_reward_acc += (
-            float(res.rewards.get(self.agent_index, 0.0)) if res.rewards else 0.0
-        )
-        self._update_transition_summaries(self.agent_index, agent_move, res)
-        # Log atomic move in history
-        self._append_history(agent_move.dice_roll, self.agent_index)
+        self._process_move_result(self.agent_index, agent_move, res)
         extra = res.extra_turn
 
-        # simulate others if no extra turn
+        # Simulate others if no extra turn
         if not extra:
-            total_players = len(self.game.players)
-            idx = (self.agent_index + 1) % total_players
-            while idx != self.agent_index:
-                if self.game.players[idx].check_won():
-                    idx = (idx + 1) % total_players
-                    continue
-
-                opp_extra = True
-                extra_count = 0
-
-                while opp_extra and extra_count < config.MAX_EXTRA_TURNS:
-                    extra_count += 1
-                    dice = self.game.roll_dice()
-                    legals = self.game.legal_moves(idx, dice)
-                    if not legals:
-                        opp_extra = False
-                        break
-                    agent_color = int(self.game.players[idx].color)
-                    board_stack = self.game.board.build_tensor(agent_color)
-                    mv = self.game.players[idx].choose(board_stack, dice, legals)
-                    if mv is None:
-                        mv = random.choice(legals)
-                    opp_res = self.game.apply_move(mv)
-                    self._update_transition_summaries(idx, mv, opp_res)
-                    # Accumulate opponent-driven rewards affecting agent (e.g., their finish)
-                    self._agent_reward_acc += (
-                        float(opp_res.rewards.get(self.agent_index, 0.0))
-                        if opp_res.rewards
-                        else 0.0
-                    )
-                    self._append_history(dice, idx)
-                    opp_extra = opp_res.extra_turn and opp_res.events.move_resolved
-
-                idx = (idx + 1) % total_players
+            self._simulate_all_opponents()
 
         terminated = self.game.players[self.agent_index].check_won()
         return terminated, extra
@@ -275,48 +316,8 @@ class Simulator:
                            Set to False when accumulating multiple opponent rounds
                            between agent turns (e.g., when agent has no valid moves).
         """
-        # Reset transition summaries only if requested
         if reset_summaries:
             self.game.board.reset_transition_summaries()
-            # Reset accumulation for this opponents phase
             self._agent_reward_acc = 0.0
 
-        total = len(self.game.players)
-        idx = (self.agent_index + 1) % total
-        while idx != self.agent_index:
-            player = self.game.players[idx]
-            if player.check_won():
-                idx = (idx + 1) % total
-                continue
-
-            extra = True
-            while extra:
-                dice = self.game.roll_dice()
-                legal = self.game.legal_moves(idx, dice)
-                if not legal:
-                    extra = False
-                    continue
-                agent_color = int(player.color)
-                board_stack = self.game.board.build_tensor(agent_color)
-                decision = None
-                if hasattr(player, "choose"):
-                    try:
-                        decision = player.choose(board_stack, dice, legal)
-                    except Exception as e:
-                        logger.warning(
-                            f"Opponent strategy failed for player {idx}, falling back to random: {e}"
-                        )
-                        decision = None
-                mv = decision if decision is not None else random.choice(legal)
-                result = self.game.apply_move(mv)
-                self._update_transition_summaries(idx, mv, result)
-                # Accumulate opponent-driven rewards affecting agent
-                self._agent_reward_acc += (
-                    float(result.rewards.get(self.agent_index, 0.0))
-                    if result.rewards
-                    else 0.0
-                )
-                self._append_history(dice, idx)
-                extra = result.extra_turn and result.events.move_resolved
-
-            idx = (idx + 1) % total
+        self._simulate_all_opponents()
