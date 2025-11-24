@@ -169,6 +169,121 @@ class LudoCnnExtractor(BaseTokenSeqExtractor):
         return self.head(combined)
 
 
+class LudoMlpExtractor(BaseTokenSeqExtractor):
+    """MLP-based extractor with per-player pooling and temporal weighting."""
+
+    def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
+        super().__init__(observation_space, features_dim)
+
+        # Per-player pooling (4 players × 4 pieces each) + temporal recency
+        # Stats per player: mean, max → 2 * embed_dim per player × 4 players
+        self.num_players = 4
+        self.pieces_per_player = 4
+        self.player_feat_dim = self.embed_dim * 2  # mean + max per player
+        self.total_player_dim = self.player_feat_dim * self.num_players
+
+        # Learnable temporal decay (recent frames matter more)
+        self.temporal_weight = nn.Parameter(torch.linspace(0.5, 1.0, self.T))
+
+        # Input: per-player features + current dice + last frame global stats
+        self.total_input_dim = (
+            self.total_player_dim  # per-player pooled features
+            + self.embed_dim  # current dice
+            + self.embed_dim * 2  # last frame mean + max (recency bias)
+        )
+
+        hidden_dim = self.embed_dim * 4
+
+        # Cleaner MLP blocks with pre-norm style
+        self.input_norm = nn.LayerNorm(self.total_input_dim)
+        self.fc1 = nn.Linear(self.total_input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, features_dim)
+        self.output_norm = nn.LayerNorm(features_dim)
+        self.dropout = nn.Dropout(0.1)
+
+    def _masked_pool(
+        self, x: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Compute mean and max pooling over masked tokens."""
+        mask_f = mask.unsqueeze(-1).to(x.dtype)
+        count = mask_f.sum(dim=1).clamp(min=1.0)
+
+        # Mean
+        x_mean = (x * mask_f).sum(dim=1) / count
+
+        # Max (masked positions → -inf)
+        x_max = x.masked_fill(~mask.unsqueeze(-1), float("-inf")).max(dim=1)[0]
+        x_max = torch.where(torch.isinf(x_max), x_mean, x_max)  # fallback to mean
+
+        return x_mean, x_max
+
+    def forward(self, observations: dict) -> torch.Tensor:
+        (
+            positions,
+            dice_hist,
+            player_hist,
+            token_mask,
+            token_colors,
+            current_dice,
+            B,
+            T,
+            N,
+            device,
+        ) = self._prepare_inputs(observations)
+
+        # Embed tokens: (B, T, N, embed_dim)
+        tok = self._embed_tokens(
+            positions, dice_hist, player_hist, token_mask, token_colors, B, T, N, device
+        )
+
+        # Apply temporal weighting (recent frames weighted higher)
+        tw = torch.softmax(self.temporal_weight, dim=0).view(1, T, 1, 1)
+        tok = tok * tw
+
+        # Condition on current dice
+        curr_dice_e = self._embed_current_dice(current_dice)  # (B, embed_dim)
+        tok = tok + curr_dice_e.view(B, 1, 1, self.embed_dim)
+
+        # Mask invalid tokens
+        tok = tok * token_mask.unsqueeze(-1).to(tok.dtype)
+
+        # --- Per-player pooling (preserves piece identity per player) ---
+        player_features = []
+        for p in range(self.num_players):
+            # Select pieces for player p: indices [p*4 : (p+1)*4]
+            start_idx = p * self.pieces_per_player
+            end_idx = start_idx + self.pieces_per_player
+            player_tok = tok[:, :, start_idx:end_idx, :]  # (B, T, 4, d)
+            player_mask = token_mask[:, :, start_idx:end_idx]  # (B, T, 4)
+
+            # Flatten time for this player's pieces
+            player_tok_flat = player_tok.reshape(B, T * self.pieces_per_player, -1)
+            player_mask_flat = player_mask.reshape(B, T * self.pieces_per_player)
+
+            p_mean, p_max = self._masked_pool(player_tok_flat, player_mask_flat)
+            player_features.append(torch.cat([p_mean, p_max], dim=-1))
+
+        per_player = torch.cat(player_features, dim=-1)  # (B, total_player_dim)
+
+        # --- Last frame features (recency bias) ---
+        last_tok = tok[:, -1, :, :]  # (B, N, d)
+        last_mask = token_mask[:, -1, :]  # (B, N)
+        last_mean, last_max = self._masked_pool(last_tok, last_mask)
+        last_frame_feat = torch.cat([last_mean, last_max], dim=-1)  # (B, 2*d)
+
+        # --- Combine all features ---
+        combined = torch.cat([per_player, curr_dice_e, last_frame_feat], dim=-1)
+
+        # --- MLP with residual-like structure ---
+        x = self.input_norm(combined)
+        x = self.dropout(torch.nn.functional.gelu(self.fc1(x)))
+        x = x + self.dropout(torch.nn.functional.gelu(self.fc2(x)))  # skip connection
+        x = self.output_norm(self.fc3(x))
+
+        return x
+
+
 class LudoTransformerExtractor(BaseTokenSeqExtractor):
     """Transformer over token sequence: (TxN tokens) with dice conditioning."""
 

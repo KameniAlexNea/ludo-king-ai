@@ -26,6 +26,7 @@ class TrainConfig:
     checkpoint_freq: int
     learning_rate: float
     target_kl: float
+    extractor: str = "transformer"
     use_transformer: bool = False
     profile: bool = False
     use_constant: bool = False
@@ -51,9 +52,16 @@ def build_train_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-kl", type=float, default=0.2)
     parser.add_argument("--use-constant", action="store_true", help="Remove annealing")
     parser.add_argument(
+        "--extractor",
+        type=str,
+        choices=["cnn", "transformer", "mlp"],
+        default="mlp",
+        help="Feature extractor type: cnn (LSTM-based), transformer, or mlp (feed-forward)",
+    )
+    parser.add_argument(
         "--use-transformer",
         action="store_true",
-        help="Use Transformer-based feature extractor",
+        help="(Deprecated) Use Transformer-based feature extractor",
     )
     parser.add_argument(
         "--profile",
@@ -73,6 +81,9 @@ def parse_train_args(args: list[str] | None = None) -> TrainConfig:
         cpu_count = os.cpu_count() or 1
         num_envs = max(1, cpu_count // 2)
 
+    # Handle backward compatibility: --use-transformer overrides --extractor
+    extractor = "transformer" if namespace.use_transformer else namespace.extractor
+
     return TrainConfig(
         total_timesteps=namespace.total_timesteps,
         n_steps=namespace.n_steps,
@@ -89,6 +100,7 @@ def parse_train_args(args: list[str] | None = None) -> TrainConfig:
         checkpoint_freq=namespace.checkpoint_freq,
         learning_rate=namespace.learning_rate,
         resume=namespace.resume,
+        extractor=extractor,
         use_transformer=namespace.use_transformer,
         profile=namespace.profile,
         target_kl=namespace.target_kl,

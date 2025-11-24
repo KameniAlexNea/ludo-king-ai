@@ -27,7 +27,11 @@ from torch.profiler import (
 from wandb.integration.sb3 import WandbCallback
 
 import wandb
-from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
+from ludo_rl.extractor import (
+    LudoCnnExtractor,
+    LudoMlpExtractor,
+    LudoTransformerExtractor,
+)
 from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king.config import config, net_config
 from ludo_rl.ludo_king.reward import reward_config
@@ -141,11 +145,16 @@ if __name__ == "__main__":
 
     # --- Policy Kwargs ---
     # Define the custom feature extractor
+    extractor_map = {
+        "cnn": LudoCnnExtractor,
+        "transformer": LudoTransformerExtractor,
+        "mlp": LudoMlpExtractor,
+    }
+    extractor_class = extractor_map[args.extractor]
+
     policy_kwargs = dict(
-        activation_fn=torch.nn.GELU,  # GELU for smooth, non-saturating gradients (best for transformers)
-        features_extractor_class=(
-            LudoTransformerExtractor if args.use_transformer else LudoCnnExtractor
-        ),
+        activation_fn=torch.nn.GELU,  # GELU for smooth, non-saturating gradients
+        features_extractor_class=extractor_class,
         features_extractor_kwargs=dict(
             features_dim=net_config.embed_dim
         ),  # Output features
