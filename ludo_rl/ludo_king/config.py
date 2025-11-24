@@ -42,10 +42,6 @@ class Config:
 
     # Curriculum configuration
     CURRICULUM_INTERVAL_RESETS: int = int(os.getenv("CURRICULUM_INTERVAL_RESETS", 2500))
-    CURRICULUM_P_BASE: float = float(os.getenv("CURRICULUM_P_BASE", 0.0))
-    CURRICULUM_P_STEP: float = float(os.getenv("CURRICULUM_P_STEP", 0.05))
-    CURRICULUM_P_MAX: float = float(os.getenv("CURRICULUM_P_MAX", 1.0))
-    CURRICULUM_MIN_EASY: int = int(os.getenv("CURRICULUM_MIN_EASY", 1))
 
     # Derived positions (computed in __post_init__ for convenience)
     def __post_init__(self):

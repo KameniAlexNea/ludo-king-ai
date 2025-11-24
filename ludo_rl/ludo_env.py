@@ -7,7 +7,6 @@ import numpy as np
 from gymnasium import spaces
 from loguru import logger
 
-from .ludo_king.config import ARENA_SCORES
 from .ludo_king.config import config as king_config
 from .ludo_king.config import reward_config
 from .ludo_king.game import Game
@@ -99,11 +98,7 @@ class LudoEnv(gym.Env):
             if s
         ]
         # 0 = random per seat, 1 = sequential cycling
-        try:
-            self.strategy_selection: int = int(os.getenv("STRATEGY_SELECTION", "0"))
-        except ValueError as e:
-            logger.warning(f"Invalid STRATEGY_SELECTION value, defaulting to 0: {e}")
-            self.strategy_selection = 0
+        self.strategy_selection: int = int(os.getenv("STRATEGY_SELECTION", "0"))
         # Track resets to advance sequential selection across episodes
         self._reset_count: int = 0
 
@@ -114,12 +109,7 @@ class LudoEnv(gym.Env):
         self.observation_space = get_observation_space()
         self._fixed_opponents_strategies: list[str] = None
         self.use_fixed_opponents = use_fixed_opponents
-        # Curriculum configuration (centralized in config)
-        self.curriculum_interval_resets: int = king_config.CURRICULUM_INTERVAL_RESETS
-        self.curriculum_prob_base: float = king_config.CURRICULUM_P_BASE
-        self.curriculum_prob_step: float = king_config.CURRICULUM_P_STEP
-        self.curriculum_prob_max: float = king_config.CURRICULUM_P_MAX
-        self.curriculum_min_easy: int = king_config.CURRICULUM_MIN_EASY
+        # Curriculum configuration is accessed via king_config directly
 
     def _build_observation(self) -> Dict[str, np.ndarray]:
         assert self.game is not None
@@ -177,93 +167,44 @@ class LudoEnv(gym.Env):
         #   500-750k: 1 random + 2 candidates
         #   750-1M:   0 random + 3 candidates
 
-        # Determine strong-opponent probability based on intervals elapsed
-        if self.curriculum_interval_resets <= 0:
-            intervals_elapsed = 1
+        # Determine how many strong opponents to add: +1 every interval
+        if king_config.CURRICULUM_INTERVAL_RESETS <= 0:
+            intervals_elapsed = num_opponents
         else:
-            intervals_elapsed = self._reset_count // self.curriculum_interval_resets
-        p_strong = (
-            self.curriculum_prob_base + intervals_elapsed * self.curriculum_prob_step
-        )
-        p_strong = max(0.0, min(self.curriculum_prob_max, p_strong))
-
-        # Build seat positions and fill which seats are candidates vs baseline random
-        seat_indices = list(range(num_opponents))
-        self.rng.shuffle(seat_indices)  # randomize which seats get candidates
+            intervals_elapsed = self._reset_count // king_config.CURRICULUM_INTERVAL_RESETS
 
         # Baseline: explicit 'random' strategy in every seat
-        lineup: List[str] = ["random"] * num_opponents
+        lineup: List[str] = ["killer"] * num_opponents
 
         # Candidate pool excludes 'random' and filters to available strategies only
-        raw_candidates = [s.strip() for s in self.opponents if s and s.strip()]
         candidate_pool = [
-            s
-            for s in raw_candidates
-            if s.lower() != "random" and s in STRATEGY_REGISTRY
+            s for s in self.opponents if s and s != "random" and s in STRATEGY_REGISTRY
         ]
-        # Build weights from arena scores (fallback to 1 if missing)
-        candidate_weights = [
-            max(1, int(ARENA_SCORES.get(s, 1))) for s in candidate_pool
-        ]
-
-        # Probabilistic assignment: each seat becomes strong with probability p_strong
+        # Deterministic curriculum: add n strong seats
         if len(candidate_pool) > 0 and num_opponents > 0:
-            strong_flags: List[bool] = []
-            for _ in range(num_opponents):
-                strong_flags.append(self.rng.random() < p_strong)
+            n_added = int(min(num_opponents, max(0, intervals_elapsed)))
+            if n_added > 0:
+                seat_indices = list(range(num_opponents))
+                self.rng.shuffle(seat_indices)
+                strong_indices = seat_indices[:n_added]
 
-            # Ensure at least curriculum_min_easy easy seats (flip excess strong to easy)
-            easy_count = strong_flags.count(False)
-            if easy_count < min(self.curriculum_min_easy, num_opponents):
-                # Flip some strong to easy to satisfy minimum
-                to_flip = min(
-                    min(self.curriculum_min_easy, num_opponents) - easy_count,
-                    strong_flags.count(True),
-                )
-                for idx in seat_indices:
-                    if to_flip <= 0:
-                        break
-                    if strong_flags[idx]:
-                        strong_flags[idx] = False
-                        to_flip -= 1
-
-            # If all easy but we have progressed (intervals_elapsed>0), ensure at least one strong
-            if intervals_elapsed > 0 and all(not f for f in strong_flags):
-                strong_flags[self.rng.choice(seat_indices)] = True
-
-            # Fill lineup accordingly using arena-weighted selection
-            if self.strategy_selection == 0:
-                for idx in seat_indices:
-                    if strong_flags[idx]:
-                        pick = self.rng.choices(
-                            candidate_pool, weights=candidate_weights, k=1
-                        )[0]
-                        lineup[idx] = pick
-            else:
-                # Sequential cycling over arena-sorted candidates
-                ordered = [
-                    s
-                    for s, _ in sorted(
-                        ((s, ARENA_SCORES.get(s, 1)) for s in candidate_pool),
-                        key=lambda t: t[1],
-                        reverse=True,
-                    )
-                ]
-                if len(ordered) == 0:
-                    ordered = candidate_pool
-                start = self._reset_count % max(1, len(ordered))
-                pi = 0
-                for idx in seat_indices:
-                    if strong_flags[idx]:
-                        lineup[idx] = ordered[(start + pi) % len(ordered)]
-                        pi += 1
+                if self.strategy_selection == 0:
+                    # Uniform random pick per strong seat
+                    for idx in strong_indices:
+                        lineup[idx] = self.rng.choice(candidate_pool)
+                else:
+                    # Sequential cycling over the plain candidate pool
+                    ordered = list(candidate_pool)
+                    start = self._reset_count % max(1, len(ordered))
+                    for i, idx in enumerate(strong_indices):
+                        lineup[idx] = ordered[(start + i) % len(ordered)]
 
         # Modulo logging at curriculum boundaries
-        if self.curriculum_interval_resets > 0 and (
-            self._reset_count % self.curriculum_interval_resets == 0
+        if king_config.CURRICULUM_INTERVAL_RESETS > 0 and (
+            self._reset_count % king_config.CURRICULUM_INTERVAL_RESETS == 0
         ):
             logger.info(
-                f"Opponent lineup for reset {self._reset_count} (p_strong={p_strong:.2f}): {lineup}"
+                f"Opponent lineup for reset {self._reset_count}: {lineup}"
             )
         self._fixed_opponents_strategies = lineup
         return lineup
