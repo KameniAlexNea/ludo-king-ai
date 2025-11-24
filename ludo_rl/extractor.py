@@ -1,6 +1,7 @@
 import gymnasium as gym
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 from .ludo_king.config import config, net_config
@@ -8,6 +9,15 @@ from .ludo_king.config import config, net_config
 
 class BaseTokenSeqExtractor(BaseFeaturesExtractor):
     """Shared embedding + input prep for token-sequence extractors."""
+
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Embedding):
+                nn.init.normal_(m.weight, std=0.02)
 
     def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 128):
         super().__init__(observation_space, features_dim)
@@ -32,6 +42,7 @@ class BaseTokenSeqExtractor(BaseFeaturesExtractor):
             nn.GELU(),
             nn.LayerNorm(self.embed_dim),
         )
+        self._init_weights()
 
     def _prepare_inputs(self, observations: dict):
         positions: torch.Tensor = observations["positions"].long()
@@ -109,6 +120,7 @@ class LudoCnnExtractor(BaseTokenSeqExtractor):
         super().__init__(observation_space, features_dim)
         # Token projection and LSTM for temporality
         bidirectional = True
+        # LSTM processes the full T-frame sequence per forward call (stateless across env steps)
         self.lstm = nn.LSTM(
             self.embed_dim,
             self.embed_dim,
@@ -126,6 +138,7 @@ class LudoCnnExtractor(BaseTokenSeqExtractor):
             nn.GELU(),
             nn.LayerNorm(features_dim),
         )
+        self._init_weights()
 
     def forward(self, observations: dict) -> torch.Tensor:
         (
@@ -177,13 +190,13 @@ class LudoMlpExtractor(BaseTokenSeqExtractor):
 
         # Per-player pooling (4 players × 4 pieces each) + temporal recency
         # Stats per player: mean, max → 2 * embed_dim per player × 4 players
-        self.num_players = 4
-        self.pieces_per_player = 4
+        self.num_players = config.NUM_PLAYERS
+        self.pieces_per_player = config.PIECES_PER_PLAYER
         self.player_feat_dim = self.embed_dim * 2  # mean + max per player
         self.total_player_dim = self.player_feat_dim * self.num_players
 
         # Learnable temporal decay (recent frames matter more)
-        self.temporal_weight = nn.Parameter(torch.linspace(0.5, 1.0, self.T))
+        self.temporal_weight = nn.Parameter(torch.linspace(-1.0, 0.0, self.T))
 
         # Input: per-player features + current dice + last frame global stats
         self.total_input_dim = (
@@ -201,6 +214,8 @@ class LudoMlpExtractor(BaseTokenSeqExtractor):
         self.fc3 = nn.Linear(hidden_dim, features_dim)
         self.output_norm = nn.LayerNorm(features_dim)
         self.dropout = nn.Dropout(0.1)
+
+        self._init_weights()
 
     def _masked_pool(
         self, x: torch.Tensor, mask: torch.Tensor
@@ -243,7 +258,6 @@ class LudoMlpExtractor(BaseTokenSeqExtractor):
 
         # Condition on current dice
         curr_dice_e = self._embed_current_dice(current_dice)  # (B, embed_dim)
-        tok = tok + curr_dice_e.view(B, 1, 1, self.embed_dim)
 
         # Mask invalid tokens
         tok = tok * token_mask.unsqueeze(-1).to(tok.dtype)
@@ -277,8 +291,8 @@ class LudoMlpExtractor(BaseTokenSeqExtractor):
 
         # --- MLP with residual-like structure ---
         x = self.input_norm(combined)
-        x = self.dropout(torch.nn.functional.gelu(self.fc1(x)))
-        x = x + self.dropout(torch.nn.functional.gelu(self.fc2(x)))  # skip connection
+        x = self.dropout(F.gelu(self.fc1(x)))
+        x = x + self.dropout(F.gelu(self.fc2(x)))  # skip connection
         x = self.output_norm(self.fc3(x))
 
         return x
@@ -293,7 +307,7 @@ class LudoTransformerExtractor(BaseTokenSeqExtractor):
         features_dim: int = 128,
     ):
         super().__init__(observation_space, features_dim)
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
+        self.cls_token = nn.Parameter(torch.randn(1, 1, self.embed_dim) * 0.02)
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.embed_dim,
@@ -304,7 +318,9 @@ class LudoTransformerExtractor(BaseTokenSeqExtractor):
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(
-            encoder_layer, num_layers=net_config.trans_num_layers
+            encoder_layer,
+            num_layers=net_config.trans_num_layers,
+            enable_nested_tensor=False,
         )
         self.output_norm = nn.LayerNorm(self.embed_dim)
         self.head = nn.Sequential(
@@ -312,6 +328,8 @@ class LudoTransformerExtractor(BaseTokenSeqExtractor):
             nn.GELU(),
             nn.LayerNorm(features_dim),
         )
+
+        self._init_weights()
 
     def forward(self, observations: dict) -> torch.Tensor:
         (
