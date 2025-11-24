@@ -171,7 +171,9 @@ class LudoEnv(gym.Env):
         if king_config.CURRICULUM_INTERVAL_RESETS <= 0:
             intervals_elapsed = num_opponents
         else:
-            intervals_elapsed = self._reset_count // king_config.CURRICULUM_INTERVAL_RESETS
+            intervals_elapsed = (
+                self._reset_count // king_config.CURRICULUM_INTERVAL_RESETS
+            )
 
         # Baseline: explicit 'random' strategy in every seat
         lineup: List[str] = ["killer"] * num_opponents
@@ -203,9 +205,7 @@ class LudoEnv(gym.Env):
         if king_config.CURRICULUM_INTERVAL_RESETS > 0 and (
             self._reset_count % king_config.CURRICULUM_INTERVAL_RESETS == 0
         ):
-            logger.info(
-                f"Opponent lineup for reset {self._reset_count}: {lineup}"
-            )
+            logger.info(f"Opponent lineup for reset {self._reset_count}: {lineup}")
         self._fixed_opponents_strategies = lineup
         return lineup
 

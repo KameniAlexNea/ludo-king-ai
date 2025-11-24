@@ -32,7 +32,7 @@ from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king.config import config, net_config
 from ludo_rl.ludo_king.reward import reward_config
 from tools.arguments import TrainingSetup, parse_train_args
-from tools.scheduler import CoefScheduler, lr_schedule
+from tools.scheduler import CoefScheduler, lr_schedule, target_kl_schedule
 
 os.environ["WANDB_START_METHOD"] = "thread"
 os.environ["WANDB_DISABLE_CODE"] = "false"
@@ -106,7 +106,19 @@ if __name__ == "__main__":
         schedule=lr_schedule(lr_min=args.ent_coef * 0.3, lr_max=args.ent_coef),
     )
 
-    callbacks = [entropy_callback]
+    target_kl_callback = CoefScheduler(
+        total_timesteps=args.total_timesteps,
+        att="target_kl",
+        schedule=target_kl_schedule(
+            kl_start=args.target_kl,  # Start at your specified value (0.02)
+            kl_peak=args.target_kl * 5.0,  # Increase to 5x (0.1)
+            kl_end=args.target_kl * 1.25,  # End slightly higher (0.025)
+            warmup_fraction=0.15,  # 15% of training for warmup
+            cooldown_fraction=0.15,  # 15% of training for cooldown
+        ),
+    )
+
+    callbacks = [entropy_callback, target_kl_callback]
 
     if not args.profile:
         wandb.init(

@@ -22,6 +22,52 @@ def lr_schedule(
     return schedule
 
 
+def target_kl_schedule(
+    kl_start: float = 0.02,
+    kl_peak: float = 0.06,
+    kl_end: float = 0.025,
+    warmup_fraction: float = 0.15,
+    cooldown_fraction: float = 0.15,
+) -> Callable[[float], float]:
+    """
+    Schedule for target_kl that:
+    - Starts conservative (kl_start) to avoid early convergence
+    - Increases to kl_peak during warmup
+    - Maintains kl_peak during mid-training
+    - Decreases to kl_end during cooldown for stability
+
+    Args:
+        kl_start: Initial target_kl value (conservative)
+        kl_peak: Maximum target_kl value (mid-training)
+        kl_end: Final target_kl value (for stability)
+        warmup_fraction: Fraction of training for warmup phase
+        cooldown_fraction: Fraction of training for cooldown phase
+    """
+
+    def schedule(progress_remaining: float) -> float:
+        progress = 1 - progress_remaining
+
+        if progress < warmup_fraction:
+            # Warmup: smoothly increase from kl_start to kl_peak
+            warmup_progress = progress / warmup_fraction
+            # Use smooth interpolation (cosine)
+            factor = 0.5 * (1 - math.cos(math.pi * warmup_progress))
+            return kl_start + (kl_peak - kl_start) * factor
+
+        elif progress > (1 - cooldown_fraction):
+            # Cooldown: smoothly decrease from kl_peak to kl_end
+            cooldown_progress = (progress - (1 - cooldown_fraction)) / cooldown_fraction
+            # Use smooth interpolation (cosine)
+            factor = 0.5 * (1 - math.cos(math.pi * cooldown_progress))
+            return kl_peak - (kl_peak - kl_end) * factor
+
+        else:
+            # Mid-training: maintain peak value
+            return kl_peak
+
+    return schedule
+
+
 class CoefScheduler(BaseCallback):
     """Dynamically adjust the entropy coefficient using a cosine schedule."""
 
