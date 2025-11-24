@@ -235,7 +235,10 @@ class Simulator:
                     continue
 
                 opp_extra = True
-                while opp_extra:
+                extra_count = 0
+
+                while opp_extra and extra_count < config.MAX_EXTRA_TURNS:
+                    extra_count += 1
                     dice = self.game.roll_dice()
                     legals = self.game.legal_moves(idx, dice)
                     if not legals:
@@ -275,8 +278,8 @@ class Simulator:
         # Reset transition summaries only if requested
         if reset_summaries:
             self.game.board.reset_transition_summaries()
-        # Reset accumulation for this opponents phase
-        self._agent_reward_acc = 0.0
+            # Reset accumulation for this opponents phase
+            self._agent_reward_acc = 0.0
 
         total = len(self.game.players)
         idx = (self.agent_index + 1) % total

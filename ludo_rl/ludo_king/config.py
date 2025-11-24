@@ -10,6 +10,7 @@ load_dotenv()
 class Config:
     HISTORY_LENGTH: int = int(os.getenv("HISTORY_LENGTH", 4))
     RANK_ENV: bool = bool(int(os.getenv("RANK_ENV", 0)))
+    MAX_EXTRA_TURNS: int = int(os.getenv("MAX_EXTRA_TURNS", 5))
     # --- Constants ---
     PATH_LENGTH: int = 58  # 0=yard, 1-51=track, 52-56=home, 57=finished
     NUM_PLAYERS: int = int(os.getenv("NUM_PLAYERS", 4))
