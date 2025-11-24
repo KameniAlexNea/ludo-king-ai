@@ -70,9 +70,15 @@ class LudoEnv(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def action_masks(self):
-        # Helper for sb3_contrib.common.masking.ActionMasker
-        return self._get_info()["action_mask"]
+    def action_masks(self) -> np.ndarray:
+        """Helper for sb3_contrib.common.masking.ActionMasker.
+
+        Returns cached mask if available, otherwise computes it.
+        The cache is invalidated whenever game state changes (reset, step, dice roll).
+        """
+        if self._cached_action_mask is None:
+            self._get_info()  # This populates the cache
+        return self._cached_action_mask
 
     def __init__(
         self, render_mode: Optional[str] = None, use_fixed_opponents: bool = True
@@ -90,8 +96,7 @@ class LudoEnv(gym.Env):
         self.current_player_index: int = 0
         self.move_map: Dict[int, Move] = {}
         self.rng = random.Random()
-        
-        # Cached action mask (recomputed only when state changes)
+        # Cache for action mask (recomputed only when state changes)
         self._cached_action_mask: np.ndarray | None = None
 
         # Opponent strategies
@@ -119,8 +124,18 @@ class LudoEnv(gym.Env):
         obs = self.sim.get_token_sequence_observation(self.current_dice_roll)
         return obs
 
+    def _roll_dice(self) -> int:
+        """Roll dice and invalidate action mask cache."""
+        assert self.game is not None
+        self._cached_action_mask = None
+        self.current_dice_roll = self.game.roll_dice()
+        return self.current_dice_roll
+
     def _get_info(self):
-        """Generates the info dict, including the crucial action mask."""
+        """Generates the info dict, including the crucial action mask.
+
+        Also updates the cached action mask and move_map.
+        """
         assert self.game is not None
         valid_moves = self.game.legal_moves(self.agent_index, self.current_dice_roll)
         # Use bool for the mask as recommended by Gymnasium
@@ -133,6 +148,8 @@ class LudoEnv(gym.Env):
             if piece_id not in self.move_map:
                 self.move_map[piece_id] = move
 
+        # Update cache
+        self._cached_action_mask = action_mask
         return {"action_mask": action_mask}
 
     def _check_game_over(self):
@@ -261,7 +278,7 @@ class LudoEnv(gym.Env):
 
         # Reset counters and dice
         self.current_turn = 0
-        self.current_dice_roll = self.game.roll_dice()
+        self._roll_dice()
 
         obs = self._build_observation()
         info = self._get_info()
@@ -274,11 +291,11 @@ class LudoEnv(gym.Env):
         while not np.any(info["action_mask"]):
             self.current_turn += 1
             self.sim.step_opponents_only(reset_summaries=False)
-            self.current_dice_roll = self.game.roll_dice()
+            self._roll_dice()
             obs = self._build_observation()
             info = self._get_info()
             if self.current_turn >= self.max_game_turns or self._check_game_over():
-                # Truncated or game over on initial no-move loop 
+                # Truncated or game over on initial no-move loop
                 return self.reset(seed=seed, options=options)
         return obs, info
 
@@ -293,7 +310,7 @@ class LudoEnv(gym.Env):
             reward += compute_invalid_action_penalty()
             self.current_turn += 1
             self.sim.step_opponents_only()
-            self.current_dice_roll = self.game.roll_dice()
+            self._roll_dice()
             obs = self._build_observation()
             info = self._get_info()
             terminated, truncated = self._check_game_over()
@@ -319,10 +336,10 @@ class LudoEnv(gym.Env):
                     float(self.game.board.blockade_hits.sum())
                 )
             # Add any opponent-driven rewards that affect agent (urgency signals)
-            reward += float(self.sim._agent_reward_acc)
+            reward += self.sim.get_agent_reward()
 
         # 4) Prepare next observation
-        self.current_dice_roll = self.game.roll_dice()
+        self._roll_dice()
         obs = self._build_observation()
         info = self._get_info()
 
@@ -360,11 +377,11 @@ class LudoEnv(gym.Env):
                 truncated = True
                 break
             self.sim.step_opponents_only(reset_summaries=False)
-            self.current_dice_roll = self.game.roll_dice()
+            self._roll_dice()
             obs = self._build_observation()
             info = self._get_info()
             # Accumulate urgency signals during prolonged opponent rounds
-            reward += float(self.sim._agent_reward_acc)
+            reward += self.sim.get_agent_reward()
             terminated, truncated = self._check_game_over()
             if terminated and not king_config.RANK_ENV:
                 # Stop early if any win during no-move loop (non-rank mode)

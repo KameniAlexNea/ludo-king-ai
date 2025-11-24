@@ -34,6 +34,10 @@ class Simulator:
             "Simulator requires an explicit Game instance; construct with Simulator.for_game(Game)."
         )
 
+    def get_agent_reward(self) -> float:
+        """Get the accumulated agent reward since last reset, without resetting."""
+        return self._agent_reward_acc
+
     @classmethod
     def for_game(cls, game: Game, agent_index: int = 0) -> "Simulator":
         """
