@@ -2,7 +2,7 @@ import math
 from typing import Callable
 
 from stable_baselines3.common.callbacks import BaseCallback
-
+from loguru import logger
 
 def lr_schedule(
     lr_min: float = 1e-5, lr_max: float = 3e-4, warmup_steps: float = 0.03
@@ -83,4 +83,9 @@ class CoefScheduler(BaseCallback):
         progress_remaining = 1.0 - (self.num_timesteps / self.total_timesteps)
         progress_remaining = float(max(0.0, min(1.0, progress_remaining)))
         setattr(self.model, self.att, float(self.schedule(progress_remaining)))
+
+        # Log every 10% progress
+        if self.num_timesteps % (self.total_timesteps // 10) < self.model.n_envs:
+            new_value = getattr(self.model, self.att)
+            logger.debug(f"train/{self.att}: {new_value}")
         return True

@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 from dataclasses import asdict
 from glob import glob
@@ -51,6 +52,18 @@ def load_vecnormalize(path: str, env: VecNormalize) -> VecNormalize:
     loaded_vn.norm_reward = True  # Normalize rewards
     return loaded_vn
 
+def make_env(seed: int):
+    def _init():
+        env = LudoEnv()
+        env.reset(seed=seed)  # Optional: unique seed per env
+        return env
+    return _init
+
+def save_and_exit(sig, frame):
+    logger.warning("Interrupted! Saving checkpoint...")
+    model.save(os.path.join(model_save_path, "interrupted_model"))
+    train_env.save(os.path.join(model_save_path, "vecnormalize_interrupted.pkl"))
+    sys.exit(0)
 
 class ProfilerStepCallback(BaseCallback):
     """Steps the PyTorch profiler once per environment step."""
@@ -83,10 +96,12 @@ if __name__ == "__main__":
     # --- Create Training Environment ---
     # We use a lambda to create the environment
     # Vectorize the environment
+    seed = getattr(args, "seed", 42)
     if args.num_envs == 1:
-        train_env = DummyVecEnv([lambda: LudoEnv()])
+        train_env = DummyVecEnv([make_env(seed)])
     else:
-        train_env = SubprocVecEnv([lambda: LudoEnv() for _ in range(args.num_envs)])
+        train_env = SubprocVecEnv([make_env(seed + i) for i in range(args.num_envs)])
+    train_env.seed(seed+1000)
     train_env = VecMonitor(train_env)
     train_env = VecCheckNan(train_env, raise_exception=True)
     train_env = VecNormalize(
@@ -204,7 +219,7 @@ if __name__ == "__main__":
             policy_kwargs=policy_kwargs,
             **init_kwargs,
         )
-    seed = getattr(args, "seed", 42)
+    
     model.set_random_seed(seed)
     train_env.seed(seed)
     train_env.reset()
@@ -236,8 +251,8 @@ if __name__ == "__main__":
             activities=activities,
             schedule=profiler_schedule,
             on_trace_ready=tensorboard_trace_handler(profiler_log_dir),
-            record_shapes=False,
-            profile_memory=False,
+            record_shapes=True,
+            profile_memory=True,
             with_stack=False,
         ) as prof:
             profiling_callbacks = CallbackList(callbacks + [ProfilerStepCallback(prof)])
