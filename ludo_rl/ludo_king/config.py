@@ -40,6 +40,13 @@ class Config:
 
     FIXED_OPPONENTS_STEPS: int = int(os.getenv("FIXED_OPPONENTS_STEPS", 10_000))
 
+    # Curriculum configuration
+    CURRICULUM_INTERVAL_RESETS: int = int(os.getenv("CURRICULUM_INTERVAL_RESETS", 2500))
+    CURRICULUM_P_BASE: float = float(os.getenv("CURRICULUM_P_BASE", 0.0))
+    CURRICULUM_P_STEP: float = float(os.getenv("CURRICULUM_P_STEP", 0.05))
+    CURRICULUM_P_MAX: float = float(os.getenv("CURRICULUM_P_MAX", 1.0))
+    CURRICULUM_MIN_EASY: int = int(os.getenv("CURRICULUM_MIN_EASY", 1))
+
     # Derived positions (computed in __post_init__ for convenience)
     def __post_init__(self):
         # Main ring covers 1..51
@@ -133,3 +140,18 @@ config = Config()
 net_config = NetworkConfig()
 strategy_config = StrategyConfig()
 reward_config = Reward()
+
+# Arena results: higher score = stronger opponent. Used by curriculum sampling.
+ARENA_SCORES = {
+    "defensive": 4962,
+    "cautious": 4710,
+    "homebody": 4371,
+    "hoarder": 4276,
+    "probability": 3582,
+    "killer": 3528,
+    "finish_line": 3455,
+    "heatseeker": 3398,
+    "rusher": 3343,
+    "retaliator": 2994,
+    "support": 981,
+}
