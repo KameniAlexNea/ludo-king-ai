@@ -66,7 +66,10 @@ def compute_move_rewards(
     if knockouts:
         mover_reward += reward_config.capture * len(knockouts)
         for knockout in knockouts:
-            victim_index = knockout["player"]
+            # Support both KnockoutEvent dataclass and legacy dict
+            victim_index = (
+                knockout.player if hasattr(knockout, "player") else knockout["player"]
+            )
             rewards[victim_index] += reward_config.got_capture
     if _get(events, "hit_blockade"):
         mover_reward += reward_config.hit_blockade

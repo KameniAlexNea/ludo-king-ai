@@ -173,38 +173,28 @@ class Simulator:
                     ]
 
         # Track knockouts
-        if result.events.knockouts:
-            for knockout in result.events.knockouts:
-                abs_pos = knockout.get("abs_pos")
-                if abs_pos is not None:
-                    agent_rel_pos = self.game.board.relative_position(
-                        agent_color, abs_pos
-                    )
-                    if agent_rel_pos != -1:
-                        if knockout["player"] == self.agent_index:
-                            # Opponent knocked out my piece
-                            self.game.board.opp_knockouts[agent_rel_pos] = 1.0
-                        elif mover_index == self.agent_index:
-                            # I knocked out opponent piece
-                            self.game.board.my_knockouts[agent_rel_pos] = 1.0
+        for knockout in result.events.knockouts:
+            agent_rel_pos = self.game.board.relative_position(
+                agent_color, knockout.abs_pos
+            )
+            if agent_rel_pos != -1:
+                if knockout.player == self.agent_index:
+                    # Opponent knocked out my piece
+                    self.game.board.opp_knockouts[agent_rel_pos] = 1.0
+                elif mover_index == self.agent_index:
+                    # I knocked out opponent piece
+                    self.game.board.my_knockouts[agent_rel_pos] = 1.0
 
         # Track new blockades
-        if result.events.blockades:
-            for blockade in result.events.blockades:
-                blockade_player = blockade.get("player", mover_index)
-                blockade_rel_pos = blockade.get(
-                    "rel"
-                )  # Note: field is "rel" in game.py
-                if blockade_rel_pos and 1 <= blockade_rel_pos <= 51:
-                    blockade_color = int(self.game.players[blockade_player].color)
-                    abs_pos = self.game.board.absolute_position(
-                        blockade_color, blockade_rel_pos
-                    )
-                    agent_rel_pos = self.game.board.relative_position(
-                        agent_color, abs_pos
-                    )
-                    if agent_rel_pos != -1:
-                        self.game.board.new_blockades[agent_rel_pos] = 1.0
+        for blockade in result.events.blockades:
+            if 1 <= blockade.rel_pos <= config.MAIN_TRACK_END:
+                blockade_color = int(self.game.players[blockade.player].color)
+                abs_pos = self.game.board.absolute_position(
+                    blockade_color, blockade.rel_pos
+                )
+                agent_rel_pos = self.game.board.relative_position(agent_color, abs_pos)
+                if agent_rel_pos != -1:
+                    self.game.board.new_blockades[agent_rel_pos] = 1.0
 
         # Track when opponent hits agent's blockade
         if (
@@ -215,7 +205,7 @@ class Simulator:
             # Opponent failed to move due to blockade - check if it's the agent's blockade
             target_rel = result.new_position  # Position they tried to move to
             mover_color = int(self.game.players[mover_index].color)
-            if 1 <= target_rel <= 51:
+            if 1 <= target_rel <= config.MAIN_TRACK_END:
                 abs_pos = self.game.board.absolute_position(mover_color, target_rel)
                 agent_rel_pos = self.game.board.relative_position(agent_color, abs_pos)
                 if agent_rel_pos != -1:

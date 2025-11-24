@@ -12,7 +12,7 @@ if TYPE_CHECKING:  # avoid runtime import to prevent circular deps
     from .player import Player
 
 from .reward import compute_move_rewards, compute_state_potential, shaping_delta
-from .types import Move, MoveEvents, MoveResult
+from .types import BlockadeEvent, KnockoutEvent, Move, MoveEvents, MoveResult
 
 
 @dataclass(slots=True)
@@ -240,11 +240,11 @@ class Game:
                             victim_index = i
                             break
                     events.knockouts.append(
-                        {
-                            "player": victim_index,
-                            "piece_id": opp_piece.piece_id,
-                            "abs_pos": abs_pos,
-                        }
+                        KnockoutEvent(
+                            player=victim_index,
+                            piece_id=opp_piece.piece_id,
+                            abs_pos=abs_pos,
+                        )
                     )
                 elif len(occupants) >= 2:
                     # can't land on an opponent blockade on non-safe squares
@@ -269,7 +269,9 @@ class Game:
             and 1 <= pc.position <= config.MAIN_TRACK_END
             and self.board.count_at_relative(player.color, pc.position) >= 2
         ):
-            events.blockades.append({"player": mv.player_index, "rel": pc.position})
+            events.blockades.append(
+                BlockadeEvent(player=mv.player_index, rel_pos=pc.position)
+            )
 
         # Compute per-player rewards (optional; env may or may not use)
         rewards = compute_move_rewards(
