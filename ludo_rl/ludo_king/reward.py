@@ -149,7 +149,7 @@ def _finish_opportunity_probability(my_rels: list[int]) -> float:
     # Probability to finish a piece on next move (home column only)
     total = 0.0
     for r in my_rels:
-        if king_config.HOME_COLUMN_START <= r <= king_config.HOME_FINISH - 1:
+        if king_config.HOME_COLUMN_START - 1 <= r <= king_config.HOME_FINISH - 1:
             total += 1.0 / 6.0 if 1 <= king_config.HOME_FINISH - r <= 6 else 0.0
     return (total / max(1, len(my_rels))) if my_rels else 0.0
 

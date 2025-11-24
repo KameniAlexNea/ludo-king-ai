@@ -95,16 +95,16 @@ class Reward:
     win: float = 50
     lose: float = -50
     finish: float = 1 * COEF
-    capture: float = 0.2 * COEF
-    got_capture: float = -0.5 * COEF
-    blockade: float = 0.05 * COEF
+    capture: float = 0.3 * COEF
+    got_capture: float = -0.3 * COEF
+    blockade: float = 0.15 * COEF
     hit_blockade: float = -0.1 * COEF
     blockade_hit: float = 0.1 * COEF
     exit_home: float = 0.1 * COEF
-    progress: float = 0.001
+    progress: float = 0.001 * COEF
     safe_position: float = 0.05 * COEF
     draw: float = -2 * COEF
-    skipped_turn: float = -0.001
+    skipped_turn: float = -0.001 * COEF
 
     # Risk/Opportunity shaping (potential-based) parameters
     shaping_use: bool = bool(int(os.getenv("SHAPING_USE", 1)))
@@ -118,8 +118,8 @@ class Reward:
     )  # lookahead depth in plies (approximate)
     # Weights for potential components
     ro_w_progress: float = float(os.getenv("RO_W_PROGRESS", 0.3))
-    ro_w_cap_opp: float = float(os.getenv("RO_W_CAP_OPP", 0.4))
-    ro_w_cap_risk: float = float(os.getenv("RO_W_CAP_RISK", 0.6))
+    ro_w_cap_opp: float = float(os.getenv("RO_W_CAP_OPP", 0.5))
+    ro_w_cap_risk: float = float(os.getenv("RO_W_CAP_RISK", 0.5))
     ro_w_finish_opp: float = float(os.getenv("RO_W_FINISH_OPP", 0.3))
 
     # Opponent progress penalties (sparse signals to encourage urgency)
