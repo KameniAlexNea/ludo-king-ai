@@ -120,10 +120,11 @@ class LudoEnv(gym.Env):
         self.use_fixed_opponents = use_fixed_opponents
 
         # Create the curriculum-aware opponent sampler
-        curriculum_resets = int(os.getenv("CURRICULUM_TOTAL_RESETS", 1_000_000))
+        # Use timesteps (not resets) for curriculum progression in multi-env training
+        curriculum_timesteps = int(os.getenv("CURRICULUM_TOTAL_TIMESTEPS", 50_000_000))
         self._opponent_sampler: OpponentLineupSampler = create_default_sampler(
             strategies=self.opponents,
-            curriculum_resets=curriculum_resets,
+            curriculum_timesteps=curriculum_timesteps,
         )
 
     def _build_observation(self) -> Dict[str, np.ndarray]:
@@ -368,6 +369,16 @@ class LudoEnv(gym.Env):
         return obs, reward, terminated, truncated, info
 
     # --- Internal helpers ---
+
+    def set_curriculum_timesteps(self, timesteps: int) -> None:
+        """
+        Update curriculum progress based on global training timesteps.
+        
+        Called by CurriculumSyncCallback to sync all envs to the same
+        training progress, ensuring curriculum advances correctly in
+        multi-env (vectorized) training.
+        """
+        self._opponent_sampler.set_global_timesteps(timesteps)
 
     def render(self):
         if self.render_mode == "rgb_array":

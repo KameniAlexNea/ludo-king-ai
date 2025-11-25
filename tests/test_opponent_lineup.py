@@ -72,7 +72,7 @@ class TestOpponentLineupSampler:
         """Create a basic sampler with common strategies."""
         return OpponentLineupSampler(
             available_strategies=["random", "killer", "defensive"],
-            curriculum_total_resets=100,
+            curriculum_total_timesteps=100,
         )
 
     @pytest.fixture
@@ -80,7 +80,7 @@ class TestOpponentLineupSampler:
         """Create a sampler with fixed seed for reproducibility."""
         sampler = OpponentLineupSampler(
             available_strategies=["random", "killer", "defensive", "cautious"],
-            curriculum_total_resets=1000,
+            curriculum_total_timesteps=1000,
         )
         sampler.set_seed(42)
         return sampler
@@ -111,21 +111,21 @@ class TestOpponentLineupSampler:
         """Initial progress should be 0."""
         assert basic_sampler.get_curriculum_progress() == 0.0
 
-    def test_get_curriculum_progress_after_advance(self, basic_sampler):
-        """Progress should increase after advance()."""
-        basic_sampler.advance()
+    def test_get_curriculum_progress_after_set_timesteps(self, basic_sampler):
+        """Progress should increase after set_global_timesteps()."""
+        basic_sampler.set_global_timesteps(1)
         assert basic_sampler.get_curriculum_progress() == 0.01  # 1/100
 
     def test_get_curriculum_progress_capped_at_one(self, basic_sampler):
         """Progress should be capped at 1.0."""
-        basic_sampler._reset_count = 200  # More than total
+        basic_sampler.set_global_timesteps(200)  # More than total
         assert basic_sampler.get_curriculum_progress() == 1.0
 
     def test_get_curriculum_progress_zero_total(self):
-        """Progress should be 1.0 when curriculum_total_resets is 0."""
+        """Progress should be 1.0 when curriculum_total_timesteps is 0."""
         sampler = OpponentLineupSampler(
             available_strategies=["random"],
-            curriculum_total_resets=0,
+            curriculum_total_timesteps=0,
         )
         assert sampler.get_curriculum_progress() == 1.0
 
@@ -138,16 +138,16 @@ class TestOpponentLineupSampler:
     def test_get_target_difficulty_increases(self, basic_sampler):
         """Target difficulty should increase with progress."""
         initial = basic_sampler.get_target_difficulty()
-        basic_sampler._reset_count = 50
+        basic_sampler.set_global_timesteps(50)
         mid = basic_sampler.get_target_difficulty()
-        basic_sampler._reset_count = 100
+        basic_sampler.set_global_timesteps(100)
         final = basic_sampler.get_target_difficulty()
 
         assert initial < mid < final
 
     def test_get_target_difficulty_final(self, basic_sampler):
         """Final difficulty should approach max_difficulty."""
-        basic_sampler._reset_count = basic_sampler.curriculum_total_resets
+        basic_sampler.set_global_timesteps(basic_sampler.curriculum_total_timesteps)
         final = basic_sampler.get_target_difficulty()
         assert abs(final - basic_sampler.max_difficulty) < 0.01
 
@@ -157,7 +157,7 @@ class TestOpponentLineupSampler:
         """Only strategies with min_curriculum_stage=0 should be available initially."""
         sampler = OpponentLineupSampler(
             available_strategies=["random", "killer", "hybrid"],
-            curriculum_total_resets=100,
+            curriculum_total_timesteps=100,
         )
         available = sampler._get_available_for_stage()
         assert "random" in available
@@ -169,9 +169,9 @@ class TestOpponentLineupSampler:
         """All strategies should be available late in training."""
         sampler = OpponentLineupSampler(
             available_strategies=["random", "killer", "hybrid"],
-            curriculum_total_resets=100,
+            curriculum_total_timesteps=100,
         )
-        sampler._reset_count = 100  # 100% progress
+        sampler.set_global_timesteps(100)  # 100% progress
         available = sampler._get_available_for_stage()
         assert "random" in available
         assert "killer" in available
@@ -186,7 +186,7 @@ class TestOpponentLineupSampler:
                     "late_strategy", min_curriculum_stage=1.0
                 )
             },
-            curriculum_total_resets=100,
+            curriculum_total_timesteps=100,
         )
         # At 0% progress, no strategies available, should fallback
         available = sampler._get_available_for_stage()
@@ -221,7 +221,7 @@ class TestOpponentLineupSampler:
         sampler = OpponentLineupSampler(
             available_strategies=["random"],  # Only one strategy
             force_diversity=False,
-            curriculum_total_resets=100,
+            curriculum_total_timesteps=100,
         )
         lineup = sampler.sample_lineup(3)
         assert lineup == ["random", "random", "random"]
@@ -307,14 +307,14 @@ class TestOpponentLineupSampler:
         """Same seed should produce same lineups."""
         sampler1 = OpponentLineupSampler(
             available_strategies=["random", "killer", "defensive", "cautious"],
-            curriculum_total_resets=1000,
+            curriculum_total_timesteps=1000,
             cache_interval=0,  # No caching
         )
         sampler1.set_seed(12345)
 
         sampler2 = OpponentLineupSampler(
             available_strategies=["random", "killer", "defensive", "cautious"],
-            curriculum_total_resets=1000,
+            curriculum_total_timesteps=1000,
             cache_interval=0,
         )
         sampler2.set_seed(12345)
@@ -339,10 +339,10 @@ class TestCreateDefaultSampler:
         sampler = create_default_sampler(strategies)
         assert sampler.available_strategies == strategies
 
-    def test_uses_provided_curriculum_resets(self):
-        """Factory should use the provided curriculum_resets."""
-        sampler = create_default_sampler(["random"], curriculum_resets=500_000)
-        assert sampler.curriculum_total_resets == 500_000
+    def test_uses_provided_curriculum_timesteps(self):
+        """Factory should use the provided curriculum_timesteps."""
+        sampler = create_default_sampler(["random"], curriculum_timesteps=500_000)
+        assert sampler.curriculum_total_timesteps == 500_000
 
     def test_uses_provided_seed(self):
         """Factory should set seed when provided."""
@@ -370,13 +370,13 @@ class TestCurriculumProgression:
         """Early in training, easier strategies should be sampled more often."""
         sampler = OpponentLineupSampler(
             available_strategies=["random", "killer", "defensive"],
-            curriculum_total_resets=1000,
+            curriculum_total_timesteps=1000,
             cache_interval=0,
         )
         sampler.set_seed(42)
 
-        # Sample many lineups at early stage
-        sampler._reset_count = 0
+        # Sample many lineups at early stage (timesteps = 0)
+        sampler.set_global_timesteps(0)
         early_counts = {"random": 0, "killer": 0, "defensive": 0}
         for _ in range(100):
             for name in sampler.sample_lineup(3):
@@ -389,7 +389,7 @@ class TestCurriculumProgression:
         """Late in training, harder strategies should be available."""
         sampler = OpponentLineupSampler(
             available_strategies=["random", "killer", "hybrid"],
-            curriculum_total_resets=100,
+            curriculum_total_timesteps=100,
             cache_interval=0,
         )
         sampler.set_seed(42)
@@ -397,15 +397,15 @@ class TestCurriculumProgression:
         # At 0% progress, hybrid not available
         assert "hybrid" not in sampler._get_available_for_stage()
 
-        # At 50% progress, hybrid still not available (min_curriculum_stage=0.3)
-        sampler._reset_count = 50
+        # At 50% progress, hybrid is available (min_curriculum_stage=0.3)
+        sampler.set_global_timesteps(50)
         assert "hybrid" in sampler._get_available_for_stage()
 
     def test_diversity_maintained_throughout(self):
         """Diversity should be maintained throughout training."""
         sampler = OpponentLineupSampler(
             available_strategies=["random", "killer", "defensive", "cautious"],
-            curriculum_total_resets=100,
+            curriculum_total_timesteps=100,
             force_diversity=True,
             cache_interval=0,
         )
@@ -413,6 +413,6 @@ class TestCurriculumProgression:
 
         # Check diversity at different stages
         for progress in [0, 25, 50, 75, 100]:
-            sampler._reset_count = progress
+            sampler.set_global_timesteps(progress)
             lineup = sampler.sample_lineup(3)
             assert len(set(lineup)) >= 2, f"Diversity failed at progress={progress}"

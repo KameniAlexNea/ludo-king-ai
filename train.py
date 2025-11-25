@@ -39,6 +39,7 @@ from ludo_rl.ludo_king.reward import reward_config
 from ludo_rl.utils.arguments import TrainingSetup, parse_train_args
 from ludo_rl.utils.scheduler import (
     CoefScheduler,
+    CurriculumSyncCallback,
     entropy_schedule,
     lr_schedule,
     target_kl_schedule,
@@ -152,7 +153,13 @@ if __name__ == "__main__":
         ),
     )
 
-    callbacks = [entropy_callback, target_kl_callback]
+    # Sync curriculum progress across all parallel envs
+    curriculum_callback = CurriculumSyncCallback(
+        sync_interval=2048,  # Sync every n_steps (2048 default)
+        verbose=0,
+    )
+
+    callbacks = [entropy_callback, target_kl_callback, curriculum_callback]
 
     if not args.profile:
         wandb.init(

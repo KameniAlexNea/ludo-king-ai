@@ -145,3 +145,55 @@ class CoefScheduler(BaseCallback):
             new_value = getattr(self.model, self.att)
             logger.debug(f"train/{self.att}: {new_value}")
         return True
+
+
+class CurriculumSyncCallback(BaseCallback):
+    """
+    Syncs global training timesteps to all environments' curriculum samplers.
+    
+    In multi-env (vectorized) training, each env has its own OpponentLineupSampler.
+    Without syncing, each env would track its own reset count, leading to slow/incorrect
+    curriculum progression. This callback ensures all envs use the global timestep count
+    for curriculum progress calculation.
+    """
+
+    def __init__(self, sync_interval: int = 1000, verbose: int = 0):
+        """
+        Args:
+            sync_interval: How often (in timesteps) to sync. Lower = more overhead,
+                          higher = more lag in curriculum updates. 1000 is a good default.
+            verbose: Verbosity level (0 = silent, 1 = log syncs)
+        """
+        super().__init__(verbose)
+        self.sync_interval = max(1, sync_interval)
+        self._last_sync = 0
+
+    def _on_step(self) -> bool:
+        # Only sync every sync_interval timesteps to reduce overhead
+        if self.num_timesteps - self._last_sync >= self.sync_interval:
+            self._sync_timesteps()
+            self._last_sync = self.num_timesteps
+        return True
+
+    def _sync_timesteps(self) -> None:
+        """Sync global timesteps to all environments."""
+        try:
+            # Access the underlying envs through the VecEnv wrapper chain
+            vec_env = self.model.get_env()
+            if vec_env is None:
+                return
+
+            # Call env_method to set timesteps on all envs
+            # This works with both DummyVecEnv and SubprocVecEnv
+            vec_env.env_method("set_curriculum_timesteps", self.num_timesteps)
+
+            if self.verbose > 0 and self.num_timesteps % (self.sync_interval * 100) == 0:
+                logger.info(
+                    f"Curriculum sync: {self.num_timesteps:,} timesteps -> all envs"
+                )
+        except AttributeError:
+            # Environment doesn't have the method - skip silently
+            pass
+        except Exception as e:
+            # Log but don't crash training
+            logger.warning(f"Curriculum sync failed: {e}")

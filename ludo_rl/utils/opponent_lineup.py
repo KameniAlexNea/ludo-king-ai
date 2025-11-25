@@ -64,13 +64,18 @@ class OpponentLineupSampler:
     - Each episode samples a fresh lineup
     - Soft curriculum: gradually increases average difficulty
     - Maintains diversity throughout training
+    
+    Note on multi-env training:
+    - When using vectorized environments (n_envs > 1), each env has its own sampler
+    - Progress should be synced via `set_global_timesteps()` from a callback
+    - This ensures curriculum progresses based on total training steps, not per-env resets
     """
 
     available_strategies: List[str] = field(default_factory=list)
     strategy_weights: Dict[str, StrategyWeight] = field(default_factory=dict)
 
-    # Curriculum settings
-    curriculum_total_resets: int = 1_000_000  # Total resets for full curriculum
+    # Curriculum settings - use timesteps for multi-env compatibility
+    curriculum_total_timesteps: int = 50_000_000  # Total timesteps for full curriculum
     min_difficulty: float = 0.2  # Starting average difficulty
     max_difficulty: float = 0.8  # Ending average difficulty
 
@@ -84,6 +89,7 @@ class OpponentLineupSampler:
     # Internal state
     _rng: random.Random = field(default_factory=random.Random, repr=False)
     _reset_count: int = field(default=0, repr=False)
+    _global_timesteps: int = field(default=0, repr=False)  # Synced from training callback
     _cached_lineup: Optional[List[str]] = field(default=None, repr=False)
     _strategy_usage: Dict[str, int] = field(default_factory=dict, repr=False)
 
@@ -108,11 +114,30 @@ class OpponentLineupSampler:
         """Set random seed for reproducibility."""
         self._rng.seed(seed)
 
+    def set_global_timesteps(self, timesteps: int) -> None:
+        """
+        Update curriculum progress based on global training timesteps.
+        
+        This should be called from a training callback to sync progress
+        across all parallel environments. Each env's sampler will then
+        use this global count for curriculum progression.
+        
+        Args:
+            timesteps: Total timesteps from model.num_timesteps
+        """
+        self._global_timesteps = timesteps
+
     def get_curriculum_progress(self) -> float:
-        """Returns curriculum progress as a float in [0, 1]."""
-        if self.curriculum_total_resets <= 0:
+        """
+        Returns curriculum progress as a float in [0, 1].
+        
+        Uses global timesteps if set (multi-env training), otherwise
+        falls back to local reset count (single env / testing).
+        """
+        if self.curriculum_total_timesteps <= 0:
             return 1.0
-        return min(1.0, self._reset_count / self.curriculum_total_resets)
+        # Use global timesteps for progress (synced from training callback)
+        return min(1.0, self._global_timesteps / self.curriculum_total_timesteps)
 
     def get_target_difficulty(self) -> float:
         """Returns the target average difficulty for current curriculum stage."""
@@ -276,7 +301,7 @@ class OpponentLineupSampler:
 
 def create_default_sampler(
     strategies: Sequence[str],
-    curriculum_resets: int = 1_000_000,
+    curriculum_timesteps: int = 50_000_000,
     seed: Optional[int] = None,
 ) -> OpponentLineupSampler:
     """
@@ -284,7 +309,7 @@ def create_default_sampler(
 
     Args:
         strategies: List of available strategy names
-        curriculum_resets: Total resets for full curriculum progression
+        curriculum_timesteps: Total timesteps for full curriculum progression
         seed: Random seed for reproducibility
 
     Returns:
@@ -292,7 +317,7 @@ def create_default_sampler(
     """
     sampler = OpponentLineupSampler(
         available_strategies=list(strategies),
-        curriculum_total_resets=curriculum_resets,
+        curriculum_total_timesteps=curriculum_timesteps,
         min_difficulty=0.15,  # Start with mostly easy opponents
         max_difficulty=0.75,  # End with challenging mix
         force_diversity=True,
