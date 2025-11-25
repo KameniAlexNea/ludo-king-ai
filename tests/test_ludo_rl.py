@@ -8,7 +8,11 @@ import numpy as np
 import torch
 from gymnasium import spaces
 
-from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
+from ludo_rl.extractor import (
+    LudoCnnExtractor,
+    LudoMlpExtractor,
+    LudoTransformerExtractor,
+)
 from ludo_rl.ludo_env import format_env_state
 from ludo_rl.ludo_king.config import config
 from ludo_rl.ludo_king.player import Player
@@ -182,6 +186,56 @@ class LudoCnnExtractorTests(unittest.TestCase):
             }
         )
         self.extractor = LudoCnnExtractor(
+            self.observation_space, features_dim=self.features_dim
+        )
+        self.extractor.eval()
+
+    def test_forward_outputs_expected_shape(self) -> None:
+        batch_size = 3
+        positions = torch.randint(
+            0, config.PATH_LENGTH, (batch_size, 10, 16), dtype=torch.long
+        )
+        dice_history = torch.randint(0, 7, (batch_size, 10), dtype=torch.long)
+        token_mask = torch.ones(batch_size, 10, 16, dtype=torch.bool)
+        player_history = torch.randint(0, 4, (batch_size, 10), dtype=torch.long)
+        token_colors = torch.randint(0, 4, (batch_size, 16), dtype=torch.long)
+        current_dice = torch.randint(1, 7, (batch_size, 1), dtype=torch.long)
+        observations = {
+            "positions": positions,
+            "dice_history": dice_history,
+            "token_mask": token_mask,
+            "player_history": player_history,
+            "token_colors": token_colors,
+            "current_dice": current_dice,
+        }
+        with torch.no_grad():
+            output = self.extractor(observations)
+
+        self.assertEqual(output.shape, (batch_size, self.features_dim))
+        self.assertFalse(torch.isnan(output).any().item())
+
+
+class LudoMLPExtractorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.features_dim = 128
+        self.observation_space = spaces.Dict(
+            {
+                "positions": spaces.Box(
+                    low=0,
+                    high=config.PATH_LENGTH - 1,
+                    shape=(10, 16),
+                    dtype=np.int64,
+                ),
+                "dice_history": spaces.Box(low=0, high=6, shape=(10,), dtype=np.int64),
+                "token_mask": spaces.Box(low=0, high=1, shape=(10, 16), dtype=np.bool_),
+                "player_history": spaces.Box(
+                    low=0, high=3, shape=(10,), dtype=np.int64
+                ),
+                "token_colors": spaces.Box(low=0, high=3, shape=(16,), dtype=np.int64),
+                "current_dice": spaces.Box(low=1, high=6, shape=(1,), dtype=np.int64),
+            }
+        )
+        self.extractor = LudoMlpExtractor(
             self.observation_space, features_dim=self.features_dim
         )
         self.extractor.eval()
