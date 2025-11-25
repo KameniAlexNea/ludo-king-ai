@@ -98,8 +98,11 @@ def _check_capture(
         return False, 0
     if safe_channel[new_pos] > 0:
         return False, 0
-    captured = int(opponent_counts[new_pos])
-    return captured > 0, captured
+    count = int(opponent_counts[new_pos])
+    # Can only capture single pieces, not blockades (2+)
+    if count == 1:
+        return True, 1
+    return False, 0
 
 
 def _is_safe_destination(safe_channel: np.ndarray, new_pos: int) -> bool:
@@ -115,10 +118,9 @@ def _forms_blockade(
 ) -> bool:
     if new_pos <= 0 or new_pos > strategy_config.main_track_end:
         return False
-    if safe_channel[new_pos]:
-        return False
+    # Blockades can form anywhere on the main track, including safe squares
     current_count = my_channel[new_pos]
-    return current_count >= 1
+    return current_count >= 1  # 1 existing + 1 incoming = 2 = blockade
 
 
 def _estimate_risk(
@@ -129,10 +131,16 @@ def _estimate_risk(
 
     risk = 0.0
 
+    def _wrap_position(pos: int) -> int:
+        """Wrap position to valid main track range [1, 51]."""
+        if pos <= 0:
+            return pos + strategy_config.main_track_end
+        if pos > strategy_config.main_track_end:
+            return pos - strategy_config.main_track_end
+        return pos
+
     for step in range(1, 7):
-        idx = new_pos - step
-        if idx <= 0:
-            idx += strategy_config.main_track_end
+        idx = _wrap_position(new_pos - step)
         if safe_channel[idx]:
             continue
         threat_level = opponent_counts[idx]

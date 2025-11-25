@@ -138,9 +138,7 @@ def run_profiled_games(num_games: int = 100, seed: int = 42):
     rng = random.Random(seed)
 
     # Select 4 different strategies
-    strategies = [
-        i for i,_ in model_arena_results(4)
-    ]
+    strategies = [i for i, _ in model_arena_results(4)]
 
     print(f"Running {num_games} games with strategies: {', '.join(strategies)}")
     print("=" * 80)
@@ -221,9 +219,7 @@ def run_cprofile_single_game():
     print("=" * 80)
 
     rng = random.Random(42)
-    strategies = [
-        i for i,_ in model_arena_results(4)
-    ]
+    strategies = [i for i, _ in model_arena_results(4)]
 
     profiler = cProfile.Profile()
     profiler.enable()

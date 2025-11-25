@@ -1,8 +1,9 @@
 import math
 from typing import Callable
 
-from stable_baselines3.common.callbacks import BaseCallback
 from loguru import logger
+from stable_baselines3.common.callbacks import BaseCallback
+
 
 def lr_schedule(
     lr_min: float = 1e-5, lr_max: float = 3e-4, warmup_steps: float = 0.03

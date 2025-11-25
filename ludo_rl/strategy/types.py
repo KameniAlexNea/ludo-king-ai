@@ -39,4 +39,4 @@ class StrategyContext:
     safe_channel: np.ndarray
 
     def iter_legal(self) -> Iterable[MoveOption]:
-        return (move for move in self.moves if self.action_mask[move.piece_id])
+        return self.moves
