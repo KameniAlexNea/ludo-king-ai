@@ -39,7 +39,7 @@ class Config:
     HOME_COLUMN_START: int = 0
     HOME_FINISH: int = 0
 
-    FIXED_OPPONENTS_STEPS: int = int(os.getenv("FIXED_OPPONENTS_STEPS", 10_000))
+    FIXED_OPPONENTS_STEPS: int = int(os.getenv("FIXED_OPPONENTS_STEPS", 100))
 
     # Curriculum configuration
     CURRICULUM_INTERVAL_RESETS: int = int(os.getenv("CURRICULUM_INTERVAL_RESETS", 2500))

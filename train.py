@@ -182,6 +182,7 @@ if __name__ == "__main__":
     }
     extractor_class = extractor_map[args.extractor]
 
+    share_extractor = os.getenv("SHARE_EXTRACTOR", "0") == "1"
     policy_kwargs = dict(
         activation_fn=torch.nn.GELU,  # GELU for smooth, non-saturating gradients
         features_extractor_class=extractor_class,
@@ -189,7 +190,7 @@ if __name__ == "__main__":
             features_dim=net_config.embed_dim
         ),  # Output features
         net_arch=dict(pi=net_config.pi, vf=net_config.vf),  # Actor/Critic network sizes
-        share_features_extractor=True,
+        share_features_extractor=share_extractor,
     )
 
     logger.debug("--- Initializing PPO Model ---")
