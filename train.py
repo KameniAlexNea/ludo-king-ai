@@ -36,8 +36,8 @@ from ludo_rl.extractor import (
 from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king.config import config, net_config
 from ludo_rl.ludo_king.reward import reward_config
-from tools.arguments import TrainingSetup, parse_train_args
-from tools.scheduler import (
+from ludo_rl.utils.arguments import TrainingSetup, parse_train_args
+from ludo_rl.utils.scheduler import (
     CoefScheduler,
     entropy_schedule,
     lr_schedule,

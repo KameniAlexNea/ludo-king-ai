@@ -23,6 +23,53 @@ def lr_schedule(
     return schedule
 
 
+def warmup_plateau_decay_schedule(
+    start: float,
+    peak: float,
+    end: float,
+    warmup_fraction: float,
+    plateau_fraction: float,
+) -> Callable[[float], float]:
+    """
+    Generic schedule with warmup, plateau, and decay phases.
+
+    Phases:
+    1. Warmup (0 -> warmup_fraction): cosine ramp from start to peak
+    2. Plateau (warmup -> warmup+plateau): maintain peak value
+    3. Decay (remaining): cosine decay from peak to end
+
+    Args:
+        start: Initial value
+        peak: Peak value (maintained during plateau)
+        end: Final value after decay
+        warmup_fraction: Fraction of training for warmup ramp
+        plateau_fraction: Fraction of training to maintain peak
+    """
+
+    def schedule(progress_remaining: float) -> float:
+        progress = 1 - progress_remaining
+
+        if progress < warmup_fraction:
+            # Warmup: cosine ramp up
+            t = progress / warmup_fraction
+            factor = 0.5 * (1 - math.cos(math.pi * t))
+            return start + (peak - start) * factor
+
+        elif progress < warmup_fraction + plateau_fraction:
+            # Plateau: maintain peak
+            return peak
+
+        else:
+            # Decay: cosine ramp down
+            t = (progress - warmup_fraction - plateau_fraction) / (
+                1 - warmup_fraction - plateau_fraction
+            )
+            factor = 0.5 * (1 + math.cos(math.pi * t))
+            return end + (peak - end) * factor
+
+    return schedule
+
+
 def entropy_schedule(
     ent_start: float = 0.02,
     ent_peak: float = 0.03,
@@ -33,11 +80,6 @@ def entropy_schedule(
     """
     Entropy coefficient schedule that encourages exploration early, then decays.
 
-    Phases:
-    1. Warmup (0 -> warmup_fraction): ramp from ent_start to ent_peak
-    2. Plateau (warmup -> warmup+plateau): maintain ent_peak for exploration
-    3. Decay (remaining): cosine decay from ent_peak to ent_end
-
     Args:
         ent_start: Initial entropy coefficient (moderate exploration)
         ent_peak: Peak entropy coefficient (maximum exploration)
@@ -45,29 +87,13 @@ def entropy_schedule(
         warmup_fraction: Fraction of training for warmup ramp
         plateau_fraction: Fraction of training to maintain peak entropy
     """
-
-    def schedule(progress_remaining: float) -> float:
-        progress = 1 - progress_remaining
-
-        if progress < warmup_fraction:
-            # Warmup: ramp up to encourage early exploration
-            warmup_progress = progress / warmup_fraction
-            factor = 0.5 * (1 - math.cos(math.pi * warmup_progress))
-            return ent_start + (ent_peak - ent_start) * factor
-
-        elif progress < warmup_fraction + plateau_fraction:
-            # Plateau: maintain high entropy for diverse strategy learning
-            return ent_peak
-
-        else:
-            # Decay: gradually reduce for exploitation
-            decay_progress = (progress - warmup_fraction - plateau_fraction) / (
-                1 - warmup_fraction - plateau_fraction
-            )
-            factor = 0.5 * (1 + math.cos(math.pi * decay_progress))
-            return ent_end + (ent_peak - ent_end) * factor
-
-    return schedule
+    return warmup_plateau_decay_schedule(
+        start=ent_start,
+        peak=ent_peak,
+        end=ent_end,
+        warmup_fraction=warmup_fraction,
+        plateau_fraction=plateau_fraction,
+    )
 
 
 def target_kl_schedule(
@@ -78,11 +104,7 @@ def target_kl_schedule(
     cooldown_fraction: float = 0.15,
 ) -> Callable[[float], float]:
     """
-    Schedule for target_kl that:
-    - Starts conservative (kl_start) to avoid early convergence
-    - Increases to kl_peak during warmup
-    - Maintains kl_peak during mid-training
-    - Decreases to kl_end during cooldown for stability
+    Schedule for target_kl with warmup, plateau, and cooldown.
 
     Args:
         kl_start: Initial target_kl value (conservative)
@@ -91,29 +113,15 @@ def target_kl_schedule(
         warmup_fraction: Fraction of training for warmup phase
         cooldown_fraction: Fraction of training for cooldown phase
     """
-
-    def schedule(progress_remaining: float) -> float:
-        progress = 1 - progress_remaining
-
-        if progress < warmup_fraction:
-            # Warmup: smoothly increase from kl_start to kl_peak
-            warmup_progress = progress / warmup_fraction
-            # Use smooth interpolation (cosine)
-            factor = 0.5 * (1 - math.cos(math.pi * warmup_progress))
-            return kl_start + (kl_peak - kl_start) * factor
-
-        elif progress > (1 - cooldown_fraction):
-            # Cooldown: smoothly decrease from kl_peak to kl_end
-            cooldown_progress = (progress - (1 - cooldown_fraction)) / cooldown_fraction
-            # Use smooth interpolation (cosine)
-            factor = 0.5 * (1 - math.cos(math.pi * cooldown_progress))
-            return kl_peak - (kl_peak - kl_end) * factor
-
-        else:
-            # Mid-training: maintain peak value
-            return kl_peak
-
-    return schedule
+    # Convert cooldown to plateau: plateau = 1 - warmup - cooldown
+    plateau_fraction = 1.0 - warmup_fraction - cooldown_fraction
+    return warmup_plateau_decay_schedule(
+        start=kl_start,
+        peak=kl_peak,
+        end=kl_end,
+        warmup_fraction=warmup_fraction,
+        plateau_fraction=plateau_fraction,
+    )
 
 
 class CoefScheduler(BaseCallback):
