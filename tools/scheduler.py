@@ -23,6 +23,53 @@ def lr_schedule(
     return schedule
 
 
+def entropy_schedule(
+    ent_start: float = 0.02,
+    ent_peak: float = 0.03,
+    ent_end: float = 0.005,
+    warmup_fraction: float = 0.1,
+    plateau_fraction: float = 0.3,
+) -> Callable[[float], float]:
+    """
+    Entropy coefficient schedule that encourages exploration early, then decays.
+
+    Phases:
+    1. Warmup (0 -> warmup_fraction): ramp from ent_start to ent_peak
+    2. Plateau (warmup -> warmup+plateau): maintain ent_peak for exploration
+    3. Decay (remaining): cosine decay from ent_peak to ent_end
+
+    Args:
+        ent_start: Initial entropy coefficient (moderate exploration)
+        ent_peak: Peak entropy coefficient (maximum exploration)
+        ent_end: Final entropy coefficient (exploitation focus)
+        warmup_fraction: Fraction of training for warmup ramp
+        plateau_fraction: Fraction of training to maintain peak entropy
+    """
+
+    def schedule(progress_remaining: float) -> float:
+        progress = 1 - progress_remaining
+
+        if progress < warmup_fraction:
+            # Warmup: ramp up to encourage early exploration
+            warmup_progress = progress / warmup_fraction
+            factor = 0.5 * (1 - math.cos(math.pi * warmup_progress))
+            return ent_start + (ent_peak - ent_start) * factor
+
+        elif progress < warmup_fraction + plateau_fraction:
+            # Plateau: maintain high entropy for diverse strategy learning
+            return ent_peak
+
+        else:
+            # Decay: gradually reduce for exploitation
+            decay_progress = (progress - warmup_fraction - plateau_fraction) / (
+                1 - warmup_fraction - plateau_fraction
+            )
+            factor = 0.5 * (1 + math.cos(math.pi * decay_progress))
+            return ent_end + (ent_peak - ent_end) * factor
+
+    return schedule
+
+
 def target_kl_schedule(
     kl_start: float = 0.02,
     kl_peak: float = 0.06,

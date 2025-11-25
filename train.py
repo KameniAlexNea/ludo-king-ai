@@ -37,7 +37,12 @@ from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king.config import config, net_config
 from ludo_rl.ludo_king.reward import reward_config
 from tools.arguments import TrainingSetup, parse_train_args
-from tools.scheduler import CoefScheduler, lr_schedule, target_kl_schedule
+from tools.scheduler import (
+    CoefScheduler,
+    entropy_schedule,
+    lr_schedule,
+    target_kl_schedule,
+)
 
 os.environ["WANDB_START_METHOD"] = "thread"
 os.environ["WANDB_DISABLE_CODE"] = "false"
@@ -126,7 +131,13 @@ if __name__ == "__main__":
     entropy_callback = CoefScheduler(
         total_timesteps=args.total_timesteps,
         att="ent_coef",
-        schedule=lr_schedule(lr_min=args.ent_coef * 0.3, lr_max=args.ent_coef),
+        schedule=entropy_schedule(
+            ent_start=args.ent_coef,  # Start at specified value (e.g., 0.01)
+            ent_peak=args.ent_coef * 1.5,  # Peak 50% higher for exploration
+            ent_end=args.ent_coef * 0.2,  # End at 20% of original
+            warmup_fraction=0.1,  # 10% ramp up
+            plateau_fraction=0.25,  # 25% at peak
+        ),
     )
 
     target_kl_callback = CoefScheduler(

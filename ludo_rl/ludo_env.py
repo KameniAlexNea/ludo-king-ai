@@ -22,6 +22,7 @@ from .ludo_king.simulator import Simulator
 from .ludo_king.types import Color, Move
 from .strategy.registry import STRATEGY_REGISTRY
 from .strategy.registry import available as available_strategies
+from .utils.opponent_lineup import OpponentLineupSampler, create_default_sampler
 
 
 def get_observation_space() -> gym.spaces.Space:
@@ -117,7 +118,13 @@ class LudoEnv(gym.Env):
         self.observation_space = get_observation_space()
         self._fixed_opponents_strategies: list[str] = None
         self.use_fixed_opponents = use_fixed_opponents
-        # Curriculum configuration is accessed via king_config directly
+
+        # Create the curriculum-aware opponent sampler
+        curriculum_resets = int(os.getenv("CURRICULUM_TOTAL_RESETS", 1_000_000))
+        self._opponent_sampler: OpponentLineupSampler = create_default_sampler(
+            strategies=self.opponents,
+            curriculum_resets=curriculum_resets,
+        )
 
     def _build_observation(self) -> Dict[str, np.ndarray]:
         assert self.game is not None
@@ -172,60 +179,16 @@ class LudoEnv(gym.Env):
         return terminated, truncated
 
     def _get_lineup(self, num_opponents: int) -> List[str]:
+        """Get opponent lineup using the curriculum-aware sampler."""
         # Respect fixed-opponents caching if enabled
         if self.use_fixed_opponents and self._fixed_opponents_strategies is not None:
             if self._reset_count % king_config.FIXED_OPPONENTS_STEPS != 0:
                 return self._fixed_opponents_strategies
 
-        # Curriculum schedule:
-        # - For the first N resets (interval), all opponents are baseline random
-        # - Each interval thereafter, replace one baseline random seat with a
-        #   candidate strategy drawn from `self.opponents`
-        # Example for 3 opponents and interval=250k resets:
-        #   0-250k:   3 random
-        #   250-500k: 2 random + 1 candidate
-        #   500-750k: 1 random + 2 candidates
-        #   750-1M:   0 random + 3 candidates
+        # Sample lineup and log stats periodically
+        lineup = self._opponent_sampler.sample_lineup(num_opponents)
+        self._opponent_sampler.log_stats(interval=50_000)
 
-        # Determine how many strong opponents to add: +1 every interval
-        if king_config.CURRICULUM_INTERVAL_RESETS <= 0:
-            intervals_elapsed = num_opponents
-        else:
-            intervals_elapsed = (
-                self._reset_count // king_config.CURRICULUM_INTERVAL_RESETS
-            )
-
-        # Baseline: explicit 'random' strategy in every seat
-        lineup: List[str] = ["killer"] * num_opponents
-
-        # Candidate pool excludes 'random' and filters to available strategies only
-        candidate_pool = [
-            s for s in self.opponents if s and s != "random" and s in STRATEGY_REGISTRY
-        ]
-        # Deterministic curriculum: add n strong seats
-        if len(candidate_pool) > 0 and num_opponents > 0:
-            n_added = int(min(num_opponents, max(0, intervals_elapsed)))
-            if n_added > 0:
-                seat_indices = list(range(num_opponents))
-                self.rng.shuffle(seat_indices)
-                strong_indices = seat_indices[:n_added]
-
-                if self.strategy_selection == 0:
-                    # Uniform random pick per strong seat
-                    for idx in strong_indices:
-                        lineup[idx] = self.rng.choice(candidate_pool)
-                else:
-                    # Sequential cycling over the plain candidate pool
-                    ordered = list(candidate_pool)
-                    start = self._reset_count % max(1, len(ordered))
-                    for i, idx in enumerate(strong_indices):
-                        lineup[idx] = ordered[(start + i) % len(ordered)]
-
-        # Modulo logging at curriculum boundaries
-        if king_config.CURRICULUM_INTERVAL_RESETS > 0 and (
-            self._reset_count % king_config.CURRICULUM_INTERVAL_RESETS == 0
-        ):
-            logger.info(f"Opponent lineup for reset {self._reset_count}: {lineup}")
         self._fixed_opponents_strategies = lineup
         return lineup
 
@@ -285,6 +248,8 @@ class LudoEnv(gym.Env):
 
         # Advance reset counter for sequential selection
         self._reset_count += 1
+        # Advance the curriculum sampler's counter
+        self._opponent_sampler.advance()
 
         # Handle no valid moves for agent on first turn: opponents play until agent has a move
         # Don't reset summaries - accumulate activity from the start
