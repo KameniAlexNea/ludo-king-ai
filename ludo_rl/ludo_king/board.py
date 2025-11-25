@@ -164,34 +164,56 @@ class Board:
             mask.extend([exists, exists, exists, exists])
         return np.asarray(mask, dtype=np.bool_)
 
-    def all_token_positions(self, agent_color: int) -> np.ndarray:
+    def all_token_positions(
+        self, agent_color: int, out: np.ndarray | None = None
+    ) -> np.ndarray:
         """Return positions (0..57) for all 16 tokens in fixed order.
 
         Uses each piece's native relative position (yard=0, ring 1..51,
         home 52..56, finish 57). Order is 4 tokens per color block as in
         token_order_for_agent(agent_color), sorted by piece_id within color.
+
+        Args:
+            agent_color: The agent's color index (0-3).
+            out: Optional pre-allocated int64 array of shape (16,) to write into.
         """
-        order = self.token_order_for_agent(agent_color)
-        positions: list[int] = []
-        for c in order:
+        if out is None:
+            out = np.zeros(16, dtype=np.int64)
+        else:
+            out.fill(0)
+
+        # Inline token_order_for_agent for speed
+        colors = (
+            agent_color,
+            (agent_color + 1) % 4,
+            (agent_color + 2) % 4,
+            (agent_color + 3) % 4,
+        )
+
+        pos_idx = 0
+        for c in colors:
             try:
                 idx = self._resolve_index(c)
-            except IndexError as e:
-                logger.warning(
-                    f"Failed to resolve color index {c} in all_token_positions: {e}"
-                )
-                # Color not present
-                positions.extend([0, 0, 0, 0])
+            except IndexError:
+                # Color not present - positions remain 0
+                pos_idx += 4
                 continue
-            pieces = list(self.players[idx])
-            pieces.sort(key=lambda p: int(getattr(p, "piece_id", 0)))
-            # Ensure exactly 4 outputs per color
+
+            pieces = self.players[idx]
+            n_pieces = len(pieces)
+            if n_pieces == 0:
+                pos_idx += 4
+                continue
+
+            # Sort pieces by piece_id and fill output
+            # Most games have exactly 4 pieces, so this is usually a no-op
+            sorted_pieces = sorted(pieces, key=lambda p: p.piece_id)
             for k in range(4):
-                if k < len(pieces):
-                    positions.append(int(pieces[k].position))
-                else:
-                    positions.append(0)
-        return np.asarray(positions, dtype=np.int64)
+                if k < n_pieces:
+                    out[pos_idx] = sorted_pieces[k].position
+                pos_idx += 1
+
+        return out
 
     def build_tensor(
         self, agent_color: int, out: np.ndarray | None = None

@@ -32,6 +32,8 @@ class Simulator:
     _out_mask: np.ndarray = field(default=None, init=False, repr=False)
     _out_player: np.ndarray = field(default=None, init=False, repr=False)
     _out_current_dice: np.ndarray = field(default=None, init=False, repr=False)
+    # Pre-allocated buffer for _append_history
+    _frame_pos_buf: np.ndarray = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         # Expect Game to be constructed by caller with players and strategies.
@@ -77,18 +79,21 @@ class Simulator:
         obj._out_mask = np.zeros((config.HISTORY_LENGTH, 16), dtype=np.bool_)
         obj._out_player = np.zeros((config.HISTORY_LENGTH,), dtype=np.int64)
         obj._out_current_dice = np.zeros((1,), dtype=np.int64)
+        # Pre-allocated buffer for _append_history to avoid allocation
+        obj._frame_pos_buf = np.zeros(16, dtype=np.int64)
         return obj
 
     # --- Token sequence observation helpers ---
 
     def _append_history(self, dice: int, player_idx: int) -> None:
         agent_color = int(self.game.players[self.agent_index].color)
-        frame_pos = self.game.board.all_token_positions(agent_color)
+        # Use pre-allocated buffer to avoid allocation
+        self.game.board.all_token_positions(agent_color, out=self._frame_pos_buf)
         i = self._hist_ptr
-        self._pos_hist[i, :] = frame_pos
-        self._dice_hist[i] = int(dice)
+        self._pos_hist[i, :] = self._frame_pos_buf
+        self._dice_hist[i] = dice
         self._mask_hist[i, :] = self._token_exists_mask
-        self._player_hist[i] = int(player_idx)
+        self._player_hist[i] = player_idx
         self._hist_ptr = (self._hist_ptr + 1) % self.history_T
         self._hist_len = min(self._hist_len + 1, self.history_T)
 

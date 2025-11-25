@@ -123,31 +123,29 @@ def _forms_blockade(
     return current_count >= 1  # 1 existing + 1 incoming = 2 = blockade
 
 
+# Pre-computed weights for risk calculation (step 1 -> weight 1.0, step 6 -> weight 0.167)
+_RISK_WEIGHTS = (1.0, 5 / 6, 4 / 6, 3 / 6, 2 / 6, 1 / 6)
+_MAIN_TRACK_END = strategy_config.main_track_end
+
+
 def _estimate_risk(
     opponent_counts: np.ndarray, safe_channel: np.ndarray, new_pos: int
 ) -> float:
-    if new_pos <= 0 or new_pos > strategy_config.main_track_end:
+    if new_pos <= 0 or new_pos > _MAIN_TRACK_END:
         return 0.0
 
     risk = 0.0
-
-    def _wrap_position(pos: int) -> int:
-        """Wrap position to valid main track range [1, 51]."""
-        if pos <= 0:
-            return pos + strategy_config.main_track_end
-        if pos > strategy_config.main_track_end:
-            return pos - strategy_config.main_track_end
-        return pos
-
     for step in range(1, 7):
-        idx = _wrap_position(new_pos - step)
+        idx = new_pos - step
+        # Inline wrap logic to avoid function call overhead
+        if idx <= 0:
+            idx += _MAIN_TRACK_END
+
         if safe_channel[idx]:
             continue
         threat_level = opponent_counts[idx]
-        if threat_level == 0:
-            continue
-        weight = 1.0 - (step - 1) / 6.0
-        risk += threat_level * weight
+        if threat_level > 0:
+            risk += threat_level * _RISK_WEIGHTS[step - 1]
 
     return risk
 
@@ -159,24 +157,24 @@ def opponent_density_within(
     for offset in range(-radius, radius + 1):
         idx = center + offset
         if idx <= 0:
-            idx += strategy_config.main_track_end
-        elif idx > strategy_config.main_track_end:
-            idx -= strategy_config.main_track_end
+            idx += _MAIN_TRACK_END
+        elif idx > _MAIN_TRACK_END:
+            idx -= _MAIN_TRACK_END
         total += distribution[idx]
     return float(total)
 
 
 def nearest_opponent_distance(distribution: Sequence[float], position: int) -> int:
-    for distance in range(1, strategy_config.main_track_end + 1):
+    for distance in range(1, _MAIN_TRACK_END + 1):
         forward = position + distance
         backward = position - distance
-        if forward > strategy_config.main_track_end:
-            forward -= strategy_config.main_track_end
+        if forward > _MAIN_TRACK_END:
+            forward -= _MAIN_TRACK_END
         if backward <= 0:
-            backward += strategy_config.main_track_end
+            backward += _MAIN_TRACK_END
         if distribution[forward] > 0 or distribution[backward] > 0:
             return distance
-    return strategy_config.main_track_end
+    return _MAIN_TRACK_END
 
 
 def model_arena_results(top_k=None):
