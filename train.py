@@ -145,9 +145,9 @@ if __name__ == "__main__":
         total_timesteps=args.total_timesteps,
         att="target_kl",
         schedule=target_kl_schedule(
-            kl_start=args.target_kl,  # Start at your specified value (0.02)
-            kl_peak=args.target_kl * 5.0,  # Increase to 5x (0.1)
-            kl_end=args.target_kl * 1.25,  # End slightly higher (0.025)
+            kl_start=args.target_kl,
+            kl_peak=args.target_kl * 2.0,
+            kl_end=args.target_kl * 1.15,
             warmup_fraction=0.15,  # 15% of training for warmup
             cooldown_fraction=0.15,  # 15% of training for cooldown
         ),
