@@ -65,6 +65,7 @@ class BaseTokenSeqExtractor(BaseFeaturesExtractor):
             current_dice = current_dice.unsqueeze(0)
         B, T, N = positions.shape
         device = positions.device
+
         return (
             positions,
             dice_hist,
@@ -133,6 +134,7 @@ class LudoCnnExtractor(BaseTokenSeqExtractor):
         self.token_feat_dim = self.embed_dim * (2 if bidirectional else 1)
         # No total_feature_dim
         self.feature_norm = nn.LayerNorm(self.token_feat_dim)
+
         self.head = nn.Sequential(
             nn.Linear(self.token_feat_dim, features_dim),
             nn.GELU(),
@@ -177,9 +179,7 @@ class LudoCnnExtractor(BaseTokenSeqExtractor):
         backward_final = lstm_out[:, 0, self.embed_dim :]
         pooled = torch.cat([forward_final, backward_final], dim=-1)
 
-        combined = pooled
-        combined = self.feature_norm(combined)
-        return self.head(combined)
+        return self.head(self.feature_norm(pooled))
 
 
 class LudoMlpExtractor(BaseTokenSeqExtractor):
@@ -217,22 +217,6 @@ class LudoMlpExtractor(BaseTokenSeqExtractor):
 
         self._init_weights()
 
-    def _masked_pool(
-        self, x: torch.Tensor, mask: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Compute mean and max pooling over masked tokens."""
-        mask_f = mask.unsqueeze(-1).to(x.dtype)
-        count = mask_f.sum(dim=1).clamp(min=1.0)
-
-        # Mean
-        x_mean = (x * mask_f).sum(dim=1) / count
-
-        # Max (masked positions → -inf)
-        x_max = x.masked_fill(~mask.unsqueeze(-1), float("-inf")).max(dim=1)[0]
-        x_max = torch.where(torch.isinf(x_max), x_mean, x_max)  # fallback to mean
-
-        return x_mean, x_max
-
     def forward(self, observations: dict) -> torch.Tensor:
         (
             positions,
@@ -262,28 +246,45 @@ class LudoMlpExtractor(BaseTokenSeqExtractor):
         # Mask invalid tokens
         tok = tok * token_mask.unsqueeze(-1).to(tok.dtype)
 
-        # --- Per-player pooling (preserves piece identity per player) ---
-        player_features = []
-        for p in range(self.num_players):
-            # Select pieces for player p: indices [p*4 : (p+1)*4]
-            start_idx = p * self.pieces_per_player
-            end_idx = start_idx + self.pieces_per_player
-            player_tok = tok[:, :, start_idx:end_idx, :]  # (B, T, 4, d)
-            player_mask = token_mask[:, :, start_idx:end_idx]  # (B, T, 4)
+        # --- Vectorized per-player pooling ---
+        # Reshape to separate players: (B, T, 4 players, 4 pieces, d)
+        tok_by_player = tok.view(B, T, self.num_players, self.pieces_per_player, -1)
+        mask_by_player = token_mask.view(B, T, self.num_players, self.pieces_per_player)
 
-            # Flatten time for this player's pieces
-            player_tok_flat = player_tok.reshape(B, T * self.pieces_per_player, -1)
-            player_mask_flat = player_mask.reshape(B, T * self.pieces_per_player)
+        # Flatten T and pieces per player: (B, num_players, T*4, d)
+        tok_flat = tok_by_player.permute(0, 2, 1, 3, 4).reshape(
+            B, self.num_players, T * self.pieces_per_player, -1
+        )
+        mask_flat = mask_by_player.permute(0, 2, 1, 3).reshape(
+            B, self.num_players, T * self.pieces_per_player
+        )
 
-            p_mean, p_max = self._masked_pool(player_tok_flat, player_mask_flat)
-            player_features.append(torch.cat([p_mean, p_max], dim=-1))
+        # Masked mean and max pooling (vectorized over all players)
+        mask_f = mask_flat.unsqueeze(-1).to(tok_flat.dtype)  # (B, P, T*4, 1)
+        count = mask_f.sum(dim=2).clamp(min=1.0)  # (B, P, 1)
 
-        per_player = torch.cat(player_features, dim=-1)  # (B, total_player_dim)
+        # Mean pooling
+        p_mean = (tok_flat * mask_f).sum(dim=2) / count  # (B, P, d)
 
-        # --- Last frame features (recency bias) ---
+        # Max pooling with -inf masking
+        p_max = tok_flat.masked_fill(~mask_flat.unsqueeze(-1), float("-inf")).max(
+            dim=2
+        )[0]
+        p_max = torch.where(torch.isinf(p_max), p_mean, p_max)  # (B, P, d)
+
+        # Concatenate mean+max per player, then flatten all players
+        per_player = torch.cat([p_mean, p_max], dim=-1).view(B, -1)  # (B, P*2d)
+
+        # --- Last frame features (recency bias) - inline pooling ---
         last_tok = tok[:, -1, :, :]  # (B, N, d)
         last_mask = token_mask[:, -1, :]  # (B, N)
-        last_mean, last_max = self._masked_pool(last_tok, last_mask)
+        last_mask_f = last_mask.unsqueeze(-1).to(last_tok.dtype)
+        last_count = last_mask_f.sum(dim=1).clamp(min=1.0)
+        last_mean = (last_tok * last_mask_f).sum(dim=1) / last_count
+        last_max = last_tok.masked_fill(~last_mask.unsqueeze(-1), float("-inf")).max(
+            dim=1
+        )[0]
+        last_max = torch.where(torch.isinf(last_max), last_mean, last_max)
         last_frame_feat = torch.cat([last_mean, last_max], dim=-1)  # (B, 2*d)
 
         # --- Combine all features ---
@@ -323,6 +324,7 @@ class LudoTransformerExtractor(BaseTokenSeqExtractor):
             enable_nested_tensor=False,
         )
         self.output_norm = nn.LayerNorm(self.embed_dim)
+
         self.head = nn.Sequential(
             nn.Linear(self.embed_dim, features_dim),
             nn.GELU(),
@@ -367,4 +369,5 @@ class LudoTransformerExtractor(BaseTokenSeqExtractor):
 
         encoded = self.encoder(sequence, src_key_padding_mask=key_padding_mask)
         cls_feature = self.output_norm(encoded[:, 0])
+
         return self.head(cls_feature)

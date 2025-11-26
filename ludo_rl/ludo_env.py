@@ -373,7 +373,7 @@ class LudoEnv(gym.Env):
     def set_curriculum_timesteps(self, timesteps: int) -> None:
         """
         Update curriculum progress based on global training timesteps.
-        
+
         Called by CurriculumSyncCallback to sync all envs to the same
         training progress, ensuring curriculum advances correctly in
         multi-env (vectorized) training.

@@ -64,7 +64,7 @@ class OpponentLineupSampler:
     - Each episode samples a fresh lineup
     - Soft curriculum: gradually increases average difficulty
     - Maintains diversity throughout training
-    
+
     Note on multi-env training:
     - When using vectorized environments (n_envs > 1), each env has its own sampler
     - Progress should be synced via `set_global_timesteps()` from a callback
@@ -89,7 +89,9 @@ class OpponentLineupSampler:
     # Internal state
     _rng: random.Random = field(default_factory=random.Random, repr=False)
     _reset_count: int = field(default=0, repr=False)
-    _global_timesteps: int = field(default=0, repr=False)  # Synced from training callback
+    _global_timesteps: int = field(
+        default=0, repr=False
+    )  # Synced from training callback
     _cached_lineup: Optional[List[str]] = field(default=None, repr=False)
     _strategy_usage: Dict[str, int] = field(default_factory=dict, repr=False)
 
@@ -117,11 +119,11 @@ class OpponentLineupSampler:
     def set_global_timesteps(self, timesteps: int) -> None:
         """
         Update curriculum progress based on global training timesteps.
-        
+
         This should be called from a training callback to sync progress
         across all parallel environments. Each env's sampler will then
         use this global count for curriculum progression.
-        
+
         Args:
             timesteps: Total timesteps from model.num_timesteps
         """
@@ -130,7 +132,7 @@ class OpponentLineupSampler:
     def get_curriculum_progress(self) -> float:
         """
         Returns curriculum progress as a float in [0, 1].
-        
+
         Uses global timesteps if set (multi-env training), otherwise
         falls back to local reset count (single env / testing).
         """

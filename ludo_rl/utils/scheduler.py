@@ -150,7 +150,7 @@ class CoefScheduler(BaseCallback):
 class CurriculumSyncCallback(BaseCallback):
     """
     Syncs global training timesteps to all environments' curriculum samplers.
-    
+
     In multi-env (vectorized) training, each env has its own OpponentLineupSampler.
     Without syncing, each env would track its own reset count, leading to slow/incorrect
     curriculum progression. This callback ensures all envs use the global timestep count
@@ -187,7 +187,10 @@ class CurriculumSyncCallback(BaseCallback):
             # This works with both DummyVecEnv and SubprocVecEnv
             vec_env.env_method("set_curriculum_timesteps", self.num_timesteps)
 
-            if self.verbose > 0 and self.num_timesteps % (self.sync_interval * 100) == 0:
+            if (
+                self.verbose > 0
+                and self.num_timesteps % (self.sync_interval * 100) == 0
+            ):
                 logger.info(
                     f"Curriculum sync: {self.num_timesteps:,} timesteps -> all envs"
                 )
