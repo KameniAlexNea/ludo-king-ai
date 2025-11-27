@@ -107,6 +107,13 @@ class Reward:
     draw: float = -2 * COEF
     skipped_turn: float = -0.001 * COEF
 
+    # Exposure-aware reward adjustments
+    # Discount capture reward based on post-capture exposure risk
+    # exposure_discount = threats_at_dest / 6.0 * capture_exposure_penalty
+    capture_exposure_penalty: float = float(os.getenv("CAPTURE_EXPOSURE_PENALTY", 0.2 * COEF))
+    # Bonus for landing on safe square (home stretch counts as safe)
+    safe_landing_bonus: float = float(os.getenv("SAFE_LANDING_BONUS", 0.02 * COEF))
+
     # Risk/Opportunity shaping (potential-based) parameters
     shaping_use: bool = bool(int(os.getenv("SHAPING_USE", 1)))
     shaping_alpha: float = float(os.getenv("SHAPING_ALPHA", 2.0))

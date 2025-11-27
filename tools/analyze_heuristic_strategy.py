@@ -107,6 +107,8 @@ class StrategyAnalysis:
     total_reward: float = 0.0
     reward_from_progress: float = 0.0
     reward_from_capture: float = 0.0
+    reward_from_exposure_penalty: float = 0.0  # Penalty for exposed captures
+    reward_from_safe_landing: float = 0.0  # Bonus for safe landings
     reward_from_got_captured: float = 0.0
     reward_from_finish: float = 0.0
     reward_from_exit_home: float = 0.0
@@ -295,12 +297,16 @@ def run_analysis_episode(
                 if new_pos in [1, 9, 14, 22, 27, 35, 40, 48] or (52 <= new_pos <= 56):
                     stats.safe_move_taken += 1
 
-            # Compute reward breakdown
+            # Use actual rewards from game engine (includes exposure adjustments)
+            # The game's compute_move_rewards now factors in exposure penalty for captures
+            actual_move_reward = result.rewards.get(agent_idx, 0.0) if result.rewards else 0.0
+            episode_reward += actual_move_reward
+            
+            # Also compute breakdown for detailed tracking (this is approximate)
             reward_breakdown = compute_move_reward_breakdown(
                 old_pos, chosen_move.new_pos, events
             )
-            move_reward = sum(reward_breakdown.values())
-            episode_reward += move_reward
+            move_reward = actual_move_reward  # Use actual reward from game
 
             # Update event counts
             if events.exited_home:
@@ -363,11 +369,32 @@ def run_analysis_episode(
 
             # Update reward totals
             stats.reward_from_progress += reward_breakdown["progress"]
-            stats.reward_from_capture += reward_breakdown["capture"]
             stats.reward_from_finish += reward_breakdown["finish"]
             stats.reward_from_exit_home += reward_breakdown["exit_home"]
             stats.reward_from_blockade += reward_breakdown["blockade"]
             stats.reward_from_hit_blockade += reward_breakdown["hit_blockade"]
+            
+            # Track capture with exposure penalty separately
+            if events.knockouts:
+                base_capture = reward_breakdown["capture"]  # Base capture reward
+                # The actual reward from game already includes exposure penalty
+                # Compute what the exposure penalty was: base - actual
+                actual_capture_component = actual_move_reward - (
+                    reward_breakdown["progress"] + reward_breakdown["finish"] +
+                    reward_breakdown["exit_home"] + reward_breakdown["blockade"] +
+                    reward_breakdown["hit_blockade"]
+                )
+                # Safe landing bonus might also be included
+                if is_dest_safe and chosen_move.new_pos != 57:
+                    actual_capture_component -= reward_config.safe_landing_bonus
+                
+                exposure_penalty = base_capture - actual_capture_component
+                stats.reward_from_capture += base_capture
+                stats.reward_from_exposure_penalty -= exposure_penalty  # Negative value
+            
+            # Track safe landing bonus
+            if is_dest_safe and chosen_move.new_pos != 57:  # Not finish (already has bonus)
+                stats.reward_from_safe_landing += reward_config.safe_landing_bonus
 
             # Determine move category
             move_category = "other"
@@ -676,9 +703,19 @@ def print_stats(stats: StrategyAnalysis) -> None:
             f"{stats.reward_from_progress / stats.total_episodes:.3f}",
         ],
         [
-            "Capture",
+            "Capture (base)",
             f"{stats.reward_from_capture:.2f}",
             f"{stats.reward_from_capture / stats.total_episodes:.3f}",
+        ],
+        [
+            "Exposure Penalty",
+            f"{stats.reward_from_exposure_penalty:.2f}",
+            f"{stats.reward_from_exposure_penalty / stats.total_episodes:.3f}",
+        ],
+        [
+            "Safe Landing Bonus",
+            f"{stats.reward_from_safe_landing:.2f}",
+            f"{stats.reward_from_safe_landing / stats.total_episodes:.3f}",
         ],
         [
             "Got Captured",

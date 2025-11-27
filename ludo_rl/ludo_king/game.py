@@ -186,6 +186,13 @@ class Game:
             if abs_pos in blockade_abs_to_color:
                 events.hit_blockade = True
                 events.move_resolved = False
+                # Build opponent positions for exposure calculation
+                mover_color = int(player.color)
+                opponent_positions = [
+                    (int(pl.color), [int(p.position) for p in pl.pieces])
+                    for i, pl in enumerate(self.players)
+                    if i != mv.player_index
+                ]
                 # Even when a move is blocked, compute rewards centrally
                 rewards = compute_move_rewards(
                     num_players=len(self.players),
@@ -193,6 +200,9 @@ class Game:
                     old_position=old,
                     new_position=old,
                     events=events,
+                    board=self.board,
+                    mover_color=mover_color,
+                    opponent_positions=opponent_positions,
                 )
                 if do_shaping:
                     # No state change; shaping delta is (gamma-1)*phi(s)
@@ -273,6 +283,14 @@ class Game:
                 BlockadeEvent(player=mv.player_index, rel_pos=pc.position)
             )
 
+        # Build opponent positions for exposure calculation
+        mover_color = int(player.color)
+        opponent_positions = [
+            (int(pl.color), [int(p.position) for p in pl.pieces])
+            for i, pl in enumerate(self.players)
+            if i != mv.player_index
+        ]
+
         # Compute per-player rewards (optional; env may or may not use)
         rewards = compute_move_rewards(
             num_players=len(self.players),
@@ -280,6 +298,9 @@ class Game:
             old_position=old,
             new_position=pc.position,
             events=events,
+            board=self.board,
+            mover_color=mover_color,
+            opponent_positions=opponent_positions,
         )
 
         # If the mover's player just won (all pieces finished), add small opponent penalty

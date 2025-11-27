@@ -7,6 +7,7 @@ from .types import MoveEvents
 
 if TYPE_CHECKING:
     from .game import Game
+    from .board import Board
 
 
 def _get(events: Union[MoveEvents, Dict[str, Any]], name: str, default=0):
@@ -19,12 +20,76 @@ def _get(events: Union[MoveEvents, Dict[str, Any]], name: str, default=0):
     return (events or {}).get(name, default)
 
 
+def _is_position_safe(position: int, mover_color: int, board: 'Board' = None) -> bool:
+    """
+    Check if a position is safe from capture.
+    
+    Safe positions:
+    - Yard (0)
+    - Finished (57)
+    - Home stretch (52-56)
+    - Safe squares on main track (star squares)
+    """
+    if position == 0 or position == king_config.HOME_FINISH:  # yard or finished
+        return True
+    if king_config.HOME_COLUMN_START <= position <= king_config.HOME_FINISH - 1:  # home stretch
+        return True
+    if 1 <= position <= king_config.MAIN_TRACK_END:  # main track
+        if board is not None:
+            abs_pos = board.absolute_position(mover_color, position)
+            return abs_pos in king_config.SAFE_SQUARES_ABS
+    return False
+
+
+def _count_threats_at_position(
+    board: 'Board',
+    mover_color: int,
+    position: int,
+    opponent_positions: list[tuple[int, list[int]]],
+) -> int:
+    """
+    Count how many dice rolls (1-6) could result in an opponent capturing
+    the piece at this position.
+    
+    Returns a count 0-6 representing how "exposed" the position is.
+    Higher = more dangerous.
+    """
+    if position == 0 or position >= king_config.HOME_COLUMN_START:
+        # Yard or home stretch - cannot be captured
+        return 0
+    
+    if not (1 <= position <= king_config.MAIN_TRACK_END):
+        return 0
+    
+    abs_target = board.absolute_position(mover_color, position)
+    
+    # Check if on safe square - still count threats but will be used differently
+    # (Note: you CAN be captured on safe squares, but it's less common)
+    
+    threat_dice: set[int] = set()
+    
+    for opp_color, opp_rels in opponent_positions:
+        for opp_rel in opp_rels:
+            if 1 <= opp_rel <= king_config.MAIN_TRACK_END:
+                abs_opp = board.absolute_position(opp_color, opp_rel)
+                # Forward distance from opponent to target on the ring
+                # Ring is 52 squares (1-52, with 52 wrapping to 1)
+                distance = (abs_target - abs_opp) % 52
+                if 1 <= distance <= 6:
+                    threat_dice.add(distance)
+    
+    return len(threat_dice)
+
+
 def compute_move_rewards(
     num_players: int,
     mover_index: int,
     old_position: int,
     new_position: int,
     events: Union[MoveEvents, Dict[str, Any]],
+    board: 'Board' = None,
+    mover_color: int = None,
+    opponent_positions: list[tuple[int, list[int]]] = None,
 ) -> Dict[int, float]:
     """
     Calculate per-player rewards for a completed move.
@@ -39,6 +104,12 @@ def compute_move_rewards(
         Piece positions before and after the move (relative coordinates).
     events:
         Structured event metadata collected during the move resolution.
+    board:
+        Optional board object for exposure calculations.
+    mover_color:
+        Optional color of the mover (needed for position conversions).
+    opponent_positions:
+        Optional list of (color, [positions]) for each opponent.
 
     Returns
     -------
@@ -62,19 +133,44 @@ def compute_move_rewards(
         for idx in range(num_players):
             if idx != mover_index:
                 rewards[idx] += reward_config.opp_piece_finished_penalty
+    
     knockouts = _get(events, "knockouts", []) or []
     if knockouts:
-        mover_reward += reward_config.capture * len(knockouts)
+        base_capture_reward = reward_config.capture * len(knockouts)
+        
+        # Compute exposure penalty if we have board context
+        exposure_penalty = 0.0
+        if board is not None and mover_color is not None and opponent_positions is not None:
+            # Count how many dice rolls could hit us at the new position
+            threat_count = _count_threats_at_position(
+                board, mover_color, new_position, opponent_positions
+            )
+            # Normalize: 0 threats = no penalty, 6 threats = full penalty
+            exposure_ratio = threat_count / 6.0
+            exposure_penalty = exposure_ratio * reward_config.capture_exposure_penalty
+        
+        # Net capture reward = base - exposure cost
+        mover_reward += base_capture_reward - exposure_penalty
+        
         for knockout in knockouts:
             # Support both KnockoutEvent dataclass and legacy dict
             victim_index = (
                 knockout.player if hasattr(knockout, "player") else knockout["player"]
             )
             rewards[victim_index] += reward_config.got_capture
+    
     if _get(events, "hit_blockade"):
         mover_reward += reward_config.hit_blockade
     if _get(events, "blockades"):
         mover_reward += reward_config.blockade
+    
+    # Bonus for landing on safe position (encourages safe play)
+    if board is not None and mover_color is not None:
+        if _is_position_safe(new_position, mover_color, board):
+            # Don't double-reward finishing (already has finish bonus)
+            if new_position != king_config.HOME_FINISH:
+                mover_reward += reward_config.safe_landing_bonus
+    
     rewards[mover_index] += mover_reward
     return rewards
 
