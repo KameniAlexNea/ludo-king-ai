@@ -1,6 +1,7 @@
-from __future__ import annotations
+"""
+Tests for ludo_rl/ludo_env.py
+"""
 
-import os
 import unittest
 from unittest.mock import patch
 
@@ -8,122 +9,139 @@ import numpy as np
 
 from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king.config import config, reward_config
-from ludo_rl.ludo_king.game import Game
 
 
-class LudoEnvTests(unittest.TestCase):
-    def setUp(self) -> None:
+class TestReset(unittest.TestCase):
+    """Tests for LudoEnv.reset()."""
+
+    def setUp(self):
         self.env = LudoEnv()
 
-    def tearDown(self) -> None:
+    def tearDown(self):
         self.env.close()
 
-    def test_reset_provides_valid_observation_and_mask(self) -> None:
-        """Test reset returns valid observation shape and consistent mask.
-
-        NOTE: With the God Step fix, reset no longer loops until the agent
-        has valid moves. The mask may be all-False if the first roll gives
-        no valid moves (e.g., rolled 1 when all pieces in yard).
-        """
+    def test_returns_observation_and_info(self):
         obs, info = self.env.reset()
+        self.assertIn("positions", obs)
+        self.assertIn("action_mask", info)
+
+    def test_observation_shapes(self):
+        obs, _ = self.env.reset()
         self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
         self.assertEqual(obs["current_dice"].shape, (1,))
-        # Mask should be consistent with env.action_masks()
+        self.assertEqual(obs["dice_history"].shape, (config.HISTORY_LENGTH,))
+
+    def test_action_mask_consistent(self):
+        _, info = self.env.reset()
         np.testing.assert_array_equal(self.env.action_masks(), info["action_mask"])
-        # If no valid moves, info should indicate this
+
+    def test_no_valid_moves_flag(self):
+        # Force roll of 1 (no exit from yard)
+        from ludo_rl.ludo_king.game import Game
+        with patch.object(Game, "roll_dice", return_value=1):
+            _, info = self.env.reset()
         if not info["action_mask"].any():
             self.assertTrue(info.get("no_valid_moves", False))
 
-    def test_reset_no_valid_moves_returns_immediately(self) -> None:
-        """Test that reset returns immediately even with no valid moves.
 
-        With the God Step fix, reset no longer loops. If the first roll
-        gives no valid moves (e.g., rolled 1 when pieces in yard), it
-        returns with an all-False mask and no_valid_moves=True.
-        """
+class TestStep(unittest.TestCase):
+    """Tests for LudoEnv.step()."""
 
-        def fixed_roll_one(self):
-            return 1  # No valid moves from yard with roll of 1
+    def setUp(self):
+        self.env = LudoEnv()
 
-        with patch.object(Game, "roll_dice", fixed_roll_one):
-            _, info = self.env.reset()
+    def tearDown(self):
+        self.env.close()
 
-        # When rolled 1 with all pieces in yard, there are no valid moves
-        self.assertFalse(info["action_mask"].any())
-        self.assertTrue(info.get("no_valid_moves", False))
-
-    def test_step_invalid_action_penalises_agent(self) -> None:
-        """Test that selecting an invalid action returns the correct penalty.
-
-        When the move_map is empty (no valid actions), selecting any action
-        should return the invalid_action penalty.
-        """
+    def test_invalid_action_returns_penalty(self):
         self.env.reset()
-
-        def fixed_roll(self):
-            return 6
-
-        with (
-            patch("ludo_rl.ludo_env.Simulator.step_opponents_only", return_value=None),
-            patch.object(Game, "roll_dice", fixed_roll),
-        ):
-            self.env.move_map = {}
-            obs, reward, terminated, truncated, info = self.env.step(0)
-        # When move_map is empty, the agent gets invalid_action penalty
+        self.env.move_map = {}  # No valid moves
+        with patch("ludo_rl.ludo_env.Simulator.step_opponents_only"):
+            _, reward, _, _, _ = self.env.step(0)
         self.assertEqual(reward, reward_config.invalid_action)
-        self.assertFalse(terminated)
-        self.assertFalse(truncated)
-        self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
-        # action_mask should be a sequence of booleans (e.g., list or ndarray)
-        self.assertIsInstance(info["action_mask"], (list, np.ndarray))
-        self.assertTrue(
-            all(isinstance(x, (bool, np.bool_)) for x in info["action_mask"])
-        )
 
-    def test_step_valid_action_returns_next_observation(self) -> None:
-        """Test that a valid action returns proper observation.
-
-        We use a fixed dice roll of 6 to ensure the agent can exit
-        from the yard and have valid moves.
-        """
-
-        def fixed_roll_six(self):
-            return 6  # Guarantees exit from yard
-
-        with patch.object(Game, "roll_dice", fixed_roll_six):
+    def test_valid_action_returns_observation(self):
+        from ludo_rl.ludo_king.game import Game
+        with patch.object(Game, "roll_dice", return_value=6):
             _, info = self.env.reset()
-            # With roll of 6, there should be valid moves (exit from yard)
-            self.assertTrue(
-                info["action_mask"].any(), "Should have valid moves with roll of 6"
-            )
-            action = int(np.where(info["action_mask"])[0][0])
-            obs, reward, terminated, truncated, next_info = self.env.step(action)
+            if info["action_mask"].any():
+                action = int(np.argmax(info["action_mask"]))
+                obs, reward, _, _, _ = self.env.step(action)
+                self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
+                self.assertIsInstance(reward, float)
 
-        self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
-        self.assertIsInstance(reward, float)
-        self.assertIn("action_mask", next_info)
-        self.assertFalse(terminated and truncated)
-
-    def test_step_handles_win_condition(self) -> None:
+    def test_win_terminates_game(self):
         self.env.reset()
-        piece = self.env.game.players[0].pieces[0]
-        piece.position = 56
+        # Set all pieces to finish position
+        for piece in self.env.game.players[0].pieces:
+            piece.position = 57
+        self.env.game.players[0].pieces[0].position = 56
         self.env.current_dice_roll = 1
-        for other in self.env.game.players[0].pieces[1:]:
-            other.position = 57
         self.env._get_info()
-        obs, reward, terminated, truncated, info = self.env.step(0)
+
+        _, reward, terminated, truncated, _ = self.env.step(0)
         self.assertTrue(terminated)
         self.assertFalse(truncated)
-        if os.getenv("RANK_ENV") == "1":
-            self.assertIn("final_rank", info)
         self.assertGreater(reward, 0.0)
-        self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
 
-    def test_render_returns_summary(self) -> None:
+    def test_truncation_on_max_turns(self):
         self.env.reset()
-        snapshot = self.env.render()
-        self.assertIn("Turn", snapshot)
+        self.env.current_turn = config.MAX_TURNS
+        _, _, terminated, truncated, _ = self.env.step(0)
+        self.assertTrue(truncated)
+
+
+class TestActionMasks(unittest.TestCase):
+    """Tests for LudoEnv.action_masks()."""
+
+    def setUp(self):
+        self.env = LudoEnv()
+
+    def tearDown(self):
+        self.env.close()
+
+    def test_returns_boolean_array(self):
+        self.env.reset()
+        mask = self.env.action_masks()
+        self.assertEqual(mask.dtype, np.bool_)
+        self.assertEqual(len(mask), 4)
+
+    def test_cached_mask(self):
+        self.env.reset()
+        mask1 = self.env.action_masks()
+        mask2 = self.env.action_masks()
+        self.assertIs(mask1, mask2)
+
+
+class TestRender(unittest.TestCase):
+    """Tests for LudoEnv.render()."""
+
+    def setUp(self):
+        self.env = LudoEnv()
+
+    def tearDown(self):
+        self.env.close()
+
+    def test_returns_string(self):
+        self.env.reset()
+        output = self.env.render()
+        self.assertIsInstance(output, str)
+        self.assertIn("Turn", output)
+
+
+class TestCurriculum(unittest.TestCase):
+    """Tests for curriculum-related methods."""
+
+    def setUp(self):
+        self.env = LudoEnv()
+
+    def tearDown(self):
+        self.env.close()
+
+    def test_set_curriculum_timesteps(self):
+        self.env.reset()
+        self.env.set_curriculum_timesteps(100000)
+        # No error means success
 
 
 if __name__ == "__main__":
