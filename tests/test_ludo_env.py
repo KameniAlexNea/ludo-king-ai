@@ -19,33 +19,45 @@ class LudoEnvTests(unittest.TestCase):
         self.env.close()
 
     def test_reset_provides_valid_observation_and_mask(self) -> None:
+        """Test reset returns valid observation shape and consistent mask.
+
+        NOTE: With the God Step fix, reset no longer loops until the agent
+        has valid moves. The mask may be all-False if the first roll gives
+        no valid moves (e.g., rolled 1 when all pieces in yard).
+        """
         obs, info = self.env.reset()
         self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
         self.assertEqual(obs["current_dice"].shape, (1,))
-        self.assertTrue(info["action_mask"].any())
+        # Mask should be consistent with env.action_masks()
         np.testing.assert_array_equal(self.env.action_masks(), info["action_mask"])
+        # If no valid moves, info should indicate this
+        if not info["action_mask"].any():
+            self.assertTrue(info.get("no_valid_moves", False))
 
-    def test_reset_handles_initial_no_moves_loop(self) -> None:
-        dice_iter = iter([1, 6, 6])
+    def test_reset_no_valid_moves_returns_immediately(self) -> None:
+        """Test that reset returns immediately even with no valid moves.
 
-        def rigged_roll(self):
-            try:
-                return next(dice_iter)
-            except StopIteration:
-                return 6
+        With the God Step fix, reset no longer loops. If the first roll
+        gives no valid moves (e.g., rolled 1 when pieces in yard), it
+        returns with an all-False mask and no_valid_moves=True.
+        """
 
-        with (
-            patch.object(Game, "roll_dice", rigged_roll),
-            patch(
-                "ludo_rl.ludo_env.Simulator.step_opponents_only", return_value=None
-            ) as step_mock,
-        ):
+        def fixed_roll_one(self):
+            return 1  # No valid moves from yard with roll of 1
+
+        with patch.object(Game, "roll_dice", fixed_roll_one):
             _, info = self.env.reset()
 
-        self.assertGreaterEqual(step_mock.call_count, 1)
-        self.assertTrue(info["action_mask"].any())
+        # When rolled 1 with all pieces in yard, there are no valid moves
+        self.assertFalse(info["action_mask"].any())
+        self.assertTrue(info.get("no_valid_moves", False))
 
     def test_step_invalid_action_penalises_agent(self) -> None:
+        """Test that selecting an invalid action returns the correct penalty.
+
+        When the move_map is empty (no valid actions), selecting any action
+        should return the invalid_action penalty.
+        """
         self.env.reset()
 
         def fixed_roll(self):
@@ -57,7 +69,8 @@ class LudoEnvTests(unittest.TestCase):
         ):
             self.env.move_map = {}
             obs, reward, terminated, truncated, info = self.env.step(0)
-        self.assertEqual(reward, reward_config.skipped_turn)
+        # When move_map is empty, the agent gets invalid_action penalty
+        self.assertEqual(reward, reward_config.invalid_action)
         self.assertFalse(terminated)
         self.assertFalse(truncated)
         self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
@@ -68,9 +81,24 @@ class LudoEnvTests(unittest.TestCase):
         )
 
     def test_step_valid_action_returns_next_observation(self) -> None:
-        _, info = self.env.reset()
-        action = int(np.where(info["action_mask"])[0][0])
-        obs, reward, terminated, truncated, next_info = self.env.step(action)
+        """Test that a valid action returns proper observation.
+
+        We use a fixed dice roll of 6 to ensure the agent can exit
+        from the yard and have valid moves.
+        """
+
+        def fixed_roll_six(self):
+            return 6  # Guarantees exit from yard
+
+        with patch.object(Game, "roll_dice", fixed_roll_six):
+            _, info = self.env.reset()
+            # With roll of 6, there should be valid moves (exit from yard)
+            self.assertTrue(
+                info["action_mask"].any(), "Should have valid moves with roll of 6"
+            )
+            action = int(np.where(info["action_mask"])[0][0])
+            obs, reward, terminated, truncated, next_info = self.env.step(action)
+
         self.assertEqual(obs["positions"].shape, (config.HISTORY_LENGTH, 16))
         self.assertIsInstance(reward, float)
         self.assertIn("action_mask", next_info)

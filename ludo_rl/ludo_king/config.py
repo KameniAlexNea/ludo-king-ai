@@ -8,7 +8,7 @@ load_dotenv()
 
 @dataclass(slots=True)
 class Config:
-    HISTORY_LENGTH: int = int(os.getenv("HISTORY_LENGTH", 4))
+    HISTORY_LENGTH: int = int(os.getenv("HISTORY_LENGTH", 12))
     RANK_ENV: bool = bool(int(os.getenv("RANK_ENV", 0)))
     MAX_EXTRA_TURNS: int = int(os.getenv("MAX_EXTRA_TURNS", 5))
     # --- Constants ---
@@ -90,42 +90,23 @@ class StrategyConfig:
     home_finish: int = 57
 
 
-COEF = 5
-
-
+# Sparse rewards only - no shaping, no COEF scaling
+# All intermediate signals removed to eliminate conflicting gradients
 @dataclass(slots=True)
 class Reward:
-    win: float = 50
-    lose: float = -50
-    finish: float = 1 * COEF
-    capture: float = 0.3 * COEF
-    got_capture: float = -0.3 * COEF
-    blockade: float = 0.15 * COEF
-    hit_blockade: float = -0.1 * COEF
-    blockade_hit: float = 0.1 * COEF
-    exit_home: float = 0.1 * COEF
-    progress: float = 0.001 * COEF
-    safe_position: float = 0.05 * COEF
-    draw: float = -2 * COEF
-    skipped_turn: float = -0.001 * COEF
+    # Terminal rewards (sparse)
+    win: float = 1.0
+    lose: float = -1.0
+    draw: float = -0.5
 
-    # Exposure-aware reward adjustments
-    # Penalty proportional to INCREASE in exposure (threats_AFTER - threats_BEFORE)
-    # Positive delta = became more exposed = penalty; Negative delta = became safer = bonus
-    capture_exposure_penalty: float = float(
-        os.getenv("CAPTURE_EXPOSURE_PENALTY", 0.2 * COEF)
-    )
-    # Bonus for landing on safe square (home stretch counts as safe)
-    safe_landing_bonus: float = float(os.getenv("SAFE_LANDING_BONUS", 0.02 * COEF))
+    # Sparse milestone rewards
+    finish: float = 0.2  # Piece reaches home finish
+    capture: float = 0.1  # Capture an opponent's piece
+    got_captured: float = -0.1  # Agent's piece got captured
 
-    # Opponent progress penalties (sparse signals to encourage urgency)
-    opp_exit_home_penalty: float = float(
-        os.getenv("OPP_EXIT_HOME_PENALTY", -0.05 * COEF)
-    )
-    opp_piece_finished_penalty: float = float(
-        os.getenv("OPP_PIECE_FINISHED_PENALTY", -0.3 * COEF)
-    )
-    opp_win_penalty: float = float(os.getenv("OPP_WIN_PENALTY", -0.2 * COEF))
+    # Minor penalties (very small to avoid reward hacking)
+    invalid_action: float = -0.01
+    skipped_turn: float = 0.0  # No penalty for skipped turns (dice luck)
 
 
 config = Config()

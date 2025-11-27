@@ -12,10 +12,9 @@ from .ludo_king.config import reward_config
 from .ludo_king.game import Game
 from .ludo_king.player import Player
 from .ludo_king.reward import (
-    compute_blockade_hits_bonus,
     compute_draw_reward,
     compute_invalid_action_penalty,
-    compute_skipped_turn_penalty,
+    compute_sparse_rewards,
     compute_terminal_reward,
 )
 from .ludo_king.simulator import Simulator
@@ -159,7 +158,10 @@ class LudoEnv(gym.Env):
 
         # Update cache
         self._cached_action_mask = action_mask
-        return {"action_mask": action_mask}
+
+        # Indicate if agent has no valid moves (e.g., rolled non-6 with all pieces in yard)
+        no_valid_moves = not action_mask.any()
+        return {"action_mask": action_mask, "no_valid_moves": no_valid_moves}
 
     def _check_game_over(self):
         """
@@ -253,57 +255,54 @@ class LudoEnv(gym.Env):
         # Advance the curriculum sampler's counter
         self._opponent_sampler.advance()
 
-        # Handle no valid moves for agent on first turn: opponents play until agent has a move
-        # Don't reset summaries - accumulate activity from the start
-        while not np.any(info["action_mask"]):
-            self.current_turn += 1
-            self.sim.step_opponents_only(reset_summaries=False)
-            self._roll_dice()
-            obs = self._build_observation()
-            info = self._get_info()
-            if self.current_turn >= self.max_game_turns or self._check_game_over():
-                # Truncated or game over on initial no-move loop
-                return self.reset(seed=seed, options=options)
+        # NO WHILE LOOP - return immediately even if agent has no valid moves
+        # The agent learns to handle no-move situations (dice didn't roll 6 to exit yard)
+        # This preserves MDP structure: initial state might have no valid actions
         return obs, info
 
     def step(self, action: int):
+        """
+        Execute one step in the environment.
+
+        MDP-Correct Design:
+        - Every call returns after a single agent decision point
+        - If agent has no valid moves, return immediately with all-zero mask
+        - Agent learns to handle no-move situations naturally
+        - No while loops that collapse multiple game states
+        """
         assert self.game is not None
         reward = 0.0
 
         # 1) Validate action and map to a chosen move
         mv = self.move_map.get(int(action))
         if mv is None:
-            # Invalid action - penalize and pass turn to opponents
+            # Invalid action - small penalty and pass turn
+            # Do NOT reset summaries - allow accumulation when agent has no valid moves
             reward += compute_invalid_action_penalty()
             self.current_turn += 1
-            self.sim.step_opponents_only()
+            self.sim.step_opponents_only(reset_summaries=False)
             self._roll_dice()
             obs = self._build_observation()
             info = self._get_info()
             terminated, truncated = self._check_game_over()
             return obs, reward, terminated, truncated, info
 
-        # 2) Apply agent move
+        # 2) Apply agent move and compute sparse rewards from events
         result = self.game.apply_move(mv)
         extra_turn = result.extra_turn and result.events.move_resolved
 
-        # Add rewards based on move result (always computed in reward.py)
-        if result.rewards is not None:
-            reward += float(result.rewards.get(self.agent_index, 0.0))
+        # Calculate sparse rewards from move events (env owns reward calculation)
+        rewards = compute_sparse_rewards(
+            num_players=len(self.game.players),
+            mover_index=self.agent_index,
+            events=result.events,
+        )
+        reward += rewards.get(self.agent_index, 0.0)
 
         # 3) If no extra turn, opponents play until agent's turn
-        # Reset summaries here since this is the agent's turn
         if not extra_turn:
             self.current_turn += 1
             self.sim.step_opponents_only(reset_summaries=True)
-
-            # Check if opponents hit agent's blockades during their turns
-            if self.game.board.blockade_hits.sum() > 0:
-                reward += compute_blockade_hits_bonus(
-                    float(self.game.board.blockade_hits.sum())
-                )
-            # Add any opponent-driven rewards that affect agent (urgency signals)
-            reward += self.sim.get_agent_reward()
 
         # 4) Prepare next observation
         self._roll_dice()
@@ -314,12 +313,10 @@ class LudoEnv(gym.Env):
         terminated, truncated = self._check_game_over()
         if terminated:
             if king_config.RANK_ENV:
-                # Continue until agent finishes: rank-based
                 rank = sum(p.check_won() for p in self.game.players)
                 reward += compute_terminal_reward(len(self.game.players), rank)
                 info["final_rank"] = rank
             else:
-                # Stop at first win (any player)
                 agent_won = self.game.players[self.agent_index].check_won()
                 if agent_won:
                     reward += reward_config.win
@@ -335,37 +332,15 @@ class LudoEnv(gym.Env):
             info["TimeLimit.truncated"] = True
             return obs, reward, terminated, truncated, info
 
-        # 6) If agent has no valid moves for next turn, simulate opponents until it does
-        # Don't reset summaries here - accumulate all activity between agent turns
-        while not np.any(info["action_mask"]) and not terminated and not truncated:
-            reward += compute_skipped_turn_penalty()
-            self.current_turn += 1
-            if self.current_turn >= self.max_game_turns:
-                truncated = True
-                break
-            self.sim.step_opponents_only(reset_summaries=False)
-            self._roll_dice()
-            obs = self._build_observation()
-            info = self._get_info()
-            # Accumulate urgency signals during prolonged opponent rounds
-            reward += self.sim.get_agent_reward()
-            terminated, truncated = self._check_game_over()
-            if terminated and not king_config.RANK_ENV:
-                # Stop early if any win during no-move loop (non-rank mode)
-                agent_won = self.game.players[self.agent_index].check_won()
-                if agent_won:
-                    reward += reward_config.win
-                    info["win"] = True
-                else:
-                    reward += reward_config.lose
-                    info["win"] = False
-                return obs, reward, terminated, truncated, info
-
-        if truncated:
-            reward += compute_draw_reward()
-            info["final_rank"] = 0
-            info["TimeLimit.truncated"] = True
-            return obs, reward, terminated, truncated, info
+        # 6) NO WHILE LOOP - return immediately even if no valid moves
+        # The agent will learn to handle no-move situations
+        # The observation and mask tell it everything it needs to know
+        # This preserves MDP structure: one step = one state transition
+        if not np.any(info["action_mask"]):
+            # No valid moves available - just return with zero mask
+            # Agent will be forced to pick an invalid action, get penalty, and continue
+            # This is correct MDP behavior - agent sees no-move state
+            pass
 
         return obs, reward, terminated, truncated, info
 

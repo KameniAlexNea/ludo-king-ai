@@ -6,10 +6,10 @@ import unittest
 import numpy as np
 
 from ludo_rl.ludo_king.board import Board
-from ludo_rl.ludo_king.config import config, reward_config
+from ludo_rl.ludo_king.config import config
 from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo_king.player import Player
-from ludo_rl.ludo_king.reward import compute_move_rewards
+from ludo_rl.ludo_king.reward import compute_sparse_rewards
 from ludo_rl.ludo_king.types import Color, Move
 
 
@@ -79,11 +79,10 @@ class BoardAndGameTests(unittest.TestCase):
             player_index=0, piece_id=mover.piece_id, new_pos=target_rel, dice_roll=1
         )
         resolution = self.game.apply_move(mv)
-        rewards = compute_move_rewards(
+        # game.py no longer returns rewards - env computes them from events
+        rewards = compute_sparse_rewards(
             len(self.players),
             0,
-            resolution.old_position,
-            resolution.new_position,
             resolution.events,
         )
         self.assertTrue(resolution.events.knockouts)
@@ -107,17 +106,17 @@ class BoardAndGameTests(unittest.TestCase):
             player_index=0, piece_id=mover.piece_id, new_pos=new_position, dice_roll=1
         )
         resolution = self.game.apply_move(mv)
-        rewards = compute_move_rewards(
+        # Sparse rewards don't have hit_blockade penalty anymore (removed as noise)
+        rewards = compute_sparse_rewards(
             len(self.players),
             0,
-            resolution.old_position,
-            resolution.new_position,
             resolution.events,
         )
         self.assertTrue(resolution.events.hit_blockade)
         self.assertFalse(resolution.events.move_resolved)
         self.assertEqual(mover.position, new_position - 1)
-        self.assertEqual(rewards[0], reward_config.hit_blockade)
+        # With sparse rewards, hitting blockade gives no reward (just the event)
+        self.assertEqual(rewards[0], 0.0)
 
     def test_roll_dice_range(self) -> None:
         rolls = {self.game.roll_dice() for _ in range(50)}
@@ -156,7 +155,7 @@ class BoardAndGameTests(unittest.TestCase):
         self.assertFalse(res.events.move_resolved)
         self.assertEqual(self.players[0].pieces[0].position, start_rel)
 
-    def test_forming_own_blockade_sets_event_and_reward(self) -> None:
+    def test_forming_own_blockade_sets_event(self) -> None:
         # Choose a ring square that is not a global safe square
         target_rel = 10
         target_abs = self.board.absolute_position(int(Color.RED), target_rel)
@@ -182,9 +181,8 @@ class BoardAndGameTests(unittest.TestCase):
         self.assertGreaterEqual(
             self.game.board.count_at_relative(int(Color.RED), target_rel), 2
         )
-        # Rewards should at least include blockade bonus
-        self.assertIsNotNone(res.rewards)
-        self.assertGreaterEqual(res.rewards[0], reward_config.blockade)
+        # game.py no longer returns rewards - they're computed by env from events
+        self.assertIsNone(res.rewards)
 
 
 class PlayerBehaviourTests(unittest.TestCase):

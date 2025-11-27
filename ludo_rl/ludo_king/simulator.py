@@ -8,6 +8,7 @@ from loguru import logger
 
 from .config import config
 from .game import Game
+from .reward import compute_sparse_rewards
 from .types import Move, MoveResult
 
 
@@ -151,6 +152,14 @@ class Simulator:
         agent_player = self.game.players[self.agent_index]
         agent_color = int(agent_player.color)
 
+        # Compute sparse rewards locally for heatmap tracking
+        # (game.py no longer returns rewards - they're computed in env)
+        rewards = compute_sparse_rewards(
+            num_players=len(self.game.players),
+            mover_index=mover_index,
+            events=result.events,
+        )
+
         # Update movement heatmap at the destination position
         if result.new_position > 0:
             # Convert mover's relative position to agent's relative position
@@ -171,9 +180,9 @@ class Simulator:
 
             if agent_rel_pos != -1:
                 self.game.board.movement_heatmap[agent_rel_pos] += 1.0
-                # Add reward at this position
-                if result.rewards and mover_index in result.rewards:
-                    self.game.board.reward_heatmap[agent_rel_pos] += result.rewards[
+                # Add reward at this position (computed locally from events)
+                if mover_index in rewards:
+                    self.game.board.reward_heatmap[agent_rel_pos] += rewards[
                         mover_index
                     ]
 

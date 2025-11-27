@@ -112,6 +112,34 @@ class Board:
         idx = self._resolve_index(player_color)
         return sum(1 for p in self.players[idx] if p.position == rel_pos)
 
+    def get_blockade_positions(self) -> dict[int, int]:
+        """
+        Return a dict mapping absolute positions to the color of the blockade owner.
+
+        A blockade exists when 2+ pieces of the same color are on the same
+        ring position (1..51). This method scans all players once and returns
+        the complete blockade map.
+
+        Returns:
+            dict[int, int]: {absolute_position: color_id} for all blockades.
+        """
+        blockade_abs_to_color: dict[int, int] = {}
+        for idx, pieces in enumerate(self.players):
+            color_id = self.colors[idx]
+            # Count pieces per relative ring position
+            counts: dict[int, int] = {}
+            for piece in pieces:
+                r = int(piece.position)
+                if 1 <= r <= config.MAIN_TRACK_END:
+                    counts[r] = counts.get(r, 0) + 1
+            # Blockade = 2+ pieces at same position
+            for r, cnt in counts.items():
+                if cnt >= 2:
+                    abs_pos = self.absolute_position(color_id, r)
+                    if abs_pos != -1:
+                        blockade_abs_to_color[abs_pos] = color_id
+        return blockade_abs_to_color
+
     def reset_transition_summaries(self) -> None:
         """Reset all transition summary channels to zero."""
         self.movement_heatmap.fill(0.0)

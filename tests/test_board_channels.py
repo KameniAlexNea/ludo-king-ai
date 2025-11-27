@@ -84,20 +84,40 @@ class BoardChannelTests(unittest.TestCase):
         )
 
     def test_reward_heatmap_updates(self):
-        """Verify that reward heatmap accumulates rewards."""
-        # Move agent's piece from yard to start
-        self.game.players[0].pieces[0].position = 1
+        """Verify that reward heatmap accumulates rewards for captures.
 
-        # Create and apply a move
-        move = Move(player_index=0, piece_id=0, new_pos=7, dice_roll=6)
+        With sparse rewards, only capture and finish events generate rewards.
+        This test sets up a capture scenario to verify heatmap tracking.
+        NOTE: Safe squares are [1, 9, 14, 22, 27, 35, 40, 48] - we use pos 8.
+        """
+        # Setup: Place agent piece at position 2, opponent at position 8
+        # Position 8 is NOT a safe square, so captures are allowed.
+        self.game.players[0].pieces[0].position = 2  # Red at relative pos 2
+
+        # Place opponent at the absolute position that agent will land on
+        # Red at rel 8 -> abs = (1 + 8 - 1) % 52 = 8
+        # Green needs to be at abs 8: abs = (14 + rel - 1) % 52 = 8
+        # => (13 + rel) % 52 = 8 => rel = -5 % 52 = 47
+        self.game.players[1].pieces[0].position = 47  # Green at abs pos 8
+
+        # Create and apply a move that captures the opponent
+        move = Move(player_index=0, piece_id=0, new_pos=8, dice_roll=6)
         result = self.game.apply_move(move)
         self.sim._update_transition_summaries(0, move, result)
 
+        # Verify capture happened
+        self.assertTrue(
+            len(result.events.knockouts) > 0,
+            "Capture should have occurred (opponent was on non-safe square)",
+        )
+
         tensor = self.game.board.build_tensor(agent_color=0)
 
-        # Reward heatmap should show rewards at position 7
+        # Reward heatmap should show capture reward at position 8
         self.assertGreater(
-            tensor[9][7], 0.0, "Reward heatmap should track rewards at position 7"
+            tensor[9][8],
+            0.0,
+            "Reward heatmap should track capture reward at position 8",
         )
 
     def test_knockout_tracking(self):

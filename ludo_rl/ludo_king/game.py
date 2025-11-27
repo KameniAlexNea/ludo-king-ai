@@ -5,13 +5,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List
 
 from .board import Board
-from .config import config, reward_config
+from .config import config
 from .piece import Piece
 
 if TYPE_CHECKING:  # avoid runtime import to prevent circular deps
     from .player import Player
 
-from .reward import compute_move_rewards
 from .types import BlockadeEvent, KnockoutEvent, Move, MoveEvents, MoveResult
 
 
@@ -93,20 +92,8 @@ class Game:
         player = self.players[player_idx]
         moves: List[Move] = []
 
-        # Precompute absolute positions of blockades on ring for all colors
-        blockade_abs_to_color: dict[int, int] = {}
-        for pl in self.players:
-            color_id = int(pl.color)
-            counts: dict[int, int] = {}
-            for piece in pl.pieces:
-                r = int(piece.position)
-                if 1 <= r <= config.MAIN_TRACK_END:
-                    counts[r] = counts.get(r, 0) + 1
-            for r, cnt in counts.items():
-                if cnt >= 2:
-                    abs_b = self.board.absolute_position(color_id, r)
-                    if abs_b != -1:
-                        blockade_abs_to_color[abs_b] = color_id
+        # Get blockade positions from board (centralized, computed once)
+        blockade_abs_to_color = self.board.get_blockade_positions()
 
         for pc in player.pieces:
             dest = self._destination_for_roll(pc.position, dice)
@@ -142,23 +129,8 @@ class Game:
         events = MoveEvents()
         old = pc.position
 
-        # Pre-check: cannot cross a blockade on ring squares
-
-        # Precompute blockade absolute positions per color (main ring only)
-        blockade_abs_to_color: dict[int, int] = {}
-        for pl in self.players:
-            color_id = int(pl.color)
-            # Count pieces per relative ring position
-            counts: dict[int, int] = {}
-            for piece in pl.pieces:
-                r = int(piece.position)
-                if 1 <= r <= config.MAIN_TRACK_END:
-                    counts[r] = counts.get(r, 0) + 1
-            for r, cnt in counts.items():
-                if cnt >= 2:
-                    abs_b = self.board.absolute_position(color_id, r)
-                    if abs_b != -1:
-                        blockade_abs_to_color[abs_b] = color_id
+        # Get blockade positions from board (centralized, computed once)
+        blockade_abs_to_color = self.board.get_blockade_positions()
 
         path = self._iter_ring_path(old, mv.new_pos)
         for rel in path:
@@ -167,30 +139,13 @@ class Game:
             if abs_pos in blockade_abs_to_color:
                 events.hit_blockade = True
                 events.move_resolved = False
-                # Build opponent positions for exposure calculation
-                mover_color = int(player.color)
-                opponent_positions = [
-                    (int(pl.color), [int(p.position) for p in pl.pieces])
-                    for i, pl in enumerate(self.players)
-                    if i != mv.player_index
-                ]
-                # Even when a move is blocked, compute rewards centrally
-                rewards = compute_move_rewards(
-                    num_players=len(self.players),
-                    mover_index=mv.player_index,
-                    old_position=old,
-                    new_position=old,
-                    events=events,
-                    board=self.board,
-                    mover_color=mover_color,
-                    opponent_positions=opponent_positions,
-                )
+                # Return without rewards - env calculates them
                 return MoveResult(
                     old_position=old,
                     new_position=old,
                     events=events,
                     extra_turn=False,
-                    rewards=rewards,
+                    rewards=None,
                 )
 
         if old == 0 and mv.new_pos == config.START_POSITION:
@@ -253,36 +208,11 @@ class Game:
                 BlockadeEvent(player=mv.player_index, rel_pos=pc.position)
             )
 
-        # Build opponent positions for exposure calculation
-        mover_color = int(player.color)
-        opponent_positions = [
-            (int(pl.color), [int(p.position) for p in pl.pieces])
-            for i, pl in enumerate(self.players)
-            if i != mv.player_index
-        ]
-
-        # Compute per-player rewards (optional; env may or may not use)
-        rewards = compute_move_rewards(
-            num_players=len(self.players),
-            mover_index=mv.player_index,
-            old_position=old,
-            new_position=pc.position,
-            events=events,
-            board=self.board,
-            mover_color=mover_color,
-            opponent_positions=opponent_positions,
-        )
-
-        # If the mover's player just won (all pieces finished), add small opponent penalty
-        if self.players[mv.player_index].check_won():
-            for idx in range(len(self.players)):
-                if idx != mv.player_index:
-                    rewards[idx] += reward_config.opp_win_penalty
-
+        # Rewards calculated by env, not game - return None
         return MoveResult(
             old_position=old,
             new_position=pc.position,
             events=events,
             extra_turn=extra,
-            rewards=rewards,
+            rewards=None,
         )
