@@ -34,6 +34,37 @@ from ludo_rl.strategy.types import MoveOption
 load_dotenv()
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Analyze RL agent strategy patterns")
+    parser.add_argument(
+        "--model-path", type=str, required=True, help="Path to trained model"
+    )
+    parser.add_argument(
+        "--episodes", type=int, default=100, help="Number of episodes to analyze"
+    )
+    parser.add_argument(
+        "--opponents",
+        type=str,
+        default=None,
+        help="Comma-separated opponent strategies (default: mixed)",
+    )
+    parser.add_argument(
+        "--deterministic", action="store_true", help="Use deterministic actions"
+    )
+    parser.add_argument(
+        "--device", type=str, default="cpu", help="Device for model inference"
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument(
+        "--detailed", action="store_true", help="Collect detailed move-by-move analysis"
+    )
+    parser.add_argument(
+        "--export-csv", type=str, default=None, help="Export detailed moves to CSV file"
+    )
+    args = parser.parse_args()
+    return args
+
+
 @dataclass
 class MoveAnalysis:
     """Analysis of a single move decision."""
@@ -774,34 +805,7 @@ def print_recommendations(stats: StrategyStats) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Analyze RL agent strategy patterns")
-    parser.add_argument(
-        "--model-path", type=str, required=True, help="Path to trained model"
-    )
-    parser.add_argument(
-        "--episodes", type=int, default=100, help="Number of episodes to analyze"
-    )
-    parser.add_argument(
-        "--opponents",
-        type=str,
-        default=None,
-        help="Comma-separated opponent strategies (default: mixed)",
-    )
-    parser.add_argument(
-        "--deterministic", action="store_true", help="Use deterministic actions"
-    )
-    parser.add_argument(
-        "--device", type=str, default="cpu", help="Device for model inference"
-    )
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument(
-        "--detailed", action="store_true", help="Collect detailed move-by-move analysis"
-    )
-    parser.add_argument(
-        "--export-csv", type=str, default=None, help="Export detailed moves to CSV file"
-    )
-    args = parser.parse_args()
-
+    args = parse_args()
     # Set seed
     np.random.seed(args.seed)
 
