@@ -758,10 +758,7 @@ def print_recommendations(stats: StrategyStats) -> None:
     # Win rate assessment
     win_rate = stats.wins / stats.total_episodes if stats.total_episodes > 0 else 0
     if win_rate < 0.25:
-        recommendations.append(
-            f"❌ WIN RATE: Only {win_rate:.0%} against opponents. "
-            f"Baseline random is ~25% in 4-player. Agent may not be learning effectively."
-        )
+        recommendations.append(f"❌ WIN RATE: Only {win_rate:.0%} against opponents. ")
     elif win_rate > 0.35:
         recommendations.append(
             f"✅ WIN RATE: {win_rate:.0%} is above random baseline. Agent is learning."
