@@ -50,7 +50,9 @@ class TestFixedOpponentsCache(unittest.TestCase):
             self.assertNotEqual(ids[9], ids[8])
             self.assertEqual(ids[9], ids[10])
         finally:
-            object.__setattr__(king_config, "FIXED_OPPONENTS_STEPS", original_fixed_steps)
+            object.__setattr__(
+                king_config, "FIXED_OPPONENTS_STEPS", original_fixed_steps
+            )
 
     def test_fixed_cache_updates_every_step_when_k_is_one(self):
         original_fixed_steps = king_config.FIXED_OPPONENTS_STEPS
@@ -70,7 +72,9 @@ class TestFixedOpponentsCache(unittest.TestCase):
             self.assertNotEqual(ids[4], ids[5])
             self.assertNotEqual(ids[5], ids[6])
         finally:
-            object.__setattr__(king_config, "FIXED_OPPONENTS_STEPS", original_fixed_steps)
+            object.__setattr__(
+                king_config, "FIXED_OPPONENTS_STEPS", original_fixed_steps
+            )
 
     def test_fixed_cache_does_not_update_between_boundaries(self):
         original_fixed_steps = king_config.FIXED_OPPONENTS_STEPS
@@ -87,7 +91,9 @@ class TestFixedOpponentsCache(unittest.TestCase):
             self.assertNotEqual(ids[4], ids[3])
             self.assertEqual(len(set(ids[4:8])), 1)
         finally:
-            object.__setattr__(king_config, "FIXED_OPPONENTS_STEPS", original_fixed_steps)
+            object.__setattr__(
+                king_config, "FIXED_OPPONENTS_STEPS", original_fixed_steps
+            )
 
 
 if __name__ == "__main__":

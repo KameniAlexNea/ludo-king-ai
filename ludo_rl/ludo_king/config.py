@@ -42,7 +42,9 @@ class Config:
     FIXED_OPPONENTS_STEPS: int = int(os.getenv("FIXED_OPPONENTS_STEPS", 100))
 
     # Curriculum configuration
-    CURRICULUM_INTERVAL_RESETS: int = int(os.getenv("CURRICULUM_INTERVAL_RESETS", 2500))
+    CURRICULUM_TOTAL_TIMESTEPS: int = int(
+        os.getenv("CURRICULUM_TOTAL_TIMESTEPS", 50_000_000)
+    )
 
     # Derived positions (computed in __post_init__ for convenience)
     def __post_init__(self):

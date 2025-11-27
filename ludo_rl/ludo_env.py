@@ -24,6 +24,11 @@ from .strategy.registry import STRATEGY_REGISTRY
 from .strategy.registry import available as available_strategies
 from .utils.opponent_lineup import OpponentLineupSampler, create_default_sampler
 
+STRATEGY_AVAILABLE = [
+    s for s in os.getenv("OPPONENTS", ",".join(available_strategies())).split(",") if s
+]
+STRATEGY_SELECTION = int(os.getenv("STRATEGY_SELECTION", "0"))
+
 
 def get_observation_space() -> gym.spaces.Space:
     return spaces.Dict(
@@ -101,13 +106,9 @@ class LudoEnv(gym.Env):
         self._cached_action_mask: np.ndarray | None = None
 
         # Opponent strategies
-        self.opponents: List[str] = [
-            s
-            for s in os.getenv("OPPONENTS", ",".join(available_strategies())).split(",")
-            if s
-        ]
+        self.opponents: List[str] = STRATEGY_AVAILABLE
         # 0 = random per seat, 1 = sequential cycling
-        self.strategy_selection: int = int(os.getenv("STRATEGY_SELECTION", "0"))
+        self.strategy_selection: int = STRATEGY_SELECTION
         # Track resets to advance sequential selection across episodes
         self._reset_count: int = 0
 
@@ -121,7 +122,7 @@ class LudoEnv(gym.Env):
 
         # Create the curriculum-aware opponent sampler
         # Use timesteps (not resets) for curriculum progression in multi-env training
-        curriculum_timesteps = int(os.getenv("CURRICULUM_TOTAL_TIMESTEPS", 50_000_000))
+        curriculum_timesteps = king_config.CURRICULUM_TOTAL_TIMESTEPS
         self._opponent_sampler: OpponentLineupSampler = create_default_sampler(
             strategies=self.opponents,
             curriculum_timesteps=curriculum_timesteps,
