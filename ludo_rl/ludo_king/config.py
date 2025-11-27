@@ -108,27 +108,13 @@ class Reward:
     skipped_turn: float = -0.001 * COEF
 
     # Exposure-aware reward adjustments
-    # Discount capture reward based on post-capture exposure risk
-    # exposure_discount = threats_at_dest / 6.0 * capture_exposure_penalty
-    capture_exposure_penalty: float = float(os.getenv("CAPTURE_EXPOSURE_PENALTY", 0.2 * COEF))
+    # Penalty proportional to INCREASE in exposure (threats_AFTER - threats_BEFORE)
+    # Positive delta = became more exposed = penalty; Negative delta = became safer = bonus
+    capture_exposure_penalty: float = float(
+        os.getenv("CAPTURE_EXPOSURE_PENALTY", 0.2 * COEF)
+    )
     # Bonus for landing on safe square (home stretch counts as safe)
     safe_landing_bonus: float = float(os.getenv("SAFE_LANDING_BONUS", 0.02 * COEF))
-
-    # Risk/Opportunity shaping (potential-based) parameters
-    shaping_use: bool = bool(int(os.getenv("SHAPING_USE", 1)))
-    shaping_alpha: float = float(os.getenv("SHAPING_ALPHA", 2.0))
-    shaping_gamma: float = float(os.getenv("SHAPING_GAMMA", 0.99))
-    # Apply shaping only for a specific agent (speeds up tournaments/opponent turns)
-    shaping_agent_only: bool = bool(int(os.getenv("SHAPING_AGENT_ONLY", 0)))
-    shaping_agent_index: int = int(os.getenv("SHAPING_AGENT_INDEX", 0))
-    ro_depth: int = int(
-        os.getenv("RO_DEPTH", 3)
-    )  # lookahead depth in plies (approximate)
-    # Weights for potential components
-    ro_w_progress: float = float(os.getenv("RO_W_PROGRESS", 0.3))
-    ro_w_cap_opp: float = float(os.getenv("RO_W_CAP_OPP", 0.5))
-    ro_w_cap_risk: float = float(os.getenv("RO_W_CAP_RISK", 0.5))
-    ro_w_finish_opp: float = float(os.getenv("RO_W_FINISH_OPP", 0.3))
 
     # Opponent progress penalties (sparse signals to encourage urgency)
     opp_exit_home_penalty: float = float(

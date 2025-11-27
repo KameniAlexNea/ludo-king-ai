@@ -11,7 +11,7 @@ from .piece import Piece
 if TYPE_CHECKING:  # avoid runtime import to prevent circular deps
     from .player import Player
 
-from .reward import compute_move_rewards, compute_state_potential, shaping_delta
+from .reward import compute_move_rewards
 from .types import BlockadeEvent, KnockoutEvent, Move, MoveEvents, MoveResult
 
 
@@ -20,9 +20,6 @@ class Game:
     players: List["Player"]
     board: Board = field(init=False)
     rng: random.Random = field(default_factory=random.Random, init=False)
-    # Cache for potential-based shaping: last Φ(s) per player
-    _phi_cache: list[float] = field(default_factory=list, init=False, repr=False)
-    _phi_valid: list[bool] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:
         # Board expects players indexed by Color id (0..3). Build a fixed map.
@@ -33,10 +30,6 @@ class Game:
             pieces_by_color[int(pl.color)] = pl.pieces
         colors = list(range(len(pieces_by_color)))
         self.board = Board(players=pieces_by_color, colors=colors)
-        # Init phi cache per player index
-        n = len(self.players)
-        self._phi_cache = [0.0] * n
-        self._phi_valid = [False] * n
 
     # --- Dice ---
     def roll_dice(self) -> int:
@@ -151,18 +144,6 @@ class Game:
 
         # Pre-check: cannot cross a blockade on ring squares
 
-        # Defer computing potential until needed (lazy) to avoid overhead on blocked moves
-        phi_before_computed = False
-        phi_before = 0.0
-        if reward_config.shaping_use and self._phi_valid[mv.player_index]:
-            phi_before = self._phi_cache[mv.player_index]
-            phi_before_computed = True
-        # Gate shaping to agent-only if requested
-        do_shaping = reward_config.shaping_use and (
-            not reward_config.shaping_agent_only
-            or mv.player_index == reward_config.shaping_agent_index
-        )
-
         # Precompute blockade absolute positions per color (main ring only)
         blockade_abs_to_color: dict[int, int] = {}
         for pl in self.players:
@@ -204,17 +185,6 @@ class Game:
                     mover_color=mover_color,
                     opponent_positions=opponent_positions,
                 )
-                if do_shaping:
-                    # No state change; shaping delta is (gamma-1)*phi(s)
-                    if not phi_before_computed:
-                        phi_before = compute_state_potential(
-                            self, mv.player_index, depth=reward_config.ro_depth
-                        )
-                        phi_before_computed = True
-                    sd = shaping_delta(
-                        phi_before, phi_before, gamma=reward_config.shaping_gamma
-                    )
-                    rewards[mv.player_index] += reward_config.shaping_alpha * sd
                 return MoveResult(
                     old_position=old,
                     new_position=old,
@@ -308,22 +278,6 @@ class Game:
             for idx in range(len(self.players)):
                 if idx != mv.player_index:
                     rewards[idx] += reward_config.opp_win_penalty
-
-        # Add potential-based shaping
-        if do_shaping:
-            if not phi_before_computed:
-                phi_before = compute_state_potential(
-                    self, mv.player_index, depth=reward_config.ro_depth
-                )
-                phi_before_computed = True
-            phi_after = compute_state_potential(
-                self, mv.player_index, depth=reward_config.ro_depth
-            )
-            sd = shaping_delta(phi_before, phi_after, gamma=reward_config.shaping_gamma)
-            rewards[mv.player_index] += reward_config.shaping_alpha * sd
-            # Update cache for this player's latest state
-            self._phi_cache[mv.player_index] = phi_after
-            self._phi_valid[mv.player_index] = True
 
         return MoveResult(
             old_position=old,

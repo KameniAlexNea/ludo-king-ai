@@ -90,7 +90,9 @@ class StrategyAnalysis:
     captures_to_unsafe: int = 0  # Captures that left piece exposed
     captures_to_safe: int = 0  # Captures that landed on safe square
     total_exposure_turns: int = 0  # Turns with pieces in exposed positions
-    pieces_recaptured_after_capture: int = 0  # Got captured within 2 turns of making capture
+    pieces_recaptured_after_capture: int = (
+        0  # Got captured within 2 turns of making capture
+    )
     safe_alternatives_skipped: int = 0  # Had safe move but chose unsafe
 
     # Opportunity tracking (when opportunity existed)
@@ -107,7 +109,9 @@ class StrategyAnalysis:
     total_reward: float = 0.0
     reward_from_progress: float = 0.0
     reward_from_capture: float = 0.0
-    reward_from_exposure_delta: float = 0.0  # Exposure change: negative=got more exposed, positive=got safer
+    reward_from_exposure_delta: float = (
+        0.0  # Exposure change: negative=got more exposed, positive=got safer
+    )
     reward_from_safe_landing: float = 0.0  # Bonus for safe landings
     reward_from_got_captured: float = 0.0
     reward_from_finish: float = 0.0
@@ -126,13 +130,17 @@ class StrategyAnalysis:
     # Per-episode tracking
     episode_rewards: List[float] = field(default_factory=list)
     episode_moves: List[int] = field(default_factory=list)
-    episode_net_captures: List[int] = field(default_factory=list)  # captures - got_captured per episode
+    episode_net_captures: List[int] = field(
+        default_factory=list
+    )  # captures - got_captured per episode
 
     # Detailed move tracking
     moves: List[MoveStats] = field(default_factory=list)
 
     # Track recent captures for recapture detection
-    recent_capture_turns: List[int] = field(default_factory=list)  # Turn numbers when we captured
+    recent_capture_turns: List[int] = field(
+        default_factory=list
+    )  # Turn numbers when we captured
 
 
 def compute_move_reward_breakdown(
@@ -202,7 +210,9 @@ def run_analysis_episode(
     turn_count = 0
     episode_captures = 0
     episode_got_captured = 0
-    recent_capture_turns: List[int] = []  # Track when we made captures for recapture detection
+    recent_capture_turns: List[
+        int
+    ] = []  # Track when we made captures for recapture detection
 
     while (
         not any(p.check_won() for p in game.players)
@@ -255,14 +265,18 @@ def run_analysis_episode(
                     abs_pos = game.board.absolute_position(player_color, mv.new_pos)
                     if abs_pos not in king_config.SAFE_SQUARES_ABS:
                         # Check if exactly one opponent piece is there
-                        occupants = game.board.pieces_at_absolute(abs_pos, exclude_color=player_color)
+                        occupants = game.board.pieces_at_absolute(
+                            abs_pos, exclude_color=player_color
+                        )
                         if len(occupants) == 1:
                             could_capture = True
                 # Check if this move exits yard
                 if mv_old_pos == 0 and mv.new_pos > 0:
                     could_exit_yard = True
                 # Check if this move reaches safe zone
-                if mv.new_pos in [1, 9, 14, 22, 27, 35, 40, 48] or (52 <= mv.new_pos <= 56):
+                if mv.new_pos in [1, 9, 14, 22, 27, 35, 40, 48] or (
+                    52 <= mv.new_pos <= 56
+                ):
                     could_reach_safe = True
                     has_safe_alternative = True
                 # Home stretch is also safe
@@ -299,9 +313,11 @@ def run_analysis_episode(
 
             # Use actual rewards from game engine (includes exposure adjustments)
             # The game's compute_move_rewards now factors in exposure penalty for captures
-            actual_move_reward = result.rewards.get(agent_idx, 0.0) if result.rewards else 0.0
+            actual_move_reward = (
+                result.rewards.get(agent_idx, 0.0) if result.rewards else 0.0
+            )
             episode_reward += actual_move_reward
-            
+
             # Also compute breakdown for detailed tracking (this is approximate)
             reward_breakdown = compute_move_reward_breakdown(
                 old_pos, chosen_move.new_pos, events
@@ -324,7 +340,7 @@ def run_analysis_episode(
 
             # === EXPOSURE TRACKING ===
             new_pos = chosen_move.new_pos
-            
+
             # Determine if destination is safe
             is_dest_safe = False
             if new_pos == 0:  # yard
@@ -337,7 +353,7 @@ def run_analysis_episode(
                 abs_dest = game.board.absolute_position(player_color, new_pos)
                 if abs_dest in king_config.SAFE_SQUARES_ABS:
                     is_dest_safe = True
-            
+
             # Determine if origin was safe
             is_origin_safe = False
             if old_pos == 0:
@@ -348,7 +364,7 @@ def run_analysis_episode(
                 abs_origin = game.board.absolute_position(player_color, old_pos)
                 if abs_origin in king_config.SAFE_SQUARES_ABS:
                     is_origin_safe = True
-            
+
             # Track safe vs unsafe moves
             if is_dest_safe:
                 stats.moves_to_safe += 1
@@ -357,7 +373,7 @@ def run_analysis_episode(
                 # Did we skip a safe alternative?
                 if has_safe_alternative:
                     stats.safe_alternatives_skipped += 1
-            
+
             # Track capture exposure
             if events.knockouts:
                 if is_origin_safe:
@@ -373,22 +389,28 @@ def run_analysis_episode(
             stats.reward_from_exit_home += reward_breakdown["exit_home"]
             stats.reward_from_blockade += reward_breakdown["blockade"]
             stats.reward_from_hit_blockade += reward_breakdown["hit_blockade"]
-            
+
             # Track capture rewards
             if events.knockouts:
                 stats.reward_from_capture += reward_breakdown["capture"]
-            
+
             # Compute exposure delta penalty from the difference between actual and base rewards
             # The actual reward includes: base rewards + exposure delta penalty + safe landing bonus
             base_reward_sum = sum(reward_breakdown.values())
-            safe_bonus = reward_config.safe_landing_bonus if (is_dest_safe and chosen_move.new_pos != 57) else 0.0
+            safe_bonus = (
+                reward_config.safe_landing_bonus
+                if (is_dest_safe and chosen_move.new_pos != 57)
+                else 0.0
+            )
             # exposure_adjustment = actual - base - safe_bonus
             # (negative means penalty was applied, positive means bonus from reduced exposure)
             exposure_adjustment = actual_move_reward - base_reward_sum - safe_bonus
             stats.reward_from_exposure_delta += exposure_adjustment
-            
+
             # Track safe landing bonus
-            if is_dest_safe and chosen_move.new_pos != 57:  # Not finish (already has bonus)
+            if (
+                is_dest_safe and chosen_move.new_pos != 57
+            ):  # Not finish (already has bonus)
                 stats.reward_from_safe_landing += reward_config.safe_landing_bonus
 
             # Determine move category
@@ -450,7 +472,9 @@ def run_analysis_episode(
                     episode_reward += reward_config.got_capture
                     # Check if this was a recapture (we captured within last 2 turns)
                     for cap_turn in recent_capture_turns:
-                        if turn_count - cap_turn <= 8:  # Within ~2 rounds (4 players * 2)
+                        if (
+                            turn_count - cap_turn <= 8
+                        ):  # Within ~2 rounds (4 players * 2)
                             stats.pieces_recaptured_after_capture += 1
                             break
 
@@ -588,42 +612,52 @@ def print_stats(stats: StrategyAnalysis) -> None:
     opportunity_data = []
     if stats.finish_opportunities > 0:
         rate = stats.finish_taken / stats.finish_opportunities
-        opportunity_data.append([
-            "Finish",
-            stats.finish_opportunities,
-            stats.finish_taken,
-            f"{rate:.1%}",
-        ])
+        opportunity_data.append(
+            [
+                "Finish",
+                stats.finish_opportunities,
+                stats.finish_taken,
+                f"{rate:.1%}",
+            ]
+        )
     if stats.capture_opportunities > 0:
         rate = stats.capture_taken / stats.capture_opportunities
-        opportunity_data.append([
-            "Capture",
-            stats.capture_opportunities,
-            stats.capture_taken,
-            f"{rate:.1%}",
-        ])
+        opportunity_data.append(
+            [
+                "Capture",
+                stats.capture_opportunities,
+                stats.capture_taken,
+                f"{rate:.1%}",
+            ]
+        )
     if stats.exit_yard_opportunities > 0:
         rate = stats.exit_yard_taken / stats.exit_yard_opportunities
-        opportunity_data.append([
-            "Exit Yard",
-            stats.exit_yard_opportunities,
-            stats.exit_yard_taken,
-            f"{rate:.1%}",
-        ])
+        opportunity_data.append(
+            [
+                "Exit Yard",
+                stats.exit_yard_opportunities,
+                stats.exit_yard_taken,
+                f"{rate:.1%}",
+            ]
+        )
     if stats.safe_move_opportunities > 0:
         rate = stats.safe_move_taken / stats.safe_move_opportunities
-        opportunity_data.append([
-            "Reach Safe",
-            stats.safe_move_opportunities,
-            stats.safe_move_taken,
-            f"{rate:.1%}",
-        ])
+        opportunity_data.append(
+            [
+                "Reach Safe",
+                stats.safe_move_opportunities,
+                stats.safe_move_taken,
+                f"{rate:.1%}",
+            ]
+        )
     if opportunity_data:
-        print(tabulate(
-            opportunity_data,
-            headers=["Opportunity", "Available", "Taken", "Rate"],
-            tablefmt="simple",
-        ))
+        print(
+            tabulate(
+                opportunity_data,
+                headers=["Opportunity", "Available", "Taken", "Rate"],
+                tablefmt="simple",
+            )
+        )
     else:
         print("No opportunity data collected.")
 
@@ -635,20 +669,34 @@ def print_stats(stats: StrategyAnalysis) -> None:
         [
             "Moves to SAFE squares",
             stats.moves_to_safe,
-            f"{stats.moves_to_safe / stats.total_moves:.1%}" if stats.total_moves > 0 else "N/A",
+            (
+                f"{stats.moves_to_safe / stats.total_moves:.1%}"
+                if stats.total_moves > 0
+                else "N/A"
+            ),
         ],
         [
             "Moves to UNSAFE squares",
             stats.moves_to_unsafe,
-            f"{stats.moves_to_unsafe / stats.total_moves:.1%}" if stats.total_moves > 0 else "N/A",
+            (
+                f"{stats.moves_to_unsafe / stats.total_moves:.1%}"
+                if stats.total_moves > 0
+                else "N/A"
+            ),
         ],
         [
             "Safe alternatives skipped",
             stats.safe_alternatives_skipped,
-            f"{stats.safe_alternatives_skipped / stats.total_moves:.1%}" if stats.total_moves > 0 else "N/A",
+            (
+                f"{stats.safe_alternatives_skipped / stats.total_moves:.1%}"
+                if stats.total_moves > 0
+                else "N/A"
+            ),
         ],
     ]
-    print(tabulate(exposure_data, headers=["Metric", "Count", "Rate"], tablefmt="simple"))
+    print(
+        tabulate(exposure_data, headers=["Metric", "Count", "Rate"], tablefmt="simple")
+    )
 
     # Capture quality analysis
     if stats.capture_count > 0:
@@ -677,13 +725,29 @@ def print_stats(stats: StrategyAnalysis) -> None:
                 f"{stats.pieces_recaptured_after_capture / stats.capture_count:.1%}",
             ],
         ]
-        print(tabulate(capture_quality_data, headers=["Metric", "Count", "Rate"], tablefmt="simple"))
-        
+        print(
+            tabulate(
+                capture_quality_data,
+                headers=["Metric", "Count", "Rate"],
+                tablefmt="simple",
+            )
+        )
+
         # Summary insight
-        risky_capture_rate = stats.captures_to_unsafe / stats.capture_count if stats.capture_count > 0 else 0
-        recapture_rate = stats.pieces_recaptured_after_capture / stats.capture_count if stats.capture_count > 0 else 0
+        risky_capture_rate = (
+            stats.captures_to_unsafe / stats.capture_count
+            if stats.capture_count > 0
+            else 0
+        )
+        recapture_rate = (
+            stats.pieces_recaptured_after_capture / stats.capture_count
+            if stats.capture_count > 0
+            else 0
+        )
         print(f"\n  >> {risky_capture_rate:.0%} of captures left piece exposed")
-        print(f"  >> {recapture_rate:.0%} of captures were followed by getting recaptured")
+        print(
+            f"  >> {recapture_rate:.0%} of captures were followed by getting recaptured"
+        )
         if risky_capture_rate > 0.5:
             print("  ⚠️  High-risk capture pattern detected!")
 
