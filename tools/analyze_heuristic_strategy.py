@@ -73,7 +73,7 @@ class StrategyAnalysis:
     wins: int = 0
     total_pieces_finished: int = 0
 
-    # Event counts
+    # Event counts (what actually happened)
     exit_yard_count: int = 0
     capture_count: int = 0
     got_captured_count: int = 0
@@ -82,6 +82,16 @@ class StrategyAnalysis:
     hit_blockade_count: int = 0
     enter_safe_count: int = 0
     leave_safe_count: int = 0
+
+    # Opportunity tracking (when opportunity existed)
+    finish_opportunities: int = 0
+    finish_taken: int = 0
+    capture_opportunities: int = 0
+    capture_taken: int = 0
+    exit_yard_opportunities: int = 0
+    exit_yard_taken: int = 0
+    safe_move_opportunities: int = 0
+    safe_move_taken: int = 0
 
     # Reward tracking
     total_reward: float = 0.0
@@ -206,6 +216,35 @@ def run_analysis_episode(
         piece = player.pieces[chosen_move.piece_id]
         old_pos = piece.position
 
+        # Analyze opportunities BEFORE move is made (only for our agent)
+        could_finish = False
+        could_capture = False
+        could_exit_yard = False
+        could_reach_safe = False
+
+        if current_idx == agent_idx:
+            for mv in legal_moves:
+                mv_piece = player.pieces[mv.piece_id]
+                mv_old_pos = mv_piece.position
+                # Check if this move finishes
+                if mv.new_pos == 57:
+                    could_finish = True
+                # Check if this move captures
+                # A capture happens if landing on single opponent on main track (not safe)
+                if 1 <= mv.new_pos <= 51:
+                    abs_pos = game.board.absolute_position(player_color, mv.new_pos)
+                    if abs_pos not in king_config.SAFE_SQUARES_ABS:
+                        # Check if exactly one opponent piece is there
+                        occupants = game.board.pieces_at_absolute(abs_pos, exclude_color=player_color)
+                        if len(occupants) == 1:
+                            could_capture = True
+                # Check if this move exits yard
+                if mv_old_pos == 0 and mv.new_pos > 0:
+                    could_exit_yard = True
+                # Check if this move reaches safe zone
+                if mv.new_pos in [1, 9, 14, 22, 27, 35, 40, 48] or (52 <= mv.new_pos <= 56):
+                    could_reach_safe = True
+
         # Apply move
         result = game.apply_move(chosen_move)
         events = result.events
@@ -214,6 +253,25 @@ def run_analysis_episode(
         if current_idx == agent_idx:
             stats.total_moves += 1
             episode_moves += 1
+
+            # Track opportunities and whether taken
+            if could_finish:
+                stats.finish_opportunities += 1
+                if events.finished:
+                    stats.finish_taken += 1
+            if could_capture:
+                stats.capture_opportunities += 1
+                if events.knockouts:
+                    stats.capture_taken += 1
+            if could_exit_yard:
+                stats.exit_yard_opportunities += 1
+                if events.exited_home:
+                    stats.exit_yard_taken += 1
+            if could_reach_safe:
+                stats.safe_move_opportunities += 1
+                new_pos = chosen_move.new_pos
+                if new_pos in [1, 9, 14, 22, 27, 35, 40, 48] or (52 <= new_pos <= 56):
+                    stats.safe_move_taken += 1
 
             # Compute reward breakdown
             reward_breakdown = compute_move_reward_breakdown(
@@ -418,6 +476,52 @@ def print_stats(stats: StrategyAnalysis) -> None:
         ],
     ]
     print(tabulate(event_data, headers=["Event", "Count", "Rate"], tablefmt="simple"))
+
+    # Opportunity analysis
+    print("\n" + "-" * 60)
+    print("OPPORTUNITY ANALYSIS (when opportunity existed, how often taken)")
+    print("-" * 60)
+    opportunity_data = []
+    if stats.finish_opportunities > 0:
+        rate = stats.finish_taken / stats.finish_opportunities
+        opportunity_data.append([
+            "Finish",
+            stats.finish_opportunities,
+            stats.finish_taken,
+            f"{rate:.1%}",
+        ])
+    if stats.capture_opportunities > 0:
+        rate = stats.capture_taken / stats.capture_opportunities
+        opportunity_data.append([
+            "Capture",
+            stats.capture_opportunities,
+            stats.capture_taken,
+            f"{rate:.1%}",
+        ])
+    if stats.exit_yard_opportunities > 0:
+        rate = stats.exit_yard_taken / stats.exit_yard_opportunities
+        opportunity_data.append([
+            "Exit Yard",
+            stats.exit_yard_opportunities,
+            stats.exit_yard_taken,
+            f"{rate:.1%}",
+        ])
+    if stats.safe_move_opportunities > 0:
+        rate = stats.safe_move_taken / stats.safe_move_opportunities
+        opportunity_data.append([
+            "Reach Safe",
+            stats.safe_move_opportunities,
+            stats.safe_move_taken,
+            f"{rate:.1%}",
+        ])
+    if opportunity_data:
+        print(tabulate(
+            opportunity_data,
+            headers=["Opportunity", "Available", "Taken", "Rate"],
+            tablefmt="simple",
+        ))
+    else:
+        print("No opportunity data collected.")
 
     # Reward breakdown
     print("\n" + "-" * 60)
