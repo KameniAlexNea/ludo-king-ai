@@ -95,14 +95,14 @@ class StrategyConfig:
 @dataclass(slots=True)
 class Reward:
     # Terminal rewards (sparse)
-    win: float = 1.0
-    lose: float = -1.0
-    draw: float = -0.5
+    win: float = 5.0
+    lose: float = -5.0
+    draw: float = -1.0
 
     # Sparse milestone rewards
-    finish: float = 0.2  # Piece reaches home finish
+    finish: float = 0.5  # Piece reaches home finish
     capture: float = 0.1  # Capture an opponent's piece
-    got_captured: float = -0.1  # Agent's piece got captured
+    got_captured: float = -0.15  # Agent's piece got captured
 
     # Minor penalties (very small to avoid reward hacking)
     invalid_action: float = -0.01

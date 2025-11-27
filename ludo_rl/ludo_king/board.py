@@ -163,15 +163,13 @@ class Board:
         ]
 
     def token_colors(self, agent_color: int) -> np.ndarray:
-        """Return a (16,) array of color ids for tokens in fixed order.
+        """Return a (16,) array of owner types for tokens in fixed order.
 
-        Order: 4 tokens per color block in token_order_for_agent(agent_color).
+        Values: 0=agent (first 4 tokens), 1=opponent (tokens 4-15).
+        This ensures permutation invariance w.r.t. opponent ordering.
         """
-        order = self.token_order_for_agent(agent_color)
-        cols: list[int] = []
-        for c in order:
-            cols.extend([c, c, c, c])
-        return np.asarray(cols, dtype=np.int64)
+        # First 4 tokens are agent's (0), rest are opponents (1)
+        return np.array([0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], dtype=np.int64)
 
     def token_exists_mask(self, agent_color: int) -> np.ndarray:
         """Return a (16,) bool mask for tokens that exist (color/seat present).

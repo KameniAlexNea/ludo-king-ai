@@ -31,7 +31,9 @@ class BaseTokenSeqExtractor(BaseFeaturesExtractor):
         self.embed_dim = net_config.token_embed_dim
         # Embeddings shared by both variants
         self.pos_emb = nn.Embedding(config.PATH_LENGTH, self.embed_dim)
-        self.color_emb = nn.Embedding(4, self.embed_dim)
+        # owner_type: 0=agent (tokens 0-3), 1=opponent (tokens 4-15)
+        # Fixes permutation invariance - no color bias leak
+        self.owner_type_emb = nn.Embedding(2, self.embed_dim)
         self.piece_idx_emb = nn.Embedding(4, self.embed_dim)
         self.time_emb = nn.Embedding(self.T, self.embed_dim)
         self.frame_dice_emb = nn.Embedding(self.dice_roll_dim + 1, self.embed_dim)
@@ -85,15 +87,20 @@ class BaseTokenSeqExtractor(BaseFeaturesExtractor):
         dice_hist: torch.Tensor,
         player_hist: torch.Tensor,
         token_mask: torch.Tensor,
-        token_colors: torch.Tensor,
+        token_colors: torch.Tensor,  # unused - kept for API compat
         B: int,
         T: int,
         N: int,
         device: torch.device,
     ) -> torch.Tensor:
+        # NOTE: token_colors is intentionally unused to ensure permutation
+        # invariance. We derive owner_type from token index instead.
         pos_e = self.pos_emb(positions)  # (B,T,N,d)
-        colors = token_colors.unsqueeze(1).expand(B, T, N)
-        color_e = self.color_emb(colors)
+        # Owner type: 0=agent (first 4 tokens), 1=opponent (tokens 4-15)
+        # This is permutation-invariant w.r.t. opponent ordering
+        owner_type = (torch.arange(N, device=device) >= 4).long()
+        owner_type = owner_type.view(1, 1, N).expand(B, T, N)
+        owner_e = self.owner_type_emb(owner_type)
         piece_idx = (torch.arange(N, device=device) % 4).view(1, 1, N).expand(B, T, N)
         piece_e = self.piece_idx_emb(piece_idx)
         time_idx = torch.arange(T, device=device).view(1, T, 1).expand(B, T, N)
@@ -105,7 +112,7 @@ class BaseTokenSeqExtractor(BaseFeaturesExtractor):
         player_idx = player_hist.view(B, T, 1).expand(B, T, N)
         player_e = self.player_emb(player_idx)
         raw_emb = torch.cat(
-            [pos_e, color_e, piece_e, time_e, frame_dice_e, player_e], dim=-1
+            [pos_e, owner_e, piece_e, time_e, frame_dice_e, player_e], dim=-1
         )
         tok = self.token_proj(raw_emb)
         return tok
@@ -200,7 +207,8 @@ class LudoMlpExtractor(BaseTokenSeqExtractor):
 
         # Input: per-player features + current dice + last frame global stats
         self.total_input_dim = (
-            self.total_player_dim  # per-player pooled features
+            self.total_player_dim  # per-player pooled features (mean + max)
+            + self.num_players  # per-player token counts (normalized)
             + self.embed_dim  # current dice
             + self.embed_dim * 2  # last frame mean + max (recency bias)
         )
@@ -272,8 +280,14 @@ class LudoMlpExtractor(BaseTokenSeqExtractor):
         )[0]
         p_max = torch.where(torch.isinf(p_max), p_mean, p_max)  # (B, P, d)
 
-        # Concatenate mean+max per player, then flatten all players
-        per_player = torch.cat([p_mean, p_max], dim=-1).view(B, -1)  # (B, P*2d)
+        # Normalized count per player (reveals how many tokens are active)
+        max_count = T * self.pieces_per_player
+        p_count = count.squeeze(-1) / max_count  # (B, P), normalized to [0, 1]
+
+        # Concatenate mean+max per player, then flatten all players + count
+        per_player = torch.cat(
+            [p_mean.view(B, -1), p_max.view(B, -1), p_count], dim=-1
+        )  # (B, P*2d + P)
 
         # --- Last frame features (recency bias) - inline pooling ---
         last_tok = tok[:, -1, :, :]  # (B, N, d)
