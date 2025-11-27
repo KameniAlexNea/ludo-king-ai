@@ -248,6 +248,60 @@ class RLStrategyTests(unittest.TestCase):
         self.assertIsInstance(strategy, RLStrategy)
 
 
+class PlayerDecisionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        random.seed(0)
+
+    def _board_stack(self) -> np.ndarray:
+        return np.zeros((10, config.PATH_LENGTH), dtype=float)
+
+    def test_player_decide_uses_configured_strategy(self) -> None:
+        from ludo_rl.ludo_king.player import Player
+        from ludo_rl.ludo_king.types import Move
+
+        player = Player(color=0)
+        player.strategy_name = "killer"
+        player.strategy = None  # ensure strategy is built from name
+
+        piece_a = player.pieces[0]
+        piece_b = player.pieces[1]
+        piece_a.position = 0
+        piece_b.position = 10
+
+        valid_moves = [
+            Move(player_index=0, piece_id=piece_a.piece_id, new_pos=11, dice_roll=6),
+            Move(player_index=0, piece_id=piece_b.piece_id, new_pos=12, dice_roll=6),
+        ]
+
+        decision = player.choose(self._board_stack(), 6, valid_moves)
+        self.assertIsNotNone(decision)
+        self.assertEqual(decision.piece_id, piece_a.piece_id)
+        self.assertEqual(decision.new_pos, 11)
+
+    def test_player_unknown_strategy_falls_back_to_random(self) -> None:
+        from ludo_rl.ludo_king.player import Player
+        from ludo_rl.ludo_king.types import Move
+
+        player = Player(color=0)
+        player.strategy_name = "unknown"
+        player.strategy = None  # trigger unknown-name handling
+
+        piece_a = player.pieces[0]
+        piece_b = player.pieces[1]
+        piece_a.position = 0
+        piece_b.position = 10
+
+        valid_moves = [
+            Move(player_index=0, piece_id=piece_a.piece_id, new_pos=6, dice_roll=6),
+            Move(player_index=0, piece_id=piece_b.piece_id, new_pos=16, dice_roll=6),
+        ]
+
+        decision = player.choose(self._board_stack(), 6, valid_moves)
+        self.assertEqual(player.strategy_name, "random")
+        self.assertIsNotNone(decision)
+        self.assertIn(decision.piece_id, (piece_a.piece_id, piece_b.piece_id))
+
+
 class LLMStrategyTests(unittest.TestCase):
     def tearDown(self) -> None:
         LLMStrategy.config = None
