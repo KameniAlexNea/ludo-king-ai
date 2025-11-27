@@ -313,6 +313,100 @@ class TestEnvRewardIntegration(unittest.TestCase):
 
         env.close()
 
+    def test_got_captured_penalty_flows_to_agent(self):
+        """When opponent captures agent's piece, agent receives got_captured penalty.
+        
+        This is a critical integration test - verifies the full flow:
+        Simulator._process_move_result should accumulate got_captured penalty
+        which then flows through sim.get_agent_reward() to the env.
+        
+        Instead of mocking the entire step_opponents_only, we directly test
+        the reward accumulation mechanism.
+        """
+        from ludo_rl.ludo_env import LudoEnv
+        from ludo_rl.ludo_king.types import MoveEvents, KnockoutEvent, MoveResult, Move
+        from ludo_rl.ludo_king.config import reward_config
+
+        env = LudoEnv()
+        env.reset(seed=42)
+
+        # The agent is player 0
+        # Directly simulate what happens when an opponent captures agent's piece
+        # by calling _process_move_result
+        
+        # Reset the accumulator
+        env.sim._agent_reward_acc = 0.0
+        
+        # Create a fake knockout event where agent (player 0) is the victim
+        fake_events = MoveEvents(move_resolved=True)
+        fake_events.knockouts = [KnockoutEvent(player=0, piece_id=0, abs_pos=10)]
+        
+        # Process the fake result - opponent 1 captured agent's piece
+        fake_result = MoveResult(
+            old_position=5,
+            new_position=10,
+            extra_turn=False,
+            events=fake_events,
+            rewards=None,
+        )
+        fake_move = Move(player_index=1, piece_id=0, new_pos=10, dice_roll=6)
+        env.sim._process_move_result(1, fake_move, fake_result)
+        
+        # Now get the accumulated reward
+        accumulated_reward = env.sim.get_agent_reward()
+        
+        env.close()
+
+        # Verify got_captured penalty was accumulated
+        expected_penalty = reward_config.got_captured
+        self.assertAlmostEqual(
+            accumulated_reward, expected_penalty,
+            places=5,
+            msg=f"Agent should receive got_captured penalty {expected_penalty}, got {accumulated_reward}"
+        )
+
+    def test_simulator_accumulates_got_captured_rewards(self):
+        """Simulator._process_move_result accumulates got_captured penalty for agent.
+        
+        Unit test for the simulator's reward accumulation logic.
+        """
+        from ludo_rl.ludo_king.game import Game
+        from ludo_rl.ludo_king.player import Player
+        from ludo_rl.ludo_king.simulator import Simulator
+        from ludo_rl.ludo_king.types import MoveEvents, KnockoutEvent, MoveResult, Move
+
+        # Create game with agent at index 0
+        players = [Player(color=c) for c in [0, 1, 2, 3]]
+        game = Game(players=players)
+        sim = Simulator.for_game(game, agent_index=0)
+
+        # Reset accumulator
+        sim._agent_reward_acc = 0.0
+
+        # Create event where opponent (player 1) captures agent's piece (player 0)
+        events = MoveEvents(move_resolved=True)
+        events.knockouts = [KnockoutEvent(player=0, piece_id=0, abs_pos=25)]
+
+        result = MoveResult(
+            old_position=20,
+            new_position=25,
+            extra_turn=False,
+            events=events,
+            rewards=None,  # game.py no longer computes rewards
+        )
+        move = Move(player_index=1, piece_id=0, new_pos=25, dice_roll=5)
+
+        # Process the result
+        sim._process_move_result(1, move, result)
+
+        # Agent should have accumulated got_captured penalty
+        self.assertAlmostEqual(
+            sim._agent_reward_acc,
+            reward_config.got_captured,
+            delta=1e-6,
+            msg=f"Agent reward accumulator should have {reward_config.got_captured}, got {sim._agent_reward_acc}"
+        )
+
 
 # =============================================================================
 # Reward Helper Functions Tests

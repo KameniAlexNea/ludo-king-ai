@@ -270,10 +270,14 @@ class Simulator:
             result: The result from applying the move.
         """
         self._update_transition_summaries(player_idx, move, result)
-        # Accumulate rewards affecting agent
-        self._agent_reward_acc += (
-            float(result.rewards.get(self.agent_index, 0.0)) if result.rewards else 0.0
+        # Compute sparse rewards locally (game.py no longer returns rewards)
+        # This captures got_captured penalties when opponents knock out agent's pieces
+        rewards = compute_sparse_rewards(
+            num_players=len(self.game.players),
+            mover_index=player_idx,
+            events=result.events,
         )
+        self._agent_reward_acc += rewards.get(self.agent_index, 0.0)
         self._append_history(move.dice_roll, player_idx)
 
     def _simulate_single_opponent(self, player_idx: int) -> None:

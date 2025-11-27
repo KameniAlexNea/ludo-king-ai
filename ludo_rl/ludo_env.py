@@ -281,6 +281,8 @@ class LudoEnv(gym.Env):
             reward += compute_invalid_action_penalty()
             self.current_turn += 1
             self.sim.step_opponents_only(reset_summaries=False)
+            # Collect any rewards accumulated during opponent turns (e.g., got_captured)
+            reward += self.sim.get_agent_reward()
             self._roll_dice()
             obs = self._build_observation()
             info = self._get_info()
@@ -303,6 +305,8 @@ class LudoEnv(gym.Env):
         if not extra_turn:
             self.current_turn += 1
             self.sim.step_opponents_only(reset_summaries=True)
+            # Collect any rewards accumulated during opponent turns (e.g., got_captured)
+            reward += self.sim.get_agent_reward()
 
         # 4) Prepare next observation
         self._roll_dice()
