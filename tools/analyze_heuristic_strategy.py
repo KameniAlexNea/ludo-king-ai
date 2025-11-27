@@ -107,7 +107,7 @@ class StrategyAnalysis:
     total_reward: float = 0.0
     reward_from_progress: float = 0.0
     reward_from_capture: float = 0.0
-    reward_from_exposure_penalty: float = 0.0  # Penalty for exposed captures
+    reward_from_exposure_delta: float = 0.0  # Exposure change: negative=got more exposed, positive=got safer
     reward_from_safe_landing: float = 0.0  # Bonus for safe landings
     reward_from_got_captured: float = 0.0
     reward_from_finish: float = 0.0
@@ -367,30 +367,25 @@ def run_analysis_episode(
                 else:
                     stats.captures_to_unsafe += 1
 
-            # Update reward totals
+            # Update reward totals from breakdown (base rewards without exposure adjustment)
             stats.reward_from_progress += reward_breakdown["progress"]
             stats.reward_from_finish += reward_breakdown["finish"]
             stats.reward_from_exit_home += reward_breakdown["exit_home"]
             stats.reward_from_blockade += reward_breakdown["blockade"]
             stats.reward_from_hit_blockade += reward_breakdown["hit_blockade"]
             
-            # Track capture with exposure penalty separately
+            # Track capture rewards
             if events.knockouts:
-                base_capture = reward_breakdown["capture"]  # Base capture reward
-                # The actual reward from game already includes exposure penalty
-                # Compute what the exposure penalty was: base - actual
-                actual_capture_component = actual_move_reward - (
-                    reward_breakdown["progress"] + reward_breakdown["finish"] +
-                    reward_breakdown["exit_home"] + reward_breakdown["blockade"] +
-                    reward_breakdown["hit_blockade"]
-                )
-                # Safe landing bonus might also be included
-                if is_dest_safe and chosen_move.new_pos != 57:
-                    actual_capture_component -= reward_config.safe_landing_bonus
-                
-                exposure_penalty = base_capture - actual_capture_component
-                stats.reward_from_capture += base_capture
-                stats.reward_from_exposure_penalty -= exposure_penalty  # Negative value
+                stats.reward_from_capture += reward_breakdown["capture"]
+            
+            # Compute exposure delta penalty from the difference between actual and base rewards
+            # The actual reward includes: base rewards + exposure delta penalty + safe landing bonus
+            base_reward_sum = sum(reward_breakdown.values())
+            safe_bonus = reward_config.safe_landing_bonus if (is_dest_safe and chosen_move.new_pos != 57) else 0.0
+            # exposure_adjustment = actual - base - safe_bonus
+            # (negative means penalty was applied, positive means bonus from reduced exposure)
+            exposure_adjustment = actual_move_reward - base_reward_sum - safe_bonus
+            stats.reward_from_exposure_delta += exposure_adjustment
             
             # Track safe landing bonus
             if is_dest_safe and chosen_move.new_pos != 57:  # Not finish (already has bonus)
@@ -708,9 +703,9 @@ def print_stats(stats: StrategyAnalysis) -> None:
             f"{stats.reward_from_capture / stats.total_episodes:.3f}",
         ],
         [
-            "Exposure Penalty",
-            f"{stats.reward_from_exposure_penalty:.2f}",
-            f"{stats.reward_from_exposure_penalty / stats.total_episodes:.3f}",
+            "Exposure Delta",  # Positive = reduced exposure (good), Negative = increased exposure (bad)
+            f"{stats.reward_from_exposure_delta:.2f}",
+            f"{stats.reward_from_exposure_delta / stats.total_episodes:.3f}",
         ],
         [
             "Safe Landing Bonus",

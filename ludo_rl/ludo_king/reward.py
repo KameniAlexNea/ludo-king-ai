@@ -81,6 +81,43 @@ def _count_threats_at_position(
     return len(threat_dice)
 
 
+def compute_exposure_delta(
+    board: 'Board',
+    mover_color: int,
+    old_position: int,
+    new_position: int,
+    opponent_positions: list[tuple[int, list[int]]],
+) -> float:
+    """
+    Compute the CHANGE in exposure from moving from old_position to new_position.
+    
+    Returns:
+        Positive value = became MORE exposed (bad)
+        Negative value = became LESS exposed (good)
+        Zero = no change in exposure
+    
+    This measures the COST of the move in terms of safety, not the absolute exposure.
+    A player already in danger who captures doesn't pay extra - they were already at risk.
+    A player who leaves safety to capture pays the exposure cost.
+    """
+    # Exposure before the move
+    threats_before = _count_threats_at_position(
+        board, mover_color, old_position, opponent_positions
+    )
+    
+    # Exposure after the move
+    threats_after = _count_threats_at_position(
+        board, mover_color, new_position, opponent_positions
+    )
+    
+    # Normalize to 0-1 range (6 possible dice values)
+    exposure_before = threats_before / 6.0
+    exposure_after = threats_after / 6.0
+    
+    # Return the delta: positive = more exposed, negative = safer
+    return exposure_after - exposure_before
+
+
 def compute_move_rewards(
     num_players: int,
     mover_index: int,
@@ -137,20 +174,7 @@ def compute_move_rewards(
     knockouts = _get(events, "knockouts", []) or []
     if knockouts:
         base_capture_reward = reward_config.capture * len(knockouts)
-        
-        # Compute exposure penalty if we have board context
-        exposure_penalty = 0.0
-        if board is not None and mover_color is not None and opponent_positions is not None:
-            # Count how many dice rolls could hit us at the new position
-            threat_count = _count_threats_at_position(
-                board, mover_color, new_position, opponent_positions
-            )
-            # Normalize: 0 threats = no penalty, 6 threats = full penalty
-            exposure_ratio = threat_count / 6.0
-            exposure_penalty = exposure_ratio * reward_config.capture_exposure_penalty
-        
-        # Net capture reward = base - exposure cost
-        mover_reward += base_capture_reward - exposure_penalty
+        mover_reward += base_capture_reward
         
         for knockout in knockouts:
             # Support both KnockoutEvent dataclass and legacy dict
@@ -164,7 +188,21 @@ def compute_move_rewards(
     if _get(events, "blockades"):
         mover_reward += reward_config.blockade
     
-    # Bonus for landing on safe position (encourages safe play)
+    # === EXPOSURE-BASED REWARD ADJUSTMENT ===
+    # Apply to ALL moves: penalize moves that INCREASE exposure, reward moves that DECREASE it
+    # This is the key insight: it's not about where you end up, but whether you made yourself
+    # MORE vulnerable than before. A player already in danger doesn't pay extra for staying there.
+    if board is not None and mover_color is not None and opponent_positions is not None:
+        exposure_delta = compute_exposure_delta(
+            board, mover_color, old_position, new_position, opponent_positions
+        )
+        # exposure_delta > 0 means we became MORE exposed (penalty)
+        # exposure_delta < 0 means we became LESS exposed (bonus)
+        # exposure_delta = 0 means no change
+        # Scale by the penalty factor (negative delta becomes positive reward)
+        mover_reward -= exposure_delta * reward_config.capture_exposure_penalty
+    
+    # Small bonus for landing on safe position (encourages safe play)
     if board is not None and mover_color is not None:
         if _is_position_safe(new_position, mover_color, board):
             # Don't double-reward finishing (already has finish bonus)
