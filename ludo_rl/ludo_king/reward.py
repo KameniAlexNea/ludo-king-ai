@@ -66,7 +66,10 @@ def compute_move_rewards(
     if knockouts:
         mover_reward += reward_config.capture * len(knockouts)
         for knockout in knockouts:
-            victim_index = knockout["player"]
+            # Support both KnockoutEvent dataclass and legacy dict
+            victim_index = (
+                knockout.player if hasattr(knockout, "player") else knockout["player"]
+            )
             rewards[victim_index] += reward_config.got_capture
     if _get(events, "hit_blockade"):
         mover_reward += reward_config.hit_blockade
@@ -86,22 +89,6 @@ def _rel_positions_for_agent(game: "Game", agent_index: int):
         if i != agent_index
     ]
     return agent_color, my_rels, opps
-
-
-def _occupied_abs_positions_excluding_color(
-    game: "Game", exclude_color: int
-) -> set[int]:
-    """Build a set of absolute ring positions (1..51) occupied by any opponent piece."""
-    occ: set[int] = set()
-    for pl in game.players:
-        c = int(pl.color)
-        if c == exclude_color:
-            continue
-        for pc in pl.pieces:
-            r = int(pc.position)
-            if 1 <= r <= king_config.MAIN_TRACK_END:
-                occ.add(game.board.absolute_position(c, r))
-    return occ
 
 
 def _cap_opp_probability(
@@ -165,7 +152,7 @@ def _finish_opportunity_probability(my_rels: list[int]) -> float:
     # Probability to finish a piece on next move (home column only)
     total = 0.0
     for r in my_rels:
-        if king_config.HOME_COLUMN_START <= r <= king_config.HOME_FINISH - 1:
+        if king_config.HOME_COLUMN_START - 1 <= r <= king_config.HOME_FINISH - 1:
             total += 1.0 / 6.0 if 1 <= king_config.HOME_FINISH - r <= 6 else 0.0
     return (total / max(1, len(my_rels))) if my_rels else 0.0
 
@@ -177,7 +164,7 @@ def _progress_normalized(my_rels: list[int]) -> float:
     return (total / max(1, len(my_rels))) if my_rels else 0.0
 
 
-def compute_state_potential(game, agent_index: int, depth: int) -> float:
+def compute_state_potential(game: "Game", agent_index: int, depth: int) -> float:
     """
     Compute a dense potential Φ(s) from risk/opportunity signals.
     """
@@ -229,7 +216,7 @@ def compute_terminal_reward(num_players: int, rank: int) -> float:
     """
 
     if rank == 1:
-        return float(reward_config.win)
+        return reward_config.win
     # Scale the (negative) lose reward linearly by placement severity:
     # 2nd -> small fraction, ... -> last -> full penalty
     # Example (4 players): rank 2 => 1/3, rank 3 => 2/3, rank 4 => 1

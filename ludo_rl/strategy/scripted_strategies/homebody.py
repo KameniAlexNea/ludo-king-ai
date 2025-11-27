@@ -6,8 +6,8 @@ from typing import ClassVar
 
 from ludo_rl.ludo_king.config import strategy_config
 
-from .base import BaseStrategy, BaseStrategyConfig
-from .types import MoveOption, StrategyContext
+from ..base import BaseStrategy, BaseStrategyConfig
+from ..types import MoveOption, StrategyContext
 
 
 @dataclass(slots=True)
@@ -69,7 +69,12 @@ class HomebodyStrategy(BaseStrategy):
             score += self.blockade_bonus
         if move.enters_home:
             score += self.home_bonus
-        if move.current_pos == 0 and ctx.dice_roll == 6:
+        active_exposed = sum(
+            1
+            for m in ctx.moves
+            if 1 <= m.current_pos <= 51 and not ctx.safe_channel[m.current_pos]
+        )
+        if move.current_pos == 0 and active_exposed >= 2:
             score -= self.leave_start_penalty
         if move.leaving_safe_zone:
             score -= self.leave_safe_penalty

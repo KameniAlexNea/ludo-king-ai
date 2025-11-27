@@ -68,7 +68,7 @@ class BlockadeRewardTests(unittest.TestCase):
 
         # We can't easily force a blockade scenario in the environment,
         # but we can verify it doesn't crash during normal play
-        obs, info = env.reset(seed=42)
+        _, info = env.reset(seed=42)
 
         steps = 0
         max_steps = 50
@@ -80,7 +80,7 @@ class BlockadeRewardTests(unittest.TestCase):
                     i for i, valid in enumerate(info["action_mask"]) if valid
                 ]
                 action = valid_actions[0]
-                obs, reward, terminated, truncated, info = env.step(action)
+                _, reward, terminated, truncated, info = env.step(action)
 
                 # Reward should always be a valid float
                 self.assertIsInstance(reward, (float, int), "Reward should be numeric")
@@ -160,6 +160,74 @@ class BlockadeRewardTests(unittest.TestCase):
         # Piece should have moved
         self.assertEqual(
             game.players[0].pieces[0].position, 10, "Piece should move to new position"
+        )
+
+    def test_own_blockade_blocks_behind_piece(self):
+        """Pieces 0,1 form blockade at pos 6; piece 2 at 3 (dice=3 lands on blockade); only 0,1 valid."""
+        players = [
+            Player(Color.RED),
+            Player(Color.GREEN),
+            Player(Color.YELLOW),
+            Player(Color.BLUE),
+        ]
+        game = Game(players=players)
+
+        agent = game.players[0]
+        blockade_pos = 6
+        agent.pieces[0].position = blockade_pos
+        agent.pieces[1].position = blockade_pos
+        behind_pos = blockade_pos - 1
+        agent.pieces[2].position = behind_pos
+        agent.pieces[3].position = 0  # safe
+
+        # Opponents safe
+        for p in game.players[1:]:
+            for pc in p.pieces:
+                pc.position = 0
+
+        dice = 3
+        legal_moves = game.legal_moves(0, dice)
+        valid_pieces = {int(m.piece_id) for m in legal_moves}
+
+        self.assertIn(0, valid_pieces, "Piece 0 should be movable")
+        self.assertIn(1, valid_pieces, "Piece 1 should be movable")
+        self.assertNotIn(2, valid_pieces, "Piece 2 blocked by own blockade")
+
+    def test_piece_on_opponent_safe_square_can_move(self):
+        """Green on Red's start (safe) can still move even if Red has a blockade there."""
+        players = [
+            Player(Color.RED),
+            Player(Color.GREEN),
+            Player(Color.YELLOW),
+            Player(Color.BLUE),
+        ]
+        game = Game(players=players)
+
+        # Red forms a blockade at its start square (relative 1 -> abs 1)
+        red = game.players[0]
+        red.pieces[0].position = 1
+        red.pieces[1].position = 1
+        red.pieces[2].position = 0
+        red.pieces[3].position = 0
+
+        # Place Green piece on Red's start absolute square (abs=1). For Green, that's relative 40.
+        green = game.players[1]
+        green.pieces[0].position = 40
+        green.pieces[1].position = 0
+        green.pieces[2].position = 0
+        green.pieces[3].position = 0
+
+        # Other opponents safe
+        for p in game.players[2:]:
+            for pc in p.pieces:
+                pc.position = 0
+
+        dice = 3
+        legal_moves = game.legal_moves(1, dice)  # Green's turn
+        valid_pieces = {int(m.piece_id) for m in legal_moves}
+
+        self.assertIn(
+            0, valid_pieces, "Green on opponent safe square should be able to move"
         )
 
 

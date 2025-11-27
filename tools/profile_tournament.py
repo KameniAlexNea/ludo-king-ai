@@ -21,6 +21,7 @@ from ludo_rl.ludo_king.config import config
 from ludo_rl.ludo_king.game import Game
 from ludo_rl.ludo_king.player import Player
 from ludo_rl.ludo_king.types import Color
+from ludo_rl.strategy.features import model_arena_results
 from ludo_rl.strategy.registry import STRATEGY_REGISTRY
 
 
@@ -137,7 +138,7 @@ def run_profiled_games(num_games: int = 100, seed: int = 42):
     rng = random.Random(seed)
 
     # Select 4 different strategies
-    strategies = ["rusher", "killer", "cautious", "defensive"]
+    strategies = [i for i, _ in model_arena_results(4)]
 
     print(f"Running {num_games} games with strategies: {', '.join(strategies)}")
     print("=" * 80)
@@ -218,7 +219,7 @@ def run_cprofile_single_game():
     print("=" * 80)
 
     rng = random.Random(42)
-    strategies = ["rusher", "killer", "cautious", "defensive"]
+    strategies = [i for i, _ in model_arena_results(4)]
 
     profiler = cProfile.Profile()
     profiler.enable()

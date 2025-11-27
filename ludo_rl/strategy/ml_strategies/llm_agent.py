@@ -8,9 +8,9 @@ from typing import Any, ClassVar, Dict, Optional, Sequence
 from llm_output_parser import parse_json as _parse_json
 from loguru import logger
 
-from .base import BaseStrategy, BaseStrategyConfig
-from .features import opponent_density_within
-from .types import MoveOption, StrategyContext
+from ..base import BaseStrategy, BaseStrategyConfig
+from ..features import opponent_density_within
+from ..types import MoveOption, StrategyContext
 
 
 def _load_langchain() -> tuple[Any, Any, Any, Any]:  # pragma: no cover - helper

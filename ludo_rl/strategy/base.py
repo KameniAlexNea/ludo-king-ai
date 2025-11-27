@@ -47,30 +47,33 @@ class BaseStrategy:
         return None
 
     def select_move(self, ctx: StrategyContext) -> Optional[MoveOption]:
-        scored_moves: list[tuple[MoveOption, float]] = []
-
-        for move in ctx.iter_legal():
-            scored_moves.append((move, self._score_move(ctx, move)))
-
-        if not scored_moves:
+        moves = ctx.moves
+        if not moves:
             return None
+        if len(moves) == 1:
+            return moves[0]
 
-        weights = self._softmax([score for _, score in scored_moves])
-        population = [move for move, _ in scored_moves]
-        return random.choices(population, weights=weights, k=1)[0]
+        # Score all moves directly without intermediate tuple list
+        scores = [self._score_move(ctx, move) for move in moves]
+        weights = self._softmax(scores)
+        return random.choices(moves, weights=weights, k=1)[0]
 
     @staticmethod
     def _softmax(scores: list[float]) -> list[float]:
-        if not scores:
+        n = len(scores)
+        if n == 0:
             return []
+        if n == 1:
+            return [1.0]
         max_score = max(scores)
         if max_score == float("-inf"):
-            return [1.0] * len(scores)
+            return [1.0] * n
         exps = [math.exp(s - max_score) for s in scores]
-        total = sum(exps)
+        total = math.fsum(exps)
         if total <= 0:
-            return [1.0] * len(scores)
-        return [value / total for value in exps]
+            return [1.0] * n
+        inv_total = 1.0 / total
+        return [e * inv_total for e in exps]
 
     def _score_move(
         self, ctx: StrategyContext, move: MoveOption

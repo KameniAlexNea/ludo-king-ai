@@ -2,19 +2,22 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from .board import Board
 from .config import config, reward_config
 from .piece import Piece
-from .player import Player
+
+if TYPE_CHECKING:  # avoid runtime import to prevent circular deps
+    from .player import Player
+
 from .reward import compute_move_rewards, compute_state_potential, shaping_delta
-from .types import Move, MoveEvents, MoveResult
+from .types import BlockadeEvent, KnockoutEvent, Move, MoveEvents, MoveResult
 
 
 @dataclass(slots=True)
 class Game:
-    players: List[Player]
+    players: List["Player"]
     board: Board = field(init=False)
     rng: random.Random = field(default_factory=random.Random, init=False)
     # Cache for potential-based shaping: last Φ(s) per player
@@ -57,20 +60,77 @@ class Game:
             return config.HOME_COLUMN_START + overflow - 1
         return cand
 
+    # --- Path utilities ---
+    def _iter_ring_path(self, start_rel: int, end_rel: int) -> list[int]:
+        """Return ring-only squares traversed from start to destination.
+
+        - From yard (0) to ring: include only destination if on ring.
+        - From ring to ring: include all ring squares (start+1 .. end) inclusive.
+        - From ring to home column: include ring squares (start+1 .. 51) inclusive.
+        - From home column/finished: no ring traversal.
+        """
+        path: list[int] = []
+        # Yard -> ring
+        if start_rel == 0:
+            if 1 <= end_rel <= config.MAIN_TRACK_END:
+                path.append(end_rel)
+            return path
+        # Already in home column or finished
+        if start_rel >= config.HOME_COLUMN_START:
+            return path
+        # Ring -> ring
+        if (
+            1 <= start_rel <= config.MAIN_TRACK_END
+            and 1 <= end_rel <= config.MAIN_TRACK_END
+        ):
+            for r in range(start_rel + 1, end_rel + 1):
+                path.append(r)
+            return path
+        # Ring -> home column: walk to the end of ring (51)
+        if (
+            1 <= start_rel <= config.MAIN_TRACK_END
+            and end_rel >= config.HOME_COLUMN_START
+        ):
+            for r in range(start_rel + 1, config.MAIN_TRACK_END + 1):
+                path.append(r)
+            return path
+        return path
+
     def legal_moves(self, player_idx: int, dice: int) -> List[Move]:
         player = self.players[player_idx]
         moves: List[Move] = []
+
+        # Precompute absolute positions of blockades on ring for all colors
+        blockade_abs_to_color: dict[int, int] = {}
+        for pl in self.players:
+            color_id = int(pl.color)
+            counts: dict[int, int] = {}
+            for piece in pl.pieces:
+                r = int(piece.position)
+                if 1 <= r <= config.MAIN_TRACK_END:
+                    counts[r] = counts.get(r, 0) + 1
+            for r, cnt in counts.items():
+                if cnt >= 2:
+                    abs_b = self.board.absolute_position(color_id, r)
+                    if abs_b != -1:
+                        blockade_abs_to_color[abs_b] = color_id
+
         for pc in player.pieces:
             dest = self._destination_for_roll(pc.position, dice)
             if dest is None:
                 continue
-            # cannot stack beyond 2 on main track
-            if (
-                dest <= config.MAIN_TRACK_END
-                and self.board.count_at_relative(player.color, dest) >= 2
-            ):
+
+            # Filter out moves that would cross or land on any blockade along the ring path
+            path = self._iter_ring_path(int(pc.position), int(dest))
+            blocked = False
+            for rel in path:
+                abs_pos = self.board.absolute_position(int(player.color), rel)
+                if abs_pos in blockade_abs_to_color:
+                    blocked = True
+                    break
+            if blocked:
                 continue
-            # Note: Opponent blockade handling is enforced in apply_move (including crossing/landing)
+
             moves.append(
                 Move(
                     player_index=player_idx,
@@ -90,40 +150,6 @@ class Game:
         old = pc.position
 
         # Pre-check: cannot cross a blockade on ring squares
-        def iter_ring_path(start_rel: int, end_rel: int) -> list[int]:
-            """Ring-only squares traversed from start to destination.
-
-            - From yard (0) to ring: include only destination if on ring.
-            - From ring to ring: include all ring squares (start+1 .. end) inclusive.
-            - From ring to home column: include ring squares (start+1 .. 51) inclusive.
-            - From home column/finished: no ring traversal.
-            """
-            path: list[int] = []
-            # Yard -> ring
-            if start_rel == 0:
-                if 1 <= end_rel <= config.MAIN_TRACK_END:
-                    path.append(end_rel)
-                return path
-            # Already in home column or finished
-            if start_rel >= config.HOME_COLUMN_START:
-                return path
-            # Ring -> ring
-            if (
-                1 <= start_rel <= config.MAIN_TRACK_END
-                and 1 <= end_rel <= config.MAIN_TRACK_END
-            ):
-                for r in range(start_rel + 1, end_rel + 1):
-                    path.append(r)
-                return path
-            # Ring -> home column: walk to the end of ring (51)
-            if (
-                1 <= start_rel <= config.MAIN_TRACK_END
-                and end_rel >= config.HOME_COLUMN_START
-            ):
-                for r in range(start_rel + 1, config.MAIN_TRACK_END + 1):
-                    path.append(r)
-                return path
-            return path
 
         # Defer computing potential until needed (lazy) to avoid overhead on blocked moves
         phi_before_computed = False
@@ -153,7 +179,7 @@ class Game:
                     if abs_b != -1:
                         blockade_abs_to_color[abs_b] = color_id
 
-        path = iter_ring_path(old, mv.new_pos)
+        path = self._iter_ring_path(old, mv.new_pos)
         for rel in path:
             abs_pos = self.board.absolute_position(player.color, rel)
             # Any blockade on path (any color) blocks traversal
@@ -214,11 +240,11 @@ class Game:
                             victim_index = i
                             break
                     events.knockouts.append(
-                        {
-                            "player": victim_index,
-                            "piece_id": opp_piece.piece_id,
-                            "abs_pos": abs_pos,
-                        }
+                        KnockoutEvent(
+                            player=victim_index,
+                            piece_id=opp_piece.piece_id,
+                            abs_pos=abs_pos,
+                        )
                     )
                 elif len(occupants) >= 2:
                     # can't land on an opponent blockade on non-safe squares
@@ -243,7 +269,9 @@ class Game:
             and 1 <= pc.position <= config.MAIN_TRACK_END
             and self.board.count_at_relative(player.color, pc.position) >= 2
         ):
-            events.blockades.append({"player": mv.player_index, "rel": pc.position})
+            events.blockades.append(
+                BlockadeEvent(player=mv.player_index, rel_pos=pc.position)
+            )
 
         # Compute per-player rewards (optional; env may or may not use)
         rewards = compute_move_rewards(

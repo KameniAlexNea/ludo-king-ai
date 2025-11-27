@@ -21,12 +21,29 @@ class Move:
 
 
 @dataclass(slots=True)
+class KnockoutEvent:
+    """Event data for when a piece is knocked out (captured)."""
+
+    player: int  # Index of the player whose piece was knocked out
+    piece_id: int  # ID of the piece that was knocked out
+    abs_pos: int  # Absolute board position where knockout occurred
+
+
+@dataclass(slots=True)
+class BlockadeEvent:
+    """Event data for when a blockade is formed."""
+
+    player: int  # Index of the player who formed the blockade
+    rel_pos: int  # Relative position where blockade was formed
+
+
+@dataclass(slots=True)
 class MoveEvents:
     exited_home: bool = False
     finished: bool = False
-    knockouts: List[Dict[str, int]] = field(default_factory=list)
+    knockouts: List[KnockoutEvent] = field(default_factory=list)
     hit_blockade: bool = False
-    blockades: List[Dict[str, int]] = field(default_factory=list)
+    blockades: List[BlockadeEvent] = field(default_factory=list)
     move_resolved: bool = True
 
 

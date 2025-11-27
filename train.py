@@ -1,6 +1,8 @@
 import os
+import sys
 import time
 from dataclasses import asdict
+from glob import glob
 
 import torch
 from loguru import logger
@@ -26,15 +28,51 @@ from torch.profiler import (
 from wandb.integration.sb3 import WandbCallback
 
 import wandb
-from ludo_rl.extractor import LudoCnnExtractor, LudoTransformerExtractor
+from ludo_rl.extractor import (
+    LudoCnnExtractor,
+    LudoMlpExtractor,
+    LudoTransformerExtractor,
+)
 from ludo_rl.ludo_env import LudoEnv
 from ludo_rl.ludo_king.config import config, net_config
 from ludo_rl.ludo_king.reward import reward_config
-from tools.arguments import TrainingSetup, parse_train_args
-from tools.scheduler import CoefScheduler, lr_schedule
+from ludo_rl.utils.arguments import TrainingSetup, parse_train_args
+from ludo_rl.utils.scheduler import (
+    CoefScheduler,
+    CurriculumSyncCallback,
+    entropy_schedule,
+    lr_schedule,
+    target_kl_schedule,
+)
 
 os.environ["WANDB_START_METHOD"] = "thread"
 os.environ["WANDB_DISABLE_CODE"] = "false"
+
+
+def load_vecnormalize(path: str, env: VecNormalize) -> VecNormalize:
+    """Load a VecNormalize wrapper from disk and attach to env."""
+    folder = os.path.dirname(path)
+    vect_env_paths = sorted(glob(os.path.join(folder, "*vecnormalize_*_steps.pkl")))
+    loaded_vn = VecNormalize.load(vect_env_paths[-1], env)
+    loaded_vn.training = True  # Keep training
+    loaded_vn.norm_reward = True  # Normalize rewards
+    return loaded_vn
+
+
+def make_env(seed: int):
+    def _init():
+        env = LudoEnv()
+        env.reset(seed=seed)  # Optional: unique seed per env
+        return env
+
+    return _init
+
+
+def save_and_exit(sig, frame):
+    logger.warning("Interrupted! Saving checkpoint...")
+    model.save(os.path.join(model_save_path, "interrupted_model"))
+    train_env.save(os.path.join(model_save_path, "vecnormalize_interrupted.pkl"))
+    sys.exit(0)
 
 
 class ProfilerStepCallback(BaseCallback):
@@ -68,13 +106,17 @@ if __name__ == "__main__":
     # --- Create Training Environment ---
     # We use a lambda to create the environment
     # Vectorize the environment
+    seed = getattr(args, "seed", 42)
     if args.num_envs == 1:
-        train_env = DummyVecEnv([lambda: LudoEnv()])
+        train_env = DummyVecEnv([make_env(seed)])
     else:
-        train_env = SubprocVecEnv([lambda: LudoEnv() for _ in range(args.num_envs)])
+        train_env = SubprocVecEnv([make_env(seed + i) for i in range(args.num_envs)])
+    train_env.seed(seed + 1000)
     train_env = VecMonitor(train_env)
     train_env = VecCheckNan(train_env, raise_exception=True)
-    train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True)
+    train_env = VecNormalize(
+        train_env, norm_obs=False, norm_reward=True, clip_reward=5.0
+    )
 
     logger.debug("--- Setting up Callbacks ---")
 
@@ -90,10 +132,34 @@ if __name__ == "__main__":
     entropy_callback = CoefScheduler(
         total_timesteps=args.total_timesteps,
         att="ent_coef",
-        schedule=lr_schedule(lr_min=args.ent_coef * 0.3, lr_max=args.ent_coef),
+        schedule=entropy_schedule(
+            ent_start=args.ent_coef,  # Start at specified value (e.g., 0.01)
+            ent_peak=args.ent_coef * 1.5,  # Peak 50% higher for exploration
+            ent_end=args.ent_coef * 0.2,  # End at 20% of original
+            warmup_fraction=0.1,  # 10% ramp up
+            plateau_fraction=0.25,  # 25% at peak
+        ),
     )
 
-    callbacks = [entropy_callback]
+    target_kl_callback = CoefScheduler(
+        total_timesteps=args.total_timesteps,
+        att="target_kl",
+        schedule=target_kl_schedule(
+            kl_start=args.target_kl,
+            kl_peak=args.target_kl * 2.0,
+            kl_end=args.target_kl * 1.15,
+            warmup_fraction=0.15,  # 15% of training for warmup
+            cooldown_fraction=0.15,  # 15% of training for cooldown
+        ),
+    )
+
+    # Sync curriculum progress across all parallel envs
+    curriculum_callback = CurriculumSyncCallback(
+        sync_interval=2048,  # Sync every n_steps (2048 default)
+        verbose=0,
+    )
+
+    callbacks = [entropy_callback, target_kl_callback, curriculum_callback]
 
     if not args.profile:
         wandb.init(
@@ -116,16 +182,22 @@ if __name__ == "__main__":
 
     # --- Policy Kwargs ---
     # Define the custom feature extractor
+    extractor_map = {
+        "cnn": LudoCnnExtractor,
+        "transformer": LudoTransformerExtractor,
+        "mlp": LudoMlpExtractor,
+    }
+    extractor_class = extractor_map[args.extractor]
+
+    share_extractor = os.getenv("SHARE_EXTRACTOR", "0") == "1"
     policy_kwargs = dict(
-        activation_fn=torch.nn.GELU,  # GELU for smooth, non-saturating gradients (best for transformers)
-        features_extractor_class=(
-            LudoTransformerExtractor if args.use_transformer else LudoCnnExtractor
-        ),
+        activation_fn=torch.nn.GELU,  # GELU for smooth, non-saturating gradients
+        features_extractor_class=extractor_class,
         features_extractor_kwargs=dict(
             features_dim=net_config.embed_dim
         ),  # Output features
         net_arch=dict(pi=net_config.pi, vf=net_config.vf),  # Actor/Critic network sizes
-        share_features_extractor=True,
+        share_features_extractor=share_extractor,
     )
 
     logger.debug("--- Initializing PPO Model ---")
@@ -157,6 +229,7 @@ if __name__ == "__main__":
     )
     if args.resume:
         logger.info(f"--- Resuming training from {args.resume} ---")
+        train_env = load_vecnormalize(args.resume, train_env)
         model = MaskablePPO.load(
             args.resume,
             env=train_env,
@@ -169,6 +242,10 @@ if __name__ == "__main__":
             policy_kwargs=policy_kwargs,
             **init_kwargs,
         )
+
+    model.set_random_seed(seed)
+    train_env.seed(seed)
+    train_env.reset()
 
     print("--- Model Summary ---")
     print(model.policy)
@@ -197,8 +274,8 @@ if __name__ == "__main__":
             activities=activities,
             schedule=profiler_schedule,
             on_trace_ready=tensorboard_trace_handler(profiler_log_dir),
-            record_shapes=False,
-            profile_memory=False,
+            record_shapes=True,
+            profile_memory=True,
             with_stack=False,
         ) as prof:
             profiling_callbacks = CallbackList(callbacks + [ProfilerStepCallback(prof)])

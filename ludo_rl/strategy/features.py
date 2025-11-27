@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 
 from ludo_rl.ludo_king.config import strategy_config
-from ludo_rl.ludo_king.piece import Piece
+
+if TYPE_CHECKING:  # avoid runtime import to prevent circular deps
+    from ludo_rl.ludo_king.piece import Piece
 
 from .types import MoveOption, StrategyContext
 
@@ -17,7 +19,7 @@ def _create_move_options(
     safe_channel: np.ndarray,
     opponent_counts: np.ndarray,
 ) -> MoveOption:
-    piece: Piece = move["piece"]
+    piece: "Piece" = move["piece"]
     new_pos = move["new_pos"]
     current_pos = piece.position
     progress = _compute_progress(current_pos, new_pos)
@@ -96,8 +98,11 @@ def _check_capture(
         return False, 0
     if safe_channel[new_pos] > 0:
         return False, 0
-    captured = int(opponent_counts[new_pos])
-    return captured > 0, captured
+    count = int(opponent_counts[new_pos])
+    # Can only capture single pieces, not blockades (2+)
+    if count == 1:
+        return True, 1
+    return False, 0
 
 
 def _is_safe_destination(safe_channel: np.ndarray, new_pos: int) -> bool:
@@ -113,31 +118,34 @@ def _forms_blockade(
 ) -> bool:
     if new_pos <= 0 or new_pos > strategy_config.main_track_end:
         return False
-    if safe_channel[new_pos]:
-        return False
+    # Blockades can form anywhere on the main track, including safe squares
     current_count = my_channel[new_pos]
-    return current_count >= 1
+    return current_count >= 1  # 1 existing + 1 incoming = 2 = blockade
+
+
+# Pre-computed weights for risk calculation (step 1 -> weight 1.0, step 6 -> weight 0.167)
+_RISK_WEIGHTS = (1.0, 5 / 6, 4 / 6, 3 / 6, 2 / 6, 1 / 6)
+_MAIN_TRACK_END = strategy_config.main_track_end
 
 
 def _estimate_risk(
     opponent_counts: np.ndarray, safe_channel: np.ndarray, new_pos: int
 ) -> float:
-    if new_pos <= 0 or new_pos > strategy_config.main_track_end:
+    if new_pos <= 0 or new_pos > _MAIN_TRACK_END:
         return 0.0
 
     risk = 0.0
-
     for step in range(1, 7):
         idx = new_pos - step
+        # Inline wrap logic to avoid function call overhead
         if idx <= 0:
-            idx += strategy_config.main_track_end
+            idx += _MAIN_TRACK_END
+
         if safe_channel[idx]:
             continue
         threat_level = opponent_counts[idx]
-        if threat_level == 0:
-            continue
-        weight = 1.0 - (step - 1) / 6.0
-        risk += threat_level * weight
+        if threat_level > 0:
+            risk += threat_level * _RISK_WEIGHTS[step - 1]
 
     return risk
 
@@ -149,21 +157,38 @@ def opponent_density_within(
     for offset in range(-radius, radius + 1):
         idx = center + offset
         if idx <= 0:
-            idx += strategy_config.main_track_end
-        elif idx > strategy_config.main_track_end:
-            idx -= strategy_config.main_track_end
+            idx += _MAIN_TRACK_END
+        elif idx > _MAIN_TRACK_END:
+            idx -= _MAIN_TRACK_END
         total += distribution[idx]
     return float(total)
 
 
 def nearest_opponent_distance(distribution: Sequence[float], position: int) -> int:
-    for distance in range(1, strategy_config.main_track_end + 1):
+    for distance in range(1, _MAIN_TRACK_END + 1):
         forward = position + distance
         backward = position - distance
-        if forward > strategy_config.main_track_end:
-            forward -= strategy_config.main_track_end
+        if forward > _MAIN_TRACK_END:
+            forward -= _MAIN_TRACK_END
         if backward <= 0:
-            backward += strategy_config.main_track_end
+            backward += _MAIN_TRACK_END
         if distribution[forward] > 0 or distribution[backward] > 0:
             return distance
-    return strategy_config.main_track_end
+    return _MAIN_TRACK_END
+
+
+def model_arena_results(top_k=None):
+    arena = [
+        ("defensive", 4962),
+        ("cautious", 4710),
+        ("homebody", 4371),
+        ("hoarder", 4276),
+        ("probability", 3582),
+        ("killer", 3528),
+        ("finish_line", 3455),
+        ("heatseeker", 3398),
+        ("rusher", 3343),
+        ("retaliator", 2994),
+        ("support", 981),
+    ]
+    return arena[:top_k] if top_k is not None else arena

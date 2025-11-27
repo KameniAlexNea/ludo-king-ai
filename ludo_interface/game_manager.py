@@ -1,8 +1,9 @@
 import random
 from typing import Dict, List, Optional, Union
 
-from ludo_rl.ludo_king import Color, Game, Player
+from ludo_rl.ludo_king import Color, Game
 from ludo_rl.ludo_king.piece import Piece as Token
+from ludo_rl.ludo_king.player import Player
 from ludo_rl.ludo_king.types import Move, MoveResult
 from ludo_rl.strategy import HumanStrategy, LLMStrategy, RLStrategy
 from ludo_rl.strategy import create as create_strategy
@@ -135,8 +136,8 @@ class GameManager:
         if result.events.knockouts:
             knockout_details = []
             for ko in result.events.knockouts:
-                knocked_player = ko["player"]
-                knocked_piece = ko["piece_id"]
+                knocked_player = ko.player
+                knocked_piece = ko.piece_id
                 knockout_details.append(
                     f"Player {knocked_player} piece {knocked_piece}"
                 )
